@@ -312,6 +312,7 @@ describe("ConfigSchema", () => {
     if (result.success) {
       expect(result.data.HARNESS_MCP_MODE).toBe("multi-user");
       expect(result.data.HARNESS_API_KEY).toBe("");
+      expect(result.data.HARNESS_BASE_URL).toBe("https://app.harness.io");
     }
   });
 
@@ -357,8 +358,8 @@ describe("ConfigSchema", () => {
     const result = ConfigSchema.safeParse({
       HARNESS_MCP_MODE: "oauth",
       HARNESS_MCP_OAUTH_ISSUER:
-        "https://id.harness-test.com/idp/realms/HarnessIDP/",
-      HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.harness-test.com/mcp",
+        "https://id.example.com/idp/realms/HarnessIDP/",
+      HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.example.com/mcp",
     });
 
     expect(result.success).toBe(true);
@@ -368,7 +369,7 @@ describe("ConfigSchema", () => {
       expect(result.data.HARNESS_MCP_OAUTH_CLIENT_ID).toBe("mcp-client");
       expect(result.data.HARNESS_MCP_OAUTH_ACCOUNT_CLAIM).toBe("account_id");
       expect(result.data.HARNESS_MCP_OAUTH_JWKS_URI).toBe(
-        "https://id.harness-test.com/idp/realms/HarnessIDP/protocol/openid-connect/certs",
+        "https://id.example.com/idp/realms/HarnessIDP/protocol/openid-connect/certs",
       );
       expect(result.data.HARNESS_MCP_OAUTH_SCOPES).toBe(
         "openid profile email organization",
@@ -391,6 +392,23 @@ describe("ConfigSchema", () => {
     );
     expect(result.HARNESS_API_KEY).toBe("");
     expect(result.HARNESS_ACCOUNT_ID).toBe("");
+  });
+
+  it("does not change HARNESS_BASE_URL outside OAuth mode", () => {
+    expect(ConfigSchema.parse(validConfig).HARNESS_BASE_URL).toBe(
+      "https://app.harness.io",
+    );
+    expect(
+      ConfigSchema.parse({ HARNESS_MCP_MODE: "multi-user" }).HARNESS_BASE_URL,
+    ).toBe("https://app.harness.io");
+  });
+
+  it("keeps an explicit HARNESS_BASE_URL in OAuth mode", () => {
+    const result = ConfigSchema.parse({
+      HARNESS_MCP_MODE: "oauth",
+      HARNESS_BASE_URL: "https://mcp.example.com/cli",
+    });
+    expect(result.HARNESS_BASE_URL).toBe("https://mcp.example.com/cli");
   });
 
   it("rejects a static HTTP auth token in OAuth mode", () => {

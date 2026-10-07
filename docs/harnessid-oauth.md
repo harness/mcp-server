@@ -38,13 +38,12 @@ The server defaults to:
 - Harness API base: `https://mcp.harness.io/cli`
 - OAuth client: `mcp-client`
 
-Override these settings for QA, local development, or another Harness environment.
+Override these only for local development or another Harness environment that you
+operate.
 
-## QA HarnessID setup
+## HarnessID client
 
-QA HarnessID realm: `https://id.harness-test.com/idp/realms/HarnessIDP`
-
-Configure a public OpenID Connect client in that realm:
+Configure a public OpenID Connect client in the HarnessID realm:
 
 - Client ID: `mcp-client` (or allow RFC 7591 dynamic client registration)
 - Client authentication: off
@@ -58,14 +57,14 @@ Configure a public OpenID Connect client in that realm:
 The issuer in HarnessID's metadata and in the token `iss` claim must exactly match
 `HARNESS_MCP_OAUTH_ISSUER`, including the `/idp` path segment.
 
-Verify a token before pointing a client at the server:
+Verify HarnessID discovery:
 
 ```bash
-curl -sS https://id.harness-test.com/idp/realms/HarnessIDP/.well-known/openid-configuration
+curl -sS https://id.harness.io/idp/realms/HarnessIDP/.well-known/openid-configuration
 ```
 
 A valid access token for this setup decodes to `iss` of
-`https://id.harness-test.com/idp/realms/HarnessIDP`, `azp` of `mcp-client`, a `scope`
+`https://id.harness.io/idp/realms/HarnessIDP`, `azp` of `mcp-client`, a `scope`
 containing `organization:<accountId>`, and a top-level `account_id` claim.
 
 ## Run the MCP server
@@ -77,35 +76,40 @@ pnpm install --frozen-lockfile
 pnpm build
 ```
 
-Set these values for QA:
+Production-style bind (defaults for issuer, resource, and API base):
 
 ```bash
 export HARNESS_MCP_MODE=oauth
-export HARNESS_MCP_OAUTH_ISSUER=https://id.harness-test.com/idp/realms/HarnessIDP
-export HARNESS_MCP_OAUTH_RESOURCE=https://mcp.harness-test.com/mcp
-export HARNESS_MCP_OAUTH_CLIENT_ID=mcp-client
-export HARNESS_MCP_OAUTH_SCOPES="openid profile email organization"
-
-export HARNESS_BASE_URL=https://mcp.harness-test.com/cli
-export HARNESS_MCP_ALLOWED_HOSTS=mcp.harness-test.com
 export HOST=0.0.0.0
 export PORT=3000
 
 pnpm start:http
 ```
 
+Local HTTP bind for a development client:
+
+```bash
+export HARNESS_MCP_MODE=oauth
+export HARNESS_ALLOW_HTTP=true
+export HARNESS_MCP_OAUTH_RESOURCE=http://127.0.0.1:3000/mcp
+export HOST=127.0.0.1
+export PORT=3000
+
+pnpm start:http
+```
+
 `HARNESS_MCP_OAUTH_JWKS_URI` defaults to
-`https://id.harness-test.com/idp/realms/HarnessIDP/protocol/openid-connect/certs`;
+`https://id.harness.io/idp/realms/HarnessIDP/protocol/openid-connect/certs`;
 set it only when HarnessID publishes keys elsewhere.
 
-`HARNESS_BASE_URL` includes the `/cli` prefix: on the QA MCP host the Harness
-Platform APIs are routed under `/cli`, so a call to `/ng/api/organizations`
-resolves to `https://mcp.harness-test.com/cli/ng/api/organizations`. The same
-host serves `/mcp` and its `.well-known` metadata; unprefixed API paths return
-404.
+In OAuth mode, `HARNESS_BASE_URL` defaults to `https://mcp.harness.io/cli`. Platform
+API paths are routed under `/cli`, so a call to `/ng/api/organizations` resolves to
+`https://mcp.harness.io/cli/ng/api/organizations`. The same host serves `/mcp` and
+its `.well-known` metadata; unprefixed API paths return 404. Single-user and
+multi-user modes keep `https://app.harness.io` unless you set `HARNESS_BASE_URL`.
 
 Terminate TLS at the ingress or reverse proxy. `HARNESS_MCP_OAUTH_RESOURCE` must be
-the external HTTPS URL used by clients, not the pod or cluster-local URL.
+the external URL used by clients, not the pod or cluster-local URL.
 
 Do not set `HARNESS_MCP_AUTH_TOKEN` or `HARNESS_API_KEY` in OAuth mode.
 Legacy FME calls that use `workspace_id` are unavailable because the server will
@@ -118,15 +122,15 @@ not forward a HarnessID access token to `api.split.io`. Pass `org_id` and
 Protected-resource metadata:
 
 ```bash
-curl -sS https://mcp.harness-test.com/.well-known/oauth-protected-resource/mcp
+curl -sS https://mcp.harness.io/.well-known/oauth-protected-resource/mcp
 ```
 
 Expected fields:
 
 ```json
 {
-  "resource": "https://mcp.harness-test.com/mcp",
-  "authorization_servers": ["https://id.harness-test.com/idp/realms/HarnessIDP"],
+  "resource": "https://mcp.harness.io/mcp",
+  "authorization_servers": ["https://id.harness.io/idp/realms/HarnessIDP"],
   "scopes_supported": ["openid", "profile", "email", "organization"],
   "bearer_methods_supported": ["header"]
 }
@@ -135,13 +139,13 @@ Expected fields:
 An unauthenticated MCP request must return HTTP 401 with a discovery challenge:
 
 ```bash
-curl -i https://mcp.harness-test.com/mcp
+curl -i https://mcp.harness.io/mcp
 ```
 
 Expected header:
 
 ```http
-WWW-Authenticate: Bearer resource_metadata="https://mcp.harness-test.com/.well-known/oauth-protected-resource/mcp"
+WWW-Authenticate: Bearer resource_metadata="https://mcp.harness.io/.well-known/oauth-protected-resource/mcp"
 ```
 
 Configure the MCP client with the resource URL:
@@ -149,12 +153,15 @@ Configure the MCP client with the resource URL:
 ```json
 {
   "mcpServers": {
-    "harness-qa": {
-      "url": "https://mcp.harness-test.com/mcp"
+    "harness": {
+      "url": "https://mcp.harness.io/mcp"
     }
   }
 }
 ```
+
+For a local server, use `http://127.0.0.1:3000/mcp` and set
+`HARNESS_MCP_OAUTH_RESOURCE` to that same URL.
 
 If the client asks for a client ID, use `mcp-client`. After browser login, verify
 that the client can initialize a session and list tools.
