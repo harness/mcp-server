@@ -97,6 +97,27 @@ describe("ccmTimeseriesExtract", () => {
     expect(ccmTimeseriesExtract(raw)).toEqual(stats);
   });
 
+  it("adds a UTC date next to epoch-ms time", () => {
+    const stats = [
+      { time: 1790553600000, values: [{ value: 286133.87 }] },
+      { time: 1790640000000, values: [{ value: 469466.56 }] },
+    ];
+    const raw = { data: { perspectiveTimeSeriesStats: { stats } } };
+    expect(ccmTimeseriesExtract(raw)).toEqual([
+      { ...stats[0], date: "2026-09-28" },
+      { ...stats[1], date: "2026-09-29" },
+    ]);
+  });
+
+  it("keeps date through compact mode", () => {
+    const registry = new Registry(makeCcmConfig());
+    const compactFn = registry.getResource("cost_timeseries").compactItem;
+    const [item] = ccmTimeseriesExtract({
+      data: { perspectiveTimeSeriesStats: { stats: [{ time: 1790640000000, __typename: "X", values: [] }] } },
+    }) as Record<string, unknown>[];
+    expect(compactFn?.(item)).toMatchObject({ time: 1790640000000, date: "2026-09-29" });
+  });
+
   it("returns empty array when stats are missing", () => {
     expect(ccmTimeseriesExtract({})).toEqual([]);
   });
