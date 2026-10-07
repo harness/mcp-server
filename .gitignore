@@ -4,6 +4,9 @@ node_modules/
 build/
 dist/
 .env
+.env.poc
+.poc/
+.harness-mcp/
 *.tgz
 *.mcpb
 .DS_Store

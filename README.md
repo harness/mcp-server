@@ -123,8 +123,14 @@ When running in HTTP mode, the server exposes:
 | `/mcp`    | `DELETE`  | Terminate an active MCP session                                  |
 | `/mcp`    | `OPTIONS` | CORS preflight                                                   |
 | `/health` | `GET`     | Health check — returns `{ "status": "ok", "sessions": <count> }` |
-| `/.well-known/oauth-protected-resource` | `GET` | RFC 9728 metadata when `HARNESS_MCP_MODE=oauth` |
+| `/.well-known/oauth-protected-resource` | `GET` | RFC 9728 metadata in `oauth` and `oauth-proxy` modes |
 | `/.well-known/oauth-protected-resource/mcp` | `GET` | Path-aware RFC 9728 metadata for the default `/mcp` resource |
+| `/.well-known/oauth-authorization-server` | `GET` | Embedded broker RFC 8414 metadata in `oauth-proxy` mode |
+| `/oauth/authorize` | `GET` | Start Cursor → upstream provider → HarnessID authorization |
+| `/oauth/upstream/callback` | `GET` | Upstream identity-provider callback |
+| `/oauth/harnessid/callback` | `GET` | HarnessID linking callback |
+| `/oauth/token` | `POST` | Return or refresh upstream tokens for Cursor; never returns HarnessID tokens |
+| `/oauth/link`, `/oauth/callback` | `GET` | Manual linking fallback for diagnostics |
 
 
 The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.
@@ -133,6 +139,7 @@ Operational constraints in HTTP mode:
 
 - Set `HARNESS_MCP_AUTH_TOKEN` for shared or remotely reachable single-user and multi-user deployments. When set, every `POST`, `GET`, and `DELETE` request to `/mcp` must include `Authorization: Bearer <token>`.
 - OAuth mode accepts HarnessID access tokens instead of `HARNESS_MCP_AUTH_TOKEN` and can bind to a non-loopback address without the unauthenticated opt-out.
+- OAuth proxy mode accepts an upstream identity-provider token, exchanges it internally for a per-user HarnessID token, and requires the upstream token on every request.
 - Non-loopback single-user and multi-user binds require `HARNESS_MCP_AUTH_TOKEN` by default. To run unauthenticated on a non-loopback interface anyway, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` explicitly.
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
@@ -151,7 +158,7 @@ Set `HARNESS_MCP_MODE=oauth` to let remote MCP clients discover HarnessID and co
 HARNESS_MCP_MODE=oauth
 ```
 
-This defaults to the issuer `https://id.harness.io/idp/realms/HarnessIDP`, resource `https://mcp.harness.io/mcp`, OAuth client `mcp-client`, and Harness API base `https://mcp.harness.io/cli`. Override them only for QA, local development, or another Harness environment.
+This defaults to the issuer `https://id.harness.io/idp/realms/HarnessIDP`, resource `https://mcp.harness.io/mcp`, OAuth client `mcp-client`, and Harness API base `https://mcp.harness.io/cli`. Override them only for local development or another Harness environment that you operate.
 
 `HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token.
 
@@ -180,7 +187,23 @@ Clients normally need only the MCP resource URL:
 
 The client reads the protected-resource metadata, discovers `HARNESS_MCP_OAUTH_ISSUER`, and then uses that authorization server's RFC 8414 metadata. If the client does not support dynamic client registration, use the pre-registered `mcp-client` client ID.
 
-See [HarnessID OAuth for a self-hosted MCP server](docs/harnessid-oauth.md) for the QA Keycloak checklist and validation commands.
+See [HarnessID OAuth for a self-hosted MCP server](docs/harnessid-oauth.md) for the client checklist and validation commands.
+
+#### Upstream Identity Provider OAuth Proxy Mode
+
+Set `HARNESS_MCP_MODE=oauth-proxy` when Cursor or another MCP client must hold
+only an upstream identity-provider token. The integrated OAuth broker starts
+the upstream browser login, chains the one-time HarnessID link, and returns only
+the upstream access/refresh tokens to the MCP client. On every `/mcp` request,
+the server validates the upstream token and obtains a per-user HarnessID token
+internally through either a rotating refresh token or the JWT bearer grant.
+HarnessID tokens never leave the server; refresh tokens and transient OAuth
+state are encrypted at rest.
+
+This mode is HTTP-only and requires upstream issuer/audience configuration, a
+HarnessID confidential client secret, and a stable 32-byte vault key. See
+[Upstream identity provider OAuth proxy mode](docs/oauth-proxy.md) for configuration and
+end-to-end MCP test commands.
 
 #### Multi-User Mode
 
@@ -233,7 +256,7 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
 
 > **Important:** Hosted MCP authentication uses **Harness Platform OAuth**. It does **not** use `HARNESS_API_KEY` in the client config. Hosted MCP availability is configured per Harness account, so you will need to work with **Harness Support** to enable/configure the setting before using it.
 >
-> The hosted endpoint `https://mcp.harness.io/mcp` is a managed service. Client-side MCP config in Claude, Cursor, or Cowork cannot override which Harness environment it routes to. For Harness0 or another private Harness SaaS environment, ask Harness Support to enable/configure hosted MCP for that environment, or run the local/self-hosted server and set `HARNESS_BASE_URL` to the target Harness host.
+> The hosted endpoint `https://mcp.harness.io/mcp` is a managed service. Client-side MCP config in Claude, Cursor, or Cowork cannot override which Harness environment it routes to. For a private or self-managed Harness environment, ask Harness Support to enable hosted MCP for that environment, or run the local/self-hosted server and set `HARNESS_BASE_URL` to the target Harness host.
 
 **Hosted MCP example:**
 
@@ -577,7 +600,7 @@ The server automatically loads environment variables from a `.env` file in the p
 
 | Variable                    | Required | Default                     | Description                                                                                                                                                                                                                                           |
 | --------------------------- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user` (shared API key), `multi-user` (HTTP with per-session API keys), or `oauth` (HTTP with HarnessID access-token validation)                                                                                              |
+| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user`, `multi-user`, `oauth` (direct HarnessID token), or `oauth-proxy` (upstream identity-provider token exchanged for a per-user HarnessID token) |
 | `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` or `oauth` mode, where each session brings its own credential                                                                 |
 | `HARNESS_ACCOUNT_ID`        | No       | *(from PAT/SAT)*            | Harness account identifier. Auto-extracted from PAT/SAT tokens in single-user mode; multi-user sessions can provide their own via `x-harness-account-id` when the API key does not embed one                                                          |
 | `HARNESS_BASE_URL`          | No       | `https://app.harness.io` (`https://mcp.harness.io/cli` in OAuth mode) | Harness API/UI base URL. OAuth mode routes through the hosted MCP `/cli` proxy by default; other modes use the Harness SaaS API directly |
@@ -587,6 +610,28 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_OAUTH_CLIENT_ID` | No     | `mcp-client`                | HarnessID client the access token must be issued to, checked against the token's `azp` claim                                                                                                                                                        |
 | `HARNESS_MCP_OAUTH_ACCOUNT_CLAIM` | No | `account_id`                | Access-token claim carrying the Harness account ID, populated by the HarnessID `organization` scope                                                                                                                                                 |
 | `HARNESS_MCP_OAUTH_SCOPES`  | No       | `openid profile email organization` | Space-separated scopes advertised in RFC 9728 protected-resource metadata                                                                                                                                                    |
+| `HARNESS_MCP_OAUTH_CLIENT_SECRET` | Yes* | -- | Confidential HarnessID client secret; required only in `oauth-proxy` mode |
+| `HARNESS_MCP_OAUTH_IDP_HINT` | No | `okta` | HarnessID organization-linked identity-provider alias used during first linking |
+| `HARNESS_MCP_OAUTH_EXTERNAL_SUB_CLAIM` | No | `external_sub` | HarnessID token claim matched to the upstream token subject during linking |
+| `HARNESS_MCP_OAUTH_PROXY_GRANT` | No | `refresh` | Later-request grant in `oauth-proxy` mode: `refresh` or `jwt-bearer` |
+| `HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL` | No | MCP resource origin | Public origin serving `/oauth/link` and `/oauth/callback` |
+| `HARNESS_MCP_OAUTH_PROXY_VAULT_MODE` | No | `file` | `file` stores the encrypted vault on local disk for one pod. `redis` shares refresh tokens and login state across pods |
+| `HARNESS_MCP_OAUTH_PROXY_VAULT_PATH` | No | `.harness-mcp/oauth-proxy-vault.enc` | Encrypted refresh-token and link-state file used when vault mode is `file` |
+| `HARNESS_MCP_OAUTH_PROXY_VAULT_KEY` | Yes* | -- | Base64-encoded 32-byte AES key required in `oauth-proxy` mode |
+| `HARNESS_MCP_OAUTH_PROXY_REDIS_URL` | Yes* | -- | `redis://` or `rediss://` URL required when vault mode is `redis`. Redis 6.2 or newer |
+| `HARNESS_MCP_OAUTH_PROXY_REDIS_KEY_PREFIX` | No | `harness-mcp:oauth` | Prefix for OAuth vault keys in Redis |
+| `HARNESS_MCP_UPSTREAM_ISSUER` | Yes* | -- | Exact upstream token issuer required in `oauth-proxy` mode |
+| `HARNESS_MCP_UPSTREAM_AUDIENCE` | Yes* | -- | Exact upstream token audience required in `oauth-proxy` mode |
+| `HARNESS_MCP_UPSTREAM_JWKS_URI` | No | `<upstream issuer>/v1/keys` | Upstream RS256 JWKS endpoint |
+| `HARNESS_MCP_UPSTREAM_SCOPES` | No | `openid profile email offline_access` | Scopes requested by the embedded broker and published to Cursor |
+| `HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID` | Yes* | -- | Confidential upstream OAuth client used by the embedded broker |
+| `HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET` | Yes* | -- | Upstream OAuth client secret used only by the server |
+| `HARNESS_MCP_UPSTREAM_DISCOVERY_URI` | No | `<upstream issuer>/.well-known/openid-configuration` | Upstream OIDC discovery endpoint |
+| `HARNESS_MCP_BROKER_ISSUER` | No | OAuth proxy public URL | Authorization-server issuer Cursor discovers |
+| `HARNESS_MCP_BROKER_CLIENT_ID` | No | `cursor-harness-mcp` | Static public OAuth client ID configured in Cursor |
+| `HARNESS_MCP_BROKER_REDIRECT_URIS` | No | `http://localhost:8787/callback` | Exact comma-separated Cursor callback allowlist |
+| `HARNESS_MCP_BROKER_CODE_TTL_MS` | No | `60000` | Lifetime of one-time Cursor authorization codes |
+| `HARNESS_MCP_BROKER_TRANSACTION_TTL_MS` | No | `600000` | Maximum lifetime of the chained browser authorization transaction |
 | `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. Legacy FME is unavailable in OAuth mode so HarnessID tokens are never sent to `api.split.io`; use Harness-native `org_id`+`project_id` scope instead. Must not be set in `multi-user` or `oauth` mode |
 | `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources in **legacy (`workspace_id`) mode only**. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development. Harness-native (`org_id`+`project_id`) mode ignores this and uses the standard `HARNESS_API_KEY`/`HARNESS_BASE_URL` instead |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |

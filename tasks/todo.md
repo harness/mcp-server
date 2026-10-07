@@ -37,18 +37,15 @@
   `organization` scope, so `HARNESS_ACCOUNT_ID` is unnecessary in OAuth mode.
 - Kept static `HARNESS_MCP_AUTH_TOKEN`, single-user PAT/SAT, and multi-user session-PAT
   paths unchanged.
-- Added QA HarnessID setup and validation guidance in `docs/harnessid-oauth.md`, plus
+- Added HarnessID setup and validation guidance in `docs/harnessid-oauth.md`, plus
   README and `.env.example` configuration.
 - Verification passed: typecheck, build, and the full suite (147 files, 3,312 tests).
-- QA end-to-end against a real `mcp-client` token: local discovery matches the QA
-  deployment's published metadata, `initialize` and `tools/list` succeed, and the token is
-  forwarded downstream with the account resolved from the token.
-- QA `HARNESS_BASE_URL` is `https://mcp.harness-test.com/cli`; the platform APIs are routed
-  under `/cli` on the MCP host, and `buildUrl` preserves a base path prefix.
-- Open QA-side items outside this repo: the deployment gateway answered
-  `Jwt issuer is not configured` for the HarnessID issuer on both `/mcp` and `/cli` paths
-  during testing, and calling `qa.harness.io` directly with a HarnessID token returned
-  `500 UNKNOWN_ERROR` where an unknown token returns `401 INVALID_TOKEN`.
+- End-to-end against a real `mcp-client` token: discovery matches the published
+  metadata, `initialize` and `tools/list` succeed, and the token is forwarded
+  downstream with the account resolved from the token.
+- OAuth-mode `HARNESS_BASE_URL` defaults to `https://mcp.harness.io/cli`; platform
+  APIs are routed under `/cli` on the MCP host, and `buildUrl` preserves a base
+  path prefix.
 
 ## Version bump 3.2.24 (2026-09-04)
 

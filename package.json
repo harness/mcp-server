@@ -18,6 +18,7 @@
     "dev": "tsc --watch",
     "start": "node build/index.js stdio",
     "start:http": "node build/index.js http",
+    "poc:proxy": "pnpm exec tsc && node build/poc/main.js",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js stdio",
     "prepare:mcpb": "node scripts/prepare-mcpb.js",
     "typecheck": "tsc --noEmit",
@@ -63,6 +64,7 @@
     "express": "^5.2.1",
     "hono": "^4.12.34",
     "jsonwebtoken": "^9.0.3",
+    "redis": "^6.3.0",
     "yaml": "^2.8.3",
     "zod": "^4.0.0"
   },

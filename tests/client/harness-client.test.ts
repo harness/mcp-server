@@ -394,12 +394,27 @@ describe("HarnessClient", () => {
       expect(secondHeaders.has("x-api-key")).toBe(false);
     });
 
+    it("forwards only the internally exchanged HarnessID token in oauth-proxy mode", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth-proxy",
+        HARNESS_API_KEY: "",
+      }));
+      client.setBearerTokenResolver(() => "internal-harnessid-token");
+
+      await client.request({ path: "/ng/api/projects" });
+
+      const headers = new Headers(fetchSpy.mock.calls[0][1]?.headers);
+      expect(headers.get("Authorization")).toBe("Bearer internal-harnessid-token");
+      expect(headers.has("x-api-key")).toBe(false);
+    });
+
     it("keeps the base URL path prefix on OAuth-mode requests", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig({
         HARNESS_MCP_MODE: "oauth",
         HARNESS_API_KEY: "",
-        HARNESS_BASE_URL: "https://mcp.harness-test.com/cli",
+        HARNESS_BASE_URL: "https://mcp.example.com/cli",
       }));
       client.setAccountIdResolver(() => "account-from-token");
       client.setBearerTokenResolver(() => "keycloak-access-token");
@@ -408,7 +423,7 @@ describe("HarnessClient", () => {
 
       const url = new URL(fetchSpy.mock.calls[0][0] as string);
       expect(url.origin + url.pathname).toBe(
-        "https://mcp.harness-test.com/cli/ng/api/organizations",
+        "https://mcp.example.com/cli/ng/api/organizations",
       );
       expect(url.searchParams.get("accountIdentifier")).toBe("account-from-token");
     });

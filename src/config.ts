@@ -20,6 +20,27 @@ const DEFAULT_OAUTH_BASE_URL = "https://mcp.harness.io/cli";
 const DEFAULT_OAUTH_ISSUER = "https://id.harness.io/idp/realms/HarnessIDP";
 const DEFAULT_OAUTH_RESOURCE = "https://mcp.harness.io/mcp";
 
+function assertRedisUrl(value: string | undefined): void {
+  if (!value) {
+    throw new Error(
+      "oauth-proxy redis vault mode requires HARNESS_MCP_OAUTH_PROXY_REDIS_URL.",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(
+      "HARNESS_MCP_OAUTH_PROXY_REDIS_URL must be a redis:// or rediss:// URL.",
+    );
+  }
+  if (url.protocol !== "redis:" && url.protocol !== "rediss:") {
+    throw new Error(
+      "HARNESS_MCP_OAUTH_PROXY_REDIS_URL must be a redis:// or rediss:// URL.",
+    );
+  }
+}
+
 function validateAllowedHosts(rawHosts: string | undefined): string | undefined {
   if (rawHosts === undefined) return undefined;
 
@@ -70,7 +91,7 @@ export function extractAccountIdFromToken(apiKey: string): string | undefined {
 const RawConfigSchema = z.object({
   HARNESS_MCP_MODE: z.preprocess(
     emptyStringAsUndefined,
-    z.enum(["single-user", "multi-user", "oauth"]).default("single-user"),
+    z.enum(["single-user", "multi-user", "oauth", "oauth-proxy"]).default("single-user"),
   ),
   HARNESS_API_KEY: optionalStringFromEnv,
   HARNESS_ACCOUNT_ID: optionalStringFromEnv,
@@ -90,6 +111,56 @@ const RawConfigSchema = z.object({
     emptyStringAsUndefined,
     z.string().default("openid profile email organization"),
   ),
+  HARNESS_MCP_OAUTH_CLIENT_SECRET: optionalStringFromEnv,
+  HARNESS_MCP_OAUTH_IDP_HINT: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("okta"),
+  ),
+  HARNESS_MCP_OAUTH_EXTERNAL_SUB_CLAIM: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("external_sub"),
+  ),
+  HARNESS_MCP_OAUTH_PROXY_GRANT: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["refresh", "jwt-bearer"]).default("refresh"),
+  ),
+  HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL: optionalUrlFromEnv,
+  HARNESS_MCP_OAUTH_PROXY_VAULT_PATH: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default(".harness-mcp/oauth-proxy-vault.enc"),
+  ),
+  HARNESS_MCP_OAUTH_PROXY_VAULT_KEY: optionalStringFromEnv,
+  HARNESS_MCP_OAUTH_PROXY_VAULT_MODE: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["file", "redis"]).default("file"),
+  ),
+  HARNESS_MCP_OAUTH_PROXY_REDIS_URL: optionalStringFromEnv,
+  HARNESS_MCP_OAUTH_PROXY_REDIS_KEY_PREFIX: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().regex(/^[A-Za-z0-9:_-]+$/).default("harness-mcp:oauth"),
+  ),
+  HARNESS_MCP_OAUTH_PROXY_LINK_TTL_MS: z.coerce.number().int().min(30_000).default(5 * 60_000),
+  HARNESS_MCP_UPSTREAM_ISSUER: optionalUrlFromEnv,
+  HARNESS_MCP_UPSTREAM_AUDIENCE: optionalStringFromEnv,
+  HARNESS_MCP_UPSTREAM_JWKS_URI: optionalUrlFromEnv,
+  HARNESS_MCP_UPSTREAM_SCOPES: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("openid profile email offline_access"),
+  ),
+  HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID: optionalStringFromEnv,
+  HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET: optionalStringFromEnv,
+  HARNESS_MCP_UPSTREAM_DISCOVERY_URI: optionalUrlFromEnv,
+  HARNESS_MCP_BROKER_ISSUER: optionalUrlFromEnv,
+  HARNESS_MCP_BROKER_CLIENT_ID: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("cursor-harness-mcp"),
+  ),
+  HARNESS_MCP_BROKER_REDIRECT_URIS: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("http://localhost:8787/callback"),
+  ),
+  HARNESS_MCP_BROKER_CODE_TTL_MS: z.coerce.number().int().min(30_000).max(10 * 60_000).default(60_000),
+  HARNESS_MCP_BROKER_TRANSACTION_TTL_MS: z.coerce.number().int().min(60_000).max(30 * 60_000).default(10 * 60_000),
   // New names (preferred)
   HARNESS_ORG: optionalStringFromEnv,
   HARNESS_PROJECT: optionalStringFromEnv,
@@ -168,8 +239,13 @@ const RawConfigSchema = z.object({
 export const ConfigSchema = RawConfigSchema.transform((data) => {
   const isMultiUser = data.HARNESS_MCP_MODE === "multi-user";
   const isOAuth = data.HARNESS_MCP_MODE === "oauth";
+  const isOAuthProxy = data.HARNESS_MCP_MODE === "oauth-proxy";
+  const isOAuthMode = isOAuth || isOAuthProxy;
+  // `/cli` is the OAuth-mode API proxy only. Single-user and multi-user keep
+  // app.harness.io so PAT/SAT deployments are unchanged. An explicit
+  // HARNESS_BASE_URL always wins.
   const harnessBaseUrl = data.HARNESS_BASE_URL
-    ?? (isOAuth ? DEFAULT_OAUTH_BASE_URL : DEFAULT_HARNESS_BASE_URL);
+    ?? (isOAuthMode ? DEFAULT_OAUTH_BASE_URL : DEFAULT_HARNESS_BASE_URL);
 
   if (isMultiUser && data.HARNESS_API_KEY) {
     throw new Error(
@@ -185,26 +261,26 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
-  if (isOAuth && data.HARNESS_API_KEY) {
+  if (isOAuthMode && data.HARNESS_API_KEY) {
     throw new Error(
-      "HARNESS_API_KEY must not be set in oauth mode. " +
+      `HARNESS_API_KEY must not be set in ${data.HARNESS_MCP_MODE} mode. ` +
       "Each session must authenticate with a HarnessID access token.",
     );
   }
 
-  if (isOAuth && data.HARNESS_FME_API_KEY) {
+  if (isOAuthMode && data.HARNESS_FME_API_KEY) {
     throw new Error(
-      "HARNESS_FME_API_KEY must not be set in oauth mode. " +
+      `HARNESS_FME_API_KEY must not be set in ${data.HARNESS_MCP_MODE} mode. ` +
       "FME calls must use the session user's HarnessID access token.",
     );
   }
 
-  if (!isMultiUser && !isOAuth && !data.HARNESS_API_KEY) {
+  if (!isMultiUser && !isOAuthMode && !data.HARNESS_API_KEY) {
     throw new Error("HARNESS_API_KEY is required in single-user mode.");
   }
 
   if (
-    isOAuth
+    isOAuthMode
     && !data.HARNESS_ALLOW_HTTP
     && (
       !data.HARNESS_MCP_OAUTH_ISSUER!.startsWith("https://")
@@ -221,15 +297,64 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
-  if (isOAuth && data.HARNESS_MCP_AUTH_TOKEN) {
+  if (isOAuthMode && data.HARNESS_MCP_AUTH_TOKEN) {
     throw new Error(
-      "HARNESS_MCP_AUTH_TOKEN must not be set in oauth mode. " +
+      `HARNESS_MCP_AUTH_TOKEN must not be set in ${data.HARNESS_MCP_MODE} mode. ` +
       "OAuth access tokens authenticate HTTP MCP requests.",
     );
   }
 
+  if (isOAuthProxy) {
+    const missing = [
+      !data.HARNESS_MCP_OAUTH_CLIENT_SECRET && "HARNESS_MCP_OAUTH_CLIENT_SECRET",
+      !data.HARNESS_MCP_UPSTREAM_ISSUER && "HARNESS_MCP_UPSTREAM_ISSUER",
+      !data.HARNESS_MCP_UPSTREAM_AUDIENCE && "HARNESS_MCP_UPSTREAM_AUDIENCE",
+      !data.HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID && "HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID",
+      !data.HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET && "HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET",
+      !data.HARNESS_MCP_OAUTH_PROXY_VAULT_KEY && "HARNESS_MCP_OAUTH_PROXY_VAULT_KEY",
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      throw new Error(`oauth-proxy mode requires ${missing.join(", ")}.`);
+    }
+    if (
+      !data.HARNESS_ALLOW_HTTP
+      && (
+        !data.HARNESS_MCP_UPSTREAM_ISSUER!.startsWith("https://")
+        || (
+          data.HARNESS_MCP_UPSTREAM_JWKS_URI !== undefined
+          && !data.HARNESS_MCP_UPSTREAM_JWKS_URI.startsWith("https://")
+        )
+        || (
+          data.HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL !== undefined
+          && !data.HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL.startsWith("https://")
+        )
+        || (
+          data.HARNESS_MCP_BROKER_ISSUER !== undefined
+          && !data.HARNESS_MCP_BROKER_ISSUER.startsWith("https://")
+        )
+        || (
+          data.HARNESS_MCP_UPSTREAM_DISCOVERY_URI !== undefined
+          && !data.HARNESS_MCP_UPSTREAM_DISCOVERY_URI.startsWith("https://")
+        )
+      )
+    ) {
+      throw new Error(
+        "Upstream issuer, JWKS, and OAuth proxy public URLs must use HTTPS. " +
+        "Set HARNESS_ALLOW_HTTP=true only for local development.",
+      );
+    }
+    if (Buffer.from(data.HARNESS_MCP_OAUTH_PROXY_VAULT_KEY!, "base64").length !== 32) {
+      throw new Error(
+        "HARNESS_MCP_OAUTH_PROXY_VAULT_KEY must be a base64-encoded 32-byte key.",
+      );
+    }
+    if (data.HARNESS_MCP_OAUTH_PROXY_VAULT_MODE === "redis") {
+      assertRedisUrl(data.HARNESS_MCP_OAUTH_PROXY_REDIS_URL);
+    }
+  }
+
   let accountId: string | undefined;
-  if (isMultiUser || isOAuth) {
+  if (isMultiUser || isOAuthMode) {
     accountId = data.HARNESS_ACCOUNT_ID ?? "";
   } else {
     accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY!);
@@ -284,10 +409,22 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   // Remove deprecated keys from output, expose only the canonical names
   const { HARNESS_DEFAULT_ORG_ID: _oldOrg, HARNESS_DEFAULT_PROJECT_ID: _oldProject, ...rest } = data;
   const oauthIssuer = data.HARNESS_MCP_OAUTH_ISSUER;
-  const oauthJwksUri = isOAuth
+  const oauthJwksUri = isOAuthMode
     ? data.HARNESS_MCP_OAUTH_JWKS_URI
       ?? `${oauthIssuer!.replace(/\/+$/, "")}/protocol/openid-connect/certs`
     : data.HARNESS_MCP_OAUTH_JWKS_URI;
+  const oauthProxyPublicUrl = data.HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL
+    ?? (isOAuthProxy ? new URL(data.HARNESS_MCP_OAUTH_RESOURCE).origin : undefined);
+  const upstreamJwksUri = data.HARNESS_MCP_UPSTREAM_JWKS_URI
+    ?? (data.HARNESS_MCP_UPSTREAM_ISSUER
+      ? `${data.HARNESS_MCP_UPSTREAM_ISSUER.replace(/\/+$/, "")}/v1/keys`
+      : undefined);
+  const brokerIssuer = data.HARNESS_MCP_BROKER_ISSUER
+    ?? oauthProxyPublicUrl;
+  const upstreamDiscoveryUri = data.HARNESS_MCP_UPSTREAM_DISCOVERY_URI
+    ?? (data.HARNESS_MCP_UPSTREAM_ISSUER
+      ? `${data.HARNESS_MCP_UPSTREAM_ISSUER.replace(/\/+$/, "")}/.well-known/openid-configuration`
+      : undefined);
 
   return {
     ...rest,
@@ -299,6 +436,10 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     HARNESS_AUTO_APPROVE_RISK,
     HARNESS_MCP_OAUTH_ISSUER: oauthIssuer,
     HARNESS_MCP_OAUTH_JWKS_URI: oauthJwksUri,
+    HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL: oauthProxyPublicUrl,
+    HARNESS_MCP_BROKER_ISSUER: brokerIssuer,
+    HARNESS_MCP_UPSTREAM_JWKS_URI: upstreamJwksUri,
+    HARNESS_MCP_UPSTREAM_DISCOVERY_URI: upstreamDiscoveryUri,
   };
 });
 
@@ -323,7 +464,9 @@ export function resolveFmeApiKey(
   config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_FME_API_KEY" | "HARNESS_API_KEY">,
 ): string | undefined {
   const explicitFmeKey =
-    config.HARNESS_MCP_MODE === "multi-user" || config.HARNESS_MCP_MODE === "oauth"
+    config.HARNESS_MCP_MODE === "multi-user"
+      || config.HARNESS_MCP_MODE === "oauth"
+      || config.HARNESS_MCP_MODE === "oauth-proxy"
       ? undefined
       : config.HARNESS_FME_API_KEY?.trim();
   if (explicitFmeKey && !isPlaceholderCredential(explicitFmeKey)) {
@@ -331,6 +474,7 @@ export function resolveFmeApiKey(
   }
 
   const fallbackHarnessKey = config.HARNESS_MCP_MODE === "oauth"
+    || config.HARNESS_MCP_MODE === "oauth-proxy"
     ? undefined
     : config.HARNESS_API_KEY?.trim();
   if (fallbackHarnessKey && !isPlaceholderCredential(fallbackHarnessKey)) {

@@ -21,6 +21,16 @@ import {
   refreshOAuthSessionCredential,
   registerOAuthProtectedResourceRoutes,
 } from "./utils/oauth-auth.js";
+import {
+  createOAuthProxyRuntime,
+  registerOAuthProxyRoutes,
+  type OAuthProxyRuntime,
+} from "./utils/oauth-proxy.js";
+import {
+  brokerProtectedResourceConfig,
+  createOAuthBrokerRuntime,
+  registerOAuthBrokerRoutes,
+} from "./utils/oauth-broker.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
 import { SearchManager } from "./search/index.js";
@@ -40,6 +50,7 @@ interface HarnessServerResult {
 
 interface OAuthSessionCredential {
   subject: string;
+  identitySubject: string;
   accountId: string;
   accessToken: string;
 }
@@ -272,6 +283,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   validateHttpAuthForBindHost(host, config);
 
   const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions(host, config));
+  let oauthProxyRuntime: OAuthProxyRuntime | undefined;
 
   // Trust reverse proxies / load balancers in front of the server so req.ip
   // resolves to the real client (from X-Forwarded-For) instead of the proxy
@@ -290,12 +302,18 @@ async function startHttp(config: Config, port: number): Promise<void> {
     next();
   });
 
-  if (config.HARNESS_MCP_MODE === "oauth") {
+  if (config.HARNESS_MCP_MODE === "oauth-proxy") {
+    oauthProxyRuntime = createOAuthProxyRuntime(config);
+    await oauthProxyRuntime.vault.connect?.();
+    registerOAuthProtectedResourceRoutes(app, brokerProtectedResourceConfig(config));
+    registerOAuthBrokerRoutes(app, createOAuthBrokerRuntime(oauthProxyRuntime));
+    registerOAuthProxyRoutes(app, oauthProxyRuntime);
+  } else if (config.HARNESS_MCP_MODE === "oauth") {
     registerOAuthProtectedResourceRoutes(app, config);
   }
 
   // Auth gate before body parsing — reject unauthenticated requests without allocating body memory
-  app.use(createMcpHttpAuthMiddleware(config));
+  app.use(createMcpHttpAuthMiddleware(config, oauthProxyRuntime));
 
   // Simple per-IP rate limiting: 60 requests per minute
   const ipHits = new Map<string, { count: number; resetAt: number }>();
@@ -420,9 +438,15 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
     try {
-      const oauthCredential = config.HARNESS_MCP_MODE === "oauth"
+      const oauthCredential = (
+        config.HARNESS_MCP_MODE === "oauth"
+        || config.HARNESS_MCP_MODE === "oauth-proxy"
+      )
         ? {
           subject: res.locals.harnessOAuthClaims.sub as string,
+          identitySubject: (
+            res.locals.harnessOAuthIdentitySubject as string | undefined
+          ) ?? res.locals.harnessOAuthClaims.sub as string,
           accountId: res.locals.harnessOAuthAccountId as string,
           accessToken: res.locals.harnessOAuthAccessToken as string,
         }
@@ -676,7 +700,14 @@ async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
 
-  if ((config.HARNESS_MCP_MODE === "multi-user" || config.HARNESS_MCP_MODE === "oauth") && transport === "stdio") {
+  if (
+    (
+      config.HARNESS_MCP_MODE === "multi-user"
+      || config.HARNESS_MCP_MODE === "oauth"
+      || config.HARNESS_MCP_MODE === "oauth-proxy"
+    )
+    && transport === "stdio"
+  ) {
     throw new Error(
       `${config.HARNESS_MCP_MODE} mode is only supported with HTTP transport. ` +
       "Use --transport http or set HARNESS_MCP_MODE=single-user for stdio.",
