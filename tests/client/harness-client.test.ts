@@ -911,6 +911,56 @@ describe("HarnessClient", () => {
       await expect(client.request({ path: "/test" })).rejects.toThrow(/HTTP 502: Bad Gateway/);
     });
 
+    it("preserves a JSON 404 message from a missing resource", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({ message: "Dataset not found" }),
+        { status: 404 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/gateway/ai-evals/api/v1/orgs/o/projects/p/dataset/missing" }))
+        .rejects.toMatchObject({
+          message: "Dataset not found",
+          statusCode: 404,
+        });
+    });
+
+    it("identifies an HTML nginx 404 as an undeployed route", async () => {
+      const html = "<html><head><title>404 Not Found</title></head><body><center><h1>404 Not Found</h1></center><hr><center>nginx</center></body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 404 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/gateway/ai-evals/api/v1/orgs/o/projects/p/dataset" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        const e = err as HarnessApiError;
+        expect(e.statusCode).toBe(404);
+        expect(e.message).toContain("HTML nginx 404");
+        expect(e.message).toContain("not deployed");
+        expect(e.message).not.toContain("<");
+      }
+    });
+
+    it("identifies a non-nginx HTML 404 without calling it nginx", async () => {
+      const html = "<html><body><h1>404 Not Found</h1></body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 404 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/test" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(HarnessApiError);
+        const e = err as HarnessApiError;
+        expect(e.statusCode).toBe(404);
+        expect(e.message).toContain("HTML error page");
+        expect(e.message).not.toContain("nginx");
+        expect(e.message).not.toContain("<");
+      }
+    });
+
     it("returns actionable message for HTML 403 (proxy/WAF block)", async () => {
       const html = '<!doctype html><meta charset="utf-8"><meta name=viewport content="width=device-width, initial-scale=1"><title>403</title>403 Forbidden';
       fetchSpy.mockResolvedValue(new Response(html, { status: 403 }));
