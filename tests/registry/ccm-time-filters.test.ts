@@ -258,18 +258,156 @@ describe("CCM custom time window — start_time/end_time override across perspec
     expect(before).toBe(Q4_END);
   });
 
-  it("falls back to relative time_filter when only one bound is provided", async () => {
+  it("rejects a lone bound instead of silently falling back to a relative window", async () => {
+    await expect(
+      registry.dispatch(client, "cost_timeseries", "list", {
+        perspective_id: "test-perspective",
+        start_time: Q4_START, // end_time missing → invalid custom window
+        time_filter: "LAST_MONTH",
+        time_resolution: "MONTH",
+        group_by: "none",
+      }),
+    ).rejects.toThrow(/start_time and end_time must be provided together/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("accepts YYYY-MM-DD dates; date-only end_time includes the whole day (CCM-37122)", async () => {
     await registry.dispatch(client, "cost_timeseries", "list", {
       perspective_id: "test-perspective",
-      start_time: Q4_START, // end_time missing → not a valid custom window
-      time_filter: "LAST_MONTH",
-      time_resolution: "MONTH",
+      start_time: "2026-09-28",
+      end_time: "2026-09-29",
+      time_resolution: "DAY",
       group_by: "none",
     });
     const { after, before } = extractTimeFilters(mockRequest.mock.calls[0][0] as Record<string, unknown>);
-    // LAST_MONTH relative to FIXED_NOW (May 2026) → April 2026.
-    expect(after).toBe(Date.UTC(2026, 3, 1));
-    expect(before).toBe(Date.UTC(2026, 3, 30, 23, 59, 59, 999));
+    expect(after).toBe(Date.UTC(2026, 8, 28));
+    expect(before).toBe(Date.UTC(2026, 8, 29, 23, 59, 59, 999));
+  });
+
+  it("rejects unparseable dates instead of falling back to LAST_30_DAYS", async () => {
+    await expect(
+      registry.dispatch(client, "cost_timeseries", "list", {
+        perspective_id: "test-perspective",
+        start_time: "sept 28th",
+        end_time: "sept 29th",
+        group_by: "none",
+      }),
+    ).rejects.toThrow(/Invalid start_time/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("cost_timeseries returns dated items, inferred date_range and requested_window", async () => {
+    mockRequest.mockResolvedValue({
+      data: { perspectiveTimeSeriesStats: { stats: [{ time: Date.UTC(2026, 8, 28), values: [] }] } },
+    });
+    const result = (await registry.dispatch(client, "cost_timeseries", "list", {
+      perspective_id: "test-perspective",
+      start_time: "2026-09-28",
+      end_time: "2026-09-29",
+      time_resolution: "DAY",
+      group_by: "none",
+    })) as { items: Array<{ date: string }>; date_range: unknown; requested_window: unknown };
+    expect(result.items[0].date).toBe("2026-09-28");
+    expect(result.date_range).toEqual({ first: "2026-09-28", last: "2026-09-28" });
+    expect(result.requested_window).toEqual({
+      start: "2026-09-28T00:00:00.000Z",
+      end: "2026-09-29T23:59:59.999Z",
+    });
+  });
+});
+
+describe("CCM anomaly and overview windows use the same date parser", () => {
+  let registry: Registry;
+  let mockRequest: ReturnType<typeof vi.fn>;
+  let client: HarnessClient;
+
+  const FIXED_NOW = new Date("2026-05-21T12:00:00Z");
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: [] });
+    client = makeClient(mockRequest);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function anomalyTimeFilters(): Array<{ operator: string; timestamp: number }> {
+    const call = mockRequest.mock.calls[0][0] as {
+      body: { anomalyFilterPropertiesDTO: { timeFilters: Array<{ operator: string; timestamp: number }> } };
+    };
+    return call.body.anomalyFilterPropertiesDTO.timeFilters;
+  }
+
+  it("cost_anomaly accepts YYYY-MM-DD and rejects an inverted window", async () => {
+    await registry.dispatch(client, "cost_anomaly", "list", {
+      start_time: "2026-09-28",
+      end_time: "2026-09-29",
+    });
+    expect(anomalyTimeFilters()).toEqual([
+      { operator: "AFTER", timestamp: Date.UTC(2026, 8, 28) },
+      { operator: "BEFORE", timestamp: Date.UTC(2026, 8, 29, 23, 59, 59, 999) },
+    ]);
+
+    mockRequest.mockClear();
+    await expect(
+      registry.dispatch(client, "cost_anomaly", "list", {
+        start_time: "2026-09-30",
+        end_time: "2026-09-28",
+      }),
+    ).rejects.toThrow(/must not be after/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("blank anomaly bounds fall back to the relative window instead of clearing it", async () => {
+    await registry.dispatch(client, "cost_anomaly", "list", { start_time: "  ", end_time: "" });
+    expect(anomalyTimeFilters()).toEqual([
+      { operator: "AFTER", timestamp: Date.UTC(2026, 3, 21) },
+      { operator: "BEFORE", timestamp: Date.UTC(2026, 4, 21, 23, 59, 59, 999) },
+    ]);
+  });
+
+  it("cost_anomaly_drilldown sends epoch-ms query params for date strings", async () => {
+    await registry.dispatch(client, "cost_anomaly_drilldown", "get", {
+      anomaly_id: "anom-1",
+      start_time: "2026-09-28",
+      end_time: "2026-09-29",
+    });
+    const call = mockRequest.mock.calls[0][0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/ccm/api/anomaly/v2/drill-down/cost/time-series");
+    expect(call.params.startTime).toBe(Date.UTC(2026, 8, 28));
+    expect(call.params.endTime).toBe(Date.UTC(2026, 8, 29, 23, 59, 59, 999));
+  });
+
+  it("cost_anomaly_drilldown rejects an impossible date before calling the API", async () => {
+    await expect(
+      registry.dispatch(client, "cost_anomaly_drilldown", "get", {
+        anomaly_id: "anom-1",
+        start_time: "2026-02-31T00:00:00Z",
+        end_time: "2026-03-01T00:00:00Z",
+      }),
+    ).rejects.toThrow(/Invalid start_time/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("cost_account_overview parses dates and does not replace invalid input with the default window", async () => {
+    await registry.dispatch(client, "cost_account_overview", "get", {
+      start_time: "2026-09-28",
+      end_time: "2026-09-29",
+    });
+    const call = mockRequest.mock.calls[0][0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/ccm/api/overview");
+    expect(call.params.startTime).toBe(String(Date.UTC(2026, 8, 28)));
+    expect(call.params.endTime).toBe(String(Date.UTC(2026, 8, 29, 23, 59, 59, 999)));
+
+    mockRequest.mockClear();
+    await expect(
+      registry.dispatch(client, "cost_account_overview", "get", { start_time: "sept 28" }),
+    ).rejects.toThrow(/Invalid start_time/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 

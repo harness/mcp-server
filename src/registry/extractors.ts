@@ -12,6 +12,7 @@ import {
 } from "../utils/runtime-input-metadata.js";
 import type { PreflightContext } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
+import { toUtcDateString, parseCustomWindow } from "../utils/ccm-time.js";
 
 /** Vibe returns unwrapped, mixed-case DTOs. Keep contract fields without forwarding internal metadata. */
 function pickVibeFields(value: unknown, fields: readonly string[]): Record<string, unknown> {
@@ -1032,7 +1033,42 @@ export const ccmTimeseriesExtract = (raw: unknown): unknown => {
   const r = raw as {
     data?: { perspectiveTimeSeriesStats?: { stats?: unknown[] } };
   };
-  return r.data?.perspectiveTimeSeriesStats?.stats ?? [];
+  const stats = r.data?.perspectiveTimeSeriesStats?.stats ?? [];
+  // Add a UTC calendar `date` next to each epoch-ms `time` so callers never
+  // have to convert epochs themselves (LLMs mis-convert by a day).
+  return stats.map((stat) => {
+    const s = stat as Record<string, unknown> | null;
+    if (s && typeof s === "object" && typeof s.time === "number") {
+      return { ...s, date: toUtcDateString(s.time) };
+    }
+    return stat;
+  });
+};
+
+/**
+ * Time series with a UTC `date` per item, plus `date_range` (first/last date
+ * actually returned, inferred from the data) so the model can verify the API
+ * covered the days it asked about. For explicit start_time/end_time requests the
+ * requested window is echoed too, to compare against `date_range`.
+ */
+export const ccmTimeseriesWithWindowExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
+  const items = ccmTimeseriesExtract(raw) as Array<Record<string, unknown>>;
+  const dates = items
+    .map((i) => i?.date)
+    .filter((d): d is string => typeof d === "string")
+    .sort();
+  const out: Record<string, unknown> = {
+    items,
+    total: items.length,
+    date_range: dates.length ? { first: dates[0], last: dates[dates.length - 1] } : null,
+  };
+  if (input) {
+    const { startMs, endMs } = parseCustomWindow(input);
+    if (startMs != null && endMs != null) {
+      out.requested_window = { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() };
+    }
+  }
+  return out;
 };
 
 /**

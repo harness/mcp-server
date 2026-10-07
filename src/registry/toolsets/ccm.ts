@@ -1,5 +1,6 @@
 import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec, BodySchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
+import { assertWindowOrder, parseCustomWindow, parseTimeInput } from "../../utils/ccm-time.js";
 import {
   ngExtract,
   passthrough,
@@ -8,6 +9,7 @@ import {
   anomalyListExtract,
   ccmBreakdownExtract,
   ccmTimeseriesExtract,
+  ccmTimeseriesWithWindowExtract,
   ccmSummaryExtract,
   ccmRecommendationsExtract,
   countExtract,
@@ -211,7 +213,8 @@ function buildCustomTimeFilters(startMs: number, endMs: number): Record<string, 
   ];
 }
 
-function buildTimeFilters(timeFilter: string): Record<string, unknown>[] {
+/** Resolve a relative `time_filter` enum to a concrete UTC [start, end] range. */
+function relativeTimeRange(timeFilter: string): { start: Date; end: Date } {
   const now = new Date();
   let start: Date;
   let end: Date;
@@ -281,6 +284,12 @@ function buildTimeFilters(timeFilter: string): Record<string, unknown>[] {
     }
   }
 
+  return { start, end };
+}
+
+
+function buildTimeFilters(timeFilter: string): Record<string, unknown>[] {
+  const { start, end } = relativeTimeRange(timeFilter);
   return buildCustomTimeFilters(start.getTime(), end.getTime());
 }
 
@@ -302,18 +311,13 @@ function resolveTimeFilters(
 }
 
 /**
- * Coerce an input value to a positive epoch-ms number, or undefined. Accepts
- * numbers or numeric strings (tool args often arrive as strings).
+ * Read the optional custom-window params from a tool input. Accepts
+ * `YYYY-MM-DD` (UTC; a date-only end_time includes that whole day), ISO 8601
+ * datetimes, or epoch ms. Throws on invalid input instead of silently falling
+ * back to the default window.
  */
-function toEpochMs(value: unknown): number | undefined {
-  if (value == null) return undefined;
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
-}
-
-/** Read the optional custom-window params from a tool input. */
 function customWindow(input: Record<string, unknown>): { startMs?: number; endMs?: number } {
-  return { startMs: toEpochMs(input.start_time), endMs: toEpochMs(input.end_time) };
+  return parseCustomWindow(input);
 }
 
 function buildViewFilter(viewId: string): Record<string, unknown>[] {
@@ -383,6 +387,7 @@ function buildPreferences(): Record<string, unknown> {
 function compactTimeseriesStat(item: Record<string, unknown>): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
   if (typeof item.time === "number") slim.time = item.time;
+  if (typeof item.date === "string") slim.date = item.date;
   if (Array.isArray(item.values)) {
     slim.values = item.values.map((entry) => {
       if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return entry;
@@ -1138,8 +1143,8 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
       listFilterFields: [
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, environment, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
-        { name: "start_time", description: "Custom window start in epoch milliseconds. When set with end_time, overrides time_filter — use for historical/custom ranges the relative enum can't express (e.g. a past quarter).", type: "number" },
-        { name: "end_time", description: "Custom window end in epoch milliseconds. Pair with start_time.", type: "number" },
+        { name: "start_time", description: "Custom window start. Accepts a UTC date \"YYYY-MM-DD\" (e.g. \"2026-09-28\"), an ISO 8601 datetime, or epoch milliseconds. Must be paired with end_time; overrides time_filter. Use for specific days or historical ranges the relative enum can't express. Invalid values return an error.", type: "string" },
+        { name: "end_time", description: "Custom window end. Accepts \"YYYY-MM-DD\" (UTC; the whole day is INCLUDED, so start_time \"2026-09-28\" + end_time \"2026-09-29\" covers both days), an ISO 8601 datetime, or epoch milliseconds. Pair with start_time.", type: "string" },
         { name: "limit", description: "Result limit", type: "number" },
         { name: "offset", description: "Pagination offset", type: "number" },
       ],
@@ -1148,15 +1153,17 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
           method: "POST",
           path: "/ccm/api/graphql",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          bodyBuilder: (input) => ({
+          bodyBuilder: (input) => {
+            const { startMs, endMs } = customWindow(input);
+            return {
             query: PERSPECTIVE_GRID_QUERY,
             operationName: "FetchperspectiveGrid",
             variables: {
               filters: buildFilters(
                 input.perspective_id as string,
                 (input.time_filter as string) ?? "LAST_30_DAYS",
-                customWindow(input).startMs,
-                customWindow(input).endMs,
+                startMs,
+                endMs,
               ),
               groupBy: buildGroupBy(input.group_by as string | undefined),
               limit: (input.limit as number) ?? 25,
@@ -1166,7 +1173,8 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
               isClusterHourlyData: false,
               preferences: buildPreferences(),
             },
-          }),
+            };
+          },
           responseExtractor: ccmBreakdownExtract,
           description:
             "Get cost breakdown by dimension for a perspective. Group by region, awsServicecode, product, cloudProvider, etc.",
@@ -1185,7 +1193,9 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
       description: `Cost over time for a perspective, grouped by a dimension. Answers "how has my spend changed?" Returns daily/monthly cost data points.
 
 Required: perspective_id, group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any label key).
-Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, MONTH, WEEK), limit.`,
+Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), OR start_time + end_time for specific days/ranges ("YYYY-MM-DD" UTC, end date inclusive), time_resolution (DAY, MONTH, WEEK), limit.
+
+Each item has 'time' (epoch ms) and 'date' (UTC "YYYY-MM-DD") — use 'date' for day labels, never convert 'time' yourself. The response 'date_range' {first, last} is the range of days actually returned (and 'requested_window' echoes a custom start_time/end_time); verify date_range covers the days asked about.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
@@ -1193,8 +1203,8 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
       listFilterFields: [
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
-        { name: "start_time", description: "Custom window start in epoch milliseconds. When set with end_time, overrides time_filter — use for historical/custom ranges the relative enum can't express (e.g. a past quarter).", type: "number" },
-        { name: "end_time", description: "Custom window end in epoch milliseconds. Pair with start_time.", type: "number" },
+        { name: "start_time", description: "Custom window start. Accepts a UTC date \"YYYY-MM-DD\" (e.g. \"2026-09-28\"), an ISO 8601 datetime, or epoch milliseconds. Must be paired with end_time; overrides time_filter. Use for specific days or historical ranges the relative enum can't express. Invalid values return an error.", type: "string" },
+        { name: "end_time", description: "Custom window end. Accepts \"YYYY-MM-DD\" (UTC; the whole day is INCLUDED, so start_time \"2026-09-28\" + end_time \"2026-09-29\" covers both days), an ISO 8601 datetime, or epoch milliseconds. Pair with start_time.", type: "string" },
         { name: "time_resolution", description: "Time resolution for aggregation", enum: ["DAY", "MONTH", "WEEK"] },
         { name: "limit", description: "Result limit", type: "number" },
       ],
@@ -1226,7 +1236,7 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
               },
             };
           },
-          responseExtractor: ccmTimeseriesExtract,
+          responseExtractor: ccmTimeseriesWithWindowExtract,
           description:
             "Get cost time series data for a perspective. Shows cost trends over time grouped by a dimension.",
         },
@@ -1253,8 +1263,8 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
       identifierFields: ["perspective_id"],
       listFilterFields: [
         { name: "time_filter", description: "Time range filter" },
-        { name: "start_time", description: "Custom window start in epoch milliseconds. When set with end_time, overrides time_filter — use for historical/custom ranges the relative enum can't express (e.g. a past quarter).", type: "number" },
-        { name: "end_time", description: "Custom window end in epoch milliseconds. Pair with start_time.", type: "number" },
+        { name: "start_time", description: "Custom window start. Accepts a UTC date \"YYYY-MM-DD\" (e.g. \"2026-09-28\"), an ISO 8601 datetime, or epoch milliseconds. Must be paired with end_time; overrides time_filter. Use for specific days or historical ranges the relative enum can't express. Invalid values return an error.", type: "string" },
+        { name: "end_time", description: "Custom window end. Accepts \"YYYY-MM-DD\" (UTC; the whole day is INCLUDED, so start_time \"2026-09-28\" + end_time \"2026-09-29\" covers both days), an ISO 8601 datetime, or epoch milliseconds. Pair with start_time.", type: "string" },
       ],
       operations: {
         list: {
@@ -1469,8 +1479,8 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         { name: "anomaly_view", description: "View type for anomaly grouping", enum: ["RESOURCE", "PERSPECTIVE"] },
         { name: "search_text", description: "Search text to filter anomalies by name or resource" },
         { name: "time_filter", description: "Predefined time range filter", enum: [...VALID_TIME_FILTERS] },
-        { name: "start_time", description: "Custom start time in epoch milliseconds (overrides time_filter)", type: "number" },
-        { name: "end_time", description: "Custom end time in epoch milliseconds (overrides time_filter)", type: "number" },
+        { name: "start_time", description: "Custom start: \"YYYY-MM-DD\" (UTC), ISO 8601, or epoch milliseconds (overrides time_filter)", type: "string" },
+        { name: "end_time", description: "Custom end: \"YYYY-MM-DD\" (UTC, whole day included), ISO 8601, or epoch milliseconds (overrides time_filter)", type: "string" },
         { name: "order_by_field", description: "Field to order by", enum: ["ANOMALOUS_SPEND", "TIME", "ACTUAL_SPEND"] },
         { name: "order_by_direction", description: "Order direction", enum: ["ASCENDING", "DESCENDING"] },
         { name: "min_amount", description: "Minimum actual amount threshold", type: "number" },
@@ -1505,14 +1515,18 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
               filters.searchText = [""];
             }
 
-            // Time filters — prefer explicit start/end, fall back to predefined
-            if (input.start_time != null || input.end_time != null) {
+            // Time filters — prefer explicit start/end, fall back to predefined.
+            // Blank strings parse as absent so they do not wipe the relative window.
+            const anomalyStart = parseTimeInput(input.start_time, "start_time");
+            const anomalyEnd = parseTimeInput(input.end_time, "end_time", { endOfDay: true });
+            if (anomalyStart !== undefined || anomalyEnd !== undefined) {
+              assertWindowOrder(anomalyStart, anomalyEnd);
               const timeFilters: Record<string, unknown>[] = [];
-              if (input.start_time != null) {
-                timeFilters.push({ operator: "AFTER", timestamp: input.start_time });
+              if (anomalyStart !== undefined) {
+                timeFilters.push({ operator: "AFTER", timestamp: anomalyStart });
               }
-              if (input.end_time != null) {
-                timeFilters.push({ operator: "BEFORE", timestamp: input.end_time });
+              if (anomalyEnd !== undefined) {
+                timeFilters.push({ operator: "BEFORE", timestamp: anomalyEnd });
               }
               filters.timeFilters = timeFilters;
             } else {
@@ -1596,8 +1610,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       scope: "account",
       identifierFields: ["anomaly_id"],
       listFilterFields: [
-        { name: "start_time", description: "Start time in epoch milliseconds (for time-series view)", type: "number" },
-        { name: "end_time", description: "End time in epoch milliseconds (for time-series view)", type: "number" },
+        { name: "start_time", description: "Time-series window start. UTC \"YYYY-MM-DD\", ISO 8601, or epoch milliseconds. Pair with end_time. Invalid values return an error.", type: "string" },
+        { name: "end_time", description: "Time-series window end. UTC \"YYYY-MM-DD\" includes that whole day, ISO 8601, or epoch milliseconds. Pair with start_time.", type: "string" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/ce/anomaly-detection",
       operations: {
@@ -1605,7 +1619,15 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           method: "GET",
           path: "/ccm/api/anomaly/v2/drill-down",
           pathBuilder: (input) => {
-            if (input.start_time != null && input.end_time != null) {
+            const startMs = parseTimeInput(input.start_time, "start_time");
+            const endMs = parseTimeInput(input.end_time, "end_time", { endOfDay: true });
+            assertWindowOrder(startMs, endMs);
+            // Rewrite onto input so queryParams send epoch ms, not a raw date string.
+            if (startMs === undefined) delete input.start_time;
+            else input.start_time = startMs;
+            if (endMs === undefined) delete input.end_time;
+            else input.end_time = endMs;
+            if (startMs !== undefined && endMs !== undefined) {
               return "/ccm/api/anomaly/v2/drill-down/cost/time-series";
             }
             return "/ccm/api/anomaly/v2/drill-down";
@@ -1618,7 +1640,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           },
           responseExtractor: ngExtract,
           description:
-            "Get anomaly drill-down details. Without start_time/end_time: returns anomaly details (resource info, expected vs actual cost). With start_time/end_time (epoch ms): returns cost time-series for the anomaly period.",
+            "Get anomaly drill-down details. Without start_time/end_time: returns anomaly details (resource info, expected vs actual cost). With start_time/end_time (UTC date, ISO 8601, or epoch ms): returns cost time-series for the anomaly period.",
         },
         list: {
           method: "GET",
@@ -2139,15 +2161,13 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           method: "GET",
           path: "/ccm/api/overview",
           pathBuilder: (input) => {
-            const toMillis = (v: unknown, fallbackDaysAgo: number): string => {
-              if (v && typeof v === "string") {
-                const ms = new Date(v).getTime();
-                if (!isNaN(ms)) return String(ms);
-              }
-              return String(Date.now() - fallbackDaysAgo * 86_400_000);
-            };
-            input.start_time = toMillis(input.start_time, 60);
-            input.end_time = toMillis(input.end_time, 0);
+            // Omitted bounds keep the historical default window. Invalid dates throw
+            // instead of being replaced by that default (which hid the wrong range).
+            const startMs = parseTimeInput(input.start_time, "start_time");
+            const endMs = parseTimeInput(input.end_time, "end_time", { endOfDay: true });
+            assertWindowOrder(startMs, endMs);
+            input.start_time = String(startMs ?? Date.now() - 60 * 86_400_000);
+            input.end_time = String(endMs ?? Date.now());
             if (!input.group_by) input.group_by = "DAY";
             return "/ccm/api/overview";
           },
@@ -2161,8 +2181,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           description: "Get cost overview with optional time range and grouping",
           paramsSchema: {
             fields: [
-              { name: "start_time", required: false, description: "Start time filter (ISO 8601)" },
-              { name: "end_time", required: false, description: "End time filter (ISO 8601)" },
+              { name: "start_time", required: false, description: "Window start. UTC \"YYYY-MM-DD\", ISO 8601, or epoch ms. Omitted defaults to 60 days ago. Invalid values error." },
+              { name: "end_time", required: false, description: "Window end. UTC \"YYYY-MM-DD\" includes that whole day, ISO 8601, or epoch ms. Omitted defaults to now. Invalid values error." },
               { name: "group_by", required: false, description: "Group results by field" },
             ],
           } satisfies ParamsSchema,

@@ -388,9 +388,12 @@ describe("business-value-review prompt", () => {
     const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
     const text = (result.messages[0].content as { type: string; text: string }).text;
 
-    // Perspective calls now accept an explicit epoch-ms window — no month-summing hack.
-    expect(text).toContain("REVIEW_START_MS");
-    expect(text).toContain("REVIEW_END_MS");
+    // Historical quarters go through start_time/end_time as UTC dates, not epoch math.
+    expect(text).toContain('start_time: "REVIEW_START"');
+    expect(text).toContain('end_time: "REVIEW_END"');
+    expect(text).toContain("YYYY-MM-DD");
+    expect(text).toContain("Do **not** convert them to epoch milliseconds");
+    expect(text).not.toContain("REVIEW_START_MS");
     expect(text).toContain("pass `start_time`/`end_time` directly");
     // Must warn LAST_QUARTER won't match a named past quarter.
     expect(text).toContain("do NOT rely on `LAST_QUARTER`");
