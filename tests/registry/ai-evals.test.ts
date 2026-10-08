@@ -13,7 +13,12 @@ import { Registry } from "../../src/registry/index.js";
 import { aiEvalsToolset } from "../../src/registry/toolsets/ai-evals.js";
 import { aiEvalsListExtract, aiEvalsArrayExtract } from "../../src/registry/extractors.js";
 import type { ResourceDefinition } from "../../src/registry/types.js";
+import { compactItems } from "../../src/utils/compact.js";
 
+const DATASET_ID = "11111111-1111-4111-8111-111111111111";
+const EVAL_ID = "22222222-2222-4222-8222-222222222222";
+const METRIC_ID = "33333333-3333-4333-8333-333333333333";
+const ANNOTATION_ID = "44444444-4444-4444-8444-444444444444";
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     HARNESS_MCP_MODE: "single-user",
@@ -285,6 +290,9 @@ describe("AI Evals diagnosticHint on key entities", () => {
     "eval_metric",
     "eval_metric_set",
     "eval_suite",
+    "eval_run",
+    "eval_suite_run",
+    "eval_annotation",
     "online_eval",
   ];
 
@@ -295,6 +303,192 @@ describe("AI Evals diagnosticHint on key entities", () => {
       expect(res.diagnosticHint!.length).toBeGreaterThan(20);
     });
   }
+
+  it("explains UUID recovery and undeployed routes", () => {
+    for (const type of [
+      "eval_dataset",
+      "evaluation",
+      "eval_target",
+      "eval_metric",
+      "eval_metric_set",
+      "eval_suite",
+      "eval_run",
+      "eval_suite_run",
+      "eval_annotation",
+    ]) {
+      const hint = findResource(type).diagnosticHint!;
+      expect(hint).toContain("harness_list");
+      expect(hint).toContain("nginx 404");
+    }
+  });
+
+  it.each([
+    ["eval_dataset", [
+      "Dataset items require 'input' as a JSON object",
+      "'expected_output' for correctness metrics",
+      "'context' (string array) for RAG/groundedness metrics",
+      "'expected_tools' for agent tool-use metrics",
+      "Items can be added inline on create or managed separately via eval_dataset_item.",
+    ]],
+    ["evaluation", [
+      "An eval requires three components: dataset_id, target_id, and metric_set_id.",
+      "Before creating an eval, list existing resources with harness_list for eval_dataset, eval_target, and eval_metric_set.",
+      "Managed evaluations cannot be created until all three are set.",
+      "When storage_type='git', omit dataset_id/target_id/metric_set_id",
+    ]],
+    ["eval_metric", [
+      "Use the 'suggestions' execute action to discover appropriate metrics for a given target type and dataset shape.",
+      "Metrics are added to metric sets (eval_metric_set) via eval_metric_set_entry",
+      "Each metric response includes a 'config_schema' field",
+    ]],
+    ["eval_metric_set", [
+      "Before creating a metric set, list available metrics with harness_list(resource_type='eval_metric').",
+      "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover metrics appropriate for a target type.",
+      "If using LLM metrics (llm-as-judge), set judge_llm_config to a structured provider configuration.",
+      "judge_llm_connector_ref remains accepted but is DEPRECATED.",
+    ]],
+    ["eval_suite", [
+      "A suite groups evaluations together. First create evaluations (each with dataset + target + metric set),",
+      "then create the suite and add evaluations via eval_suite_evaluation or the replace_evaluations execute action.",
+      "List existing evaluations with harness_list(resource_type='evaluation').",
+    ]],
+    ["eval_target", [
+      "When creating a prompt target, use an LLM connector reference (config.llm_connector_ref)",
+      "List connectors via harness_list(resource_type='connector', filters={type:'OpenAI'}) (also type:'Anthropic').",
+    ]],
+  ])("preserves all existing %s workflow guidance", (resourceType, guidance) => {
+    const hint = findResource(resourceType).diagnosticHint!;
+    for (const fragment of guidance) {
+      expect(hint).toContain(fragment);
+    }
+  });
+});
+
+// ─── UUID path identifiers ──────────────────────────────────────────────────
+
+describe("AI Evals UUID path identifiers", () => {
+  it("gets a dataset by its identifier through the backend's dedicated endpoint", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatch(makeClient(request), "eval_dataset", "get", {
+      dataset_id: "golden-dataset",
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/dataset/by-identifier/golden-dataset",
+    }));
+  });
+
+  it("encodes a dataset identifier before using its dedicated endpoint", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatch(makeClient(request), "eval_dataset", "get", {
+      dataset_id: "golden/dataset ?version=1",
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/dataset/by-identifier/golden%2Fdataset%20%3Fversion%3D1",
+    }));
+  });
+
+  it.each([
+    ["evaluation", "eval_id"],
+    ["eval_dataset_item", "dataset_id"],
+    ["eval_run", "run_id"],
+    ["eval_metric", "metric_id"],
+    ["eval_metric_set", "set_id"],
+    ["eval_suite", "suite_id"],
+    ["eval_suite_run", "suite_run_id"],
+    ["eval_target", "target_id"],
+    ["eval_annotation", "annotation_id"],
+  ])("rejects a non-UUID %s path identifier before a request", async (resourceType, field) => {
+    const request = vi.fn();
+    const registry = new Registry(makeConfig());
+
+    await expect(registry.dispatch(makeClient(request), resourceType, "get", {
+      [field]: "display-name",
+      ...(resourceType === "eval_dataset_item" ? { item_id: METRIC_ID } : {}),
+    })).rejects.toThrow(
+      `${field} must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.`,
+    );
+
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["eval_dataset", "update", { dataset_id: "display-name" }, "dataset_id"],
+    ["eval_dataset", "delete", { dataset_id: "display-name" }, "dataset_id"],
+    ["eval_dataset_item", "list", { dataset_id: "display-name" }, "dataset_id"],
+    ["eval_dataset_item", "get", { dataset_id: DATASET_ID, item_id: "display-name" }, "item_id"],
+    ["eval_dataset_item", "create", { dataset_id: "display-name" }, "dataset_id"],
+    ["eval_dataset_item", "update", { dataset_id: "display-name", item_id: METRIC_ID }, "dataset_id"],
+    ["eval_dataset_item", "delete", { dataset_id: DATASET_ID, item_id: "display-name" }, "item_id"],
+    ["evaluation", "update", { eval_id: "display-name" }, "eval_id"],
+    ["evaluation", "delete", { eval_id: "display-name" }, "eval_id"],
+    ["eval_metric", "update", { metric_id: "display-name" }, "metric_id"],
+    ["eval_metric", "delete", { metric_id: "display-name" }, "metric_id"],
+    ["eval_metric_set", "update", { set_id: "display-name" }, "set_id"],
+    ["eval_metric_set", "delete", { set_id: "display-name" }, "set_id"],
+    ["eval_metric_set_entry", "list", { set_id: "display-name" }, "set_id"],
+    ["eval_metric_set_entry", "create", { set_id: "display-name" }, "set_id"],
+    ["eval_metric_set_entry", "update", { set_id: "display-name", metric_id: METRIC_ID }, "set_id"],
+    ["eval_metric_set_entry", "delete", { set_id: METRIC_ID, metric_id: "display-name" }, "metric_id"],
+    ["eval_suite", "update", { suite_id: "display-name" }, "suite_id"],
+    ["eval_suite", "delete", { suite_id: "display-name" }, "suite_id"],
+    ["eval_suite_evaluation", "list", { suite_id: "display-name" }, "suite_id"],
+    ["eval_suite_evaluation", "create", { suite_id: "display-name" }, "suite_id"],
+    ["eval_suite_evaluation", "delete", { suite_id: DATASET_ID, evaluation_id: "display-name" }, "evaluation_id"],
+    ["eval_target", "update", { target_id: "display-name" }, "target_id"],
+    ["eval_target", "delete", { target_id: "display-name" }, "target_id"],
+    ["eval_annotation", "update", { annotation_id: "display-name" }, "annotation_id"],
+    ["eval_annotation", "delete", { annotation_id: "display-name" }, "annotation_id"],
+  ] as const)(
+    "rejects invalid UUIDs while constructing %s.%s",
+    (resourceType, operation, input, field) => {
+      const pathBuilder = findResource(resourceType).operations[operation]!.pathBuilder!;
+
+      expect(() => pathBuilder(input, { HARNESS_ORG: "org", HARNESS_PROJECT: "project" })).toThrow(
+        `${field} must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.`,
+      );
+    },
+  );
+
+  it("uses UUIDs returned by list results for detail paths", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatch(makeClient(request), "evaluation", "get", { eval_id: EVAL_ID });
+    await registry.dispatch(makeClient(request), "eval_metric", "get", { metric_id: METRIC_ID });
+
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/evals/${EVAL_ID}`,
+    }));
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/metrics/${METRIC_ID}`,
+    }));
+  });
+
+  it("encodes opaque trace and registry-item path segments", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatchExecute(makeClient(request), "online_eval", "evaluate", {
+      trace_id: "trace/a?version=1",
+      body: {},
+    });
+    await registry.dispatch(makeClient(request), "eval_registry_item", "get", {
+      item_id: "prompt/a b",
+    });
+
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/traces/trace%2Fa%3Fversion%3D1/evaluate",
+    }));
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompt%2Fa%20b",
+    }));
+  });
 });
 
 // ─── eval_model removed ────────────────────────────────────────────────────
@@ -675,13 +869,13 @@ describe("AI Evals control-plane API drift", () => {
     await registry.dispatch(client, "eval_metric", "update", {
       org_id: "myorg",
       project_id: "myproj",
-      metric_id: "metric-1",
+      metric_id: METRIC_ID,
       body: { dimension: "safety" },
     });
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("PATCH");
-    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/metrics/metric-1");
+    expect(call.path).toBe(`/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/metrics/${METRIC_ID}`);
     expect(call.body).toEqual({ dimension: "safety" });
   });
 
@@ -756,7 +950,7 @@ describe("AI Evals control-plane API drift", () => {
     await registry.dispatch(client, "eval_annotation", "update", {
       org_id: "myorg",
       project_id: "myproj",
-      annotation_id: "annotation-1",
+      annotation_id: ANNOTATION_ID,
       body: {
         thumbs_up: true,
         comment: "Resolved after review",
@@ -765,7 +959,7 @@ describe("AI Evals control-plane API drift", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("PATCH");
-    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/observe/annotations/annotation-1");
+    expect(call.path).toBe(`/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/observe/annotations/${ANNOTATION_ID}`);
     expect(call.body).toEqual({
       thumbs_up: true,
       comment: "Resolved after review",
@@ -788,6 +982,18 @@ describe("AI Evals extractors", () => {
   it("aiEvalsListExtract handles standard paginated response", () => {
     const result = aiEvalsListExtract({ data: [{ id: "1" }, { id: "2" }], total_elements: 5 });
     expect(result).toEqual({ items: [{ id: "1" }, { id: "2" }], total: 5 });
+  });
+
+  it("preserves id and uuid fields through compact list results", () => {
+    const extracted = aiEvalsListExtract({
+      data: [{ id: EVAL_ID, name: "Eval" }, { uuid: DATASET_ID, name: "Dataset" }],
+      total_elements: 2,
+    });
+
+    expect(compactItems(extracted.items)).toEqual([
+      { id: EVAL_ID, name: "Eval" },
+      { uuid: DATASET_ID, name: "Dataset" },
+    ]);
   });
 
   it("aiEvalsListExtract handles empty response", () => {

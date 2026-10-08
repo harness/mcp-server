@@ -1,5 +1,53 @@
 # Harness MCP Server — Task Tracking
 
+## AI Evals reads return 404 (2026-10-08)
+
+Base: `main@upstream` `bf89204b` (v3.2.33). Reproduced with a local build against QA
+(`AI_Evals/AI_Evals_QA`), harness0, and event-store-team.
+
+### Findings
+
+1. **Get-by-non-UUID is the 404.** Every AI Evals get/update/delete path takes the UUID
+   (`dataset/{dataset_id}`, `evals/{eval_id}`, ...). Passing the slug (`identifier`) or display
+   name reaches the backend unchanged and returns `404 Dataset not found` / `404 Eval not found`.
+   Get by UUID returns 200 for dataset, evaluation, metric, metric set, and target.
+2. **Older installs hide the UUID.** Compact list mode (the default) dropped `id`/`uuid` before
+   #1030 (v3.2.31). The globally installed `harness-mcp-v2@3.2.16` returns only
+   `name`/`identifier`/`description`, so agents can only pass a slug and every get 404s. Upstream
+   main keeps `id` and `uuid`. Datasets return their key as `uuid`; the other resources use `id`.
+3. **The 404 hint misleads.** `harness_get`/`harness_list` append `diagnosticHint` only on 404,
+   but the AI Evals hints describe create-body shape ("Dataset items require 'input'...") and
+   never say "pass the UUID from `harness_list`".
+4. **Path IDs are not encoded.** The `pathBuilder`s interpolate `input.<id>` raw, so a display
+   name with spaces or parentheses is sent unescaped.
+5. **event-store-team has no AI Evals route (infra, not MCP).** nginx returns an HTML 404 for
+   `/gateway/ai-evals/api/v1/runner-config` and `/ai-evals/api/v1/runner-config` (no auth),
+   while `/ng/api/health` is 200. QA and harness0 return 200 for both prefixes, so the
+   `/gateway/ai-evals/api/v1` base in `ai-evals.ts` is correct.
+
+### Plan
+
+- [ ] Ops: upgrade the installed `harness-mcp-v2` from 3.2.16 to >= 3.2.33 (fixes finding 2 with no code change).
+- [x] Verify which AI Evals path IDs are UUIDs against `ai-evals` contracts on `main@origin`
+      (`dataset_id`, `item_id`, `eval_id`, `run_id`, `metric_id`, `set_id`, `suite_id`,
+      `suite_run_id`, `target_id`, `annotation_id`). `trace_id` is not a UUID; leave it free-form.
+- [x] Add one `idSegment(input, field)` helper in `ai-evals.ts` that runs `requireUuid` and
+      `encodeURIComponent`. Use it in every get/update/delete/execute `pathBuilder` for UUID IDs.
+      Error text: "`<field>` must be the `id`/`uuid` from `harness_list(resource_type=...)`, not the identifier or name."
+- [x] `eval_dataset` get: when `dataset_id` is not a UUID, route to
+      `dataset/by-identifier/{identifier}` instead of failing (the backend supports slug lookup).
+- [x] Rewrite AI Evals `diagnosticHint`s for 404 recovery: IDs are UUIDs from list `id`
+      (`uuid` for datasets); check `org_id`/`project_id`; an HTML nginx 404 means AI Evals is not
+      deployed at this base URL. Move the body-shape guidance into `bodySchema`/descriptions.
+- [x] Apply the same UUID guard to `observability-evaluations.ts` reads (it already guards writes).
+- [x] Tests in `tests/registry/ai-evals.test.ts`: slug/name rejected locally with no request sent;
+      UUID path encoded; dataset slug routes to `by-identifier`; 404 hint text; compact list
+      keeps `id`/`uuid` for every AI Evals list resource.
+- [ ] Infra follow-up (owner: ai-evals deploy): enable the AI Evals ingress/VirtualService on
+      event-store-team, or document it as unsupported there.
+- [x] `pnpm typecheck && pnpm test`, then `pnpm build && pnpm docs:check`. Rerun the QA repro.
+- [x] Append the lesson to `tasks/lessons.md`.
+
 ## Version Bump 3.2.28 (2026-09-16)
 
 - [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
