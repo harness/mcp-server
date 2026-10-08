@@ -67,6 +67,13 @@ describe("incident resource definition", () => {
     expect(severityFilter?.enum).toEqual(["0", "1", "2", "3", "4"]);
   });
 
+  it("tells agents to re-read the incident before changing a theory they just added", () => {
+    const def = new Registry(makeConfig()).getResource("incident");
+    const description = def.executeActions?.add_root_cause_theory?.actionDescription;
+    expect(description).toContain("rootCauseTheoriesSha");
+    expect(description).toContain("call harness_get before confirming");
+  });
+
   it.each(["create", "update"] as const)("names the severity option ids in the %s body schema", (op) => {
     const registry = new Registry(makeConfig());
     const def = registry.getResource("incident");

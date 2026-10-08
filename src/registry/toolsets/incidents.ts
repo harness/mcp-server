@@ -226,7 +226,7 @@ function rootCauseTheoryStatusAction(
 export const incidentsToolset: ToolsetDefinition = {
   name: "incidents",
   displayName: "AI-SRE Incidents",
-  description: "Harness AI-SRE incident-management — list, inspect, create, update, and close incidents",
+  description: "Harness AI-SRE incident-management — list, inspect, create, update, and close incidents, and add, confirm, rule out, or undo their root-cause theories",
   resources: [
     {
       resourceType: "incident",
@@ -340,7 +340,9 @@ export const incidentsToolset: ToolsetDefinition = {
           actionDescription:
             "Add a human-authored root-cause theory to an incident. If a theory with the same message already "
             + "exists, no duplicate is created: the existing theory is returned with created=false and its status "
-            + "is left unchanged. The response's theory.id identifies the theory for later status changes.",
+            + "is left unchanged. The response's theory.id identifies the theory for later status changes. The "
+            + "response does not include rootCauseTheoriesSha, and a successful add (created=true) changes it, so "
+            + "call harness_get before confirming, ruling out, or undoing a theory.",
         },
         confirm_root_cause_theory: rootCauseTheoryStatusAction(
           "confirm",
