@@ -8,7 +8,7 @@ import { compactItems } from "../utils/compact.js";
 import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
-import type { ResourceScope } from "../registry/types.js";
+import type { FilterFieldSpec, ResourceScope } from "../registry/types.js";
 import { orgIdField, projectIdField, resourceScopeSchema } from "./input-schemas.js";
 import { searchOutputSchema } from "./output-schemas.js";
 import type { SearchManager } from "../search/index.js";
@@ -17,6 +17,37 @@ import { entityResultMatchesEffectiveScope } from "../search/entity-index.js";
 
 const log = createLogger("search");
 const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
+
+/**
+ * Payload every default harness_search scatter-gather list call sends.
+ * Kept in one place so candidate filtering uses the same keys as dispatch.
+ */
+export function keywordSearchListInput(
+  args: { query: string; max_per_type?: number },
+  mergedArgs: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...mergedArgs,
+    search_term: args.query,
+    name: args.query,
+    query: args.query,
+    search: args.query,
+    size: args.max_per_type ?? 5,
+    limit: args.max_per_type ?? 5,
+    page: 0,
+  };
+}
+
+/**
+ * True when registry.dispatch(list) would throw "Missing required filter"
+ * for this payload. Matches the registry check (`required && input[name] === undefined`).
+ */
+export function missesRequiredListFilter(
+  fields: readonly FilterFieldSpec[] | undefined,
+  input: Record<string, unknown>,
+): boolean {
+  return (fields ?? []).some((field) => field.required === true && input[field.name] === undefined);
+}
 
 /** Relevance tiers — lower number = more relevant. */
 const RELEVANCE_TIERS: Record<string, number> = {
@@ -128,18 +159,20 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
       try {
         const signal = extra.signal;
         const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url, { includeResourceScope: true });
+        const listInput = keywordSearchListInput(args, mergedArgs);
         const requestedScope = asResourceScope(mergedArgs.resource_scope);
         const hasExplicitResourceTypes = (args.resource_types?.length ?? 0) > 0;
 
         // Determine the full candidate type list (before semantic narrowing)
         let candidateTypes = args.resource_types ?? [];
         if (candidateTypes.length === 0) {
-          // Skip types whose list op needs caller-supplied input (e.g. llm_model needs provider +
-          // credentials); a keyword scatter-gather cannot satisfy it and would only produce errors.
+          // Skip types whose required list filters this keyword payload cannot fill
+          // (llm_model needs provider). Types whose only required filter is already
+          // set — notably scs_component_search's search_term — stay in the search.
           candidateTypes = registry.getAllResourceTypes().filter(
             (rt) =>
               registry.supportsOperation(rt, "list") &&
-              !registry.getResource(rt).listFilterFields?.some((f) => f.required),
+              !missesRequiredListFilter(registry.getResource(rt).listFilterFields, listInput),
           );
         }
         if (requestedScope && !hasExplicitResourceTypes) {
@@ -204,16 +237,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           const batchResults = await Promise.all(
             batch.map(async (rt) => {
               try {
-                const result = await registry.dispatch(client, rt, "list", {
-                  ...mergedArgs,
-                  search_term: args.query,
-                  name: args.query,
-                  query: args.query,
-                  search: args.query,
-                  size: args.max_per_type ?? 5,
-                  limit: args.max_per_type ?? 5,
-                  page: 0,
-                }, { tool: "harness_search" }, signal);
+                const result = await registry.dispatch(client, rt, "list", { ...listInput }, { tool: "harness_search" }, signal);
                 return { rt, result, error: null };
               } catch (err) {
                 log.debug(`Search failed for ${rt}`, { error: String(err) });
