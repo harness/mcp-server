@@ -128,6 +128,7 @@ function validateExampleStructure(name: string, yaml: string): Violation[] {
   }
 
   const RUNTIME_STRINGS = new Set(["cloud", "shell", "vm", "k8"]);
+  const RUNTIME_OBJECT_KEYS = new Set(["shell", "cloud", "vm", "kubernetes", "delegate"]);
   const K8_RUNTIME_KEYS = new Set([
     "namespace",
     "connector",
@@ -173,6 +174,15 @@ function validateExampleStructure(name: string, yaml: string): Violation[] {
         path: `${stagePath}.runtime.shell`,
         message: 'invalid converter shape `runtime: {shell: true}` — use the string `runtime: cloud` (or a shell spec object)',
       });
+    }
+    for (const key of Object.keys(runtime)) {
+      if (!RUNTIME_OBJECT_KEYS.has(key)) {
+        violations.push({
+          example: name,
+          path: `${stagePath}.runtime.${key}`,
+          message: `"${key}" is not a valid RuntimeV1 object key (schema allows ${[...RUNTIME_OBJECT_KEYS].join(", ")})`,
+        });
+      }
     }
     if (isRecord(runtime.kubernetes)) {
       for (const key of Object.keys(runtime.kubernetes)) {
