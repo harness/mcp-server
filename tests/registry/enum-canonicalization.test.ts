@@ -80,6 +80,24 @@ describe("canonicalizeListFilterEnums", () => {
     expect(input.status).toBe(42);
   });
 
+  it("canonicalizes string array filter values element-by-element", () => {
+    const arrayFields: FilterFieldSpec[] = [
+      { name: "status", description: "status", enum: ["ACTIVE", "PAUSED", "ARCHIVED"] },
+    ];
+    const input: Record<string, unknown> = { status: ["active", "paused"] };
+    canonicalizeListFilterEnums(input, arrayFields);
+    expect(input.status).toEqual(["ACTIVE", "PAUSED"]);
+  });
+
+  it("leaves array elements untouched when they have no enum match", () => {
+    const arrayFields: FilterFieldSpec[] = [
+      { name: "status", description: "status", enum: ["ACTIVE", "PAUSED"] },
+    ];
+    const input: Record<string, unknown> = { status: ["active", "draft"] };
+    canonicalizeListFilterEnums(input, arrayFields);
+    expect(input.status).toEqual(["ACTIVE", "draft"]);
+  });
+
   it("no-ops when the filter is omitted", () => {
     const input: Record<string, unknown> = {};
     canonicalizeListFilterEnums(input, fields);
