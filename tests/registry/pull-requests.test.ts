@@ -439,6 +439,73 @@ describe("pull_request registry mappings", () => {
       body: { decision: "reviewed", commit_sha: "abc123" },
     }));
   });
+
+  it("accepts submit_review fields from params/top-level input without a nested body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      decision: "approved",
+      commit_sha: "deadbeef",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/reviews",
+      body: { decision: "approved", commit_sha: "deadbeef" },
+    }));
+  });
+
+  it("maps commitSha alias from top-level input for submit_review", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      decision: "changereq",
+      commitSha: "cafebabe",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: { decision: "changereq", commit_sha: "cafebabe" },
+    }));
+  });
+
+  it("rejects conflicting submit_review values between body and params/top-level input", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        commit_sha: "from-params",
+        body: { decision: "approved", commit_sha: "from-body" },
+      }),
+    ).rejects.toThrow(/Conflicting pr_reviewer\.submit_review values/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects submit_review when commit_sha is omitted and no nested body is sent", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        decision: "approved",
+      }),
+    ).rejects.toThrow(/Missing required fields for pr_reviewer: commit_sha/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("pull_request list pagination and query mapping", () => {
