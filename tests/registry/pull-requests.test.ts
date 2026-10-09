@@ -439,6 +439,41 @@ describe("pull_request registry mappings", () => {
       body: { decision: "reviewed", commit_sha: "abc123" },
     }));
   });
+
+  it("accepts submit_review fields from params/top-level input and maps commitSha alias", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      decision: "approved",
+      commitSha: "def456",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/reviews",
+      body: { decision: "approved", commit_sha: "def456" },
+    }));
+  });
+
+  it("rejects conflicting submit_review values between body and params/top-level input", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        commit_sha: "from-top",
+        body: { decision: "approved", commit_sha: "from-body" },
+      }),
+    ).rejects.toThrow(/Conflicting pr_reviewer\.submit_review values/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("pull_request list pagination and query mapping", () => {
