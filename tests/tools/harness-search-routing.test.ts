@@ -209,7 +209,7 @@ describe("harness_search semantic routing integration", () => {
     const { registerSearchTool } = await import("../../src/tools/harness-search.js");
     registerSearchTool(server, registry, client, searchManager);
 
-    const fullTypeCount = registry.getTypesForOperation("list").length;
+    const fullTypeCount = registry.getTypesForOperation("list").filter((rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required)).length;
     const result = await server.call("harness_search", { query: "github connector" });
     const data = parseResult(result) as {
       semantic_routed?: boolean;
@@ -233,7 +233,7 @@ describe("harness_search semantic routing integration", () => {
     const { registerSearchTool } = await import("../../src/tools/harness-search.js");
     registerSearchTool(server, registry, client, searchManager);
 
-    const fullTypeCount = registry.getTypesForOperation("list").length;
+    const fullTypeCount = registry.getTypesForOperation("list").filter((rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required)).length;
     const result = await server.call("harness_search", { query: "deploy" });
     const data = parseResult(result) as { semantic_routed?: boolean; searched_types: number };
 

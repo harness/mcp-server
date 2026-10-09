@@ -26,6 +26,16 @@ const connectorUpdateSchema: BodySchema = {
   ],
 };
 
+const llmModelDiscoverySchema: BodySchema = {
+  description: "LLM model discovery request. Use secret references (e.g. account.my_secret) — never raw API keys.",
+  fields: [
+    { name: "provider", type: "string", required: true, description: "ANTHROPIC | OPENAI | GITHUB_COPILOT | HARNESS_OPENAI | HARNESS_ANTHROPIC" },
+    { name: "authentication", type: "object", required: false, description: "{type, spec}. Token: {type:'Token',spec:{tokenRef:'account.secret_id'}}. Anthropic also supports BedrockApiKey, Vertex, CloudProvider; OpenAI supports Vertex." },
+    { name: "url", type: "string", required: false, description: "Optional custom base URL" },
+    { name: "region", type: "string", required: false, description: "Optional region" },
+  ],
+};
+
 export const connectorsToolset: ToolsetDefinition = {
   name: "connectors",
   displayName: "Connectors",
@@ -137,6 +147,51 @@ export const connectorsToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           actionDescription: "Test connectivity of a connector",
           bodySchema: { description: "No body required. Connector is identified by path parameter.", fields: [] },
+        },
+      },
+    },
+    {
+      resourceType: "llm_model",
+      displayName: "LLM Model",
+      description:
+        "Discover provider model targets (e.g. Claude, GPT models) available for draft LLM connector authentication details. " +
+        "Supports list only; backed by POST /ng/api/llm-connector/models. Nothing is created or stored. " +
+        "Pass the discovery request through harness_list params: provider (ANTHROPIC | OPENAI | GITHUB_COPILOT | HARNESS_OPENAI | HARNESS_ANTHROPIC), " +
+        "authentication ({type, spec}), and optional url / region. " +
+        "SECRETS: authentication must reference Harness secrets (e.g. spec.tokenRef='account.my_secret'); NEVER paste raw API keys. " +
+        "Authentication shapes — ANTHROPIC: {type:'Token',spec:{tokenRef}} | {type:'BedrockApiKey',...} | {type:'Vertex',...} | {type:'CloudProvider',...}; " +
+        "OPENAI: {type:'Token',spec:{tokenRef}} | {type:'Vertex',...}; GITHUB_COPILOT: {type:'Token',spec:{tokenRef}}. " +
+        "Default scope is account; pass org_id / project_id only to resolve secrets at that scope. " +
+        "Returns a list of {value, displayName}.",
+      toolset: "connectors",
+      scope: "account",
+      supportedScopes: ["account", "org", "project"],
+      scopeOptional: true,
+      identifierFields: [],
+      compactItem: (item) => ({ value: item.value, displayName: item.displayName }),
+      listFilterFields: [
+        { name: "provider", description: "LLM provider (required)", required: true, enum: ["ANTHROPIC", "OPENAI", "GITHUB_COPILOT", "HARNESS_OPENAI", "HARNESS_ANTHROPIC"] },
+        { name: "authentication", description: "Provider authentication object {type, spec}. Use secret references only (e.g. spec.tokenRef='account.my_secret'), never raw keys." },
+        { name: "url", description: "Optional custom provider base URL" },
+        { name: "region", description: "Optional provider region (e.g. for Bedrock/Vertex)" },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: "/ng/api/llm-connector/models",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              provider: input.provider ?? body.provider,
+              authentication: input.authentication ?? body.authentication,
+              url: input.url ?? body.url,
+              region: input.region ?? body.region,
+            };
+          },
+          bodySchema: llmModelDiscoverySchema,
+          responseExtractor: ngExtract,
+          description: "Discover LLM models for a provider using draft authentication (secret refs only). Returns [{value, displayName}].",
         },
       },
     },
