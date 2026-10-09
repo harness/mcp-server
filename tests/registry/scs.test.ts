@@ -2400,3 +2400,50 @@ describe("scs_sbom download dispatch", () => {
     ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
+
+describe("SCS supply-chain artifact deep links (#1030)", () => {
+  const SCOPE = { org_id: "o1", project_id: "p1" };
+  const BASE =
+    "https://app.harness.io/ng/account/test-account/all/orgs/o1/projects/p1/supply-chain/artifacts";
+
+  it("artifact_security get resolves {artifact} from artifact_id", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const client = makeClient(vi.fn().mockResolvedValue({ id: "art-123", name: "demo" }));
+
+    const result = (await registry.dispatch(client, "artifact_security", "get", {
+      ...SCOPE,
+      source_id: "src1",
+      artifact_id: "art-123",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(`${BASE}/art-123`);
+    expect(String(result.openInHarness)).not.toContain("{artifact}");
+  });
+
+  it("scs_artifact_remediation get resolves {artifact} from artifact_id", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const client = makeClient(vi.fn().mockResolvedValue({ upgrade: "1.2.3" }));
+
+    const result = (await registry.dispatch(client, "scs_artifact_remediation", "get", {
+      ...SCOPE,
+      artifact_id: "art-456",
+      purl: "pkg:npm/lodash@4.17.21",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(`${BASE}/art-456`);
+    expect(String(result.openInHarness)).not.toContain("{artifact}");
+  });
+
+  it("scs_chain_of_custody get resolves {artifact} from artifact_id", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const client = makeClient(vi.fn().mockResolvedValue({ events: [] }));
+
+    const result = (await registry.dispatch(client, "scs_chain_of_custody", "get", {
+      ...SCOPE,
+      artifact_id: "art-789",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(`${BASE}/art-789`);
+    expect(String(result.openInHarness)).not.toContain("{artifact}");
+  });
+});
