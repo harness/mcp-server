@@ -134,7 +134,13 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         // Determine the full candidate type list (before semantic narrowing)
         let candidateTypes = args.resource_types ?? [];
         if (candidateTypes.length === 0) {
-          candidateTypes = registry.getAllResourceTypes().filter((rt) => registry.supportsOperation(rt, "list"));
+          // Skip types whose list op needs caller-supplied input (e.g. llm_model needs provider +
+          // credentials); a keyword scatter-gather cannot satisfy it and would only produce errors.
+          candidateTypes = registry.getAllResourceTypes().filter(
+            (rt) =>
+              registry.supportsOperation(rt, "list") &&
+              !registry.getResource(rt).listFilterFields?.some((f) => f.required),
+          );
         }
         if (requestedScope && !hasExplicitResourceTypes) {
           candidateTypes = candidateTypes.filter((rt) => registry.getSupportedScopes(rt).includes(requestedScope));

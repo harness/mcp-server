@@ -209,7 +209,7 @@ describe("harness_search semantic routing integration", () => {
     const { registerSearchTool } = await import("../../src/tools/harness-search.js");
     registerSearchTool(server, registry, client, searchManager);
 
-    const fullTypeCount = registry.getTypesForOperation("list").length;
+    const fullTypeCount = registry.getTypesForOperation("list").filter((rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required)).length;
     const result = await server.call("harness_search", { query: "github connector" });
     const data = parseResult(result) as {
       semantic_routed?: boolean;
@@ -226,6 +226,15 @@ describe("harness_search semantic routing integration", () => {
     expect(mockRequest).toHaveBeenCalledTimes(2);
   });
 
+  it("excludes llm_model from default scatter-gather (required provider filter)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    const searchable = registry.getTypesForOperation("list").filter(
+      (rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required),
+    );
+    expect(searchable).not.toContain("llm_model");
+    expect(registry.getResource("llm_model").listFilterFields?.some((f) => f.name === "provider" && f.required)).toBe(true);
+  });
+
   it("falls back to full scatter-gather when routing scores are below threshold", async () => {
     const searchManager = makeSearchManager([
       makeSemanticResult(ROUTING_THRESHOLD - 0.05, { resource_type: "pipeline" }),
@@ -233,7 +242,7 @@ describe("harness_search semantic routing integration", () => {
     const { registerSearchTool } = await import("../../src/tools/harness-search.js");
     registerSearchTool(server, registry, client, searchManager);
 
-    const fullTypeCount = registry.getTypesForOperation("list").length;
+    const fullTypeCount = registry.getTypesForOperation("list").filter((rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required)).length;
     const result = await server.call("harness_search", { query: "deploy" });
     const data = parseResult(result) as { semantic_routed?: boolean; searched_types: number };
 
