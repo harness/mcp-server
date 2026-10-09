@@ -707,7 +707,7 @@ describe("Registry", () => {
         body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
       });
 
-      const call = mockRequest.mock.calls[0][0];
+      const call = mockRequest.mock.calls.find((c) => c[0].method === "PUT")![0];
       expect(call.path).toBe("/template/api/templates/update/my-template/v2");
     });
 
@@ -727,7 +727,7 @@ describe("Registry", () => {
         body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
       });
 
-      const call = mockRequest.mock.calls[0][0];
+      const call = mockRequest.mock.calls.find((c) => c[0].method === "PUT")![0];
       expect(call.path).toBe("/template/api/templates/update/my-template/v2");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
@@ -843,7 +843,7 @@ describe("Registry", () => {
         },
       });
 
-      const call = mockRequest.mock.calls[0][0];
+      const call = mockRequest.mock.calls.find((c) => c[0].method === "PUT")![0];
       expect(call.path).toBe("/v1/templates/acc_explicit/versions/1.0.0");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
@@ -888,7 +888,7 @@ describe("Registry", () => {
         },
       });
 
-      const call = mockRequest.mock.calls[0][0];
+      const call = mockRequest.mock.calls.find((c) => c[0].method === "PUT")![0];
       expect(call.path).toBe("/v1/templates/testsj/versions/v2");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();

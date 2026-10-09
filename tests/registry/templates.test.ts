@@ -137,6 +137,107 @@ describe("v0 template git query-param mapping", () => {
   });
 });
 
+describe("remote template update hydration", () => {
+  it("loads v0 git query params from the current template when the update sends only YAML", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: {
+          identifier: "Yarn_Install_Build_Test_GitHub_Auth",
+          storeType: "REMOTE",
+          gitDetails: {
+            branch: "main",
+            repoName: "harness-ci-templates",
+            filePath: ".harness/templates/Yarn_Install_Build_Test_GitHub_Auth/v1.yaml",
+            connectorRef: "account.GitHub",
+            objectId: "abc111",
+            commitId: "def222",
+          },
+        },
+      })
+      .mockResolvedValueOnce({ data: { identifier: "Yarn_Install_Build_Test_GitHub_Auth" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "update", {
+      template_id: "Yarn_Install_Build_Test_GitHub_Auth",
+      version_label: "v1",
+      resource_scope: "account",
+      body: "template:\n  identifier: Yarn_Install_Build_Test_GitHub_Auth\n  versionLabel: v1\n",
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({
+      method: "GET",
+      path: "/template/api/templates/Yarn_Install_Build_Test_GitHub_Auth",
+    }));
+    expect(mockRequest.mock.calls[1]![0]).toEqual(expect.objectContaining({
+      method: "PUT",
+      path: "/template/api/templates/update/Yarn_Install_Build_Test_GitHub_Auth/v1",
+      params: expect.objectContaining({
+        storeType: "REMOTE",
+        branch: "main",
+        repoName: "harness-ci-templates",
+        filePath: ".harness/templates/Yarn_Install_Build_Test_GitHub_Auth/v1.yaml",
+        connectorRef: "account.GitHub",
+        lastObjectId: "abc111",
+        lastCommitId: "def222",
+      }),
+    }));
+  });
+
+  it("loads v1 git_details from the current template when the update sends only YAML", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        template: {
+          identifier: "template_c0c1",
+          name: "template_c0c1",
+          store_type: "REMOTE",
+          connector_ref: "",
+          git_details: {
+            object_id: "2fcd2561f9d1e35df08a5f46d8bd7f54b4257b05",
+            branch_name: "main",
+            file_path: ".harness/orgs/test_org_madhav/projects/test_project_madhav/templates/template_c0c1/v1.yaml",
+            repo_name: "test-repo",
+            commit_id: "df4117c46bd5cf9c2742797c8c49d1764c03e035",
+            is_harness_code_repo: null,
+          },
+        },
+      })
+      .mockResolvedValueOnce({ identifier: "template_c0c1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "update", {
+      template_id: "template_c0c1",
+      version_label: "v1",
+      org_id: "test_org_madhav",
+      project_id: "test_project_madhav",
+      body: {
+        template_yaml: "version: 1\ntemplate:\n  identifier: template_c0c1\n  step:\n    run:\n      script: echo 1\n",
+      },
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({
+      method: "GET",
+      path: "/v1/orgs/test_org_madhav/projects/test_project_madhav/templates/template_c0c1/versions/v1",
+      params: expect.objectContaining({ include_yaml: true }),
+    }));
+    expect(mockRequest.mock.calls[1]![0]).toEqual(expect.objectContaining({
+      method: "PUT",
+      body: expect.objectContaining({
+        name: "template_c0c1",
+        git_details: {
+          store_type: "REMOTE",
+          branch_name: "main",
+          repo_name: "test-repo",
+          file_path: ".harness/orgs/test_org_madhav/projects/test_project_madhav/templates/template_c0c1/v1.yaml",
+          last_object_id: "2fcd2561f9d1e35df08a5f46d8bd7f54b4257b05",
+          last_commit_id: "df4117c46bd5cf9c2742797c8c49d1764c03e035",
+        },
+      }),
+    }));
+  });
+});
+
 describe("template_v1 global template catalog", () => {
   it("list with global=true hits /v1/templates and passes global_template=true", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
@@ -301,6 +402,8 @@ describe("template paramsSchema for harness_describe", () => {
         "is_harness_code_repo",
         "last_object_id",
         "last_commit_id",
+        "is_new_branch",
+        "base_branch",
         "comments",
       ]),
     );
