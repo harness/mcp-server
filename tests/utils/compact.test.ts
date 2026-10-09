@@ -104,6 +104,26 @@ describe("compactItems", () => {
     expect(result[0].openInHarness).toBe("https://app.harness.io/ng/pipelines/p1");
   });
 
+  it("keeps SCS list marker fields _summary, _message, and _result", () => {
+    const items = [{
+      identifier: "art-1",
+      name: "nginx",
+      _summary: { total: 3, critical: 1 },
+      _message: "3 vulnerabilities found",
+      _result: "FAIL",
+      yaml: "should-strip",
+    }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toMatchObject({
+      identifier: "art-1",
+      name: "nginx",
+      _summary: { total: 3, critical: 1 },
+      _message: "3 vulnerabilities found",
+      _result: "FAIL",
+    });
+    expect(result[0]).not.toHaveProperty("yaml");
+  });
+
   it("passes through non-object items unchanged", () => {
     const items = ["string", 42, null];
     expect(compactItems(items)).toEqual(["string", 42, null]);
