@@ -79,7 +79,16 @@ function humanizeHttpError(status: number, rawBody: string): string {
     case 403:
       return "HTTP 403 Forbidden — access denied. Possible causes: wrong HARNESS_ACCOUNT_ID, IP restrictions, missing RBAC permissions, or corporate proxy/WAF blocking the request.";
     case 404:
-      return `HTTP 404 Not Found — the API endpoint or resource does not exist. Verify the base URL and resource identifiers.`;
+      // JSON API 404s keep their message (for example "Dataset not found").
+      // Non-JSON 404s used to collapse to one sentence, so callers could not
+      // tell an undeployed route's HTML nginx page from a missing resource.
+      if (!html) {
+        return "HTTP 404 Not Found — the API endpoint or resource does not exist. Verify the base URL and resource identifiers.";
+      }
+      if (/nginx/i.test(rawBody)) {
+        return "HTTP 404 Not Found — Harness returned an HTML nginx 404 instead of a JSON API response. The route is not deployed at this base URL.";
+      }
+      return "HTTP 404 Not Found — Harness returned an HTML error page instead of a JSON API response. Verify HARNESS_BASE_URL; this is not a JSON resource-not-found error.";
     default: {
       if (html) return `HTTP ${status}: Harness returned an HTML error page (possible proxy, WAF, or redirect). Check HARNESS_BASE_URL and network connectivity.`;
       const hint = rawBody.slice(0, 200);
