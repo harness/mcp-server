@@ -103,6 +103,7 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/client/harness-client.ts",
   "src/utils/log-resolver.ts",
   "src/utils/oauth-auth.ts",
+  "src/utils/oauth-proxy.ts",
   "src/audit/sinks/webhook.ts",
   "src/search/remote-provider.ts",
   "src/client/typesafe-client.ts",
