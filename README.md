@@ -1325,6 +1325,7 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 | --------------------- | ---- | --- | ------ | ------ | ------ | ----------------- |
 | `connector`           | x    | x   | x      | x      | x      | `test_connection` |
 | `connector_catalogue` | x    |     |        |        |        |                   |
+| `llm_model`           | x    |     |        |        |        |                   |
 
 
 ### Infrastructure
@@ -2017,7 +2018,7 @@ Available toolset names:
 | `agents`                | agent, agent_run                                                                                                                                                                                                                                                                                |
 | `services`              | service                                                                                                                                                                                                                                                                                         |
 | `environments`          | environment                                                                                                                                                                                                                                                                                     |
-| `connectors`            | connector, connector_catalogue                                                                                                                                                                                                                                                                  |
+| `connectors`            | connector, connector_catalogue, llm_model                                                                                                                                                                                                                                                     |
 | `infrastructure`        | infrastructure                                                                                                                                                                                                                                                                                  |
 | `secrets`               | secret                                                                                                                                                                                                                                                                                          |
 | `logs`                  | execution_log                                                                                                                                                                                                                                                                                   |
