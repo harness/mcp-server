@@ -2790,9 +2790,16 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
             };
           },
           bodySchema: {
-            description: "Request a budget override for the current period.",
+            description:
+              "Request a budget override for the current period. Required-field checks run on the request body after budget_id is mapped to policy_id.",
             fields: [
-              { name: "budget_id", type: "string", required: true, description: "AI budget UUID to request an override for." },
+              {
+                name: "policy_id",
+                type: "string",
+                required: true,
+                description:
+                  "AI budget UUID sent to the API. Pass body.policy_id, or body.budget_id / top-level budget_id (copied to policy_id before validation).",
+              },
               { name: "amount", type: "number", required: true, description: "Requested ceiling amount." },
               { name: "reason", type: "string", required: true, description: "Business justification." },
             ],
