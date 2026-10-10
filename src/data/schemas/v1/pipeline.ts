@@ -3391,6 +3391,10 @@ const schema: Record<string, any> = {
                   "with": {
                     "description": "Service input overrides.",
                     "$ref": "#/definitions/pipeline_v1/common/WithInputs"
+                  },
+                  "on-failure": {
+                    "description": "Failure strategy for this service. Overrides the stage-level failure strategy.",
+                    "$ref": "#/definitions/pipeline_v1/common/OnFailure"
                   }
                 },
                 "additionalProperties": false
@@ -3430,6 +3434,10 @@ const schema: Record<string, any> = {
                         "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
                     ]
+                  },
+                  "on-failure": {
+                    "description": "Failure strategy for this service group. Overrides the stage-level failure strategy.",
+                    "$ref": "#/definitions/pipeline_v1/common/OnFailure"
                   }
                 },
                 "additionalProperties": false
@@ -3526,6 +3534,10 @@ const schema: Record<string, any> = {
                   "ref": {
                     "description": "Git branch for the environment configuration.",
                     "type": "string"
+                  },
+                  "on-failure": {
+                    "description": "Failure strategy for this environment. Overrides the stage-level failure strategy.",
+                    "$ref": "#/definitions/pipeline_v1/common/OnFailure"
                   }
                 },
                 "additionalProperties": false
@@ -3551,6 +3563,10 @@ const schema: Record<string, any> = {
                         "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
                     ]
+                  },
+                  "on-failure": {
+                    "description": "Failure strategy for this environment selection. Overrides the stage-level failure strategy.",
+                    "$ref": "#/definitions/pipeline_v1/common/OnFailure"
                   }
                 },
                 "additionalProperties": false
@@ -3576,6 +3592,10 @@ const schema: Record<string, any> = {
                         "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
                     ]
+                  },
+                  "on-failure": {
+                    "description": "Failure strategy for this environment group. Overrides the stage-level failure strategy.",
+                    "$ref": "#/definitions/pipeline_v1/common/OnFailure"
                   }
                 },
                 "additionalProperties": false
@@ -3601,6 +3621,10 @@ const schema: Record<string, any> = {
                         "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
                     ]
+                  },
+                  "on-failure": {
+                    "description": "Failure strategy for this environment selection. Overrides the stage-level failure strategy.",
+                    "$ref": "#/definitions/pipeline_v1/common/OnFailure"
                   }
                 },
                 "additionalProperties": false

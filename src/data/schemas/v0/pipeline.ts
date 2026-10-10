@@ -78,6 +78,12 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "runtimeInputConfig": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/pipeline/common/RuntimeInputSpec"
+            }
+          },
           "stages": {
             "type": "array",
             "items": {
@@ -7936,6 +7942,13 @@ const schema: Record<string, any> = {
                   "segmentType"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "trafficType": {
                     "description": "FME Traffic Type name (case-sensitive)",
                     "oneOf": [
@@ -8127,6 +8140,13 @@ const schema: Record<string, any> = {
                   "name"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "name": {
                     "oneOf": [
                       {
@@ -8260,6 +8280,13 @@ const schema: Record<string, any> = {
                   "name"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "name": {
                     "oneOf": [
                       {
@@ -8384,6 +8411,13 @@ const schema: Record<string, any> = {
                   "limit"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -8706,6 +8740,13 @@ const schema: Record<string, any> = {
                   "allocation"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -8883,6 +8924,13 @@ const schema: Record<string, any> = {
                   "treatments"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -9103,6 +9151,13 @@ const schema: Record<string, any> = {
                   "treatments"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -9293,6 +9348,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -9427,6 +9489,13 @@ const schema: Record<string, any> = {
                   "enabled"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -9571,6 +9640,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -9704,6 +9780,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -9838,6 +9921,13 @@ const schema: Record<string, any> = {
                   "treatments"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -10023,6 +10113,13 @@ const schema: Record<string, any> = {
                   "treatments"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -10221,6 +10318,13 @@ const schema: Record<string, any> = {
                   "operations"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -11165,6 +11269,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "segmentName": {
                     "description": "Name of the rule-based segment to configure",
                     "oneOf": [
@@ -11764,6 +11875,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "description": "Feature flag name",
                     "oneOf": [
@@ -11928,6 +12046,13 @@ const schema: Record<string, any> = {
                   "instructions"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -39577,6 +39702,36 @@ const schema: Record<string, any> = {
             "type": "string",
             "description": "FME Treatment Name",
             "pattern": "^[a-zA-Z0-9][-_\\.a-zA-Z0-9]*$"
+          },
+          "fme-common-changelog": {
+            "title": "fme-common-changelog",
+            "type": "object",
+            "description": "Optional changelog metadata (title/comment) forwarded to the FME backend as audit metadata for this change",
+            "properties": {
+              "title": {
+                "description": "Single-line changelog title",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "comment": {
+                "description": "Free-text changelog comment",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "fme-segment-common-segment-name": {
             "title": "fme-segment-common-segment-name",
@@ -107548,6 +107703,225 @@ const schema: Record<string, any> = {
               "desc": "This is the description for JsonNode"
             }
           }
+        },
+        "RuntimeInputSpec": {
+          "title": "RuntimeInputSpec",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "target"
+          ],
+          "properties": {
+            "target": {
+              "type": "string",
+              "minLength": 1
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "visibleWhen": {
+              "$ref": "#/definitions/pipeline/common/RuntimeInputCondition"
+            },
+            "allowedValuesWhen": {
+              "$ref": "#/definitions/pipeline/common/AllowedValuesRuleSet"
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "RuntimeInputCondition": {
+          "title": "RuntimeInputCondition",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/pipeline/common/RuntimeInputComparisonCondition"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "and"
+              ],
+              "properties": {
+                "and": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#/definitions/pipeline/common/RuntimeInputCondition"
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "or"
+              ],
+              "properties": {
+                "or": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#/definitions/pipeline/common/RuntimeInputCondition"
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "not"
+              ],
+              "properties": {
+                "not": {
+                  "$ref": "#/definitions/pipeline/common/RuntimeInputCondition"
+                }
+              }
+            }
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "RuntimeInputComparisonCondition": {
+          "title": "RuntimeInputComparisonCondition",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "field",
+                "op",
+                "value"
+              ],
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "eq",
+                    "ne"
+                  ]
+                },
+                "value": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "field",
+                "op",
+                "value"
+              ],
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "in",
+                    "notIn"
+                  ]
+                },
+                "value": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "field",
+                "op"
+              ],
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "isEmpty",
+                    "isNotEmpty"
+                  ]
+                }
+              }
+            }
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "AllowedValuesRuleSet": {
+          "title": "AllowedValuesRuleSet",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rules"
+          ],
+          "properties": {
+            "rules": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/definitions/pipeline/common/AllowedValuesRule"
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "AllowedValuesRule": {
+          "title": "AllowedValuesRule",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "condition",
+            "values"
+          ],
+          "properties": {
+            "condition": {
+              "$ref": "#/definitions/pipeline/common/RuntimeInputCondition"
+            },
+            "values": {
+              "type": "array",
+              "minItems": 1,
+              "items": {}
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "FailureStrategyConfig": {
           "title": "FailureStrategyConfig",

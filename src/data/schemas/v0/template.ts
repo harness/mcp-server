@@ -1266,6 +1266,9 @@ const schema: Record<string, any> = {
                 },
                 {
                   "$ref": "#/definitions/pipeline/stages/compositeloadtest/CompositeLoadTestStageNode_template"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/drtest/DRTestStageNode_template"
                 }
               ]
             },
@@ -60219,598 +60222,6 @@ const schema: Record<string, any> = {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false
           },
-          "ContainerK8sInfra": {
-            "title": "ContainerK8sInfra",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/steps/custom/ContainerStepInfra"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "spec",
-                  "type"
-                ],
-                "properties": {
-                  "spec": {
-                    "$ref": "#/definitions/pipeline/steps/custom/ContainerInfraYamlSpec"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "KubernetesDirect",
-                      "VM"
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for ContainerK8sInfra"
-              }
-            }
-          },
-          "ContainerStepInfra": {
-            "title": "ContainerStepInfra",
-            "type": "object",
-            "discriminator": "type",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "KubernetesDirect",
-                  "VM",
-                  "ECSDirect"
-                ]
-              },
-              "description": {
-                "desc": "This is the description for ContainerStepInfra"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ContainerInfraYamlSpec": {
-            "title": "ContainerInfraYamlSpec",
-            "type": "object",
-            "required": [
-              "connectorRef"
-            ],
-            "properties": {
-              "annotations": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "automountServiceAccountToken": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "connectorRef": {
-                "type": "string"
-              },
-              "containerSecurityContext": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/SecurityContext"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "initTimeout": {
-                "type": "string"
-              },
-              "labels": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "namespace": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 2147483647
-              },
-              "nodeSelector": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "os": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "enum": [
-                      "Linux",
-                      "MacOS",
-                      "Windows"
-                    ]
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "priorityClassName": {
-                "type": "string"
-              },
-              "resources": {
-                "$ref": "#/definitions/pipeline/common/ContainerResource"
-              },
-              "runAsUser": {
-                "oneOf": [
-                  {
-                    "type": "integer",
-                    "format": "int32"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "serviceAccountName": {
-                "type": "string"
-              },
-              "tolerations": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/steps/custom/Toleration"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "volumes": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/steps/custom/ContainerVolume"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for ContainerInfraYamlSpec"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "SecurityContext": {
-            "title": "SecurityContext",
-            "type": "object",
-            "properties": {
-              "allowPrivilegeEscalation": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "capabilities": {
-                "$ref": "#/definitions/pipeline/steps/custom/Capabilities"
-              },
-              "privileged": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "procMount": {
-                "type": "string"
-              },
-              "readOnlyRootFilesystem": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "runAsGroup": {
-                "oneOf": [
-                  {
-                    "type": "integer",
-                    "format": "int32"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "runAsNonRoot": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "runAsUser": {
-                "oneOf": [
-                  {
-                    "type": "integer",
-                    "format": "int32"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for SecurityContext"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "Capabilities": {
-            "title": "Capabilities",
-            "type": "object",
-            "properties": {
-              "add": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "drop": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for Capabilities"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "Toleration": {
-            "title": "Toleration",
-            "type": "object",
-            "properties": {
-              "effect": {
-                "type": "string"
-              },
-              "key": {
-                "type": "string"
-              },
-              "operator": {
-                "type": "string"
-              },
-              "tolerationSeconds": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "value": {
-                "type": "string"
-              },
-              "description": {
-                "desc": "This is the description for Toleration"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ContainerVolume": {
-            "title": "ContainerVolume",
-            "type": "object",
-            "discriminator": "type",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "EmptyDir",
-                  "PersistentVolumeClaim",
-                  "HostPath",
-                  "ConfigMap",
-                  "Secret"
-                ]
-              },
-              "description": {
-                "desc": "This is the description for ContainerVolume"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ContainerECSDirectInfra": {
-            "title": "ContainerECSDirectInfra",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/steps/custom/ContainerStepInfra"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "spec",
-                  "type"
-                ],
-                "properties": {
-                  "spec": {
-                    "$ref": "#/definitions/pipeline/steps/custom/ECSDirectInfraYamlSpec"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "ECSDirect"
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for ContainerECSDirectInfra"
-              }
-            }
-          },
-          "ECSDirectInfraYamlSpec": {
-            "title": "ECSDirectInfraYamlSpec",
-            "type": "object",
-            "required": [
-              "connectorRef"
-            ],
-            "properties": {
-              "connectorRef": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "harnessImageConnectorRef": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "cluster": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "region": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "subnets": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "securityGroups": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "taskRoleArn": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "executionRoleArn": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "initTimeout": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "enableExecuteCommand": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "logGroupName": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "volumes": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/steps/common/CIVolume"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "containerSecurityContext": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/SecurityContext"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for ECSDirectInfraYamlSpec"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
           "Attestation": {
             "title": "Attestation",
             "type": "object",
@@ -61751,6 +61162,598 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for ContainerStepInfo"
               }
             }
+          },
+          "ContainerK8sInfra": {
+            "title": "ContainerK8sInfra",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/custom/ContainerStepInfra"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "spec",
+                  "type"
+                ],
+                "properties": {
+                  "spec": {
+                    "$ref": "#/definitions/pipeline/steps/custom/ContainerInfraYamlSpec"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "KubernetesDirect",
+                      "VM"
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for ContainerK8sInfra"
+              }
+            }
+          },
+          "ContainerStepInfra": {
+            "title": "ContainerStepInfra",
+            "type": "object",
+            "discriminator": "type",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "KubernetesDirect",
+                  "VM",
+                  "ECSDirect"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ContainerStepInfra"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ContainerInfraYamlSpec": {
+            "title": "ContainerInfraYamlSpec",
+            "type": "object",
+            "required": [
+              "connectorRef"
+            ],
+            "properties": {
+              "annotations": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "automountServiceAccountToken": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "connectorRef": {
+                "type": "string"
+              },
+              "containerSecurityContext": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/SecurityContext"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "initTimeout": {
+                "type": "string"
+              },
+              "labels": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "namespace": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2147483647
+              },
+              "nodeSelector": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "os": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Linux",
+                      "MacOS",
+                      "Windows"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "priorityClassName": {
+                "type": "string"
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "serviceAccountName": {
+                "type": "string"
+              },
+              "tolerations": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/custom/Toleration"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "volumes": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/custom/ContainerVolume"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ContainerInfraYamlSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "SecurityContext": {
+            "title": "SecurityContext",
+            "type": "object",
+            "properties": {
+              "allowPrivilegeEscalation": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "capabilities": {
+                "$ref": "#/definitions/pipeline/steps/custom/Capabilities"
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "procMount": {
+                "type": "string"
+              },
+              "readOnlyRootFilesystem": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "runAsGroup": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "runAsNonRoot": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for SecurityContext"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "Capabilities": {
+            "title": "Capabilities",
+            "type": "object",
+            "properties": {
+              "add": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "drop": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for Capabilities"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "Toleration": {
+            "title": "Toleration",
+            "type": "object",
+            "properties": {
+              "effect": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "operator": {
+                "type": "string"
+              },
+              "tolerationSeconds": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "value": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for Toleration"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ContainerVolume": {
+            "title": "ContainerVolume",
+            "type": "object",
+            "discriminator": "type",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "EmptyDir",
+                  "PersistentVolumeClaim",
+                  "HostPath",
+                  "ConfigMap",
+                  "Secret"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ContainerVolume"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ContainerECSDirectInfra": {
+            "title": "ContainerECSDirectInfra",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/custom/ContainerStepInfra"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "spec",
+                  "type"
+                ],
+                "properties": {
+                  "spec": {
+                    "$ref": "#/definitions/pipeline/steps/custom/ECSDirectInfraYamlSpec"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "ECSDirect"
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for ContainerECSDirectInfra"
+              }
+            }
+          },
+          "ECSDirectInfraYamlSpec": {
+            "title": "ECSDirectInfraYamlSpec",
+            "type": "object",
+            "required": [
+              "connectorRef"
+            ],
+            "properties": {
+              "connectorRef": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "harnessImageConnectorRef": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "cluster": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "region": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "subnets": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "securityGroups": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "taskRoleArn": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "executionRoleArn": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "initTimeout": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "enableExecuteCommand": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "logGroupName": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "volumes": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/common/CIVolume"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "containerSecurityContext": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/SecurityContext"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ECSDirectInfraYamlSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "CustomApprovalStepNode_template": {
             "title": "CustomApprovalStepNode_template",
@@ -66404,6 +66407,13 @@ const schema: Record<string, any> = {
                   "segmentType"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "trafficType": {
                     "description": "FME Traffic Type name (case-sensitive)",
                     "oneOf": [
@@ -66990,6 +67000,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "segmentName": {
                     "description": "Name of the rule-based segment to configure",
                     "oneOf": [
@@ -67317,6 +67334,13 @@ const schema: Record<string, any> = {
                   "name"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "name": {
                     "oneOf": [
                       {
@@ -67436,6 +67460,13 @@ const schema: Record<string, any> = {
                   "name"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "name": {
                     "oneOf": [
                       {
@@ -67546,6 +67577,13 @@ const schema: Record<string, any> = {
                   "limit"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -67840,6 +67878,13 @@ const schema: Record<string, any> = {
                   "allocation"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -68003,6 +68048,13 @@ const schema: Record<string, any> = {
                   "treatments"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -68209,6 +68261,13 @@ const schema: Record<string, any> = {
                   "treatments"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -68385,6 +68444,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -68505,6 +68571,13 @@ const schema: Record<string, any> = {
                   "enabled"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -68635,6 +68708,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -68754,6 +68834,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -68874,6 +68961,13 @@ const schema: Record<string, any> = {
                   "treatments"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -69365,6 +69459,13 @@ const schema: Record<string, any> = {
                   "treatments"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -69549,6 +69650,13 @@ const schema: Record<string, any> = {
                   "operations"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -69924,6 +70032,13 @@ const schema: Record<string, any> = {
                   "environment"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "description": "Feature flag name",
                     "oneOf": [
@@ -70074,6 +70189,13 @@ const schema: Record<string, any> = {
                   "instructions"
                 ],
                 "properties": {
+                  "changeRequest": {
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
+                  "changelog": {
+                    "description": "Legacy alias for changeRequest.",
+                    "$ref": "#/definitions/pipeline/steps/common/fme-common-changelog"
+                  },
                   "flagName": {
                     "oneOf": [
                       {
@@ -78630,25 +78752,6 @@ const schema: Record<string, any> = {
                 }
               }
             ],
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CIVolume": {
-            "title": "CIVolume",
-            "type": "object",
-            "discriminator": "type",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "EmptyDir",
-                  "PersistentVolumeClaim",
-                  "HostPath"
-                ]
-              },
-              "description": {
-                "desc": "This is the description for CIVolume"
-              }
-            },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "EnforceAttestationStepNode_template": {
@@ -101273,6 +101376,25 @@ const schema: Record<string, any> = {
               }
             ]
           },
+          "CIVolume": {
+            "title": "CIVolume",
+            "type": "object",
+            "discriminator": "type",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "EmptyDir",
+                  "PersistentVolumeClaim",
+                  "HostPath"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for CIVolume"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "fme-flag-common-flag-name": {
             "title": "fme-flag-common-flag-name",
             "type": "string",
@@ -101372,6 +101494,36 @@ const schema: Record<string, any> = {
             "description": "Change Proposal Comment",
             "minLength": 1,
             "maxLength": 480
+          },
+          "fme-common-changelog": {
+            "title": "fme-common-changelog",
+            "type": "object",
+            "description": "Optional changelog metadata (title/comment) forwarded to the FME backend as audit metadata for this change",
+            "properties": {
+              "title": {
+                "description": "Single-line changelog title",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "comment": {
+                "description": "Free-text changelog comment",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "fme-segment-common-segment-name": {
             "title": "fme-segment-common-segment-name",
@@ -156129,126 +156281,11 @@ const schema: Record<string, any> = {
             ]
           }
         },
-        "stages": {
-          "type": "object",
-          "title": "stages",
-          "properties": {
-            "parallel": {
-              "$ref": "#/definitions/pipeline/stages/ParallelStageElementConfig"
-            },
-            "insert": {
-              "$ref": "#/definitions/pipeline/stages/insert/InsertStageNode"
-            },
-            "stage": {
-              "description": "This is stage node. it can be of various types like CI, CD, etc.",
-              "oneOf": [
-                {
-                  "$ref": "#/definitions/pipeline/stages/iacm/IACMStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/cd/DeploymentStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/security/SecurityStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/ci/IntegrationStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/approval/ApprovalStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/custom/PipelineStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/custom/DynamicStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/custom/CustomStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/cf/FeatureFlagStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/template/TemplateStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/idp/IDPStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/drtest/DRTestStageNode"
-                },
-                {
-                  "$ref": "#/definitions/pipeline/stages/compositeloadtest/CompositeLoadTestStageNode"
-                }
-              ]
-            }
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "ParallelStageElementConfig": {
-          "type": "array",
-          "title": "ParallelStageElementConfig",
-          "items": {
-            "$ref": "#/definitions/pipeline/stages/stages"
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#",
-          "properties": {
-            "description": {
-              "desc": "This is the description for ParallelStageElementConfig"
-            }
-          }
-        },
-        "insert": {
-          "InsertStageNode": {
-            "title": "InsertStageNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "stages"
-            ],
-            "properties": {
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][-0-9a-zA-Z_\\s]{0,127}$"
-              },
-              "stages": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/stages/stages"
-                    },
-                    "maxItems": 2147483647,
-                    "minItems": 1
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^[\\s]*$"
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          }
-        },
         "drtest": {
-          "DRTestStageNode": {
-            "title": "DRTestStageNode",
+          "DRTestStageNode_template": {
+            "title": "DRTestStageNode_template",
             "type": "object",
             "required": [
-              "identifier",
-              "name",
               "type"
             ],
             "properties": {
@@ -156267,10 +156304,6 @@ const schema: Record<string, any> = {
                   }
                 ]
               },
-              "description": {
-                "type": "string",
-                "desc": "This is the description for DRTestStageNode"
-              },
               "failureStrategies": {
                 "oneOf": [
                   {
@@ -156285,14 +156318,6 @@ const schema: Record<string, any> = {
                     "minLength": 1
                   }
                 ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][-0-9a-zA-Z_\\s]{0,127}$"
               },
               "objective": {
                 "type": "string"
@@ -156730,6 +156755,258 @@ const schema: Record<string, any> = {
                 ]
               }
             ]
+          },
+          "DRTestStageNode": {
+            "title": "DRTestStageNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "type": "string",
+                "desc": "This is the description for DRTestStageNode"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][-0-9a-zA-Z_\\s]{0,127}$"
+              },
+              "objective": {
+                "type": "string"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "tags": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "DRTest"
+                ]
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "runMode": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "DRTest"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/drtest/DRTestStageConfigImpl"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "stages": {
+          "type": "object",
+          "title": "stages",
+          "properties": {
+            "parallel": {
+              "$ref": "#/definitions/pipeline/stages/ParallelStageElementConfig"
+            },
+            "insert": {
+              "$ref": "#/definitions/pipeline/stages/insert/InsertStageNode"
+            },
+            "stage": {
+              "description": "This is stage node. it can be of various types like CI, CD, etc.",
+              "oneOf": [
+                {
+                  "$ref": "#/definitions/pipeline/stages/iacm/IACMStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/cd/DeploymentStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/security/SecurityStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/ci/IntegrationStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/approval/ApprovalStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/custom/PipelineStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/custom/DynamicStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/custom/CustomStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/cf/FeatureFlagStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/template/TemplateStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/idp/IDPStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/drtest/DRTestStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/compositeloadtest/CompositeLoadTestStageNode"
+                }
+              ]
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "ParallelStageElementConfig": {
+          "type": "array",
+          "title": "ParallelStageElementConfig",
+          "items": {
+            "$ref": "#/definitions/pipeline/stages/stages"
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "properties": {
+            "description": {
+              "desc": "This is the description for ParallelStageElementConfig"
+            }
+          }
+        },
+        "insert": {
+          "InsertStageNode": {
+            "title": "InsertStageNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "stages"
+            ],
+            "properties": {
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][-0-9a-zA-Z_\\s]{0,127}$"
+              },
+              "stages": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/stages/stages"
+                    },
+                    "maxItems": 2147483647,
+                    "minItems": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[\\s]*$"
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           }
         }
       },
