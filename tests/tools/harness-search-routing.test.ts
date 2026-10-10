@@ -227,12 +227,25 @@ describe("harness_search semantic routing integration", () => {
   });
 
   it("excludes llm_model from default scatter-gather (required provider filter)", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
-    const searchable = registry.getTypesForOperation("list").filter(
-      (rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required),
+    const connectorsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    const searchable = connectorsRegistry.getTypesForOperation("list").filter(
+      (rt) => !connectorsRegistry.getResource(rt).listFilterFields?.some((f) => f.required),
     );
     expect(searchable).not.toContain("llm_model");
-    expect(registry.getResource("llm_model").listFilterFields?.some((f) => f.name === "provider" && f.required)).toBe(true);
+    expect(
+      connectorsRegistry.getResource("llm_model").listFilterFields?.some((f) => f.name === "provider" && f.required),
+    ).toBe(true);
+
+    const searchManager = makeSearchManager([
+      makeSemanticResult(ROUTING_THRESHOLD - 0.05, { resource_type: "connector" }),
+    ]);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, connectorsRegistry, client, searchManager);
+
+    await server.call("harness_search", { query: "anthropic models" });
+
+    const paths = mockRequest.mock.calls.map((call) => (call[0] as { path?: string }).path);
+    expect(paths.some((path) => path?.includes("llm-connector/models"))).toBe(false);
   });
 
   it("falls back to full scatter-gather when routing scores are below threshold", async () => {

@@ -75,6 +75,23 @@ describe("compactItems", () => {
     expect(result[0]).toEqual({ id: "k0H5ygr7SriAlJNMgAapqg", uuid: "abc-123", name: "GenAI Cost", folderId: "F1" });
   });
 
+  it("keeps SCS extractor marker fields used for empty-result semantics", () => {
+    const items = [
+      { identifier: "pkg-1", name: "lodash", _summary: { total: 1, by_type: { npm: 1 } } },
+      { _result: "EMPTY", _message: "Zero sub-dependencies found. Do NOT fabricate — report as-is." },
+    ];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toMatchObject({
+      identifier: "pkg-1",
+      name: "lodash",
+      _summary: { total: 1, by_type: { npm: 1 } },
+    });
+    expect(result[1]).toEqual({
+      _result: "EMPTY",
+      _message: "Zero sub-dependencies found. Do NOT fabricate — report as-is.",
+    });
+  });
+
   it("strips verbose metadata fields", () => {
     const items = [{
       identifier: "p1",
