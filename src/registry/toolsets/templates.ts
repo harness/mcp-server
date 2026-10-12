@@ -154,8 +154,8 @@ const TEMPLATE_V1_GET_PARAMS: ParamsSchema = {
     },
     { name: "branch", required: false, description: "Git branch alias — maps to branch_name on the wire. Pass via params." },
     { name: "branch_name", required: false, description: "Git branch — sent as branch_name. Alias of branch. Pass via params." },
-    { name: "repo_name", required: false, description: "Git repository name for Git Experience. Pass via params." },
-    { name: "connector_ref", required: false, description: "Git connector for remote templates. Pass via params." },
+    { name: "repo_name", required: false, description: "Parent Git repository name — sent as parent_entity_repo_name. Pass via params." },
+    { name: "connector_ref", required: false, description: "Parent Git connector — sent as parent_entity_connector_ref. Pass via params." },
     { name: "load_from_fallback_branch", required: false, description: "When true, load from the created non-default branch if the requested branch is empty. Pass via params." },
   ],
 };
@@ -229,6 +229,7 @@ const templateV1GitUpdatePreflight = remoteGitUpdatePreflight({
   resourceType: "template_v1",
   idKeys: ["template_id", "version_label"],
   getDefaults: { include_yaml: true },
+  accountIdGetKey: "parent_entity_account_id",
   copyNameTo: "template_name",
 });
 
@@ -651,8 +652,11 @@ export const templatesToolset: ToolsetDefinition = {
             global: "global_template",
             branch: "branch_name",
             branch_name: "branch_name",
-            connector_ref: "connector_ref",
-            repo_name: "repo_name",
+            connector_ref: "parent_entity_connector_ref",
+            repo_name: "parent_entity_repo_name",
+            parent_entity_account_id: "parent_entity_account_id",
+            org_id: "parent_entity_org_id",
+            project_id: "parent_entity_project_id",
             load_from_fallback_branch: "load_from_fallback_branch",
             include_yaml: "include_yaml",
           },

@@ -95,6 +95,8 @@ export interface RemoteGitUpdatePreflightOptions {
   idKeys: readonly string[];
   /** Static get inputs, such as `{ load_from_fallback_branch: true }` for v1 pipelines. */
   getDefaults?: Record<string, unknown>;
+  /** Add the effective account to this internal get input field. */
+  accountIdGetKey?: string;
   /** Copy `current.name` onto this input field when the caller omitted it. */
   copyNameTo?: string;
 }
@@ -105,8 +107,8 @@ export interface RemoteGitUpdatePreflightOptions {
  * lock is left as-is. Inline entities and a failed lookup do not block the write.
  */
 export function remoteGitUpdatePreflight(options: RemoteGitUpdatePreflightOptions) {
-  const { resourceType, idKeys, getDefaults, copyNameTo } = options;
-  return async ({ client, input, registry, signal }: PreflightContext): Promise<void> => {
+  const { resourceType, idKeys, getDefaults, accountIdGetKey, copyNameTo } = options;
+  return async ({ client, input, registry, signal, accountId }: PreflightContext): Promise<void> => {
     if (isExplicitlyInline(input) || hasRemoteUpdateLockContext(input)) return;
 
     const currentGit = inputGitDetails(input);
@@ -117,6 +119,7 @@ export function remoteGitUpdatePreflight(options: RemoteGitUpdatePreflightOption
     setIfMissing(getInput, "branch", firstGitString(currentGit.branch_name, currentGit.branch));
     setIfMissing(getInput, "repo_name", firstGitString(currentGit.repo_name));
     setIfMissing(getInput, "connector_ref", firstGitString(currentGit.connector_ref));
+    if (accountIdGetKey) setIfMissing(getInput, accountIdGetKey, accountId);
     if (getDefaults) {
       for (const [key, value] of Object.entries(getDefaults)) {
         if (getInput[key] === undefined) getInput[key] = value;
@@ -154,7 +157,12 @@ export function remoteGitUpdatePreflight(options: RemoteGitUpdatePreflightOption
     setIfMissing(input, "branch", firstGitString(git?.branch_name, git?.branchName, git?.branch));
     setIfMissing(input, "repo_name", firstGitString(git?.repo_name, git?.repoName));
     setIfMissing(input, "file_path", firstGitString(git?.file_path, git?.filePath));
-    setIfMissing(input, "connector_ref", firstGitString(git?.connector_ref, git?.connectorRef));
+    setIfMissing(input, "connector_ref", firstGitString(
+      git?.connector_ref,
+      git?.connectorRef,
+      wrapped?.connector_ref,
+      wrapped?.connectorRef,
+    ));
     setIfMissing(input, "last_object_id", firstGitString(
       git?.last_object_id,
       git?.object_id,

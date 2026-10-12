@@ -192,7 +192,7 @@ describe("remote template update hydration", () => {
           identifier: "template_c0c1",
           name: "template_c0c1",
           store_type: "REMOTE",
-          connector_ref: "",
+          connector_ref: "account.git_connector",
           git_details: {
             object_id: "2fcd2561f9d1e35df08a5f46d8bd7f54b4257b05",
             branch_name: "main",
@@ -219,7 +219,12 @@ describe("remote template update hydration", () => {
     expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({
       method: "GET",
       path: "/v1/orgs/test_org_madhav/projects/test_project_madhav/templates/template_c0c1/versions/v1",
-      params: expect.objectContaining({ include_yaml: true }),
+      params: expect.objectContaining({
+        include_yaml: true,
+        parent_entity_account_id: "test-account",
+        parent_entity_org_id: "test_org_madhav",
+        parent_entity_project_id: "test_project_madhav",
+      }),
     }));
     expect(mockRequest.mock.calls[1]![0]).toEqual(expect.objectContaining({
       method: "PUT",
@@ -230,9 +235,35 @@ describe("remote template update hydration", () => {
           branch_name: "main",
           repo_name: "test-repo",
           file_path: ".harness/orgs/test_org_madhav/projects/test_project_madhav/templates/template_c0c1/v1.yaml",
+          connector_ref: "account.git_connector",
           last_object_id: "2fcd2561f9d1e35df08a5f46d8bd7f54b4257b05",
           last_commit_id: "df4117c46bd5cf9c2742797c8c49d1764c03e035",
         },
+      }),
+    }));
+  });
+
+  it("maps v1 Git read context to the template API parent-entity query names", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ template: { identifier: "template_c0c1" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "get", {
+      template_id: "template_c0c1",
+      version_label: "v1",
+      org_id: "test_org_madhav",
+      project_id: "test_project_madhav",
+      repo_name: "test-repo",
+      connector_ref: "account.git_connector",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      params: expect.objectContaining({
+        parent_entity_org_id: "test_org_madhav",
+        parent_entity_project_id: "test_project_madhav",
+        parent_entity_repo_name: "test-repo",
+        parent_entity_connector_ref: "account.git_connector",
       }),
     }));
   });
