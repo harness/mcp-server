@@ -886,3 +886,12 @@ Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, b
 - [x] Confirm main's lockfile already pins ip-address 10.7.2 and CI is green.
 - [x] Reproduce a stale `node_modules/.pnpm/ip-address@10.4.0` directory surviving `pnpm install --frozen-lockfile`.
 - [x] Count only linked installs in the NAT64 security check, and load the express-rate-limit copy for classification tests.
+
+## Version 3.2.34
+
+- [x] Create chore/version-3.2.34 from current origin/main.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.34` and open a PR against `main`.
+
+Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
