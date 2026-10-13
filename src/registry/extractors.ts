@@ -474,7 +474,11 @@ export const stoRemediationDiffExtract = (raw: unknown): unknown => {
 export const aiEvalsListExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { data?: unknown[]; total_elements?: number };
   return {
-    items: r.data ?? [],
+    items: (r.data ?? []).map((item) => {
+      if (!isRecord(item) || item.id !== undefined) return item;
+      const id = item.uuid ?? item.run_id ?? item.suite_run_id;
+      return typeof id === "string" ? { ...item, id } : item;
+    }),
     total: r.total_elements ?? 0,
   };
 };

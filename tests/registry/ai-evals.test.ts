@@ -19,6 +19,8 @@ const DATASET_ID = "11111111-1111-4111-8111-111111111111";
 const EVAL_ID = "22222222-2222-4222-8222-222222222222";
 const METRIC_ID = "33333333-3333-4333-8333-333333333333";
 const ANNOTATION_ID = "44444444-4444-4444-8444-444444444444";
+const RUN_ID = "55555555-5555-4555-8555-555555555555";
+const SUITE_RUN_ID = "66666666-6666-4666-8666-666666666666";
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     HARNESS_MCP_MODE: "single-user",
@@ -979,20 +981,49 @@ describe("AI Evals dataset export removed", () => {
 // ─── Extractors ─────────────────────────────────────────────────────────────
 
 describe("AI Evals extractors", () => {
+  it("returns a run list whose generic id is usable for the next get call", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" }],
+        total_elements: 1,
+      })
+      .mockResolvedValueOnce({ run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" });
+
+    const result = await registry.dispatch(makeClient(mockRequest), "eval_run", "list", {}) as {
+      items: Array<Record<string, unknown>>;
+      total: number;
+    };
+
+    expect(result).toEqual({
+      items: [{ id: RUN_ID, run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" }],
+      total: 1,
+    });
+    await registry.dispatch(makeClient(mockRequest), "eval_run", "get", { run_id: result.items[0]!.id });
+    expect(mockRequest.mock.calls[1][0].path).toMatch(new RegExp(`/runs/${RUN_ID}$`));
+  });
+
   it("aiEvalsListExtract handles standard paginated response", () => {
     const result = aiEvalsListExtract({ data: [{ id: "1" }, { id: "2" }], total_elements: 5 });
     expect(result).toEqual({ items: [{ id: "1" }, { id: "2" }], total: 5 });
   });
 
-  it("preserves id and uuid fields through compact list results", () => {
+  it("adds a generic id while preserving AI Evals UUID and run ID fields", () => {
     const extracted = aiEvalsListExtract({
-      data: [{ id: EVAL_ID, name: "Eval" }, { uuid: DATASET_ID, name: "Dataset" }],
-      total_elements: 2,
+      data: [
+        { id: EVAL_ID, name: "Eval" },
+        { uuid: DATASET_ID, name: "Dataset" },
+        { run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" },
+        { suite_run_id: SUITE_RUN_ID, suite_id: EVAL_ID, name: "Suite run" },
+      ],
+      total_elements: 4,
     });
 
     expect(compactItems(extracted.items)).toEqual([
       { id: EVAL_ID, name: "Eval" },
-      { uuid: DATASET_ID, name: "Dataset" },
+      { id: DATASET_ID, uuid: DATASET_ID, name: "Dataset" },
+      { id: RUN_ID, run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" },
+      { id: SUITE_RUN_ID, suite_run_id: SUITE_RUN_ID, suite_id: EVAL_ID, name: "Suite run" },
     ]);
   });
 

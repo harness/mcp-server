@@ -13,6 +13,8 @@ const log = createLogger("harness-client");
 const HARNESS_MCP_USER_AGENT = `harness-mcp-server/${getVersion()}`;
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+const TRANSIENT_NETWORK_CODES = new Set(["EAI_AGAIN", "ECONNRESET", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"]);
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * Whether the caller explicitly set a body (including empty string).
@@ -69,9 +71,17 @@ function isHtmlBody(body: string): boolean {
   return /^\s*</.test(body) || /<!doctype/i.test(body.slice(0, 100));
 }
 
+function isNginxErrorPage(body: string): boolean {
+  return isHtmlBody(body) && /<center>\s*nginx(?:\/[\d.]+)?\s*<\/center>/i.test(body);
+}
+
 /** Produce a clean, actionable error message for non-JSON HTTP error responses. */
 function humanizeHttpError(status: number, rawBody: string): string {
   const html = isHtmlBody(rawBody);
+  if (isNginxErrorPage(rawBody)) {
+    return `HTTP ${status}: nginx returned an error page before the request reached a Harness service. ` +
+      "Check HARNESS_BASE_URL and whether this product route is deployed in that environment.";
+  }
 
   switch (status) {
     case 401:
@@ -86,6 +96,32 @@ function humanizeHttpError(status: number, rawBody: string): string {
       return `HTTP ${status}: ${hint || "empty response"}`;
     }
   }
+}
+
+function isSafeRetry(options: RequestOptions, method: string): boolean {
+  if (options.retryPolicy === "do_not_retry" || options.retryPolicy === "idempotency_key_required") return false;
+  return options.retryPolicy === "safe" || IDEMPOTENT_METHODS.has(method);
+}
+
+function getNetworkErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const cause = (err as { cause?: unknown }).cause;
+  if (cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string") {
+    return (cause as { code: string }).code;
+  }
+  return typeof (err as { code?: unknown }).code === "string" ? (err as { code: string }).code : undefined;
+}
+
+function transportError(err: unknown): HarnessApiError {
+  const code = getNetworkErrorCode(err);
+  const message = code === "ENOTFOUND"
+    ? "Cannot resolve the Harness API host (ENOTFOUND). Check HARNESS_BASE_URL and DNS configuration."
+    : code === "EAI_AGAIN"
+      ? "Temporary DNS lookup failure (EAI_AGAIN). Retry after checking DNS availability."
+      : TRANSIENT_NETWORK_CODES.has(code ?? "")
+        ? `Transient network failure (${code}). Retry after checking network connectivity.`
+        : "Network request failed before Harness returned a response. Check HARNESS_BASE_URL and network connectivity.";
+  return new HarnessApiError(message, 503, code ?? "NETWORK_ERROR", undefined, err);
 }
 
 /**
@@ -481,8 +517,12 @@ export class HarnessClient {
         try {
           data = JSON.parse(text);
         } catch (parseErr) {
+          const message = isHtmlBody(text)
+            ? "Harness returned an HTML page instead of API JSON. " +
+              "Check HARNESS_BASE_URL and whether this product route is deployed in that environment."
+            : `Non-JSON response from ${method} ${options.path}: ${text.slice(0, 200)}`;
           throw new HarnessApiError(
-            `Non-JSON response from ${method} ${options.path}: ${text.slice(0, 200)}`,
+            message,
             502,
             undefined,
             undefined,
@@ -502,16 +542,14 @@ export class HarnessClient {
           }
           // Timeout — retry if allowed (and policy permits)
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
+          if (attempt < this.maxRetries && isSafeRetry(options, method)) continue;
           throw lastError;
         }
-        throw new HarnessApiError(
-          `Request failed: ${(err as Error).message ?? String(err)}`,
-          502,
-          undefined,
-          undefined,
-          err,
-        );
+        lastError = transportError(err);
+        if (attempt < this.maxRetries && isSafeRetry(options, method) && TRANSIENT_NETWORK_CODES.has(getNetworkErrorCode(err) ?? "")) {
+          continue;
+        }
+        throw lastError;
       } finally {
         clearTimeout(timer);
       }
@@ -551,6 +589,7 @@ export class HarnessClient {
         await new Promise((r) => setTimeout(r, backoff));
       }
 
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         if (options.signal?.aborted) {
           throw options.signal.reason ?? new DOMException("The operation was aborted", "AbortError");
@@ -558,7 +597,7 @@ export class HarnessClient {
 
         const timeoutController = new AbortController();
         const effectiveTimeout = options.timeoutMs ?? this.timeout;
-        const timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
+        timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
         const signal = options.signal
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
@@ -602,13 +641,16 @@ export class HarnessClient {
             throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
           }
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
+          if (attempt < this.maxRetries && isSafeRetry(options, method)) continue;
           throw lastError;
         }
-        throw new HarnessApiError(
-          `Request failed: ${(err as Error).message ?? String(err)}`,
-          502, undefined, undefined, err,
-        );
+        lastError = transportError(err);
+        if (attempt < this.maxRetries && isSafeRetry(options, method) && TRANSIENT_NETWORK_CODES.has(getNetworkErrorCode(err) ?? "")) {
+          continue;
+        }
+        throw lastError;
+      } finally {
+        clearTimeout(timer);
       }
     }
 
