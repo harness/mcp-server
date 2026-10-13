@@ -69522,6 +69522,40 @@ const schema: Record<string, any> = {
                   },
                   "handleInProgressInstanceRefresh": {
                     "type": "string"
+                  },
+                  "standbyInstances": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Terminate",
+                          "Ignore",
+                          "Wait"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "scaleInProtectedInstances": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Refresh",
+                          "Ignore",
+                          "Wait"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   }
                 }
               }
@@ -69632,6 +69666,40 @@ const schema: Record<string, any> = {
               },
               "handleInProgressInstanceRefresh": {
                 "type": "string"
+              },
+              "standbyInstances": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Terminate",
+                      "Ignore",
+                      "Wait"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "scaleInProtectedInstances": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Refresh",
+                      "Ignore",
+                      "Wait"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
               },
               "description": {
                 "desc": "This is the description for AsgRollingDeployStepInfo"
@@ -112126,9 +112194,6 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/cd/TerragruntDestroyStepNode"
                   },
                   {
-                    "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentConfig"
-                  },
-                  {
                     "$ref": "#/definitions/pipeline/steps/common/BackgroundStepNode"
                   },
                   {
@@ -112621,137 +112686,6 @@ const schema: Record<string, any> = {
                     "pattern": "^[\\s]*$"
                   }
                 ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentConfig": {
-            "title": "CustomDeploymentConfig",
-            "type": "object",
-            "required": [
-              "execution",
-              "infrastructure"
-            ],
-            "properties": {
-              "execution": {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentExecutionConfig"
-              },
-              "infrastructure": {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentInfraConfig"
-              },
-              "metadata": {
-                "type": "string"
-              },
-              "description": {
-                "desc": "This is the description for CustomDeploymentConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentExecutionConfig": {
-            "title": "CustomDeploymentExecutionConfig",
-            "type": "object",
-            "properties": {
-              "stepTemplateRefs": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "description": {
-                "desc": "This is the description for CustomDeploymentExecutionConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentInfraConfig": {
-            "title": "CustomDeploymentInfraConfig",
-            "type": "object",
-            "required": [
-              "fetchInstancesScript",
-              "instanceAttributes",
-              "instancesListPath"
-            ],
-            "properties": {
-              "fetchInstancesScript": {
-                "minLength": 1,
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentFetchInstancesScriptConfig"
-              },
-              "instanceAttributes": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentInstanceAttributes"
-                },
-                "minLength": 1
-              },
-              "instancesListPath": {
-                "type": "string",
-                "minLength": 1
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentConnectorNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentSecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentStringNGVariable"
-                    }
-                  ]
-                }
-              },
-              "description": {
-                "desc": "This is the description for CustomDeploymentInfraConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentFetchInstancesScriptConfig": {
-            "title": "CustomDeploymentFetchInstancesScriptConfig",
-            "type": "object",
-            "required": [
-              "store"
-            ],
-            "properties": {
-              "metadata": {
-                "type": "string"
-              },
-              "store": {
-                "minLength": 1,
-                "$ref": "#/definitions/pipeline/steps/cd/StoreConfigWrapper"
-              },
-              "description": {
-                "desc": "This is the description for CustomDeploymentFetchInstancesScriptConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentInstanceAttributes": {
-            "title": "CustomDeploymentInstanceAttributes",
-            "type": "object",
-            "required": [
-              "jsonPath",
-              "name"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for CustomDeploymentInstanceAttributes"
-              },
-              "jsonPath": {
-                "type": "string",
-                "minLength": 1
-              },
-              "name": {
-                "type": "string",
-                "minLength": 1
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
