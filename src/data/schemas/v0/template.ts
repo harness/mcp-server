@@ -3888,6 +3888,40 @@ const schema: Record<string, any> = {
                   },
                   "handleInProgressInstanceRefresh": {
                     "type": "string"
+                  },
+                  "standbyInstances": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Terminate",
+                          "Ignore",
+                          "Wait"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "scaleInProtectedInstances": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Refresh",
+                          "Ignore",
+                          "Wait"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   }
                 }
               }
@@ -3998,6 +4032,40 @@ const schema: Record<string, any> = {
               },
               "handleInProgressInstanceRefresh": {
                 "type": "string"
+              },
+              "standbyInstances": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Terminate",
+                      "Ignore",
+                      "Wait"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "scaleInProtectedInstances": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Refresh",
+                      "Ignore",
+                      "Wait"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
               },
               "description": {
                 "desc": "This is the description for AsgRollingDeployStepInfo"
@@ -140480,9 +140548,6 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/cd/TerragruntDestroyStepNode"
                   },
                   {
-                    "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentConfig"
-                  },
-                  {
                     "$ref": "#/definitions/pipeline/steps/common/BackgroundStepNode"
                   },
                   {
@@ -140975,29 +141040,6 @@ const schema: Record<string, any> = {
                     "pattern": "^[\\s]*$"
                   }
                 ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentConfig": {
-            "title": "CustomDeploymentConfig",
-            "type": "object",
-            "required": [
-              "execution",
-              "infrastructure"
-            ],
-            "properties": {
-              "execution": {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentExecutionConfig"
-              },
-              "infrastructure": {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentInfraConfig"
-              },
-              "metadata": {
-                "type": "string"
-              },
-              "description": {
-                "desc": "This is the description for CustomDeploymentConfig"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
