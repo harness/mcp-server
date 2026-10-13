@@ -149,4 +149,24 @@ describe("compactItems", () => {
     expect(result[0].name).toBe("[Incident 1](https://app.harness.io/inc/1)");
     expect(result[0]).not.toHaveProperty("openInHarness");
   });
+
+  it("preserves SCS orchestration marker fields (_summary, _message, _result)", () => {
+    const items = [{
+      identifier: "art-1",
+      name: "nginx",
+      _summary: { total: 0, by_type: {} },
+      _message: "No CVEs found",
+      _result: "EMPTY",
+      yaml: "stripped",
+    }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toMatchObject({
+      identifier: "art-1",
+      name: "nginx",
+      _summary: { total: 0, by_type: {} },
+      _message: "No CVEs found",
+      _result: "EMPTY",
+    });
+    expect(result[0]).not.toHaveProperty("yaml");
+  });
 });
