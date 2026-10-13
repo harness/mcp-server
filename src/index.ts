@@ -23,7 +23,6 @@ import {
 } from "./utils/oauth-auth.js";
 import {
   createOAuthProxyRuntime,
-  registerOAuthProxyRoutes,
   type OAuthProxyRuntime,
 } from "./utils/oauth-proxy.js";
 import {
@@ -308,7 +307,6 @@ async function startHttp(config: Config, port: number): Promise<void> {
     await oauthProxyRuntime.vault.connect?.();
     registerOAuthProtectedResourceRoutes(app, brokerProtectedResourceConfig(config));
     registerOAuthBrokerRoutes(app, createOAuthBrokerRuntime(oauthProxyRuntime));
-    registerOAuthProxyRoutes(app, oauthProxyRuntime);
   } else if (config.HARNESS_MCP_MODE === "oauth") {
     registerOAuthProtectedResourceRoutes(app, config);
   }

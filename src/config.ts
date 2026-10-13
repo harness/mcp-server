@@ -20,6 +20,23 @@ const DEFAULT_OAUTH_BASE_URL = "https://mcp.harness.io/cli";
 const DEFAULT_OAUTH_ISSUER = "https://id.harness.io/idp/realms/HarnessIDP";
 const DEFAULT_OAUTH_RESOURCE = "https://mcp.harness.io/mcp";
 
+const UPSTREAM_EMAIL_DOMAIN_PATTERN =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+
+function upstreamEmailDomains(value: string | undefined): string[] {
+  if (!value) return [];
+  const domains = [...new Set(
+    value.split(",").map((part) => part.trim().toLowerCase()).filter(Boolean),
+  )];
+  const invalid = domains.find((domain) => !UPSTREAM_EMAIL_DOMAIN_PATTERN.test(domain));
+  if (invalid) {
+    throw new Error(
+      `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS contains invalid domain "${invalid}".`,
+    );
+  }
+  return domains;
+}
+
 function assertRedisUrl(value: string | undefined): void {
   if (!value) {
     throw new Error(
@@ -112,10 +129,6 @@ const RawConfigSchema = z.object({
     z.string().default("openid profile email organization"),
   ),
   HARNESS_MCP_OAUTH_CLIENT_SECRET: optionalStringFromEnv,
-  HARNESS_MCP_OAUTH_IDP_HINT: z.preprocess(
-    emptyStringAsUndefined,
-    z.string().default("okta"),
-  ),
   HARNESS_MCP_OAUTH_EXTERNAL_SUB_CLAIM: z.preprocess(
     emptyStringAsUndefined,
     z.string().default("external_sub"),
@@ -150,6 +163,7 @@ const RawConfigSchema = z.object({
   HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID: optionalStringFromEnv,
   HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET: optionalStringFromEnv,
   HARNESS_MCP_UPSTREAM_DISCOVERY_URI: optionalUrlFromEnv,
+  HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS: optionalStringFromEnv,
   HARNESS_MCP_BROKER_ISSUER: optionalUrlFromEnv,
   HARNESS_MCP_BROKER_CLIENT_ID: z.preprocess(
     emptyStringAsUndefined,
@@ -157,7 +171,7 @@ const RawConfigSchema = z.object({
   ),
   HARNESS_MCP_BROKER_REDIRECT_URIS: z.preprocess(
     emptyStringAsUndefined,
-    z.string().default("http://localhost:8787/callback"),
+    z.string().default("*"),
   ),
   HARNESS_MCP_BROKER_CODE_TTL_MS: z.coerce.number().int().min(30_000).max(10 * 60_000).default(60_000),
   HARNESS_MCP_BROKER_TRANSACTION_TTL_MS: z.coerce.number().int().min(60_000).max(30 * 60_000).default(10 * 60_000),
@@ -479,6 +493,9 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     HARNESS_MCP_BROKER_ISSUER: brokerIssuer,
     HARNESS_MCP_UPSTREAM_JWKS_URI: upstreamJwksUri,
     HARNESS_MCP_UPSTREAM_DISCOVERY_URI: upstreamDiscoveryUri,
+    HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS: upstreamEmailDomains(
+      data.HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS,
+    ),
   };
 });
 

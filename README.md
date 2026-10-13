@@ -130,7 +130,6 @@ When running in HTTP mode, the server exposes:
 | `/oauth/upstream/callback` | `GET` | Upstream identity-provider callback |
 | `/oauth/harnessid/callback` | `GET` | HarnessID linking callback |
 | `/oauth/token` | `POST` | Return or refresh upstream tokens for Cursor; never returns HarnessID tokens |
-| `/oauth/link`, `/oauth/callback` | `GET` | Manual linking fallback for diagnostics |
 
 
 The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.
@@ -193,12 +192,13 @@ See [HarnessID OAuth for a self-hosted MCP server](docs/harnessid-oauth.md) for 
 
 Set `HARNESS_MCP_MODE=oauth-proxy` when Cursor or another MCP client must hold
 only an upstream identity-provider token. The integrated OAuth broker starts
-the upstream browser login, chains the one-time HarnessID link, and returns only
-the upstream access/refresh tokens to the MCP client. On every `/mcp` request,
-the server validates the upstream token and obtains a per-user HarnessID token
-internally through either a rotating refresh token or the JWT bearer grant.
-HarnessID tokens never leave the server; refresh tokens and transient OAuth
-state are encrypted at rest.
+the upstream browser login, completes the HarnessID login in the same flow, and
+returns only the upstream access/refresh tokens to the MCP client. On every
+`/mcp` request, the server validates the upstream token and uses a cached
+per-user HarnessID access token, renewing it with the refresh token before
+expiry. A missing upstream-to-HarnessID mapping returns 401 so the client signs
+in again. HarnessID tokens never leave the server; refresh tokens, cached
+access tokens, and transient OAuth state are encrypted at rest.
 
 This mode is HTTP-only and requires upstream issuer/audience configuration, a
 HarnessID confidential client secret, and a stable 32-byte vault key. See
@@ -611,12 +611,11 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_OAUTH_ACCOUNT_CLAIM` | No | `account_id`                | Access-token claim carrying the Harness account ID, populated by the HarnessID `organization` scope                                                                                                                                                 |
 | `HARNESS_MCP_OAUTH_SCOPES`  | No       | `openid profile email organization` | Space-separated scopes advertised in RFC 9728 protected-resource metadata                                                                                                                                                    |
 | `HARNESS_MCP_OAUTH_CLIENT_SECRET` | Yes* | -- | Confidential HarnessID client secret; required only in `oauth-proxy` mode |
-| `HARNESS_MCP_OAUTH_IDP_HINT` | No | `okta` | HarnessID organization-linked identity-provider alias used during first linking |
-| `HARNESS_MCP_OAUTH_EXTERNAL_SUB_CLAIM` | No | `external_sub` | HarnessID token claim matched to the upstream token subject during linking |
+| `HARNESS_MCP_OAUTH_EXTERNAL_SUB_CLAIM` | No | `external_sub` | HarnessID token claim matched to the upstream subject or upstream email during linking |
 | `HARNESS_MCP_OAUTH_PROXY_GRANT` | No | `refresh` | Later-request grant in `oauth-proxy` mode: `refresh` or `jwt-bearer` |
-| `HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL` | No | MCP resource origin | Public origin serving `/oauth/link` and `/oauth/callback` |
+| `HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL` | No | MCP resource origin | Public origin of the OAuth broker |
 | `HARNESS_MCP_OAUTH_PROXY_VAULT_MODE` | No | `file` | `file` stores the encrypted vault on local disk for one pod. `redis` shares refresh tokens and login state across pods |
-| `HARNESS_MCP_OAUTH_PROXY_VAULT_PATH` | No | `.harness-mcp/oauth-proxy-vault.enc` | Encrypted refresh-token and link-state file used when vault mode is `file` |
+| `HARNESS_MCP_OAUTH_PROXY_VAULT_PATH` | No | `.harness-mcp/oauth-proxy-vault.enc` | Encrypted HarnessID token and login-state file used when vault mode is `file` |
 | `HARNESS_MCP_OAUTH_PROXY_VAULT_KEY` | Yes* | -- | Base64-encoded 32-byte AES key required in `oauth-proxy` mode |
 | `HARNESS_MCP_OAUTH_PROXY_REDIS_URL` | Yes* | -- | `redis://` or `rediss://` URL required when vault mode is `redis`. Redis 6.2 or newer |
 | `HARNESS_MCP_OAUTH_PROXY_REDIS_KEY_PREFIX` | No | `harness-mcp:oauth` | Prefix for OAuth vault keys in Redis |
@@ -627,9 +626,10 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID` | Yes* | -- | Confidential upstream OAuth client used by the embedded broker |
 | `HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET` | Yes* | -- | Upstream OAuth client secret used only by the server |
 | `HARNESS_MCP_UPSTREAM_DISCOVERY_URI` | No | `<upstream issuer>/.well-known/openid-configuration` | Upstream OIDC discovery endpoint |
+| `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS` | No | -- | Comma-separated domains allowed to match `external_sub`. Empty accepts any email from the trusted upstream issuer |
 | `HARNESS_MCP_BROKER_ISSUER` | No | OAuth proxy public URL | Authorization-server issuer Cursor discovers |
 | `HARNESS_MCP_BROKER_CLIENT_ID` | No | `cursor-harness-mcp` | Static public OAuth client ID configured in Cursor |
-| `HARNESS_MCP_BROKER_REDIRECT_URIS` | No | `http://localhost:8787/callback` | Exact comma-separated Cursor callback allowlist |
+| `HARNESS_MCP_BROKER_REDIRECT_URIS` | No | `*` | `*` allows IDE loopback and app-scheme callbacks. Exact comma-separated URIs lock the allowlist |
 | `HARNESS_MCP_BROKER_CODE_TTL_MS` | No | `60000` | Lifetime of one-time Cursor authorization codes |
 | `HARNESS_MCP_BROKER_TRANSACTION_TTL_MS` | No | `600000` | Maximum lifetime of the chained browser authorization transaction |
 | `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. Legacy FME is unavailable in OAuth mode so HarnessID tokens are never sent to `api.split.io`; use Harness-native `org_id`+`project_id` scope instead. Must not be set in `multi-user` or `oauth` mode |

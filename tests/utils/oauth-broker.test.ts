@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfigSchema, type Config } from "../../src/config.js";
 import {
+  brokerRedirectAllowed,
   buildAuthorizationServerMetadata,
   createOAuthBrokerRuntime,
   registerOAuthBrokerRoutes,
@@ -37,7 +38,11 @@ const harnessJwk = {
   use: "sig",
 };
 
-function brokerConfig(vaultPath: string, grant: "refresh" | "jwt-bearer" = "refresh"): Config {
+function brokerConfig(
+  vaultPath: string,
+  grant: "refresh" | "jwt-bearer" = "refresh",
+  emailDomains?: string,
+): Config {
   return ConfigSchema.parse({
     HARNESS_MCP_MODE: "oauth-proxy",
     HARNESS_BASE_URL: `${mcpOrigin}/cli`,
@@ -58,6 +63,7 @@ function brokerConfig(vaultPath: string, grant: "refresh" | "jwt-bearer" = "refr
     HARNESS_MCP_BROKER_ISSUER: mcpOrigin,
     HARNESS_MCP_BROKER_CLIENT_ID: "cursor-harness-mcp",
     HARNESS_MCP_BROKER_REDIRECT_URIS: cursorRedirect,
+    ...(emailDomains ? { HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS: emailDomains } : {}),
   });
 }
 
@@ -67,9 +73,13 @@ interface TokenState {
   accessSubject?: string;
   idSubject?: string;
   accessUid?: string;
+  accessEmail?: string;
+  accessEmailVerified?: boolean;
+  accessUpn?: string;
   idEmail?: string;
   idEmailVerified?: boolean;
   idPreferredUsername?: string;
+  idUniqueName?: string;
   harnessEmail?: string;
   harnessEmailVerified?: boolean;
 }
@@ -80,6 +90,11 @@ function signUpstreamAccessToken(state: TokenState = {}): string {
       aud: "harness-mcp",
       scope: "openid profile email offline_access",
       ...(state.accessUid ? { uid: state.accessUid } : {}),
+      ...(state.accessEmail ? { email: state.accessEmail } : {}),
+      ...(state.accessEmailVerified !== undefined
+        ? { email_verified: state.accessEmailVerified }
+        : {}),
+      ...(state.accessUpn ? { upn: state.accessUpn } : {}),
     },
     upstreamKeys.privateKey,
     {
@@ -100,6 +115,7 @@ function signUpstreamIdToken(nonce: string, state: TokenState = {}): string {
       ...(state.idEmail ? { email: state.idEmail } : {}),
       ...(state.idEmailVerified !== undefined ? { email_verified: state.idEmailVerified } : {}),
       ...(state.idPreferredUsername ? { preferred_username: state.idPreferredUsername } : {}),
+      ...(state.idUniqueName ? { unique_name: state.idUniqueName } : {}),
     },
     upstreamKeys.privateKey,
     {
@@ -253,6 +269,24 @@ async function completeBrowserFlow(
   expect(cursorUrl.searchParams.get("iss")).toBe(mcpOrigin);
   return cursorUrl.searchParams.get("code")!;
 }
+
+describe("broker redirect allowlist", () => {
+  it("accepts IDE loopback and app callbacks when the allowlist is *", () => {
+    expect(brokerRedirectAllowed("*", "http://localhost:8787/callback")).toBe(true);
+    expect(brokerRedirectAllowed("*", "http://127.0.0.1:54321/callback")).toBe(true);
+    expect(brokerRedirectAllowed("*", "http://[::1]:8787/callback")).toBe(true);
+    expect(brokerRedirectAllowed("*", "vscode://mcp/callback")).toBe(true);
+    expect(brokerRedirectAllowed("*", "https://attacker.example/callback")).toBe(false);
+    expect(brokerRedirectAllowed("*", "javascript:alert(1)")).toBe(false);
+  });
+
+  it("keeps an exact allowlist closed", () => {
+    expect(brokerRedirectAllowed(
+      "http://localhost:8787/callback",
+      "http://127.0.0.1:8787/callback",
+    )).toBe(false);
+  });
+});
 
 describe("integrated OAuth broker", () => {
   let directory: string | undefined;
@@ -579,6 +613,80 @@ describe("integrated OAuth broker", () => {
       expect(await proxy.vault.getRecord(upstreamIssuer, "user@example.com")).toMatchObject({
         linked: true,
       });
+    });
+  });
+
+  it("links a SAML email external_sub when the upstream subject is a different id", async () => {
+    directory = await mkdtemp(join(tmpdir(), "oauth-broker-saml-email-"));
+    const state: TokenState = {
+      accessSubject: "ida-user-1",
+      idSubject: "ida-user-1",
+      idEmail: "User@Jpmchase.com",
+      externalSubject: "user@jpmchase.com",
+    };
+    const proxy = createOAuthProxyRuntime(
+      brokerConfig(join(directory, "vault.enc"), "refresh", "jpmchase.com"),
+      oauthFetch(state),
+    );
+    const app = express();
+    registerOAuthBrokerRoutes(app, createOAuthBrokerRuntime(proxy));
+
+    await withListeningApp(app, async (baseUrl) => {
+      const verifier = randomBytes(32).toString("base64url");
+      const code = await completeBrowserFlow(baseUrl, state, verifier);
+      expect(code).toEqual(expect.any(String));
+      expect(await proxy.vault.getRecord(upstreamIssuer, "ida-user-1")).toMatchObject({
+        linked: true,
+      });
+      expect(await proxy.vault.getRecord(upstreamIssuer, "user@jpmchase.com")).toBeUndefined();
+    });
+  });
+
+  it("rejects an upstream email outside the configured domain", async () => {
+    directory = await mkdtemp(join(tmpdir(), "oauth-broker-email-domain-"));
+    const state: TokenState = {
+      accessSubject: "ida-user-1",
+      idSubject: "ida-user-1",
+      idEmail: "user@other.example",
+      externalSubject: "user@other.example",
+    };
+    const proxy = createOAuthProxyRuntime(
+      brokerConfig(join(directory, "vault.enc"), "refresh", "jpmchase.com"),
+      oauthFetch(state),
+    );
+    const app = express();
+    registerOAuthBrokerRoutes(app, createOAuthBrokerRuntime(proxy));
+
+    await withListeningApp(app, async (baseUrl) => {
+      const verifier = randomBytes(32).toString("base64url");
+      const authorize = new URL("/oauth/authorize", baseUrl);
+      authorize.search = new URLSearchParams({
+        client_id: "cursor-harness-mcp",
+        redirect_uri: cursorRedirect,
+        response_type: "code",
+        state: "cursor-state",
+        resource: `${mcpOrigin}/mcp`,
+        scope: "openid profile email offline_access",
+        code_challenge: pkceChallenge(verifier),
+        code_challenge_method: "S256",
+      });
+      const upstreamRedirect = new URL(
+        (await fetch(authorize, { redirect: "manual" })).headers.get("location")!,
+      );
+      state.nonce = upstreamRedirect.searchParams.get("nonce")!;
+      const upstreamCallback = new URL("/oauth/upstream/callback", baseUrl);
+      upstreamCallback.searchParams.set("state", upstreamRedirect.searchParams.get("state")!);
+      upstreamCallback.searchParams.set("code", "upstream-code");
+      const harnessRedirect = new URL(
+        (await fetch(upstreamCallback, { redirect: "manual" })).headers.get("location")!,
+      );
+      const harnessCallback = new URL("/oauth/harnessid/callback", baseUrl);
+      harnessCallback.searchParams.set("state", harnessRedirect.searchParams.get("state")!);
+      harnessCallback.searchParams.set("code", "harness-code");
+      const response = await fetch(harnessCallback, { redirect: "manual" });
+      const cursorError = new URL(response.headers.get("location")!);
+      expect(cursorError.searchParams.get("error")).toBe("access_denied");
+      expect(await proxy.vault.getRecord(upstreamIssuer, "ida-user-1")).toBeUndefined();
     });
   });
 

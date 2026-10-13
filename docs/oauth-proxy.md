@@ -10,16 +10,19 @@ and audit records therefore use the linked Harness user.
 
 Two HarnessID grant methods are supported:
 
-- `refresh`: first login returns a HarnessID refresh token. It is encrypted at
-  rest and rotated when HarnessID returns a replacement.
+- `refresh`: first login returns a HarnessID refresh token and access token.
+  Both are encrypted at rest. Later requests reuse the access token until 60
+  seconds before it expires, then renew it with the refresh token. A rotated
+  refresh token replaces the stored one.
 - `jwt-bearer`: every exchange uses the upstream JWT as an RFC 7523 assertion.
   No refresh token or other token material is persisted.
 
 Both methods require one browser login to create the upstream-provider-to-
-HarnessID user link. The vault always stores short-lived PKCE state and a
-non-secret linked marker. Only `refresh` mode stores a token. Use the local
-encrypted file for a single pod. Use Redis when more than one pod must share
-that state.
+HarnessID user mapping. The vault always stores short-lived PKCE state and a
+non-secret linked marker. Only `refresh` mode stores HarnessID tokens. Use the
+local encrypted file for a single pod. Use Redis when more than one pod must
+share that state. A missing or rejected mapping returns `401 invalid_token`
+so the client starts `/oauth/authorize` again.
 
 ## End-to-end Cursor flow
 
@@ -73,7 +76,7 @@ sequenceDiagram
     K-->>M: HarnessID tokens
     M->>M: Require external_sub == upstream sub
     alt refresh grant
-        M->>M: Encrypt refresh token in vault
+        M->>M: Encrypt refresh and access tokens in vault
     else jwt-bearer grant
         M->>M: Store linked marker only
     end
@@ -81,8 +84,12 @@ sequenceDiagram
     C->>M: POST /oauth/token with Cursor PKCE verifier
     M-->>C: Upstream access and refresh tokens only
     C->>M: POST /mcp, Bearer upstream token
-    M->>K: Exchange for HarnessID access token
-    K-->>M: HarnessID access token
+    alt refresh grant
+        M->>M: Reuse cached HarnessID access token
+    else jwt-bearer grant
+        M->>K: JWT bearer grant
+        K-->>M: HarnessID access token
+    end
     M->>H: Harness API call, Bearer HarnessID token
     H-->>M: API response
     M-->>C: MCP result
@@ -99,10 +106,13 @@ sequenceDiagram
 
     C->>M: POST /mcp, Bearer upstream token
     M->>M: Validate upstream token
-    M->>M: Load encrypted refresh token
-    M->>K: refresh_token grant
-    K-->>M: HarnessID access token (+ rotated refresh)
-    M->>M: Store rotated refresh token if returned
+    alt access token valid beyond 60 seconds
+        M->>M: Reuse cached HarnessID access token
+    else missing or inside the renewal window
+        M->>K: refresh_token grant
+        K-->>M: HarnessID access token (+ rotated refresh)
+        M->>M: Store access token and rotated refresh token
+    end
     M->>H: Harness API call, Bearer HarnessID token
     H-->>M: API response
     M-->>C: MCP result
@@ -139,9 +149,13 @@ sequenceDiagram
 - `/oauth/token` strips upstream ID tokens and every HarnessID token.
 - HarnessID linking accepts an exact upstream `sub` match. It also accepts
   Okta's access-token `uid` when that equals the ID token `sub`, and an email
-  or `preferred_username` that equals the other token's subject. An email is
-  rejected only when `email_verified` is explicitly false. Suffix matches are
-  rejected.
+  or `preferred_username` that equals the other token's subject. `external_sub`
+  may also equal an email-shaped `email`, `upn`, `preferred_username`, or
+  `unique_name` claim from the upstream access token or ID token. The vault
+  record stays keyed by the upstream access-token `sub`. An email is rejected
+  when `email_verified` is explicitly false. Set
+  `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS` to allow only those domains. Suffix
+  matches are rejected.
 - The upstream refresh-token grant is proxied so Cursor can rotate its upstream
   token without receiving any Harness credential.
 
@@ -204,10 +218,11 @@ In the `HarnessIDP` realm:
 2. Add an **OpenID Connect v1.0** provider.
 3. Configure its issuer, authorization endpoint, token endpoint, userinfo
    endpoint, JWKS endpoint, client ID, and client secret.
-4. Set the alias that the MCP deployment will use in
-   `HARNESS_MCP_OAUTH_IDP_HINT`.
-5. Link the provider to the Harness organization.
-6. Ensure first broker login creates or links the correct Harness user.
+4. Link the provider to the Harness organization. Login always starts on the
+   Harness login page. This proxy never sends `kc_idp_hint`. The Harness
+   gateway adds that parameter when a customer subdomain should open one
+   identity provider.
+5. Ensure first broker login creates or links the correct Harness user.
 
 For unattended first linking, use a provider-specific first-login flow that
 automatically links only when the upstream provider is authoritative for the
@@ -231,6 +246,7 @@ Direct access grants: Off
 Service accounts: Off
 PKCE method: S256
 Valid redirect URI: https://<mcp-host>/oauth/harnessid/callback
+Browser flow override: none
 ```
 
 Assign these client scopes:
@@ -270,13 +286,21 @@ HarnessID client requirements:
 - Refresh-token rotation enabled if required by policy.
 - Session and refresh-token lifetimes appropriate for the deployment.
 
-After first linking, the encrypted vault stores the refresh token under the
-upstream issuer and subject. On every MCP request:
+After the browser login, the encrypted vault stores the HarnessID refresh token
+and access token under the upstream issuer and subject. On every MCP request:
 
 1. The upstream bearer token is revalidated.
-2. The stored refresh token is sent to HarnessID.
-3. The returned HarnessID access token is validated and used for Harness APIs.
+2. A cached HarnessID access token is reused while more than 60 seconds remain
+   before expiry.
+3. Otherwise the stored refresh token is sent to HarnessID, and the new access
+   token is validated and cached.
 4. A rotated refresh token replaces the previous value.
+5. That HarnessID access token is attached to the Harness API call for the
+   request.
+
+If the vault has no mapping for the upstream identity, or HarnessID rejects the
+refresh token, the server deletes the record and returns `401 invalid_token`.
+The client must start `/oauth/authorize` again.
 
 Operational requirements:
 
@@ -293,7 +317,7 @@ Operational requirements:
 - Values are encrypted with the vault key before they are written. A rotated
   refresh token is published under a per-user lock so two pods do not redeem
   the same token.
-- Changing or losing the vault key requires users to link again.
+- Changing or losing the vault key requires users to sign in again.
 - Redis does not move MCP session state. Session affinity is still required
   when running more than one replica.
 
@@ -394,12 +418,11 @@ export HARNESS_MCP_OAUTH_RESOURCE=http://127.0.0.1:3000/mcp
 export HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL=http://127.0.0.1:3000
 export HARNESS_MCP_BROKER_ISSUER=http://127.0.0.1:3000
 export HARNESS_MCP_BROKER_CLIENT_ID=cursor-harness-mcp
-export HARNESS_MCP_BROKER_REDIRECT_URIS=http://localhost:8787/callback
+export HARNESS_MCP_BROKER_REDIRECT_URIS='*'
 
 export HARNESS_MCP_OAUTH_ISSUER=https://id.harness-test.com/idp/realms/HarnessIDP
 export HARNESS_MCP_OAUTH_CLIENT_ID=harness-mcp-proxy
 export HARNESS_MCP_OAUTH_CLIENT_SECRET='<HarnessID confidential client secret>'
-export HARNESS_MCP_OAUTH_IDP_HINT=okta
 export HARNESS_MCP_OAUTH_EXTERNAL_SUB_CLAIM=external_sub
 export HARNESS_MCP_OAUTH_SCOPES='openid profile email organization'
 
@@ -409,6 +432,7 @@ export HARNESS_MCP_UPSTREAM_JWKS_URI=https://your-org.oktapreview.com/oauth2/def
 export HARNESS_MCP_UPSTREAM_SCOPES='openid profile email offline_access'
 export HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID='<upstream confidential client ID>'
 export HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET='<upstream confidential client secret>'
+# export HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS=jpmchase.com
 
 export HARNESS_MCP_OAUTH_PROXY_VAULT_KEY="$(openssl rand -base64 32)"
 export HARNESS_MCP_OAUTH_PROXY_VAULT_MODE=file
@@ -494,7 +518,7 @@ deliberately excluded from logs.
 
 Repeat once with `HARNESS_MCP_OAUTH_PROXY_GRANT=refresh`, then with
 `jwt-bearer`. Before switching, stop the server and remove the local test vault
-so the first-link behavior is exercised again:
+so the first login is exercised again:
 
 ```bash
 rm -f .harness-mcp/oauth-proxy-vault.enc
@@ -509,17 +533,18 @@ rm -f .harness-mcp/oauth-proxy-vault.enc
   exactly matches `HARNESS_MCP_BROKER_CLIENT_ID`.
 - `invalid_redirect_uri`: register `/oauth/upstream/callback` at the upstream
   provider, `/oauth/harnessid/callback` at HarnessID, and allow
-  `http://localhost:8787/callback` through
-  `HARNESS_MCP_BROKER_REDIRECT_URIS`.
+  the IDE callback through `HARNESS_MCP_BROKER_REDIRECT_URIS`. `*` allows
+  loopback and app-scheme callbacks.
 - Upstream callback fails nonce validation: ensure the upstream client returns
   a signed ID token when `openid` is requested.
 - `does not match the access token subject or verified email`: the server log
   lists the claim names on each token. Okta's access token needs `uid`, or one
   token needs `email` or `preferred_username` equal to the other token's
   subject. `email_verified: false` rejects the email.
-- `HarnessID token claim "external_sub" does not match`: the confidential
-  client mapper is missing, and the HarnessID token also has no verified email
-  equal to the upstream subject.
+- `HarnessID token claim "external_sub" does not match`: the HarnessID claim
+  is neither the upstream `sub` nor an email from the upstream access token or
+  ID token. A SAML NameID email matches `email`, `upn`, `preferred_username`,
+  or `unique_name`. `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS` drops every other domain.
 - `invalid_grant` in `jwt-bearer`: check the assertion `iss`, single-valued
   `aud`, `exp`, `jti`, signature, provider link, allowed provider, and replay
   setting.

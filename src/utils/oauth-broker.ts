@@ -6,6 +6,7 @@ import { createLogger } from "./logger.js";
 import {
   buildHarnessAuthorizationUrl,
   completeHarnessAuthorization,
+  upstreamEmailIdentifiers,
   oauthPkceChallenge,
   randomOAuthToken,
   describeReceivedJwt,
@@ -127,7 +128,7 @@ export function registerOAuthBrokerRoutes(
       if (clientId !== config.HARNESS_MCP_BROKER_CLIENT_ID) {
         throw new OAuthRequestError("unauthorized_client", "Unknown OAuth client.");
       }
-      if (!allowedRedirectUris(config).has(redirectUri)) {
+      if (!brokerRedirectAllowed(config.HARNESS_MCP_BROKER_REDIRECT_URIS, redirectUri)) {
         throw new OAuthRequestError("invalid_request", "The redirect_uri is not registered.");
       }
       if (resource !== config.HARNESS_MCP_OAUTH_RESOURCE) {
@@ -216,6 +217,10 @@ export function registerOAuthBrokerRoutes(
         upstreamIssuer: identity.issuer,
         upstreamSubject: identity.subject,
         upstreamIdSubject: typeof idClaims.sub === "string" ? idClaims.sub : undefined,
+        upstreamLinkIdentifiers: upstreamEmailIdentifiers(
+          runtime.proxy.config,
+          [identity.claims, idClaims],
+        ),
         upstreamTokens: {
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
@@ -277,7 +282,10 @@ export function registerOAuthBrokerRoutes(
         code,
         transaction.harnessCodeVerifier,
         harnessCallbackUrl(runtime.proxy.config),
-        transaction.upstreamIdSubject ? [transaction.upstreamIdSubject] : [],
+        [
+          ...(transaction.upstreamIdSubject ? [transaction.upstreamIdSubject] : []),
+          ...(transaction.upstreamLinkIdentifiers ?? []),
+        ],
       );
       await issueCursorAuthorizationCode(runtime, transaction, res);
     } catch (error) {
@@ -527,13 +535,38 @@ function configuredScopes(config: Config): string[] {
   return config.HARNESS_MCP_UPSTREAM_SCOPES.split(/\s+/).filter(Boolean);
 }
 
-function allowedRedirectUris(config: Config): Set<string> {
-  return new Set(
-    config.HARNESS_MCP_BROKER_REDIRECT_URIS
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
-  );
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+const BLOCKED_REDIRECT_SCHEMES = new Set([
+  "javascript",
+  "data",
+  "file",
+  "blob",
+  "vbscript",
+  "about",
+]);
+
+export function brokerRedirectAllowed(configured: string, redirectUri: string): boolean {
+  const entries = configured.split(",").map((value) => value.trim()).filter(Boolean);
+  if (entries.includes(redirectUri)) return true;
+  return entries.includes("*") && ideRedirectAllowed(redirectUri);
+}
+
+function ideRedirectAllowed(redirectUri: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(redirectUri);
+  } catch {
+    return false;
+  }
+  if (url.username || url.password) return false;
+  const scheme = url.protocol.replace(/:$/, "").toLowerCase();
+  if (!/^[a-z][a-z0-9+.-]*$/.test(scheme) || BLOCKED_REDIRECT_SCHEMES.has(scheme)) {
+    return false;
+  }
+  if (scheme === "http" || scheme === "https") {
+    return LOOPBACK_HOSTS.has(url.hostname.toLowerCase());
+  }
+  return true;
 }
 
 function upstreamCallbackUrl(config: Config): string {

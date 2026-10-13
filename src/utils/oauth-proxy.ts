@@ -5,7 +5,7 @@ import {
   type JsonWebKey as NodeJsonWebKey,
   type KeyObject,
 } from "node:crypto";
-import type { Express, RequestHandler } from "express";
+import type { RequestHandler } from "express";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import type { Config } from "../config.js";
 import { createLogger } from "./logger.js";
@@ -24,6 +24,7 @@ import {
 const log = createLogger("oauth-proxy");
 const CLOCK_TOLERANCE_SECONDS = 30;
 const JWKS_CACHE_TTL_MS = 5 * 60_000;
+const ACCESS_TOKEN_RENEWAL_SKEW_MS = 60_000;
 
 /** Decoded claims for local grant debugging. The raw token is not logged. */
 export function describeReceivedJwt(token: string | undefined): unknown {
@@ -203,76 +204,6 @@ export function oauthProxyProtectedResourceConfig(config: Config): {
   };
 }
 
-export function registerOAuthProxyRoutes(
-  app: Express,
-  runtime: OAuthProxyRuntime,
-): void {
-  app.get("/oauth/link", async (req, res) => {
-    try {
-      const id = queryString(req.query.txn);
-      const transaction = id ? await runtime.vault.getTransaction(id) : undefined;
-      if (!transaction) {
-        res.status(400).type("html").send(page(
-          "Link expired",
-          "<p>Retry the MCP request to create a new HarnessID link.</p>",
-        ));
-        return;
-      }
-      res.redirect(buildHarnessAuthorizationUrl(
-        runtime.config,
-        transaction.state,
-        transaction.codeVerifier,
-        callbackUrl(runtime.config),
-      ));
-    } catch (error) {
-      log.warn("OAuth proxy link failed", { error: errorMessage(error) });
-      res.status(500).type("html").send(page("Link failed", "<p>Unable to start HarnessID login.</p>"));
-    }
-  });
-
-  app.get("/oauth/callback", async (req, res) => {
-    const state = queryString(req.query.state);
-    const code = queryString(req.query.code);
-    const oauthError = queryString(req.query.error);
-    if (oauthError) {
-      res.status(400).type("html").send(page(
-        "HarnessID login failed",
-        `<p>${escapeHtml(queryString(req.query.error_description) ?? oauthError)}</p>`,
-      ));
-      return;
-    }
-    const found = state ? await runtime.vault.takeTransactionByState(state) : undefined;
-    if (!found || !code) {
-      res.status(400).type("html").send(page(
-        "HarnessID login failed",
-        "<p>The authorization state is missing or expired. Retry the MCP request.</p>",
-      ));
-      return;
-    }
-
-    try {
-      const harness = await completeHarnessAuthorization(
-        runtime,
-        found.transaction.subject,
-        code,
-        found.transaction.codeVerifier,
-        callbackUrl(runtime.config),
-      );
-      res.type("html").send(page(
-        "Harness account linked",
-        `<p>HarnessID linked this upstream identity to Harness account <code>${escapeHtml(harness.accountId)}</code>.</p>
-         <p>Return to the MCP client and retry the request.</p>`,
-      ));
-    } catch (error) {
-      log.warn("OAuth proxy callback rejected", { error: errorMessage(error) });
-      res.status(400).type("html").send(page(
-        "HarnessID link rejected",
-        `<p>${escapeHtml(errorMessage(error))}</p>`,
-      ));
-    }
-  });
-}
-
 export function createOAuthProxyHttpAuthMiddleware(
   runtime: OAuthProxyRuntime,
 ): RequestHandler {
@@ -308,7 +239,7 @@ export function createOAuthProxyHttpAuthMiddleware(
         return exchangeHarnessToken(runtime, identity, record, token);
       });
       if (!result) {
-        await sendLinkRequired(runtime, identity, res, metadataUrl);
+        reauthenticateRequired(res, metadataUrl);
         return;
       }
 
@@ -321,7 +252,7 @@ export function createOAuthProxyHttpAuthMiddleware(
     } catch (error) {
       if (error instanceof TokenEndpointError && error.invalidGrant) {
         await runtime.vault.deleteRecord(identity.issuer, identity.subject);
-        await sendLinkRequired(runtime, identity, res, metadataUrl);
+        reauthenticateRequired(res, metadataUrl);
         return;
       }
       log.error("HarnessID token exchange failed", { error: errorMessage(error) });
@@ -334,12 +265,45 @@ export function createOAuthProxyHttpAuthMiddleware(
   };
 }
 
+function cachedAccessTokenUsable(record: OAuthProxyVaultRecord): boolean {
+  return typeof record.accessToken === "string"
+    && record.accessToken.length > 0
+    && typeof record.accessTokenExpiresAt === "number"
+    && record.accessTokenExpiresAt - Date.now() > ACCESS_TOKEN_RENEWAL_SKEW_MS;
+}
+
+function accessTokenExpiresAt(claims: JwtPayload, expiresIn?: number): number {
+  if (typeof claims.exp === "number") return claims.exp * 1000;
+  if (typeof expiresIn === "number") return Date.now() + expiresIn * 1000;
+  return Date.now();
+}
+
 async function exchangeHarnessToken(
   runtime: OAuthProxyRuntime,
   identity: VerifiedIdentity,
   record: OAuthProxyVaultRecord,
   upstreamToken: string,
 ): Promise<{ accessToken: string; claims: JwtPayload; accountId: string }> {
+  if (
+    runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
+    && cachedAccessTokenUsable(record)
+  ) {
+    try {
+      return await verifyHarnessToken(runtime, record.accessToken!);
+    } catch (error) {
+      log.warn("Cached HarnessID access token rejected; refreshing", {
+        error: errorMessage(error),
+      });
+    }
+  }
+
+  if (
+    runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
+    && !record.refreshToken
+  ) {
+    throw new TokenEndpointError(400, '{"error":"invalid_grant"}');
+  }
+
   const tokens = runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
     ? await harnessGrant(runtime, {
       grant_type: "refresh_token",
@@ -351,22 +315,21 @@ async function exchangeHarnessToken(
       assertion: upstreamToken,
       scope: runtime.config.HARNESS_MCP_OAUTH_SCOPES,
     });
-
-  if (
-    runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
-    && tokens.refreshToken
-  ) {
+  const harness = await verifyHarnessToken(runtime, tokens.accessToken);
+  if (runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh") {
     await runtime.vault.putRecord(
       identity.issuer,
       identity.subject,
       {
         linked: true,
-        refreshToken: tokens.refreshToken,
+        refreshToken: tokens.refreshToken ?? record.refreshToken,
+        accessToken: tokens.accessToken,
+        accessTokenExpiresAt: accessTokenExpiresAt(harness.claims, tokens.expiresIn),
         updatedAt: new Date().toISOString(),
       },
     );
   }
-  return verifyHarnessToken(runtime, tokens.accessToken);
+  return harness;
 }
 
 async function verifyHarnessToken(
@@ -478,13 +441,8 @@ export function buildHarnessAuthorizationUrl(
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", oauthPkceChallenge(verifier));
   url.searchParams.set("code_challenge_method", "S256");
-  url.searchParams.set("kc_idp_hint", config.HARNESS_MCP_OAUTH_IDP_HINT);
   url.searchParams.set("prompt", "login");
   return url.toString();
-}
-
-function callbackUrl(config: Config): string {
-  return `${required(config, "HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL").replace(/\/+$/, "")}/oauth/callback`;
 }
 
 const VERIFIED_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -501,6 +459,33 @@ function normalizedEmail(value: unknown): string | undefined {
 export function verifiedEmail(claims: JwtPayload): string | undefined {
   if (claims.email_verified === false || claims.email_verified === "false") return undefined;
   return normalizedEmail(claims.email);
+}
+
+const UPSTREAM_EMAIL_CLAIM_NAMES = ["email", "upn", "preferred_username", "unique_name"] as const;
+
+export function upstreamEmailIdentifiers(
+  config: Config,
+  claimSets: readonly JwtPayload[],
+): string[] {
+  const domains = config.HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS;
+  const identifiers = new Set<string>();
+  for (const claims of claimSets) {
+    if (claims.email_verified === false || claims.email_verified === "false") continue;
+    for (const name of UPSTREAM_EMAIL_CLAIM_NAMES) {
+      const email = normalizedEmail(claims[name]);
+      if (!email) continue;
+      const domain = email.slice(email.indexOf("@") + 1);
+      if (domains.length > 0 && !domains.includes(domain)) continue;
+      identifiers.add(email);
+    }
+  }
+  return [...identifiers];
+}
+
+function matchesLinkedIdentifier(value: string, identifiers: readonly string[]): boolean {
+  if (identifiers.includes(value)) return true;
+  const email = normalizedEmail(value);
+  return email !== undefined && identifiers.some((identifier) => identifier.toLowerCase() === email);
 }
 
 export function upstreamSubjectsMatch(accessClaims: JwtPayload, idClaims: JwtPayload): boolean {
@@ -535,7 +520,9 @@ function assertLinkedIdentity(
   const identifiers = [upstreamSubject, ...alternateSubjects];
   const claimName = config.HARNESS_MCP_OAUTH_EXTERNAL_SUB_CLAIM;
   const externalSubject = claims[claimName];
-  if (typeof externalSubject === "string" && identifiers.includes(externalSubject)) return;
+  if (typeof externalSubject === "string" && matchesLinkedIdentifier(externalSubject, identifiers)) {
+    return;
+  }
   const harnessEmail = verifiedEmail(claims);
   if (harnessEmail && identifiers.some((identifier) => identifier.toLowerCase() === harnessEmail)) {
     return;
@@ -586,40 +573,28 @@ export async function completeHarnessAuthorization(
       refreshToken: runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
         ? tokens.refreshToken
         : undefined,
+      accessToken: runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
+        ? tokens.accessToken
+        : undefined,
+      accessTokenExpiresAt: runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
+        ? accessTokenExpiresAt(harness.claims, tokens.expiresIn)
+        : undefined,
       updatedAt: new Date().toISOString(),
     },
   );
   return harness;
 }
 
-async function sendLinkRequired(
-  runtime: OAuthProxyRuntime,
-  identity: VerifiedIdentity,
+function reauthenticateRequired(
   res: Parameters<RequestHandler>[1],
   metadataUrl: string,
-): Promise<void> {
-  const transactionId = randomOAuthToken();
-  await runtime.vault.putTransaction(transactionId, {
-    issuer: identity.issuer,
-    subject: identity.subject,
-    state: randomOAuthToken(),
-    codeVerifier: randomOAuthToken(),
-    expiresAt: Date.now() + runtime.config.HARNESS_MCP_OAUTH_PROXY_LINK_TTL_MS,
-  });
-  const verificationUri = new URL(
-    "/oauth/link",
-    required(runtime.config, "HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL"),
+): void {
+  oauthError(
+    res,
+    metadataUrl,
+    "HarnessID authentication is required for this identity.",
+    true,
   );
-  verificationUri.searchParams.set("txn", transactionId);
-  res.setHeader(
-    "WWW-Authenticate",
-    `Bearer error="insufficient_authorization", resource_metadata="${metadataUrl}"`,
-  );
-  res.status(401).json({
-    error: "authorization_required",
-    verification_uri_complete: verificationUri.toString(),
-    expires_in: Math.floor(runtime.config.HARNESS_MCP_OAUTH_PROXY_LINK_TTL_MS / 1000),
-  });
 }
 
 async function withIdentityLock<T>(
@@ -675,10 +650,6 @@ export function oauthPkceChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
 }
 
-function queryString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
 function clip(value: string, max = 400): string {
   return value.replace(/\s+/g, " ").slice(0, max);
 }
@@ -687,16 +658,3 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function page(title: string, body: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body><h1>${escapeHtml(title)}</h1>${body}</body></html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;",
-  }[char] ?? char));
-}

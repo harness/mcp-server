@@ -5,6 +5,8 @@ import { dirname } from "node:path";
 export interface OAuthProxyVaultRecord {
   linked: boolean;
   refreshToken?: string;
+  accessToken?: string;
+  accessTokenExpiresAt?: number;
   updatedAt: string;
 }
 
@@ -14,6 +16,7 @@ export interface OAuthProxyLinkTransaction {
   state: string;
   codeVerifier: string;
   expiresAt: number;
+  linkIdentifiers?: string[];
 }
 
 export interface UpstreamTokenBundle {
@@ -38,6 +41,7 @@ export interface OAuthBrokerTransaction {
   upstreamIssuer?: string;
   upstreamSubject?: string;
   upstreamIdSubject?: string;
+  upstreamLinkIdentifiers?: string[];
   upstreamTokens?: UpstreamTokenBundle;
   harnessState?: string;
   harnessCodeVerifier?: string;
