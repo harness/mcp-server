@@ -20,6 +20,28 @@ const firewallExceptionCreateSchema: BodySchema = {
   ],
 };
 
+// Only allowed server-side while status is PENDING — once approved/rejected the
+// exception is immutable via this endpoint (use the status endpoint instead).
+const firewallExceptionUpdateSchema: BodySchema = {
+  description:
+    "Request to update a pending firewall exception. Only allowed while status is PENDING; " +
+    "approved or rejected exceptions cannot be edited this way.",
+  fields: [
+    { name: "businessJustification", type: "string", required: false, description: "Updated business justification for the exception" },
+    { name: "versionList", type: "array", required: false, description: "Updated list of versions to except. Empty array means all versions.", itemType: "string" },
+    { name: "expireAfter", type: "number", required: false, description: "Days after approval when the exception expires. Null/omit means never-expires." },
+    { name: "remediationPlan", type: "string", required: false, description: "Updated plan for remediation" },
+  ],
+};
+
+// `status` is set by the approve/reject action itself, not supplied by the caller.
+const firewallExceptionApprovalSchema: BodySchema = {
+  description: "Approval decision for a pending firewall exception.",
+  fields: [
+    { name: "notes", type: "string", required: false, description: "Note from the approver explaining the decision" },
+  ],
+};
+
 // Projects a raw v3 package list item down to the fields agents actually need.
 // The default `compactItems()` whitelist keeps `id`/`name`/timestamps but drops
 // `packageType`, `packageKind`, `latestVersion`, `registryName`, etc — those
@@ -96,7 +118,8 @@ const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<strin
  *
  * External gateway prefix: `/har/api/v3/…`.
  *
- * Write operations included: firewall exception create (account-scoped).
+ * Write operations included: firewall exception create/update/delete and
+ * approve/reject (all account-scoped).
  * `x-internal: true` operations are excluded on purpose.
  */
 
@@ -128,7 +151,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
   name: "registries-v3",
   displayName: "Artifact Registries (v3)",
   description:
-    "Harness Artifact Registry v3 — packages, versions, files, metadata, scans, firewall exceptions. Includes firewall exception create (account-scoped write).",
+    "Harness Artifact Registry v3 — packages, versions, files, metadata, scans, firewall exceptions. Includes firewall exception create/update/delete and approve/reject (account-scoped writes).",
   // Opt-in until a v3 registry list lands, so agents don't have to
   // disambiguate between v1 registries/artifacts and v3 packages/versions.
   optIn: true,
@@ -542,6 +565,62 @@ export const registriesV3Toolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Create a firewall exception for a policy-blocked artifact (starts in PENDING status, requires approval)",
           bodySchema: firewallExceptionCreateSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/har/api/v3/scans/exceptions/{id}",
+          pathParams: { exception_id: "id" },
+          // Idempotent full-replace PUT, same as registry.update / quarantine.update — safe to retry.
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description: "Update a pending firewall exception by exception_id. Only allowed while status is PENDING.",
+          bodySchema: firewallExceptionUpdateSchema,
+        },
+        delete: {
+          method: "DELETE",
+          path: "/har/api/v3/scans/exceptions/{id}",
+          pathParams: { exception_id: "id" },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description: "Delete a firewall exception by exception_id.",
+        },
+      },
+      executeActions: {
+        approve: {
+          method: "PUT",
+          path: "/har/api/v3/scans/exceptions/{id}/status",
+          pathParams: { exception_id: "id" },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return {
+              status: "APPROVED",
+              notes: input.notes ?? body?.notes,
+            };
+          },
+          responseExtractor: passthrough,
+          actionDescription: "Approve a pending firewall exception. Requires exception_id. Optional: notes.",
+          bodySchema: firewallExceptionApprovalSchema,
+        },
+        reject: {
+          method: "PUT",
+          path: "/har/api/v3/scans/exceptions/{id}/status",
+          pathParams: { exception_id: "id" },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return {
+              status: "REJECTED",
+              notes: input.notes ?? body?.notes,
+            };
+          },
+          responseExtractor: passthrough,
+          actionDescription: "Reject a pending firewall exception. Requires exception_id. Optional: notes.",
+          bodySchema: firewallExceptionApprovalSchema,
         },
       },
     },
