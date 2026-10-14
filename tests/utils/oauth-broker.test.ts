@@ -276,8 +276,19 @@ describe("broker redirect allowlist", () => {
     expect(brokerRedirectAllowed("*", "http://127.0.0.1:54321/callback")).toBe(true);
     expect(brokerRedirectAllowed("*", "http://[::1]:8787/callback")).toBe(true);
     expect(brokerRedirectAllowed("*", "vscode://mcp/callback")).toBe(true);
+    expect(brokerRedirectAllowed("*", "cursor://anyserver.example/callback")).toBe(true);
     expect(brokerRedirectAllowed("*", "https://attacker.example/callback")).toBe(false);
     expect(brokerRedirectAllowed("*", "javascript:alert(1)")).toBe(false);
+    expect(brokerRedirectAllowed("*", "intent://evil.com/oauth#Intent;scheme=https;end")).toBe(false);
+    expect(brokerRedirectAllowed("*", "microsoft-edge:https://evil.com/callback")).toBe(false);
+    expect(brokerRedirectAllowed("*", "view-source:https://evil.com")).toBe(false);
+    expect(brokerRedirectAllowed("*", "ftp://evil.com/callback")).toBe(false);
+    expect(brokerRedirectAllowed("*", "wss://evil.com/callback")).toBe(false);
+    expect(brokerRedirectAllowed("*", "ftp://127.0.0.1/callback")).toBe(true);
+    expect(brokerRedirectAllowed(
+      "https://idp.example/callback",
+      "https://idp.example/callback",
+    )).toBe(true);
   });
 
   it("keeps an exact allowlist closed", () => {
