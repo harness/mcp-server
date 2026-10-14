@@ -969,6 +969,29 @@ describe("HarnessClient", () => {
       });
     });
 
+    it("reports nginx gateway timeouts as an unavailable upstream, not an undeployed route", async () => {
+      const html = "<html><head><title>504 Gateway Time-out</title></head><body><center>nginx</center></body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 504 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      const err = await client.request({ path: "/gateway/ai-evals/api/v1/route" }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ statusCode: 504 });
+      expect((err as HarnessApiError).message).toContain("(504 Gateway Time-out)");
+      expect((err as HarnessApiError).message).toContain("upstream Harness service is unavailable");
+      expect((err as HarnessApiError).message).not.toContain("deployed");
+    });
+
+    it("keeps the credential hint for nginx-served 401 pages", async () => {
+      const html = "<html><head><title>401 Authorization Required</title></head><body><center>nginx</center></body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 401 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/test" })).rejects.toMatchObject({
+        statusCode: 401,
+        message: expect.stringContaining("HARNESS_API_KEY"),
+      });
+    });
+
     it("strips JS redirect page from 401 error message", async () => {
       const redirectHtml = `<html><head><script>
         function redirectPage() {
@@ -1115,6 +1138,17 @@ describe("HarnessClient", () => {
         expect((err as HarnessApiError).statusCode).toBe(408);
         expect((err as HarnessApiError).message).toContain("timed out");
       }
+    });
+
+    it("does not retry a timed-out write without a safe retry policy", async () => {
+      const abortErr = Object.assign(new Error("The operation was aborted"), { name: "AbortError" });
+      fetchSpy.mockRejectedValue(abortErr);
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ method: "POST", path: "/test", body: {} })).rejects.toMatchObject({
+        statusCode: 408,
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
   });
 

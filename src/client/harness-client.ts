@@ -75,12 +75,25 @@ function isNginxErrorPage(body: string): boolean {
   return isHtmlBody(body) && /<center>\s*nginx(?:\/[\d.]+)?\s*<\/center>/i.test(body);
 }
 
+function humanizeNginxError(status: number, rawBody: string): string {
+  const title = rawBody.match(/<title>([^<]{1,100})<\/title>/i)?.[1]?.trim();
+  const prefix = `HTTP ${status}: nginx returned an error page${title ? ` (${title})` : ""}`;
+  if (status === 404) {
+    return `${prefix} before the request reached a Harness service. ` +
+      "Check HARNESS_BASE_URL and whether this product route is deployed in that environment.";
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return `${prefix}: the upstream Harness service is unavailable or did not respond. ` +
+      "Retry later, or check that the service is healthy in that environment.";
+  }
+  return `${prefix} before the request reached a Harness service. Check HARNESS_BASE_URL and the request.`;
+}
+
 /** Produce a clean, actionable error message for non-JSON HTTP error responses. */
 function humanizeHttpError(status: number, rawBody: string): string {
   const html = isHtmlBody(rawBody);
-  if (isNginxErrorPage(rawBody)) {
-    return `HTTP ${status}: nginx returned an error page before the request reached a Harness service. ` +
-      "Check HARNESS_BASE_URL and whether this product route is deployed in that environment.";
+  if (status !== 401 && status !== 403 && isNginxErrorPage(rawBody)) {
+    return humanizeNginxError(status, rawBody);
   }
 
   switch (status) {
@@ -110,6 +123,10 @@ function getNetworkErrorCode(err: unknown): string | undefined {
     return (cause as { code: string }).code;
   }
   return typeof (err as { code?: unknown }).code === "string" ? (err as { code: string }).code : undefined;
+}
+
+function isRetryableTransportError(err: unknown, options: RequestOptions, method: string): boolean {
+  return isSafeRetry(options, method) && TRANSIENT_NETWORK_CODES.has(getNetworkErrorCode(err) ?? "");
 }
 
 function transportError(err: unknown): HarnessApiError {
@@ -546,9 +563,7 @@ export class HarnessClient {
           throw lastError;
         }
         lastError = transportError(err);
-        if (attempt < this.maxRetries && isSafeRetry(options, method) && TRANSIENT_NETWORK_CODES.has(getNetworkErrorCode(err) ?? "")) {
-          continue;
-        }
+        if (attempt < this.maxRetries && isRetryableTransportError(err, options, method)) continue;
         throw lastError;
       } finally {
         clearTimeout(timer);
@@ -645,9 +660,7 @@ export class HarnessClient {
           throw lastError;
         }
         lastError = transportError(err);
-        if (attempt < this.maxRetries && isSafeRetry(options, method) && TRANSIENT_NETWORK_CODES.has(getNetworkErrorCode(err) ?? "")) {
-          continue;
-        }
+        if (attempt < this.maxRetries && isRetryableTransportError(err, options, method)) continue;
         throw lastError;
       } finally {
         clearTimeout(timer);

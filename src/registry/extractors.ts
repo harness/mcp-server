@@ -474,14 +474,29 @@ export const stoRemediationDiffExtract = (raw: unknown): unknown => {
 export const aiEvalsListExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { data?: unknown[]; total_elements?: number };
   return {
-    items: (r.data ?? []).map((item) => {
-      if (!isRecord(item) || item.id !== undefined) return item;
-      const id = item.uuid ?? item.run_id ?? item.suite_run_id;
-      return typeof id === "string" ? { ...item, id } : item;
-    }),
+    items: r.data ?? [],
     total: r.total_elements ?? 0,
   };
 };
+
+/**
+ * AI Evals paginated list whose rows carry their primary key under a resource-specific
+ * field (e.g. `uuid`, `run_id`). Mirrors it into `id` so list results feed the next get call.
+ * Rows can also hold foreign keys (`suite_run_id` on runs, `suite_id` on suite runs), so the
+ * key must be declared per resource rather than guessed.
+ */
+export const aiEvalsListExtractWithId = (idField: string) =>
+  (raw: unknown): { items: unknown[]; total: number } => {
+    const { items, total } = aiEvalsListExtract(raw);
+    return {
+      items: items.map((item) => {
+        if (!isRecord(item) || item.id !== undefined) return item;
+        const id = item[idField];
+        return typeof id === "string" ? { ...item, id } : item;
+      }),
+      total,
+    };
+  };
 
 /**
  * AI Evals — bare array response (e.g. suite evaluations, metric set entries list).

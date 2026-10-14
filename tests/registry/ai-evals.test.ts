@@ -1008,23 +1008,37 @@ describe("AI Evals extractors", () => {
     expect(result).toEqual({ items: [{ id: "1" }, { id: "2" }], total: 5 });
   });
 
-  it("adds a generic id while preserving AI Evals UUID and run ID fields", () => {
+  it("preserves id and uuid fields through compact list results", () => {
     const extracted = aiEvalsListExtract({
-      data: [
-        { id: EVAL_ID, name: "Eval" },
-        { uuid: DATASET_ID, name: "Dataset" },
-        { run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" },
-        { suite_run_id: SUITE_RUN_ID, suite_id: EVAL_ID, name: "Suite run" },
-      ],
-      total_elements: 4,
+      data: [{ id: EVAL_ID, name: "Eval" }, { uuid: DATASET_ID, name: "Dataset" }],
+      total_elements: 2,
     });
 
     expect(compactItems(extracted.items)).toEqual([
       { id: EVAL_ID, name: "Eval" },
-      { id: DATASET_ID, uuid: DATASET_ID, name: "Dataset" },
-      { id: RUN_ID, run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" },
-      { id: SUITE_RUN_ID, suite_run_id: SUITE_RUN_ID, suite_id: EVAL_ID, name: "Suite run" },
+      { uuid: DATASET_ID, name: "Dataset" },
     ]);
+  });
+
+  it.each([
+    ["eval_dataset", { uuid: DATASET_ID, name: "Dataset" }, DATASET_ID],
+    ["eval_dataset_item", { uuid: DATASET_ID, item_identifier: "row-1" }, DATASET_ID],
+    ["eval_run", { run_id: RUN_ID, suite_run_id: SUITE_RUN_ID, eval_id: EVAL_ID }, RUN_ID],
+    ["eval_run_by_eval", { run_id: RUN_ID, eval_id: EVAL_ID }, RUN_ID],
+    ["eval_suite", { suite_id: EVAL_ID, name: "Suite" }, EVAL_ID],
+    ["eval_suite_run", { suite_run_id: SUITE_RUN_ID, suite_id: EVAL_ID }, SUITE_RUN_ID],
+  ])("%s list mirrors its declared primary key into id", (resourceType, row, expectedId) => {
+    const extract = findResource(resourceType).operations.list!.responseExtractor!;
+    const extracted = extract({ data: [row], total_elements: 1 }) as { items: unknown[] };
+
+    expect(extracted.items).toEqual([{ id: expectedId, ...row }]);
+  });
+
+  it("keeps an existing id instead of overwriting it with a foreign key", () => {
+    const extract = findResource("eval_run_item").operations.list!.responseExtractor!;
+    const row = { id: METRIC_ID, run_id: RUN_ID, dataset_item_id: "row-1" };
+
+    expect((extract({ data: [row], total_elements: 1 }) as { items: unknown[] }).items).toEqual([row]);
   });
 
   it("aiEvalsListExtract handles empty response", () => {
