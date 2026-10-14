@@ -29,8 +29,8 @@ const firewallExceptionUpdateSchema: BodySchema = {
   fields: [
     { name: "businessJustification", type: "string", required: false, description: "Updated business justification for the exception" },
     { name: "versionList", type: "array", required: false, description: "Updated list of versions to except. Empty array means all versions.", itemType: "string" },
-    { name: "expireAfter", type: "number", required: false, description: "Days after approval when the exception expires. Null/omit means never-expires." },
-    { name: "remediationPlan", type: "string", required: false, description: "Updated plan for remediation" },
+    { name: "expireAfter", type: "number", required: false, description: "Days after approval when the exception expires. Omitting or sending null leaves the existing value unchanged — this field cannot be cleared via update." },
+    { name: "remediationPlan", type: "string", required: false, description: "Updated plan for remediation. Omitting or sending null leaves the existing value unchanged — this field cannot be cleared via update." },
   ],
 };
 
@@ -570,12 +570,14 @@ export const registriesV3Toolset: ToolsetDefinition = {
           method: "PUT",
           path: "/har/api/v3/scans/exceptions/{id}",
           pathParams: { exception_id: "id" },
-          // Idempotent full-replace PUT, same as registry.update / quarantine.update — safe to retry.
+          // PUT, but it's a partial update server-side — omitted/null fields are left
+          // unchanged rather than cleared (see firewallExceptionUpdateSchema). Still
+          // idempotent for a fixed input, so safe to retry.
           operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
-          description: "Update a pending firewall exception by exception_id. Only allowed while status is PENDING.",
+          description: "Update a pending firewall exception by exception_id. Only allowed while status is PENDING. This is a partial update — fields you omit (or send as null) keep their current value; expireAfter and remediationPlan cannot be cleared this way.",
           bodySchema: firewallExceptionUpdateSchema,
         },
         delete: {
