@@ -90,9 +90,13 @@ describe("AI Evals pagination mapping", () => {
 // ─── Path-scoped writes ─────────────────────────────────────────────────────
 
 describe("AI Evals path-scoped write bodies", () => {
-  it("keeps every resource strictly project-scoped and avoids redundant body scope injection flags", () => {
+  it("keeps project-owned AI Evals resources project-scoped and avoids redundant body scope injection flags", () => {
     const redundant: string[] = [];
 
+    // This toolset owns project resources: configuration, scores, failures, and
+    // the ad-hoc trace-evaluation write. Account-only trace viewing/querying
+    // must be modeled in a separate resource/toolset rather than weakening
+    // scope on a project-owned resource here.
     for (const resource of aiEvalsToolset.resources) {
       expect(resource.scope).toBe("project");
       expect(resource.scopeOptional).toBe(true);
