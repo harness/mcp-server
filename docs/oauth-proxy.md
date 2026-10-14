@@ -534,7 +534,8 @@ rm -f .harness-mcp/oauth-proxy-vault.enc
 - `invalid_redirect_uri`: register `/oauth/upstream/callback` at the upstream
   provider, `/oauth/harnessid/callback` at HarnessID, and allow
   the IDE callback through `HARNESS_MCP_BROKER_REDIRECT_URIS`. `*` allows
-  loopback and app-scheme callbacks.
+  loopback HTTP(S) and app-scheme callbacks such as `vscode://`. It rejects
+  remote network URLs and browser handoff schemes such as `intent:`.
 - Upstream callback fails nonce validation: ensure the upstream client returns
   a signed ID token when `openid` is requested.
 - `does not match the access token subject or verified email`: the server log

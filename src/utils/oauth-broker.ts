@@ -536,6 +536,16 @@ function configuredScopes(config: Config): string[] {
 }
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+// Schemes the browser resolves as a network connection. Wildcard mode keeps
+// these on loopback so the authorization code is not sent to a remote host.
+const NETWORK_REDIRECT_SCHEMES = new Set([
+  "http",
+  "https",
+  "ws",
+  "wss",
+  "ftp",
+  "ftps",
+]);
 const BLOCKED_REDIRECT_SCHEMES = new Set([
   "javascript",
   "data",
@@ -543,7 +553,28 @@ const BLOCKED_REDIRECT_SCHEMES = new Set([
   "blob",
   "vbscript",
   "about",
+  // Browser handoff schemes can navigate to an arbitrary https origin and
+  // deliver the authorization code there. intent://evil#Intent;scheme=https
+  // is the usual Android form; it does not contain a literal https:// URL.
+  "intent",
+  "microsoft-edge",
+  "microsoft-edge-holographic",
+  "googlechrome",
+  "googlechromes",
+  "chrome",
+  "opera",
+  "firefox",
+  "browser",
+  "view-source",
+  "jar",
+  "mhtml",
+  "mk",
+  "content",
+  "ms-msdt",
+  "ms-officecmd",
+  "search-ms",
 ]);
+const NESTED_WEB_URL = /https?:\/\//i;
 
 export function brokerRedirectAllowed(configured: string, redirectUri: string): boolean {
   const entries = configured.split(",").map((value) => value.trim()).filter(Boolean);
@@ -563,10 +594,13 @@ function ideRedirectAllowed(redirectUri: string): boolean {
   if (!/^[a-z][a-z0-9+.-]*$/.test(scheme) || BLOCKED_REDIRECT_SCHEMES.has(scheme)) {
     return false;
   }
-  if (scheme === "http" || scheme === "https") {
+  if (NETWORK_REDIRECT_SCHEMES.has(scheme)) {
     return LOOPBACK_HOSTS.has(url.hostname.toLowerCase());
   }
-  return true;
+  // App schemes such as vscode:// stay allowed. Reject a nested web URL so a
+  // custom scheme cannot smuggle https://evil.example in the path.
+  const remainder = redirectUri.slice(scheme.length + 1);
+  return !NESTED_WEB_URL.test(remainder);
 }
 
 function upstreamCallbackUrl(config: Config): string {

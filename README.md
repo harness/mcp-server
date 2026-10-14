@@ -622,7 +622,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS` | No | -- | Comma-separated domains allowed to match `external_sub`. Empty accepts any email from the trusted upstream issuer |
 | `HARNESS_MCP_BROKER_ISSUER` | No | OAuth proxy public URL | Authorization-server issuer the MCP client discovers |
 | `HARNESS_MCP_BROKER_CLIENT_ID` | No | `cursor-harness-mcp` | Public OAuth client ID. Any name works when the MCP client is configured with the same value |
-| `HARNESS_MCP_BROKER_REDIRECT_URIS` | No | `*` | `*` allows IDE loopback and app-scheme callbacks. Exact comma-separated URIs lock the allowlist |
+| `HARNESS_MCP_BROKER_REDIRECT_URIS` | No | `*` | `*` allows loopback HTTP(S) and IDE app schemes such as `vscode://`. It rejects remote network URLs and browser handoff schemes such as `intent:`. Exact comma-separated URIs lock the allowlist |
 | `HARNESS_MCP_BROKER_CODE_TTL_MS` | No | `60000` | Lifetime of one-time authorization codes issued to the MCP client |
 | `HARNESS_MCP_BROKER_TRANSACTION_TTL_MS` | No | `600000` | Maximum lifetime of the chained browser authorization transaction |
 | `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. Legacy FME is unavailable in OAuth mode so HarnessID tokens are never sent to `api.split.io`; use Harness-native `org_id`+`project_id` scope instead. Must not be set in `multi-user` or `oauth` mode |
