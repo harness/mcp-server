@@ -49,6 +49,9 @@ const schema: Record<string, any> = {
             "type": "string",
             "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
           },
+          "identities": {
+            "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+          },
           "name": {
             "type": "string",
             "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
@@ -70051,6 +70054,9 @@ const schema: Record<string, any> = {
               "identifier": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
               },
               "name": {
                 "type": "string",

@@ -1407,6 +1407,9 @@ const schema: Record<string, any> = {
             "flowControl": {
               "$ref": "#/definitions/pipeline/flowControl"
             },
+            "identities": {
+              "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+            },
             "properties": {
               "type": "object",
               "properties": {
@@ -24796,6 +24799,9 @@ const schema: Record<string, any> = {
                   }
                 ]
               },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+              },
               "strategy": {
                 "oneOf": [
                   {
@@ -41968,6 +41974,9 @@ const schema: Record<string, any> = {
               "identifier": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
               },
               "name": {
                 "type": "string",
