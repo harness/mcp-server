@@ -352,7 +352,8 @@ describe("AI Evals diagnosticHint on key entities", () => {
     ]) {
       const hint = findResource(type).diagnosticHint!;
       expect(hint).toContain("harness_list");
-      expect(hint).toContain("nginx 404");
+      expect(hint).toContain("HTML 404");
+      expect(hint).not.toContain("nginx");
     }
   });
 
@@ -656,6 +657,27 @@ describe("AI Evals eval_target test action", () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
+  it("does not expose downstream connector errors in target validation", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockRejectedValue(new Error("private connector endpoint failed"));
+
+    const error = await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: "{{input}}",
+        },
+      },
+    }).catch(error => error as Error);
+
+    const message = (error as Error).message;
+    expect(message).toContain("not a readable Harness connector");
+    expect(message).not.toContain("private connector endpoint failed");
+  });
+
   it("does not invent a response_path requirement for legacy app targets", async () => {
     const registry = new Registry(makeConfig());
     const request = vi.fn().mockResolvedValue({ id: "legacy-agent-target" });
@@ -682,7 +704,7 @@ describe("AI Evals eval_target test action", () => {
 // ─── Prompt Registry ─────────────────────────────────────────────────────────
 
 describe("AI Evals Prompt Registry", () => {
-  it("exposes the versioned Prompt Registry separately from the generic registry proxy", () => {
+  it("exposes the versioned Prompt Registry separately from generic registry items", () => {
     const prompt = findResource("eval_prompt");
 
     expect(prompt.operations).toMatchObject({
@@ -703,6 +725,7 @@ describe("AI Evals Prompt Registry", () => {
       delete_tag: { method: "DELETE" },
     });
     expect(findResource("eval_registry_item").description).toContain("eval_prompt");
+    expect(findResource("eval_registry_item").description).not.toContain("proxy");
     expect(prompt.description).toContain("browse-only");
     expect(prompt.diagnosticHint).toContain("default library='custom'");
   });
@@ -790,7 +813,7 @@ describe("AI Evals Prompt Registry", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  it("does not create a prompt through the generic registry proxy", async () => {
+  it("does not create a prompt through generic registry items", async () => {
     const registry = new Registry(makeConfig());
     const request = vi.fn();
 

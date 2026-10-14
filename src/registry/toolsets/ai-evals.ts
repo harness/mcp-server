@@ -18,7 +18,7 @@ const WHOLE_TEMPLATE_PLACEHOLDER_PATTERN = /^\s*\{\{\s*[^{}]+\s*\}\}\s*$/;
 const INPUT_TEMPLATE_REFERENCE_PATTERN = /\{\{\s*input(?:\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*\s*\}\}/;
 const UUID_404_HINT =
   "Use the id from harness_list for get, update, delete, and execute actions; identifiers and display names are not accepted. " +
-  "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL.";
+  "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL.";
 
 function scopeOrThrow(input: Record<string, unknown>, config: PathBuilderConfig): { org: string; project: string } {
   const org = (input.org_id as string) ?? config.HARNESS_ORG ?? "";
@@ -133,11 +133,10 @@ async function getScopedResource(
       ctx.signal,
     );
     return unwrapRecord(result);
-  } catch (error) {
+  } catch {
     throw new Error(
       `${idField}=${id} is not a readable ${resourceType} in this org/project. ` +
-      `List valid choices with harness_list(resource_type="${resourceType}"). ` +
-      `Details: ${(error as Error).message}`,
+      `List valid choices with harness_list(resource_type="${resourceType}").`,
     );
   }
 }
@@ -161,11 +160,10 @@ export async function getConnector(ctx: PreflightContext, connectorRef: string):
     });
     const record = unwrapRecord(result);
     return asRecord(record.connector) ?? record;
-  } catch (error) {
+  } catch {
     throw new Error(
       `connector_ref=${connectorRef} is not a readable Harness connector in this eval scope. ` +
-      "Ask the user to select an existing connector and provide its scoped identifier (for example, account.my-connector). " +
-      `Details: ${(error as Error).message}`,
+      "Ask the user to select an existing connector and provide its scoped identifier (for example, account.my-connector).",
     );
   }
 }
@@ -340,11 +338,10 @@ async function validatePromptReference(
       retryPolicy: "safe",
       signal: ctx.signal,
     });
-  } catch (error) {
+  } catch {
     throw new Error(
       `prompt_id=${promptId}${version ? ` at prompt_version=${version}` : ""} is not a readable Prompt Registry entry in this org/project. ` +
-      "Use harness_list(resource_type=\"eval_prompt\") to find a prompt, then use its id and optional version or tag. " +
-      `Details: ${(error as Error).message}`,
+      "Use harness_list(resource_type=\"eval_prompt\") to find a prompt, then use its id and optional version or tag.",
     );
   }
 }
@@ -854,7 +851,7 @@ const datasetItemHistorySchema: BodySchema = {
       name: "item_identifiers",
       type: "array",
       required: true,
-      description: "1–100 unique dataset business IDs (item_identifier values), not internal item UUIDs",
+      description: "1–100 unique dataset business IDs (item_identifier values), not resource UUIDs",
       itemType: "string",
     },
     { name: "limit", type: "number", required: false, description: "Completed runs per item (1–20; default 5)" },
@@ -1169,13 +1166,13 @@ const uploadOutputsSchema: BodySchema = {
 };
 
 const bulkDeleteDatasetItemsSchema: BodySchema = {
-  description: "Bulk-delete dataset items by internal UUID or stable business item ID",
+  description: "Bulk-delete dataset items by resource UUID or stable business item ID",
   fields: [
     {
       name: "item_ids",
       type: "array",
       required: true,
-      description: "One or more internal item UUIDs or item_identifier values. Unknown IDs are returned as not_found.",
+      description: "One or more resource UUIDs or item_identifier values. Unknown IDs are returned as not_found.",
       itemType: "string",
     },
   ],
@@ -1457,7 +1454,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["dataset_id"],
       diagnosticHint:
         "For get/update/delete, use the uuid from harness_list (or use a dataset identifier only for get). " +
-        "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "Dataset items require 'input' as a JSON object (e.g. { messages: [{role:'user', content:'...'}] } or { prompt: '...' }). " +
         "Optional fields depend on metric type: 'expected_output' for correctness metrics, 'context' (string array) for RAG/groundedness metrics, " +
         "'expected_tools' for agent tool-use metrics. Items can be added inline on create or managed separately via eval_dataset_item.",
@@ -1651,7 +1648,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["eval_id"],
       diagnosticHint:
         "Use the id from harness_list for get, update, delete, and execute actions; identifiers and display names are not accepted. " +
-        "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "An eval requires three components: dataset_id, target_id, and metric_set_id. " +
         "Before creating an eval, list existing resources with harness_list for eval_dataset, eval_target, and eval_metric_set. " +
         "Create any missing components first. Managed evaluations cannot be created until all three are set. " +
@@ -1932,7 +1929,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["metric_id"],
       diagnosticHint:
         "Use the id from harness_list for get, update, and delete; metric names are not accepted. " +
-        "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "Use the 'suggestions' execute action to discover appropriate metrics for a given target type and dataset shape. " +
         "Metrics are added to metric sets (eval_metric_set) via eval_metric_set_entry, then referenced by evaluations. " +
         "Each metric response includes a 'config_schema' field (JSON Schema) describing available config options for that metric kind — " +
@@ -2023,7 +2020,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["set_id"],
       diagnosticHint:
         "Use the id from harness_list for get, update, delete, and execute actions; metric-set names are not accepted. " +
-        "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "Before creating a metric set, list available metrics with harness_list(resource_type='eval_metric'). " +
         "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover metrics appropriate for a target type. " +
         "If using LLM metrics (llm-as-judge), set judge_llm_config to a structured provider configuration. " +
@@ -2194,7 +2191,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["suite_id"],
       diagnosticHint:
         "Use the id from harness_list for get, update, delete, and execute actions; suite names are not accepted. " +
-        "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "A suite groups evaluations together. First create evaluations (each with dataset + target + metric set), " +
         "then create the suite and add evaluations via eval_suite_evaluation or the replace_evaluations execute action. " +
         "List existing evaluations with harness_list(resource_type='evaluation').",
@@ -2392,7 +2389,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["target_id"],
       diagnosticHint:
         "Use the id from harness_list for get, update, delete, and execute actions; target names are not accepted. " +
-        "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "When creating a prompt target, use an LLM connector reference (config.llm_connector_ref) " +
         "to specify the model credentials. List connectors via harness_list(resource_type='connector', filters={type:'OpenAI'}) (also type:'Anthropic').",
       relatedResources: [
@@ -2915,7 +2912,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       resourceType: "eval_registry_item",
       displayName: "AI Evals Registry Item",
       description:
-        "GenAI registry proxy for agents, MCP tools, and skills. Prompt records may be listed for compatibility, " +
+        "GenAI registry for agents, MCP tools, and skills. Prompt records may be listed for compatibility, " +
         "but create and manage versioned prompts with eval_prompt so template validation, versions, and tags work correctly. " +
         "Pass type as a query parameter for get/delete when needed.",
       toolset: "ai-evals",
