@@ -90,10 +90,12 @@ describe("AI Evals pagination mapping", () => {
 // ─── Path-scoped writes ─────────────────────────────────────────────────────
 
 describe("AI Evals path-scoped write bodies", () => {
-  it("uses resource-level header scoping instead of redundant endpoint-level body injection flags", () => {
+  it("keeps every resource strictly project-scoped and avoids redundant body scope injection flags", () => {
     const redundant: string[] = [];
 
     for (const resource of aiEvalsToolset.resources) {
+      expect(resource.scope).toBe("project");
+      expect(resource.scopeOptional).toBe(true);
       expect(resource.headerBasedScoping).toBe(true);
       for (const [operation, spec] of Object.entries(resource.operations)) {
         if (spec?.skipScopeBodyInjection) {
@@ -108,6 +110,34 @@ describe("AI Evals path-scoped write bodies", () => {
     }
 
     expect(redundant).toEqual([]);
+  });
+
+  it.each([
+    { HARNESS_ORG: undefined },
+    { HARNESS_PROJECT: undefined },
+  ])("fails before requesting a project resource when either scope component is unavailable", async overrides => {
+    const registry = new Registry(makeConfig(overrides));
+    const request = vi.fn();
+
+    await expect(registry.dispatch(makeClient(request), "eval_prompt", "list", {})).rejects.toThrow(
+      "AI Evals requires org and project",
+    );
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("uses only the explicit project scope in Prompt Registry routes", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({ data: [], total_elements: 0 });
+
+    await registry.dispatch(makeClient(request), "eval_prompt", "list", {
+      org_id: "isolated-org",
+      project_id: "isolated-project",
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/isolated-org/projects/isolated-project/registry/prompts",
+      headerBasedScoping: true,
+    }));
   });
 
   it("dataset create does not inject NG scope fields into the API body", async () => {
