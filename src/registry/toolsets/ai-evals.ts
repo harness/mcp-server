@@ -2729,9 +2729,9 @@ export const aiEvalsToolset: ToolsetDefinition = {
       resourceType: "eval_prompt",
       displayName: "AI Evals Prompt Registry",
       description:
-        "Versioned Prompt Registry prompts used by prompt targets. Use this resource—not eval_registry_item—to create, " +
+        "Versioned project Prompt Registry prompts used by prompt targets. Use this resource—not eval_registry_item—to create, " +
         "update, version, tag, or resolve prompts. List returns UUID id plus identifier; use id for mutations and targets. " +
-        "Use get_by_identifier only when a human-readable slug is all you have.",
+        "Harness-library entries are browse-only with the current API and cannot be fetched or used as prompt targets.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
@@ -2740,7 +2740,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
       diagnosticHint:
         "Prompt IDs are UUIDs from harness_list(resource_type='eval_prompt'); identifiers are lowercase slugs used only " +
         "with the get_by_identifier action. Prompt versions accept vN, N, or a named tag such as production. " +
-        "Harness-library prompts are read-only—list with filters: { library: 'harness' | 'all' } but do not update or delete them.",
+        "Use the default library='custom' for prompts that can be fetched and used by targets. Harness-library prompts " +
+        "(library='harness' or 'all') are currently browse-only: the backend lists them but cannot fetch or resolve them.",
       relatedResources: [
         { resourceType: "eval_target", relationship: "used_by", description: "Prompt targets reference prompt_id and optional prompt_version" },
       ],
@@ -2750,7 +2751,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         { name: "category", description: "Prompt category" },
         { name: "sort", description: "name | created_at | identifier" },
         { name: "order", description: "asc | desc" },
-        { name: "library", description: "custom (default) | harness (read-only library) | all" },
+        { name: "library", description: "custom (default, usable project prompts) | harness (browse-only) | all (includes browse-only library prompts)" },
       ],
       operations: {
         list: {

@@ -620,6 +620,8 @@ describe("AI Evals Prompt Registry", () => {
       delete_tag: { method: "DELETE" },
     });
     expect(findResource("eval_registry_item").description).toContain("eval_prompt");
+    expect(prompt.description).toContain("browse-only");
+    expect(prompt.diagnosticHint).toContain("default library='custom'");
   });
 
   it("maps Prompt Registry list filters to its real API query keys", () => {
