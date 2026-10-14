@@ -13,6 +13,8 @@ const log = createLogger("harness-client");
 const HARNESS_MCP_USER_AGENT = `harness-mcp-server/${getVersion()}`;
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+const TRANSIENT_NETWORK_CODES = new Set(["EAI_AGAIN", "ECONNRESET", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"]);
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * Whether the caller explicitly set a body (including empty string).
@@ -64,14 +66,41 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-/** True when body is an HTML page (redirect, WAF block, proxy error). */
+/** True when body is an HTML page (redirect, access block, or intermediary error). */
 function isHtmlBody(body: string): boolean {
   return /^\s*</.test(body) || /<!doctype/i.test(body.slice(0, 100));
+}
+
+/** nginx's own error page, as opposed to an application or proxy HTML body. */
+function isNginxHtml(body: string): boolean {
+  return /nginx/i.test(body);
+}
+
+function humanizeHtmlError(status: number, rawBody: string): string {
+  const nginx = isNginxHtml(rawBody);
+  // Keep the nginx wording. AI Evals recovery hints tell agents that an
+  // "HTML nginx 404" means the product route is not deployed. The raw page
+  // (server version, titles, markup) stays out of the message.
+  if (status === 404 && nginx) {
+    return "HTTP 404 Not Found — Harness returned an HTML nginx 404 instead of a JSON API response. The route is not deployed at this base URL.";
+  }
+  const page = nginx ? "an HTML nginx error page" : "an HTML error page";
+  if (status === 404) {
+    return "HTTP 404: Harness returned an HTML error page. Check HARNESS_BASE_URL and whether the requested product route is available in that environment.";
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return `HTTP ${status}: Harness returned ${page}: the requested service is unavailable or did not respond. ` +
+      "Retry later, or check service availability in that environment.";
+  }
+  return `HTTP ${status}: Harness returned ${page}. Check HARNESS_BASE_URL and the request.`;
 }
 
 /** Produce a clean, actionable error message for non-JSON HTTP error responses. */
 function humanizeHttpError(status: number, rawBody: string): string {
   const html = isHtmlBody(rawBody);
+  if (status !== 401 && status !== 403 && html) {
+    return humanizeHtmlError(status, rawBody);
+  }
 
   switch (status) {
     case 401:
@@ -81,11 +110,86 @@ function humanizeHttpError(status: number, rawBody: string): string {
     case 404:
       return `HTTP 404 Not Found — the API endpoint or resource does not exist. Verify the base URL and resource identifiers.`;
     default: {
-      if (html) return `HTTP ${status}: Harness returned an HTML error page (possible proxy, WAF, or redirect). Check HARNESS_BASE_URL and network connectivity.`;
       const hint = rawBody.slice(0, 200);
       return `HTTP ${status}: ${hint || "empty response"}`;
     }
   }
+}
+
+function isSafeRetry(options: RequestOptions, method: string): boolean {
+  if (options.retryPolicy === "do_not_retry" || options.retryPolicy === "idempotency_key_required") return false;
+  return options.retryPolicy === "safe" || IDEMPOTENT_METHODS.has(method);
+}
+
+function readErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" && code.length > 0 ? code : undefined;
+}
+
+/** Prefer the fetch cause chain. undici nests the syscall code under `cause`. */
+function getNetworkErrorCode(err: unknown): string | undefined {
+  let current: unknown = err && typeof err === "object" ? (err as { cause?: unknown }).cause : undefined;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
+    const code = readErrorCode(current);
+    if (code) return code;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return readErrorCode(err);
+}
+
+function isRetryableTransportError(err: unknown, options: RequestOptions, method: string): boolean {
+  return isSafeRetry(options, method) && TRANSIENT_NETWORK_CODES.has(getNetworkErrorCode(err) ?? "");
+}
+
+function isTransportFailure(err: unknown): boolean {
+  if (getNetworkErrorCode(err)) return true;
+  return err instanceof TypeError && /fetch failed/i.test(err.message);
+}
+
+function thrownMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return String(err);
+}
+
+/** One line of error text with HTML, scripts, and login-redirect pages removed. */
+function sanitizeDiagnosticText(text: string): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact || isHtmlBody(compact) || /<(?:html|script|style)\b/i.test(compact)) return "";
+  if (/function\s+\w+\s*\(/.test(compact) || /redirectPage|signInPath/.test(compact)) return "";
+  return compact.slice(0, 200);
+}
+
+function transportError(err: unknown, options: RequestOptions, method: string): HarnessApiError {
+  const code = getNetworkErrorCode(err);
+  const safe = isSafeRetry(options, method);
+  let message: string;
+  if (code === "ENOTFOUND") {
+    message = "Cannot resolve the Harness API host (ENOTFOUND). Check HARNESS_BASE_URL and DNS configuration.";
+  } else if (code === "EAI_AGAIN") {
+    message = "Temporary DNS lookup failure (EAI_AGAIN). Retry after checking DNS availability.";
+  } else if (code && TRANSIENT_NETWORK_CODES.has(code)) {
+    message = safe
+      ? `Transient network failure (${code}). Retry after checking network connectivity.`
+      : `Transient network failure (${code}). The ${method} request was not retried.`;
+  } else if (code && /CERT|TLS|SSL|UNABLE_TO_VERIFY/i.test(code)) {
+    message = `TLS certificate check failed (${code}). Check HARNESS_BASE_URL and the server certificate.`;
+  } else if (code) {
+    message = `Network request failed (${code}). Check HARNESS_BASE_URL and network connectivity.`;
+  } else {
+    const detail = sanitizeDiagnosticText(thrownMessage(err));
+    message = detail
+      ? `Network request failed before Harness returned a response: ${detail}. Check HARNESS_BASE_URL and network connectivity.`
+      : "Network request failed before Harness returned a response. Check HARNESS_BASE_URL and network connectivity.";
+  }
+  return new HarnessApiError(message, 503, code ?? "NETWORK_ERROR", undefined, err);
+}
+
+/** Transport failures get a network diagnosis. Other throws keep their message. */
+function failureFromThrow(err: unknown, options: RequestOptions, method: string): HarnessApiError {
+  if (isTransportFailure(err)) return transportError(err, options, method);
+  const detail = sanitizeDiagnosticText(thrownMessage(err)) || "unknown error";
+  return new HarnessApiError(`Request failed: ${detail}`, 502, undefined, undefined, err);
 }
 
 /**
@@ -443,7 +547,7 @@ export class HarnessClient {
           if (
             RETRYABLE_STATUS_CODES.has(response.status) &&
             attempt < this.maxRetries &&
-            options.retryPolicy !== "do_not_retry"
+            isSafeRetry(options, method)
           ) {
             lastError = error;
             continue;
@@ -481,8 +585,14 @@ export class HarnessClient {
         try {
           data = JSON.parse(text);
         } catch (parseErr) {
+          const message = isHtmlBody(text)
+            ? (isNginxHtml(text)
+              ? "Harness returned an HTML nginx page instead of API JSON. The route is not deployed at this base URL."
+              : "Harness returned an HTML page instead of API JSON. " +
+                "Check HARNESS_BASE_URL and whether this product route is deployed in that environment.")
+            : `Non-JSON response from ${method} ${options.path}: ${text.slice(0, 200)}`;
           throw new HarnessApiError(
-            `Non-JSON response from ${method} ${options.path}: ${text.slice(0, 200)}`,
+            message,
             502,
             undefined,
             undefined,
@@ -502,16 +612,12 @@ export class HarnessClient {
           }
           // Timeout — retry if allowed (and policy permits)
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
+          if (attempt < this.maxRetries && isSafeRetry(options, method)) continue;
           throw lastError;
         }
-        throw new HarnessApiError(
-          `Request failed: ${(err as Error).message ?? String(err)}`,
-          502,
-          undefined,
-          undefined,
-          err,
-        );
+        lastError = failureFromThrow(err, options, method);
+        if (attempt < this.maxRetries && isRetryableTransportError(err, options, method)) continue;
+        throw lastError;
       } finally {
         clearTimeout(timer);
       }
@@ -551,6 +657,7 @@ export class HarnessClient {
         await new Promise((r) => setTimeout(r, backoff));
       }
 
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         if (options.signal?.aborted) {
           throw options.signal.reason ?? new DOMException("The operation was aborted", "AbortError");
@@ -558,7 +665,7 @@ export class HarnessClient {
 
         const timeoutController = new AbortController();
         const effectiveTimeout = options.timeoutMs ?? this.timeout;
-        const timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
+        timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
         const signal = options.signal
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
@@ -586,7 +693,7 @@ export class HarnessClient {
           if (
             RETRYABLE_STATUS_CODES.has(response.status) &&
             attempt < this.maxRetries &&
-            options.retryPolicy !== "do_not_retry"
+            isSafeRetry(options, method)
           ) {
             lastError = error;
             continue;
@@ -602,13 +709,14 @@ export class HarnessClient {
             throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
           }
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
+          if (attempt < this.maxRetries && isSafeRetry(options, method)) continue;
           throw lastError;
         }
-        throw new HarnessApiError(
-          `Request failed: ${(err as Error).message ?? String(err)}`,
-          502, undefined, undefined, err,
-        );
+        lastError = failureFromThrow(err, options, method);
+        if (attempt < this.maxRetries && isRetryableTransportError(err, options, method)) continue;
+        throw lastError;
+      } finally {
+        clearTimeout(timer);
       }
     }
 

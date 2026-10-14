@@ -947,6 +947,79 @@ describe("HarnessClient", () => {
       }
     });
 
+    it("reports HTML 404s without exposing intermediary details", async () => {
+      const html = "<html><head><title>404 Not Found</title></head><body>Not Found</body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 404 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      const err = await client.request({ path: "/test" }).catch((e: unknown) => e);
+      expect(err).toMatchObject({
+        statusCode: 404,
+        message: expect.stringContaining("HTML error page"),
+      });
+      expect((err as HarnessApiError).message).not.toContain("nginx");
+      expect((err as HarnessApiError).message).not.toContain("<");
+    });
+
+    it("identifies an nginx HTML 404 without copying the page", async () => {
+      const html = "<html><head><title>custom upstream banner</title></head><body><center>nginx/1.27.0</center></body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 404 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      const err = await client.request({ path: "/gateway/ai-evals/api/v1/orgs/o/projects/p/dataset" }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(HarnessApiError);
+      const message = (err as HarnessApiError).message;
+      expect((err as HarnessApiError).statusCode).toBe(404);
+      expect(message).toContain("HTML nginx 404");
+      expect(message).toContain("not deployed");
+      expect(message).not.toContain("1.27.0");
+      expect(message).not.toContain("custom upstream banner");
+      expect(message).not.toContain("<");
+    });
+
+    it("keeps a JSON 404 as a missing resource", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "Dataset not found" }), { status: 404 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/test" })).rejects.toMatchObject({
+        statusCode: 404,
+        message: "Dataset not found",
+      });
+    });
+
+    it("reports HTML 404s for streaming requests too", async () => {
+      const html = "<html><body>Not Found</body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 404 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.requestStream({ method: "GET", path: "/test" })).rejects.toMatchObject({
+        statusCode: 404,
+        message: expect.stringContaining("HTML error page"),
+      });
+    });
+
+    it("reports HTML gateway timeouts as unavailable without exposing intermediaries", async () => {
+      const html = "<html><head><title>504 Gateway Time-out</title></head><body>Timed out</body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 504 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      const err = await client.request({ path: "/test" }).catch((e: unknown) => e);
+      expect(err).toMatchObject({ statusCode: 504 });
+      expect((err as HarnessApiError).message).toContain("requested service is unavailable");
+      expect((err as HarnessApiError).message).not.toContain("Gateway Time-out");
+    });
+
+    it("keeps the credential hint for HTML 401 pages", async () => {
+      const html = "<html><head><title>401 Authorization Required</title></head><body>Unauthorized</body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 401 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/test" })).rejects.toMatchObject({
+        statusCode: 401,
+        message: expect.stringContaining("HARNESS_API_KEY"),
+      });
+    });
+
     it("strips JS redirect page from 401 error message", async () => {
       const redirectHtml = `<html><head><script>
         function redirectPage() {
@@ -1051,6 +1124,22 @@ describe("HarnessClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
+    it("does not retry a retryable HTTP response for an unsafe write", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "unavailable" }), { status: 503 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ method: "POST", path: "/test", body: {} })).rejects.toThrow(HarnessApiError);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not retry a retryable HTTP response for an unsafe streaming write", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "unavailable" }), { status: 503 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.requestStream({ method: "POST", path: "/test", body: {} })).rejects.toThrow(HarnessApiError);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("retries on 500 when retryPolicy is 'safe'", async () => {
       fetchSpy
         .mockResolvedValueOnce(new Response(JSON.stringify({ message: "fail" }), { status: 500 }))
@@ -1094,11 +1183,24 @@ describe("HarnessClient", () => {
         expect((err as HarnessApiError).message).toContain("timed out");
       }
     });
+
+    it("does not retry a timed-out write without a safe retry policy", async () => {
+      const abortErr = Object.assign(new Error("The operation was aborted"), { name: "AbortError" });
+      fetchSpy.mockRejectedValue(abortErr);
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ method: "POST", path: "/test", body: {} })).rejects.toMatchObject({
+        statusCode: 408,
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("request — network errors", () => {
-    it("wraps fetch errors as HarnessApiError with 502", async () => {
-      fetchSpy.mockRejectedValue(new Error("DNS resolution failed"));
+    it("reports DNS failures without inventing an HTTP response", async () => {
+      fetchSpy.mockRejectedValue(
+        Object.assign(new TypeError("fetch failed"), { cause: { code: "ENOTFOUND" } }),
+      );
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
 
       try {
@@ -1106,9 +1208,103 @@ describe("HarnessClient", () => {
         expect.fail("should have thrown");
       } catch (err) {
         expect(err).toBeInstanceOf(HarnessApiError);
-        expect((err as HarnessApiError).statusCode).toBe(502);
-        expect((err as HarnessApiError).message).toContain("DNS resolution failed");
+        expect((err as HarnessApiError).statusCode).toBe(503);
+        expect((err as HarnessApiError).harnessCode).toBe("ENOTFOUND");
+        expect((err as HarnessApiError).message).toContain("Cannot resolve the Harness API host");
+        expect((err as HarnessApiError).message).toContain("HARNESS_BASE_URL");
       }
+    });
+
+    it("retries a transient network failure for a safe GET", async () => {
+      vi.useFakeTimers();
+      fetchSpy
+        .mockRejectedValueOnce(Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 1 }));
+
+      const result = client.request<{ data: string }>({ method: "GET", path: "/test", retryPolicy: "safe" });
+      await vi.runAllTimersAsync();
+
+      await expect(result).resolves.toEqual({ data: "ok" });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries a transient network failure for a safe streaming GET", async () => {
+      vi.useFakeTimers();
+      fetchSpy
+        .mockRejectedValueOnce(Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } }))
+        .mockResolvedValueOnce(new Response("streamed", { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 1 }));
+
+      const response = client.requestStream({ method: "GET", path: "/test", retryPolicy: "safe" });
+      await vi.runAllTimersAsync();
+
+      await expect(response).resolves.toMatchObject({ status: 200 });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not retry a transient network failure for an unsafe write", async () => {
+      fetchSpy.mockRejectedValue(Object.assign(new TypeError("fetch failed"), { cause: { code: "ECONNRESET" } }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ method: "POST", path: "/test" })).rejects.toMatchObject({
+        harnessCode: "ECONNRESET",
+        message: expect.stringContaining("POST request was not retried"),
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("names a refused connection instead of a generic network failure", async () => {
+      fetchSpy.mockRejectedValue(Object.assign(new TypeError("fetch failed"), {
+        cause: { cause: { code: "ECONNREFUSED" } },
+      }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ method: "GET", path: "/test", retryPolicy: "safe" })).rejects.toMatchObject({
+        statusCode: 503,
+        harnessCode: "ECONNREFUSED",
+        message: expect.stringContaining("ECONNREFUSED"),
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("names a TLS failure instead of a connectivity problem", async () => {
+      fetchSpy.mockRejectedValue(Object.assign(new TypeError("fetch failed"), {
+        cause: { code: "DEPTH_ZERO_SELF_SIGNED_CERT" },
+      }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      const err = await client.request({ path: "/test" }).catch((e: unknown) => e);
+      expect(err).toMatchObject({
+        statusCode: 503,
+        harnessCode: "DEPTH_ZERO_SELF_SIGNED_CERT",
+      });
+      expect((err as HarnessApiError).message).toContain("TLS certificate check failed");
+      expect((err as HarnessApiError).message).not.toContain("fetch failed");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps a non-network throw instead of relabeling it as a transport failure", async () => {
+      fetchSpy.mockRejectedValue(new Error("stream parser failed"));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ method: "GET", path: "/test", retryPolicy: "safe" })).rejects.toMatchObject({
+        statusCode: 502,
+        message: "Request failed: stream parser failed",
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not copy an HTML page from a non-network throw", async () => {
+      fetchSpy.mockRejectedValue(new Error("<html><script>alert(1)</script></html>"));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      const err = await client.requestStream({ method: "GET", path: "/test" }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(HarnessApiError);
+      expect((err as HarnessApiError).statusCode).toBe(502);
+      expect((err as HarnessApiError).message).toBe("Request failed: unknown error");
+      expect((err as HarnessApiError).message).not.toContain("<");
+      expect((err as HarnessApiError).message).not.toContain("alert");
     });
   });
 
@@ -1168,7 +1364,7 @@ describe("HarnessClient", () => {
   });
 
   describe("request — non-JSON responses", () => {
-    it("throws clear error for HTML response (proxy error page)", async () => {
+    it("does not return HTML from a successful proxy response as API JSON", async () => {
       const html = "<html><body><h1>502 Bad Gateway</h1></body></html>";
       fetchSpy.mockResolvedValue(new Response(html, { status: 200, headers: { "Content-Type": "text/html" } }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
@@ -1179,9 +1375,22 @@ describe("HarnessClient", () => {
       } catch (err) {
         expect(err).toBeInstanceOf(HarnessApiError);
         expect((err as HarnessApiError).statusCode).toBe(502);
-        expect((err as HarnessApiError).message).toContain("Non-JSON response");
-        expect((err as HarnessApiError).message).toContain("502 Bad Gateway");
+        expect((err as HarnessApiError).message).toContain("HTML page instead of API JSON");
+        expect((err as HarnessApiError).message).not.toContain("<");
       }
+    });
+
+    it("identifies an nginx page returned as a successful response", async () => {
+      const html = "<html><body><center>nginx/1.27.0</center></body></html>";
+      fetchSpy.mockResolvedValue(new Response(html, { status: 200, headers: { "Content-Type": "text/html" } }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      const err = await client.request({ path: "/test" }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(HarnessApiError);
+      expect((err as HarnessApiError).statusCode).toBe(502);
+      expect((err as HarnessApiError).message).toContain("HTML nginx page");
+      expect((err as HarnessApiError).message).toContain("not deployed");
+      expect((err as HarnessApiError).message).not.toContain("1.27.0");
     });
 
     it("treats empty 2xx body as success (204 / IaCM provider version 201)", async () => {

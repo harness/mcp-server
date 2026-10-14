@@ -32,6 +32,7 @@ ${org_id ? `org_id=${org_id}` : "Use default HARNESS_ORG"}; ${project_id ? `proj
 - This workflow creates **managed offline evaluations only**. Do not assume identifiers, connector settings, models, dataset content, prompt versions, or agent response paths.
 - Before every write, ask for any required value that the user has not explicitly supplied, in the field's documented JSON format. Never fabricate UUIDs, connector refs, sample data, or outputs.
 - Use the IDs returned from the matching list/create call, in this exact org/project. The MCP preflight rejects inaccessible or mismatched references.
+- For \`eval_registry_item\`, specify \`filters: { type: "prompt" | "agent" | "mcp_tool" | "skill" }\` when discovering a particular registry item kind.
 - Actions that contact an LLM, target, or execution pipeline require an explicit confirmation. Explain the likely cost and external effect immediately before invoking them.
 
 ## Steps (use generic MCP tools only)

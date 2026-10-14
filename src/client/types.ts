@@ -68,8 +68,10 @@ export interface RequestOptions {
   /** When true, omit the automatic `accountIdentifier` query param.
    *  Some APIs (e.g. SEI) use only the `Harness-Account` header for account scoping. */
   headerBasedScoping?: boolean;
-  /** Retry policy from OperationPolicy. When "do_not_retry", transient errors
-   *  (5xx, timeouts) throw immediately instead of retrying. */
+  /** Retry policy from OperationPolicy.
+   *  "safe" retries transient failures for any method.
+   *  "do_not_retry" and "idempotency_key_required" never retry.
+   *  When omitted, only GET, HEAD, and OPTIONS retry. */
   retryPolicy?: "safe" | "idempotency_key_required" | "do_not_retry";
   /** Internal tracing metadata. Never serialized into HTTP headers/query/body. */
   tracing?: {
