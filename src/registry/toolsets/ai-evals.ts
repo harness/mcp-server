@@ -11,7 +11,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const LLM_CONNECTOR_TYPES = new Set(["OpenAi", "OpenAI", "Anthropic", "AzureOpenAI", "AzureOpenAi", "GoogleAI", "GoogleAi"]);
 const JUDGE_BACKED_METRIC_TYPES = new Set(["llm", "ai_judge"]);
 const TARGET_TYPES = new Set(["prompt", "agent", "precomputed"]);
-const REGISTRY_ITEM_TYPES = new Set(["prompt", "agent", "mcp_tool", "skill"]);
+const REGISTRY_ITEM_TYPES = new Set(["agent", "mcp_tool", "skill"]);
 const PROMPT_VARIABLE_TYPES = new Set(["string", "number", "boolean", "array", "object"]);
 const PROMPT_IDENTIFIER_PATTERN = /^[a-z][a-z0-9_-]{0,127}$/;
 const WHOLE_TEMPLATE_PLACEHOLDER_PATTERN = /^\s*\{\{\s*[^{}]+\s*\}\}\s*$/;
@@ -74,6 +74,20 @@ function pathSegment(value: unknown, field: string): string {
   return encodeURIComponent(id);
 }
 
+function promptVersionSegment(value: unknown, field: string): string {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 1) {
+    return String(value);
+  }
+  return pathSegment(value, field);
+}
+
+function normalizePromptVersion(value: unknown): string | undefined {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value >= 1 ? String(value) : undefined;
+  }
+  return nonEmptyString(value);
+}
+
 function uuidPathSegment(input: JsonRecord, field: string): string {
   return encodeURIComponent(requireUuid(input[field], field));
 }
@@ -115,6 +129,15 @@ function listItems(value: unknown): { items: JsonRecord[]; total: number } {
     }),
     total: typeof totalValue === "number" ? totalValue : rawItems.length,
   };
+}
+
+function normalizedTargetType(value: unknown): string | undefined {
+  const type = nonEmptyString(value);
+  return type === "app" ? "agent" : type === "static" ? "precomputed" : type;
+}
+
+function isPrecomputedTarget(target: JsonRecord | undefined): boolean {
+  return normalizedTargetType(target?.type) === "precomputed";
 }
 
 async function getScopedResource(
@@ -323,7 +346,7 @@ async function validatePromptReference(
   const promptId = requireUuid(rawPromptId, "prompt_id");
   const version = rawPromptVersion === undefined || rawPromptVersion === null
     ? undefined
-    : nonEmptyString(rawPromptVersion);
+    : normalizePromptVersion(rawPromptVersion);
   if (rawPromptVersion !== undefined && rawPromptVersion !== null && !version) {
     throw new Error("prompt_version must be a non-empty version (for example, v3) or tag (for example, production).");
   }
@@ -336,6 +359,7 @@ async function validatePromptReference(
       method: "GET",
       path,
       retryPolicy: "safe",
+      headerBasedScoping: true,
       signal: ctx.signal,
     });
   } catch {
@@ -347,8 +371,7 @@ async function validatePromptReference(
 }
 
 async function validateTarget(ctx: PreflightContext, target: JsonRecord): Promise<void> {
-  const rawType = nonEmptyString(target.type);
-  const type = rawType === "app" ? "agent" : rawType === "static" ? "precomputed" : rawType;
+  const type = normalizedTargetType(target.type);
   const config = asRecord(target.config);
   if (!type || !TARGET_TYPES.has(type) || !config) {
     throw new Error(
@@ -418,6 +441,12 @@ async function validatePromptWrite(ctx: PreflightContext, isCreate: boolean): Pr
 async function validateRegistryItemCreate(ctx: PreflightContext): Promise<void> {
   const body = requireBody(ctx.input, "Registry item create");
   const type = nonEmptyString(body.type);
+  if (type === "prompt") {
+    throw new Error(
+      "Create versioned prompts with resource_type=\"eval_prompt\", not eval_registry_item. " +
+      "eval_prompt validates prompt templates and supports versions, tags, and Prompt Registry targets.",
+    );
+  }
   if (!type || !REGISTRY_ITEM_TYPES.has(type)) {
     throw new Error(`body.type must be one of ${[...REGISTRY_ITEM_TYPES].join(", ")}.`);
   }
@@ -427,17 +456,11 @@ async function validateRegistryItemCreate(ctx: PreflightContext): Promise<void> 
       "body.identifier must match ^[a-z][a-z0-9_-]{0,127}$ (lowercase slug, starting with a letter).",
     );
   }
-  if (type === "prompt") {
-    throw new Error(
-      "Create versioned prompts with resource_type=\"eval_prompt\", not eval_registry_item. " +
-      "eval_prompt validates prompt templates and supports versions, tags, and Prompt Registry targets.",
-    );
-  }
 }
 
 async function validateOutputUpload(ctx: PreflightContext): Promise<void> {
   const target = await getScopedResource(ctx, "eval_target", "target_id", ctx.input.target_id);
-  if (target.type !== "precomputed") {
+  if (!isPrecomputedTarget(target)) {
     throw new Error("Static outputs can only be uploaded to a precomputed target.");
   }
   const body = requireBody(ctx.input, "Output upload");
@@ -648,7 +671,7 @@ async function validateManagedEvalComposition(ctx: PreflightContext, input: Json
 
   if (target) await validateTarget(ctx, target);
   if (metricSet) await validateMetricSet(ctx, metricSet, requireAll);
-  if (dataset && target?.type === "precomputed") await validatePrecomputedData(ctx, datasetId!, target);
+  if (dataset && isPrecomputedTarget(target)) await validatePrecomputedData(ctx, datasetId!, target);
 }
 
 async function validateEvalRun(ctx: PreflightContext): Promise<void> {
@@ -669,7 +692,7 @@ async function validateEvalRun(ctx: PreflightContext): Promise<void> {
   const target = targetId ? await getScopedResource(ctx, "eval_target", "target_id", targetId) : undefined;
   if (target) await validateTarget(ctx, target);
   await validateMetricSet(ctx, metricSet, true);
-  if (target?.type === "precomputed" || !target) await validatePrecomputedData(ctx, datasetId, target);
+  if (isPrecomputedTarget(target) || !target) await validatePrecomputedData(ctx, datasetId, target);
   if (runInputs.llm_config !== undefined) await validateLlmConfig(ctx, "run_inputs.llm_config", runInputs.llm_config);
 }
 
@@ -1223,7 +1246,7 @@ const createRegistryItemSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: true, description: "Name" },
     { name: "identifier", type: "string", required: true, description: "Unique id" },
-    { name: "type", type: "string", required: true, description: "prompt | agent | mcp_tool | skill" },
+    { name: "type", type: "string", required: true, description: "agent | mcp_tool | skill. Use eval_prompt to create versioned prompts." },
     { name: "config", type: "object", required: true, description: "Item config payload" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
@@ -2842,7 +2865,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
-            `/versions/${pathSegment(input.version, "version")}`,
+            `/versions/${promptVersionSegment(input.version, "version")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           actionDescription: "Get params.version, which may be vN, N, or a named tag such as production.",
@@ -2853,7 +2876,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
-            `/versions/${pathSegment(input.version, "version")}`,
+            `/versions/${promptVersionSegment(input.version, "version")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: bodyFromInput,
           bodySchema: replacePromptVersionLabelsSchema,
@@ -2865,7 +2888,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
-            `/versions/${pathSegment(input.version, "version")}/restore`,
+            `/versions/${promptVersionSegment(input.version, "version")}/restore`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: { description: "No body", fields: [] },

@@ -766,7 +766,7 @@ describe("AI Evals Prompt Registry", () => {
     });
     await registry.dispatchExecute(client, "eval_prompt", "get_version", {
       prompt_id: DATASET_ID,
-      version: "v3",
+      version: 3,
     });
     await registry.dispatchExecute(client, "eval_prompt", "set_tag", {
       prompt_id: DATASET_ID,
@@ -781,7 +781,7 @@ describe("AI Evals Prompt Registry", () => {
     }));
     expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
       method: "GET",
-      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${DATASET_ID}/versions/v3`,
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${DATASET_ID}/versions/3`,
     }));
     expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
       method: "PUT",
@@ -826,6 +826,10 @@ describe("AI Evals Prompt Registry", () => {
       },
     })).rejects.toThrow(/resource_type="eval_prompt"/);
 
+    const typeField = findResource("eval_registry_item").operations.create!.bodySchema!.fields
+      .find(field => field.name === "type");
+    expect(typeField?.description).not.toContain("prompt |");
+    expect(typeField?.description).toContain("Use eval_prompt");
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -886,6 +890,35 @@ describe("AI Evals Prompt Registry", () => {
 
     expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
       path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${promptId}/versions/production`,
+      headerBasedScoping: true,
+    }));
+  });
+
+  it("checks a numeric registry prompt version before creating a target", async () => {
+    const registry = new Registry(makeConfig());
+    const promptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ version: 3 })
+      .mockResolvedValueOnce({});
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Versioned registry prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          prompt_source: "registry",
+          prompt_id: promptId,
+          prompt_version: 3,
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${promptId}/versions/3`,
+      headerBasedScoping: true,
     }));
   });
 });
@@ -986,7 +1019,29 @@ describe("managed offline evaluation safety", () => {
     expect(findResource("evaluation").executeActions?.import_yaml.operationPolicy.risk).toBe("medium_write");
   });
 
-  it("checks the existing dataset when an eval is updated to a precomputed target", async () => {
+  it("accepts legacy static targets for output uploads", async () => {
+    const registry = new Registry(makeConfig());
+    const targetId = "55555555-5555-4555-8555-555555555555";
+    const datasetId = "66666666-6666-4666-8666-666666666666";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ uuid: targetId, type: "static", config: { dataset_id: datasetId } })
+      .mockResolvedValueOnce({ uuid: datasetId })
+      .mockResolvedValueOnce({ data: [{ item_identifier: "real-case" }], total_elements: 1 })
+      .mockResolvedValueOnce({});
+
+    await registry.dispatchExecute(makeClient(request), "eval_target", "upload_outputs", {
+      target_id: targetId,
+      body: { items: [{ item_identifier: "real-case", output: { answer: "42" } }] },
+    });
+
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
+      method: "POST",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets/${targetId}/outputs`,
+    }));
+  });
+
+  it("checks the existing dataset when an eval is updated to a legacy static target", async () => {
     const registry = new Registry(makeConfig());
     const request = vi
       .fn()
@@ -1000,7 +1055,7 @@ describe("managed offline evaluation safety", () => {
       .mockResolvedValueOnce({ uuid: "22222222-2222-4222-8222-222222222222" })
       .mockResolvedValueOnce({
         uuid: "55555555-5555-4555-8555-555555555555",
-        type: "precomputed",
+        type: "static",
         config: { dataset_id: "66666666-6666-4666-8666-666666666666" },
       })
       .mockResolvedValueOnce({ uuid: "66666666-6666-4666-8666-666666666666" })
