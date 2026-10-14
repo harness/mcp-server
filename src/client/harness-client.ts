@@ -496,7 +496,7 @@ export class HarnessClient {
           if (
             RETRYABLE_STATUS_CODES.has(response.status) &&
             attempt < this.maxRetries &&
-            options.retryPolicy !== "do_not_retry"
+            isSafeRetry(options, method)
           ) {
             lastError = error;
             continue;
@@ -640,7 +640,7 @@ export class HarnessClient {
           if (
             RETRYABLE_STATUS_CODES.has(response.status) &&
             attempt < this.maxRetries &&
-            options.retryPolicy !== "do_not_retry"
+            isSafeRetry(options, method)
           ) {
             lastError = error;
             continue;

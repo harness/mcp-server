@@ -1096,6 +1096,22 @@ describe("HarnessClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
+    it("does not retry a retryable HTTP response for an unsafe write", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "unavailable" }), { status: 503 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.request({ method: "POST", path: "/test", body: {} })).rejects.toThrow(HarnessApiError);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not retry a retryable HTTP response for an unsafe streaming write", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "unavailable" }), { status: 503 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 2 }));
+
+      await expect(client.requestStream({ method: "POST", path: "/test", body: {} })).rejects.toThrow(HarnessApiError);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
     it("retries on 500 when retryPolicy is 'safe'", async () => {
       fetchSpy
         .mockResolvedValueOnce(new Response(JSON.stringify({ message: "fail" }), { status: 500 }))
