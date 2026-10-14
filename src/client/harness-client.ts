@@ -66,34 +66,28 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-/** True when body is an HTML page (redirect, WAF block, proxy error). */
+/** True when body is an HTML page (redirect, access block, or intermediary error). */
 function isHtmlBody(body: string): boolean {
   return /^\s*</.test(body) || /<!doctype/i.test(body.slice(0, 100));
 }
 
-function isNginxErrorPage(body: string): boolean {
-  return isHtmlBody(body) && /<center>\s*nginx(?:\/[\d.]+)?\s*<\/center>/i.test(body);
-}
-
-function humanizeNginxError(status: number, rawBody: string): string {
-  const title = rawBody.match(/<title>([^<]{1,100})<\/title>/i)?.[1]?.trim();
-  const prefix = `HTTP ${status}: nginx returned an error page${title ? ` (${title})` : ""}`;
+function humanizeHtmlError(status: number): string {
+  const prefix = `HTTP ${status}: Harness returned an HTML error page`;
   if (status === 404) {
-    return `${prefix} before the request reached a Harness service. ` +
-      "Check HARNESS_BASE_URL and whether this product route is deployed in that environment.";
+    return `${prefix}. Check HARNESS_BASE_URL and whether the requested product route is available in that environment.`;
   }
   if (status === 502 || status === 503 || status === 504) {
-    return `${prefix}: the upstream Harness service is unavailable or did not respond. ` +
-      "Retry later, or check that the service is healthy in that environment.";
+    return `${prefix}: the requested service is unavailable or did not respond. ` +
+      "Retry later, or check service availability in that environment.";
   }
-  return `${prefix} before the request reached a Harness service. Check HARNESS_BASE_URL and the request.`;
+  return `${prefix}. Check HARNESS_BASE_URL and the request.`;
 }
 
 /** Produce a clean, actionable error message for non-JSON HTTP error responses. */
 function humanizeHttpError(status: number, rawBody: string): string {
   const html = isHtmlBody(rawBody);
-  if (status !== 401 && status !== 403 && isNginxErrorPage(rawBody)) {
-    return humanizeNginxError(status, rawBody);
+  if (status !== 401 && status !== 403 && html) {
+    return humanizeHtmlError(status);
   }
 
   switch (status) {

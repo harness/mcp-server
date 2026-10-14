@@ -947,42 +947,41 @@ describe("HarnessClient", () => {
       }
     });
 
-    it("identifies nginx HTML 404s as an unrouted service path", async () => {
-      const html = "<html><head><title>404 Not Found</title></head><body><center>nginx/1.25.3</center></body></html>";
+    it("reports HTML 404s without exposing intermediary details", async () => {
+      const html = "<html><head><title>404 Not Found</title></head><body>Not Found</body></html>";
       fetchSpy.mockResolvedValue(new Response(html, { status: 404 }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
 
-      await expect(client.request({ path: "/gateway/ai-evals/api/v1/route" })).rejects.toMatchObject({
+      await expect(client.request({ path: "/test" })).rejects.toMatchObject({
         statusCode: 404,
-        message: expect.stringContaining("before the request reached a Harness service"),
+        message: expect.stringContaining("HTML error page"),
       });
     });
 
-    it("identifies nginx HTML 404s for streaming requests too", async () => {
-      const html = "<html><body><center>nginx/1.25.3</center></body></html>";
+    it("reports HTML 404s for streaming requests too", async () => {
+      const html = "<html><body>Not Found</body></html>";
       fetchSpy.mockResolvedValue(new Response(html, { status: 404 }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
 
-      await expect(client.requestStream({ method: "GET", path: "/gateway/ai-evals/api/v1/route" })).rejects.toMatchObject({
+      await expect(client.requestStream({ method: "GET", path: "/test" })).rejects.toMatchObject({
         statusCode: 404,
-        message: expect.stringContaining("before the request reached a Harness service"),
+        message: expect.stringContaining("HTML error page"),
       });
     });
 
-    it("reports nginx gateway timeouts as an unavailable upstream, not an undeployed route", async () => {
-      const html = "<html><head><title>504 Gateway Time-out</title></head><body><center>nginx</center></body></html>";
+    it("reports HTML gateway timeouts as unavailable without exposing intermediaries", async () => {
+      const html = "<html><head><title>504 Gateway Time-out</title></head><body>Timed out</body></html>";
       fetchSpy.mockResolvedValue(new Response(html, { status: 504 }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
 
-      const err = await client.request({ path: "/gateway/ai-evals/api/v1/route" }).catch((e: unknown) => e);
+      const err = await client.request({ path: "/test" }).catch((e: unknown) => e);
       expect(err).toMatchObject({ statusCode: 504 });
-      expect((err as HarnessApiError).message).toContain("(504 Gateway Time-out)");
-      expect((err as HarnessApiError).message).toContain("upstream Harness service is unavailable");
-      expect((err as HarnessApiError).message).not.toContain("deployed");
+      expect((err as HarnessApiError).message).toContain("requested service is unavailable");
+      expect((err as HarnessApiError).message).not.toContain("Gateway Time-out");
     });
 
-    it("keeps the credential hint for nginx-served 401 pages", async () => {
-      const html = "<html><head><title>401 Authorization Required</title></head><body><center>nginx</center></body></html>";
+    it("keeps the credential hint for HTML 401 pages", async () => {
+      const html = "<html><head><title>401 Authorization Required</title></head><body>Unauthorized</body></html>";
       fetchSpy.mockResolvedValue(new Response(html, { status: 401 }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
 
