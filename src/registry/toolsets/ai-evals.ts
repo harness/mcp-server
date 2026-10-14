@@ -240,6 +240,14 @@ async function validateHttpConnector(ctx: PreflightContext, connectorRef: string
   }
 }
 
+/** `app` and `static` are API names for agent and precomputed. The stored type is left unchanged. */
+function canonicalTargetType(value: unknown): string | undefined {
+  const type = nonEmptyString(value);
+  if (type === "app") return "agent";
+  if (type === "static") return "precomputed";
+  return type;
+}
+
 function validateAgentConfig(config: JsonRecord): void {
   const endpoint = nonEmptyString(config.endpoint) ?? nonEmptyString(config.endpoint_url);
   if (!endpoint || !/^https?:\/\//i.test(endpoint)) {
@@ -347,8 +355,7 @@ async function validatePromptReference(
 }
 
 async function validateTarget(ctx: PreflightContext, target: JsonRecord): Promise<void> {
-  const rawType = nonEmptyString(target.type);
-  const type = rawType === "app" ? "agent" : rawType === "static" ? "precomputed" : rawType;
+  const type = canonicalTargetType(target.type);
   const config = asRecord(target.config);
   if (!type || !TARGET_TYPES.has(type) || !config) {
     throw new Error(
@@ -437,7 +444,7 @@ async function validateRegistryItemCreate(ctx: PreflightContext): Promise<void> 
 
 async function validateOutputUpload(ctx: PreflightContext): Promise<void> {
   const target = await getScopedResource(ctx, "eval_target", "target_id", ctx.input.target_id);
-  if (target.type !== "precomputed") {
+  if (canonicalTargetType(target.type) !== "precomputed") {
     throw new Error("Static outputs can only be uploaded to a precomputed target.");
   }
   const body = requireBody(ctx.input, "Output upload");
@@ -648,7 +655,7 @@ async function validateManagedEvalComposition(ctx: PreflightContext, input: Json
 
   if (target) await validateTarget(ctx, target);
   if (metricSet) await validateMetricSet(ctx, metricSet, requireAll);
-  if (dataset && target?.type === "precomputed") await validatePrecomputedData(ctx, datasetId!, target);
+  if (dataset && canonicalTargetType(target?.type) === "precomputed") await validatePrecomputedData(ctx, datasetId!, target);
 }
 
 async function validateEvalRun(ctx: PreflightContext): Promise<void> {
@@ -669,7 +676,7 @@ async function validateEvalRun(ctx: PreflightContext): Promise<void> {
   const target = targetId ? await getScopedResource(ctx, "eval_target", "target_id", targetId) : undefined;
   if (target) await validateTarget(ctx, target);
   await validateMetricSet(ctx, metricSet, true);
-  if (target?.type === "precomputed" || !target) await validatePrecomputedData(ctx, datasetId, target);
+  if (canonicalTargetType(target?.type) === "precomputed" || !target) await validatePrecomputedData(ctx, datasetId, target);
   if (runInputs.llm_config !== undefined) await validateLlmConfig(ctx, "run_inputs.llm_config", runInputs.llm_config);
 }
 
@@ -1084,7 +1091,7 @@ const createTargetSchema: BodySchema = {
   description: "Create target. For managed: type + config are required. For git-backed: omit type/config and provide storage_type='git' + git_source.",
   fields: [
     { name: "name", type: "string", required: true, description: "Name" },
-    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (required when storage_type='managed', omit for git; legacy app→agent and static→precomputed are normalized)" },
+    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (required when storage_type='managed', omit for git; legacy app and static are accepted and are not rewritten)" },
     {
       name: "config",
       type: "object",

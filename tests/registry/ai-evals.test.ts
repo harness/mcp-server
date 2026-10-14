@@ -699,6 +699,34 @@ describe("AI Evals eval_target test action", () => {
       },
     }));
   });
+
+  it("uploads outputs to a target stored with the API type static", async () => {
+    const registry = new Registry(makeConfig());
+    const targetId = "55555555-5555-4555-8555-555555555555";
+    const datasetId = "66666666-6666-4666-8666-666666666666";
+    const request = vi.fn()
+      .mockResolvedValueOnce({
+        uuid: targetId,
+        type: "static",
+        config: { dataset_id: datasetId },
+      })
+      .mockResolvedValueOnce({ uuid: datasetId })
+      .mockResolvedValueOnce({
+        data: [{ item_identifier: "case-1", input: { question: "hi" } }],
+        total_elements: 1,
+      })
+      .mockResolvedValueOnce({ uploaded: 1 });
+
+    await registry.dispatchExecute(makeClient(request), "eval_target", "upload_outputs", {
+      target_id: targetId,
+      body: { items: [{ item_identifier: "case-1", output: { text: "ok" } }] },
+    });
+
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
+      method: "POST",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets/${targetId}/outputs`,
+    }));
+  });
 });
 
 // ─── Prompt Registry ─────────────────────────────────────────────────────────
@@ -1017,6 +1045,73 @@ describe("managed offline evaluation safety", () => {
         body: { target_id: "55555555-5555-4555-8555-555555555555" },
       }),
     ).rejects.toThrow(/configured for dataset_id/);
+  });
+
+  it("checks precomputed coverage when the stored target type is static", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        uuid: "11111111-1111-4111-8111-111111111111",
+        storage_type: "managed",
+        dataset_id: "22222222-2222-4222-8222-222222222222",
+        target_id: "33333333-3333-4333-8333-333333333333",
+        metric_set_id: "44444444-4444-4444-8444-444444444444",
+      })
+      .mockResolvedValueOnce({ uuid: "22222222-2222-4222-8222-222222222222" })
+      .mockResolvedValueOnce({
+        uuid: "55555555-5555-4555-8555-555555555555",
+        type: "static",
+        config: { dataset_id: "66666666-6666-4666-8666-666666666666" },
+      })
+      .mockResolvedValueOnce({ uuid: "66666666-6666-4666-8666-666666666666" })
+      .mockResolvedValueOnce({ entries: [] })
+      .mockResolvedValueOnce({
+        data: [{ item_identifier: "real-case", input: { question: "What is my balance?" } }],
+        total_elements: 1,
+      });
+
+    await expect(
+      registry.dispatch(makeClient(request), "evaluation", "update", {
+        eval_id: "11111111-1111-4111-8111-111111111111",
+        body: { target_id: "55555555-5555-4555-8555-555555555555" },
+      }),
+    ).rejects.toThrow(/configured for dataset_id/);
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: "PATCH" }));
+  });
+
+  it("checks precomputed coverage when a run's stored target type is static", async () => {
+    const registry = new Registry(makeConfig());
+    const evalId = "11111111-1111-4111-8111-111111111111";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        storage_type: "managed",
+        dataset_id: "22222222-2222-4222-8222-222222222222",
+        target_id: "33333333-3333-4333-8333-333333333333",
+        metric_set_id: "44444444-4444-4444-8444-444444444444",
+      })
+      .mockResolvedValueOnce({ uuid: "22222222-2222-4222-8222-222222222222" })
+      .mockResolvedValueOnce({
+        uuid: "44444444-4444-4444-8444-444444444444",
+        entries: [{ metric_id: "77777777-7777-4777-8777-777777777777" }],
+      })
+      .mockResolvedValueOnce({
+        uuid: "55555555-5555-4555-8555-555555555555",
+        type: "static",
+        config: { dataset_id: "66666666-6666-4666-8666-666666666666" },
+      })
+      .mockResolvedValueOnce({ uuid: "66666666-6666-4666-8666-666666666666" })
+      .mockResolvedValueOnce({ type: "heuristic", name: "contains" })
+      .mockResolvedValueOnce({
+        data: [{ item_identifier: "case-1", input: { question: "hi" } }],
+        total_elements: 1,
+      });
+
+    await expect(
+      registry.dispatchExecute(makeClient(request), "evaluation", "run", { eval_id: evalId }),
+    ).rejects.toThrow(/configured for dataset_id/);
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: "POST" }));
   });
 
   it("preflights externally costly actions with scoped resource lookups", () => {
