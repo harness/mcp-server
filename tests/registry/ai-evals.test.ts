@@ -11,7 +11,7 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
 import { aiEvalsToolset } from "../../src/registry/toolsets/ai-evals.js";
-import { aiEvalsListExtract, aiEvalsArrayExtract } from "../../src/registry/extractors.js";
+import { aiEvalsDataArrayExtract, aiEvalsListExtract, aiEvalsArrayExtract } from "../../src/registry/extractors.js";
 import type { ResourceDefinition } from "../../src/registry/types.js";
 import { compactItems } from "../../src/utils/compact.js";
 
@@ -90,10 +90,16 @@ describe("AI Evals pagination mapping", () => {
 // ─── Path-scoped writes ─────────────────────────────────────────────────────
 
 describe("AI Evals path-scoped write bodies", () => {
-  it("uses resource-level header scoping instead of redundant endpoint-level body injection flags", () => {
+  it("keeps project-owned AI Evals resources project-scoped and avoids redundant body scope injection flags", () => {
     const redundant: string[] = [];
 
+    // This toolset owns project resources: configuration, scores, failures, and
+    // the ad-hoc trace-evaluation write. Prompt Registry stays project-scoped
+    // even though its backing Config Service is tenant/account-scoped.
+    // Account-only trace viewing/querying must be a separate resource/toolset.
     for (const resource of aiEvalsToolset.resources) {
+      expect(resource.scope).toBe("project");
+      expect(resource.scopeOptional).toBe(true);
       expect(resource.headerBasedScoping).toBe(true);
       for (const [operation, spec] of Object.entries(resource.operations)) {
         if (spec?.skipScopeBodyInjection) {
@@ -108,6 +114,34 @@ describe("AI Evals path-scoped write bodies", () => {
     }
 
     expect(redundant).toEqual([]);
+  });
+
+  it.each([
+    { HARNESS_ORG: undefined },
+    { HARNESS_PROJECT: undefined },
+  ])("fails before requesting a project resource when either scope component is unavailable", async overrides => {
+    const registry = new Registry(makeConfig(overrides));
+    const request = vi.fn();
+
+    await expect(registry.dispatch(makeClient(request), "eval_prompt", "list", {})).rejects.toThrow(
+      "AI Evals requires org and project",
+    );
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("uses only the explicit project scope in Prompt Registry routes", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({ data: [], total_elements: 0 });
+
+    await registry.dispatch(makeClient(request), "eval_prompt", "list", {
+      org_id: "isolated-org",
+      project_id: "isolated-project",
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/isolated-org/projects/isolated-project/registry/prompts",
+      headerBasedScoping: true,
+    }));
   });
 
   it("dataset create does not inject NG scope fields into the API body", async () => {
@@ -318,7 +352,8 @@ describe("AI Evals diagnosticHint on key entities", () => {
     ]) {
       const hint = findResource(type).diagnosticHint!;
       expect(hint).toContain("harness_list");
-      expect(hint).toContain("nginx 404");
+      expect(hint).toContain("HTML 404");
+      expect(hint).not.toContain("nginx");
     }
   });
 
@@ -549,6 +584,338 @@ describe("AI Evals eval_target test action", () => {
     const action = res.executeActions!.test;
     expect(action.operationPolicy?.retryPolicy).toBe("do_not_retry");
   });
+
+  it("accepts the deployed agent target shape and a whole-placeholder request template", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({ id: "agent-target" });
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Agent target",
+        type: "agent",
+        config: {
+          endpoint: "https://agent.example.com/v1/chat",
+          method: "post",
+          response_path: "choices.0.message.content",
+          request_template: "{{ input.input }}",
+        },
+      },
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets",
+    }));
+  });
+
+  it.each([
+    ["root input", "Answer: {{input}}"],
+    ["nested input", "Answer: {{ input.text }}"],
+  ])("accepts %s references in an inline prompt target", async (_name, userMessageTemplate) => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ id: "prompt-target" });
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Inline prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: userMessageTemplate,
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "POST",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets",
+      body: expect.objectContaining({
+        config: expect.objectContaining({ user_message_template: userMessageTemplate }),
+      }),
+    }));
+  });
+
+  it("rejects inline prompt templates that do not reference input", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValueOnce({ type: "OpenAI" });
+
+    await expect(registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Invalid inline prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: "Answer from the context.",
+        },
+      },
+    })).rejects.toThrow(/must reference \{\{input\}\} or a dotted input path/);
+
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not expose downstream connector errors in target validation", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockRejectedValue(new Error("private connector endpoint failed"));
+
+    const error = await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: "{{input}}",
+        },
+      },
+    }).catch(error => error as Error);
+
+    const message = (error as Error).message;
+    expect(message).toContain("not a readable Harness connector");
+    expect(message).not.toContain("private connector endpoint failed");
+  });
+
+  it("does not invent a response_path requirement for legacy app targets", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({ id: "legacy-agent-target" });
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Legacy app target",
+        type: "app",
+        config: { endpoint: "https://agent.example.com/v1/chat" },
+      },
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      body: {
+        name: "Legacy app target",
+        type: "app",
+        config: { endpoint: "https://agent.example.com/v1/chat" },
+      },
+    }));
+  });
+
+  it("uploads outputs to a target stored with the API type static", async () => {
+    const registry = new Registry(makeConfig());
+    const targetId = "55555555-5555-4555-8555-555555555555";
+    const datasetId = "66666666-6666-4666-8666-666666666666";
+    const request = vi.fn()
+      .mockResolvedValueOnce({
+        uuid: targetId,
+        type: "static",
+        config: { dataset_id: datasetId },
+      })
+      .mockResolvedValueOnce({ uuid: datasetId })
+      .mockResolvedValueOnce({
+        data: [{ item_identifier: "case-1", input: { question: "hi" } }],
+        total_elements: 1,
+      })
+      .mockResolvedValueOnce({ uploaded: 1 });
+
+    await registry.dispatchExecute(makeClient(request), "eval_target", "upload_outputs", {
+      target_id: targetId,
+      body: { items: [{ item_identifier: "case-1", output: { text: "ok" } }] },
+    });
+
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
+      method: "POST",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets/${targetId}/outputs`,
+    }));
+  });
+});
+
+// ─── Prompt Registry ─────────────────────────────────────────────────────────
+
+describe("AI Evals Prompt Registry", () => {
+  it("exposes the versioned Prompt Registry separately from generic registry items", () => {
+    const prompt = findResource("eval_prompt");
+
+    expect(prompt.operations).toMatchObject({
+      list: { method: "GET" },
+      get: { method: "GET" },
+      create: { method: "POST", operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" } },
+      update: { method: "PATCH", operationPolicy: { retryPolicy: "do_not_retry" } },
+      delete: { method: "DELETE", operationPolicy: { risk: "destructive" } },
+    });
+    expect(prompt.executeActions).toMatchObject({
+      get_by_identifier: { method: "GET" },
+      list_versions: { method: "GET" },
+      get_version: { method: "GET" },
+      replace_version_labels: { method: "PATCH" },
+      restore_version: { method: "POST" },
+      list_tags: { method: "GET" },
+      set_tag: { method: "PUT" },
+      delete_tag: { method: "DELETE" },
+    });
+    expect(findResource("eval_registry_item").description).toContain("eval_prompt");
+    expect(findResource("eval_registry_item").description).not.toContain("proxy");
+    expect(prompt.description).toContain("browse-only");
+    expect(prompt.diagnosticHint).toContain("default library='custom'");
+  });
+
+  it("maps Prompt Registry list filters to its real API query keys", () => {
+    const filters = findResource("eval_prompt").operations.list!.queryParams!;
+
+    expect(filters).toMatchObject({
+      page: "page",
+      size: "limit",
+      search: "search",
+      labels: "labels",
+      category: "category",
+      sort: "sort",
+      order: "order",
+      library: "library",
+    });
+  });
+
+  it("reports the tag count from the API's unpaginated data wrapper", () => {
+    expect(aiEvalsDataArrayExtract({
+      data: [{ tag_name: "production", version: 3 }, { tag_name: "staging", version: 2 }],
+    })).toEqual({
+      items: [{ tag_name: "production", version: 3 }, { tag_name: "staging", version: 2 }],
+      total: 2,
+    });
+    expect(findResource("eval_prompt").executeActions!.list_tags.responseExtractor).toBe(aiEvalsDataArrayExtract);
+  });
+
+  it("routes prompt identifier, version, and tag reads without treating the identifier as a UUID", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({});
+    const client = makeClient(request);
+
+    await registry.dispatchExecute(client, "eval_prompt", "get_by_identifier", {
+      identifier: "claude-bugrepro-003",
+      version: "production",
+    });
+    await registry.dispatchExecute(client, "eval_prompt", "get_version", {
+      prompt_id: DATASET_ID,
+      version: "v3",
+    });
+    await registry.dispatchExecute(client, "eval_prompt", "set_tag", {
+      prompt_id: DATASET_ID,
+      tag_name: "production",
+      body: { version: 3 },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      method: "GET",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/by-identifier/claude-bugrepro-003",
+      params: expect.objectContaining({ version: "production" }),
+    }));
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "GET",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${DATASET_ID}/versions/v3`,
+    }));
+    expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      method: "PUT",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${DATASET_ID}/tags/production`,
+      body: { version: 3 },
+    }));
+  });
+
+  it("rejects invalid prompt config and identifiers before issuing a write", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn();
+    const client = makeClient(request);
+
+    await expect(registry.dispatch(client, "eval_prompt", "create", {
+      body: {
+        name: "Bad prompt",
+        identifier: "Not A Slug",
+        config: { system_message: "Hello" },
+      },
+    })).rejects.toThrow(/lowercase slug/);
+    await expect(registry.dispatch(client, "eval_prompt", "create", {
+      body: {
+        name: "Bad variable",
+        identifier: "bad-variable",
+        config: { system_message: "Hello", variables: [{ name: "input" }] },
+      },
+    })).rejects.toThrow(/reserved "input"/);
+
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("does not create a prompt through generic registry items", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn();
+
+    await expect(registry.dispatch(makeClient(request), "eval_registry_item", "create", {
+      body: {
+        name: "Wrong route",
+        identifier: "wrong-route",
+        type: "prompt",
+        config: {},
+      },
+    })).rejects.toThrow(/resource_type="eval_prompt"/);
+
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("resolves a registry prompt in scope and permits omitting prompt_version for latest", async () => {
+    const registry = new Registry(makeConfig());
+    const targetId = "77777777-7777-4777-8777-777777777777";
+    const promptId = "88888888-8888-4888-8888-888888888888";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ id: promptId, version: "v3" })
+      .mockResolvedValueOnce({ id: targetId });
+    const client = makeClient(request);
+
+    await registry.dispatch(client, "eval_target", "create", {
+      body: {
+        name: "Registry prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          prompt_source: "registry",
+          prompt_id: promptId,
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "GET",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${promptId}`,
+    }));
+    expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      method: "POST",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets",
+    }));
+  });
+
+  it("checks a named registry prompt tag before creating a target", async () => {
+    const registry = new Registry(makeConfig());
+    const promptId = "99999999-9999-4999-8999-999999999999";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ version: "v3" })
+      .mockResolvedValueOnce({});
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Tagged registry prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          prompt_source: "registry",
+          prompt_id: promptId,
+          prompt_version: "production",
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${promptId}/versions/production`,
+    }));
+  });
 });
 
 // ─── Managed offline evaluation safety ──────────────────────────────────────
@@ -678,6 +1045,73 @@ describe("managed offline evaluation safety", () => {
         body: { target_id: "55555555-5555-4555-8555-555555555555" },
       }),
     ).rejects.toThrow(/configured for dataset_id/);
+  });
+
+  it("checks precomputed coverage when the stored target type is static", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        uuid: "11111111-1111-4111-8111-111111111111",
+        storage_type: "managed",
+        dataset_id: "22222222-2222-4222-8222-222222222222",
+        target_id: "33333333-3333-4333-8333-333333333333",
+        metric_set_id: "44444444-4444-4444-8444-444444444444",
+      })
+      .mockResolvedValueOnce({ uuid: "22222222-2222-4222-8222-222222222222" })
+      .mockResolvedValueOnce({
+        uuid: "55555555-5555-4555-8555-555555555555",
+        type: "static",
+        config: { dataset_id: "66666666-6666-4666-8666-666666666666" },
+      })
+      .mockResolvedValueOnce({ uuid: "66666666-6666-4666-8666-666666666666" })
+      .mockResolvedValueOnce({ entries: [] })
+      .mockResolvedValueOnce({
+        data: [{ item_identifier: "real-case", input: { question: "What is my balance?" } }],
+        total_elements: 1,
+      });
+
+    await expect(
+      registry.dispatch(makeClient(request), "evaluation", "update", {
+        eval_id: "11111111-1111-4111-8111-111111111111",
+        body: { target_id: "55555555-5555-4555-8555-555555555555" },
+      }),
+    ).rejects.toThrow(/configured for dataset_id/);
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: "PATCH" }));
+  });
+
+  it("checks precomputed coverage when a run's stored target type is static", async () => {
+    const registry = new Registry(makeConfig());
+    const evalId = "11111111-1111-4111-8111-111111111111";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        storage_type: "managed",
+        dataset_id: "22222222-2222-4222-8222-222222222222",
+        target_id: "33333333-3333-4333-8333-333333333333",
+        metric_set_id: "44444444-4444-4444-8444-444444444444",
+      })
+      .mockResolvedValueOnce({ uuid: "22222222-2222-4222-8222-222222222222" })
+      .mockResolvedValueOnce({
+        uuid: "44444444-4444-4444-8444-444444444444",
+        entries: [{ metric_id: "77777777-7777-4777-8777-777777777777" }],
+      })
+      .mockResolvedValueOnce({
+        uuid: "55555555-5555-4555-8555-555555555555",
+        type: "static",
+        config: { dataset_id: "66666666-6666-4666-8666-666666666666" },
+      })
+      .mockResolvedValueOnce({ uuid: "66666666-6666-4666-8666-666666666666" })
+      .mockResolvedValueOnce({ type: "heuristic", name: "contains" })
+      .mockResolvedValueOnce({
+        data: [{ item_identifier: "case-1", input: { question: "hi" } }],
+        total_elements: 1,
+      });
+
+    await expect(
+      registry.dispatchExecute(makeClient(request), "evaluation", "run", { eval_id: evalId }),
+    ).rejects.toThrow(/configured for dataset_id/);
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: "POST" }));
   });
 
   it("preflights externally costly actions with scoped resource lookups", () => {
