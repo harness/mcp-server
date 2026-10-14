@@ -94,9 +94,9 @@ describe("AI Evals path-scoped write bodies", () => {
     const redundant: string[] = [];
 
     // This toolset owns project resources: configuration, scores, failures, and
-    // the ad-hoc trace-evaluation write. Account-only trace viewing/querying
-    // must be modeled in a separate resource/toolset rather than weakening
-    // scope on a project-owned resource here.
+    // the ad-hoc trace-evaluation write. Prompt Registry stays project-scoped
+    // even though its backing Config Service is tenant/account-scoped.
+    // Account-only trace viewing/querying must be a separate resource/toolset.
     for (const resource of aiEvalsToolset.resources) {
       expect(resource.scope).toBe("project");
       expect(resource.scopeOptional).toBe(true);
@@ -605,6 +605,55 @@ describe("AI Evals eval_target test action", () => {
       method: "POST",
       path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets",
     }));
+  });
+
+  it.each([
+    ["root input", "Answer: {{input}}"],
+    ["nested input", "Answer: {{ input.text }}"],
+  ])("accepts %s references in an inline prompt target", async (_name, userMessageTemplate) => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ id: "prompt-target" });
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Inline prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: userMessageTemplate,
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "POST",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets",
+      body: expect.objectContaining({
+        config: expect.objectContaining({ user_message_template: userMessageTemplate }),
+      }),
+    }));
+  });
+
+  it("rejects inline prompt templates that do not reference input", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValueOnce({ type: "OpenAI" });
+
+    await expect(registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Invalid inline prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: "Answer from the context.",
+        },
+      },
+    })).rejects.toThrow(/must reference \{\{input\}\} or a dotted input path/);
+
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("does not invent a response_path requirement for legacy app targets", async () => {

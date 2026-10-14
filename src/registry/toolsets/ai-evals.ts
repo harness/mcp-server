@@ -15,6 +15,7 @@ const REGISTRY_ITEM_TYPES = new Set(["prompt", "agent", "mcp_tool", "skill"]);
 const PROMPT_VARIABLE_TYPES = new Set(["string", "number", "boolean", "array", "object"]);
 const PROMPT_IDENTIFIER_PATTERN = /^[a-z][a-z0-9_-]{0,127}$/;
 const WHOLE_TEMPLATE_PLACEHOLDER_PATTERN = /^\s*\{\{\s*[^{}]+\s*\}\}\s*$/;
+const INPUT_TEMPLATE_REFERENCE_PATTERN = /\{\{\s*input(?:\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*\s*\}\}/;
 const UUID_404_HINT =
   "Use the id from harness_list for get, update, delete, and execute actions; identifiers and display names are not accepted. " +
   "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL.";
@@ -366,8 +367,10 @@ async function validateTarget(ctx: PreflightContext, target: JsonRecord): Promis
       await validatePromptReference(ctx, config.prompt_id, config.prompt_version);
     } else if (!nonEmptyString(config.system_message) || !nonEmptyString(config.user_message_template)) {
       throw new Error("Inline prompt targets require non-empty system_message and user_message_template.");
-    } else if (!String(config.user_message_template).includes("{{input}}")) {
-      throw new Error("target.config.user_message_template must include the {{input}} placeholder.");
+    } else if (!INPUT_TEMPLATE_REFERENCE_PATTERN.test(String(config.user_message_template))) {
+      throw new Error(
+        "target.config.user_message_template must reference {{input}} or a dotted input path such as {{input.text}}.",
+      );
     }
     return;
   }
@@ -1094,7 +1097,7 @@ const createTargetSchema: BodySchema = {
         "For type='prompt': { llm_connector_ref: '<existing Harness LLM connector identifier>', " +
         "model?: string, prompt_source?: 'inline'|'registry', prompt_id?: '<Prompt Registry UUID>', " +
         "prompt_version?: 'vN'|'N'|'<tag>' (optional; omit for latest), " +
-        "system_message?: string, user_message_template?: '...{{input}}...', temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
+        "system_message?: string, user_message_template?: '...{{input}}...' or '...{{input.text}}...', temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
         "frequency_penalty?: -2 to 2, presence_penalty?: -2 to 2 }. " +
         "For type='agent': { endpoint: '<agent HTTP URL>' (endpoint_url is a legacy alias), method?: '<HTTP method>' (default POST), " +
         "response_path?: '<response JSON path>' (default output), request_template?: object | '{{ input.field }}' }. " +
@@ -1123,7 +1126,7 @@ const updateTargetSchema: BodySchema = {
       description:
         "Target config. For type='prompt': { llm_connector_ref, prompt_source?: 'inline'|'registry', " +
         "prompt_id?: '<Prompt Registry UUID>', prompt_version?: 'vN'|'N'|'<tag>' (omit for latest), " +
-        "system_message?, user_message_template?, model? }. " +
+        "system_message?, user_message_template? (must reference {{input}} or {{input.field}}), model? }. " +
         "For type='agent': { endpoint (or legacy endpoint_url), method?: '<HTTP method>' (default POST), " +
         "response_path?: '<response JSON path>' (default output), request_template?: object | '{{ input.field }}' }. " +
         "For type='precomputed': { dataset_id?, model_name?, model_version? }.",
