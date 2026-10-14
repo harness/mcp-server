@@ -5,18 +5,26 @@ import {
   openVaultValue,
   sealVaultValue,
   type OAuthBrokerAuthorizationCode,
+  type OAuthBrokerRefreshGrant,
   type OAuthBrokerTransaction,
-  type OAuthProxyLinkTransaction,
   type OAuthProxyVaultRecord,
   type OAuthProxyVaultStore,
 } from "./oauth-proxy-vault.js";
 
 const log = createLogger("oauth-proxy-vault");
-const LOCK_TTL_MS = 30_000;
-const LOCK_WAIT_MS = 20_000;
+const LOCK_TTL_MS = 60_000;
+const LOCK_WAIT_MS = 45_000;
+const LOCK_EXTEND_MS = 15_000;
 const UNLOCK_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
   return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
+const EXTEND_SCRIPT = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("pexpire", KEYS[1], ARGV[2])
 else
   return 0
 end
@@ -101,38 +109,12 @@ export class RedisOAuthProxyVault implements OAuthProxyVaultStore {
     subject: string,
     record: OAuthProxyVaultRecord,
   ): Promise<void> {
-    await this.redis.set(this.recordKey(issuer, subject), sealVaultValue(this.key, record));
+    const key = this.recordKey(issuer, subject);
+    await this.redis.set(key, sealVaultValue(this.key, record, key));
   }
 
   async deleteRecord(issuer: string, subject: string): Promise<void> {
     await this.redis.del([this.recordKey(issuer, subject)]);
-  }
-
-  async putTransaction(id: string, transaction: OAuthProxyLinkTransaction): Promise<void> {
-    await this.writeExpiring(this.linkKey(id), transaction, transaction.expiresAt);
-    await this.writeExpiring(
-      this.linkStateKey(transaction.state),
-      id,
-      transaction.expiresAt,
-      false,
-    );
-  }
-
-  async getTransaction(id: string): Promise<OAuthProxyLinkTransaction | undefined> {
-    const transaction = await this.read<OAuthProxyLinkTransaction>(this.linkKey(id));
-    if (!transaction || transaction.expiresAt > Date.now()) return transaction;
-    await this.redis.del([this.linkKey(id), this.linkStateKey(transaction.state)]);
-    return undefined;
-  }
-
-  async takeTransactionByState(
-    state: string,
-  ): Promise<{ id: string; transaction: OAuthProxyLinkTransaction } | undefined> {
-    const id = await this.redis.getDel(this.linkStateKey(state));
-    if (!id) return undefined;
-    const transaction = await this.takeValue<OAuthProxyLinkTransaction>(this.linkKey(id));
-    if (!transaction || transaction.expiresAt <= Date.now()) return undefined;
-    return { id, transaction };
   }
 
   async putBrokerTransaction(id: string, transaction: OAuthBrokerTransaction): Promise<void> {
@@ -196,6 +178,19 @@ export class RedisOAuthProxyVault implements OAuthProxyVaultStore {
     return code;
   }
 
+  getBrokerRefresh(digest: string): Promise<OAuthBrokerRefreshGrant | undefined> {
+    return this.read(this.refreshKey(digest));
+  }
+
+  async putBrokerRefresh(digest: string, grant: OAuthBrokerRefreshGrant): Promise<void> {
+    const key = this.refreshKey(digest);
+    await this.redis.set(key, sealVaultValue(this.key, grant, key));
+  }
+
+  async deleteBrokerRefresh(digest: string): Promise<void> {
+    await this.redis.del([this.refreshKey(digest)]);
+  }
+
   async withLock<T>(name: string, work: () => Promise<T>): Promise<T> {
     const lockKey = this.scoped("lock", digest(name));
     const token = randomBytes(16).toString("base64url");
@@ -203,9 +198,16 @@ export class RedisOAuthProxyVault implements OAuthProxyVaultStore {
     while (Date.now() <= deadline) {
       const acquired = await this.redis.set(lockKey, token, { nx: true, px: LOCK_TTL_MS });
       if (acquired) {
+        const extender = setInterval(() => {
+          this.redis.eval(EXTEND_SCRIPT, [lockKey], [token, String(LOCK_TTL_MS)]).catch((error: unknown) => {
+            log.warn("OAuth refresh lock extension failed", { error: safeRedisError(error) });
+          });
+        }, LOCK_EXTEND_MS);
+        extender.unref();
         try {
           return await work();
         } finally {
+          clearInterval(extender);
           await this.redis.eval(UNLOCK_SCRIPT, [lockKey], [token]);
         }
       }
@@ -232,13 +234,13 @@ export class RedisOAuthProxyVault implements OAuthProxyVaultStore {
   private async read<T>(key: string): Promise<T | undefined> {
     const sealed = await this.redis.get(key);
     if (!sealed) return undefined;
-    return openVaultValue<T>(this.key, sealed);
+    return openVaultValue<T>(this.key, sealed, key);
   }
 
   private async takeValue<T>(key: string): Promise<T | undefined> {
     const sealed = await this.redis.getDel(key);
     if (!sealed) return undefined;
-    return openVaultValue<T>(this.key, sealed);
+    return openVaultValue<T>(this.key, sealed, key);
   }
 
   private async writeExpiring(
@@ -249,20 +251,12 @@ export class RedisOAuthProxyVault implements OAuthProxyVaultStore {
   ): Promise<void> {
     const ttl = expiresAt - Date.now();
     if (ttl <= 0) return;
-    const stored = encrypt ? sealVaultValue(this.key, value) : String(value);
+    const stored = encrypt ? sealVaultValue(this.key, value, key) : String(value);
     await this.redis.set(key, stored, { px: ttl });
   }
 
   private recordKey(issuer: string, subject: string): string {
     return this.scoped("record", digest(`${issuer}\n${subject}`));
-  }
-
-  private linkKey(id: string): string {
-    return this.scoped("link", digest(id));
-  }
-
-  private linkStateKey(state: string): string {
-    return this.scoped("link-state", digest(state));
   }
 
   private brokerKey(id: string): string {
@@ -279,6 +273,10 @@ export class RedisOAuthProxyVault implements OAuthProxyVaultStore {
 
   private codeKey(digestValue: string): string {
     return this.scoped("code", digest(digestValue));
+  }
+
+  private refreshKey(digestValue: string): string {
+    return this.scoped("refresh", digest(digestValue));
   }
 
   private scoped(kind: string, id: string): string {

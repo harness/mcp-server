@@ -311,15 +311,16 @@ async function startHttp(config: Config, port: number): Promise<void> {
     registerOAuthProtectedResourceRoutes(app, config);
   }
 
-  // Auth gate before body parsing — reject unauthenticated requests without allocating body memory
-  app.use(createMcpHttpAuthMiddleware(config, oauthProxyRuntime));
-
-  // Simple per-IP rate limiting: 60 requests per minute
+  // Rate-limit before authentication so unknown-kid JWKS refreshes cannot be forced unbounded.
   const ipHits = new Map<string, { count: number; resetAt: number }>();
   const RATE_WINDOW_MS = 60_000;
   const RATE_LIMIT = 60;
 
   app.use((req, res, next) => {
+    if (req.path === "/health" || req.method === "OPTIONS") {
+      next();
+      return;
+    }
     const ip = req.ip ?? "unknown";
     const now = Date.now();
     let entry = ipHits.get(ip);
@@ -338,6 +339,9 @@ async function startHttp(config: Config, port: number): Promise<void> {
     }
     next();
   });
+
+  // Auth gate before body parsing — reject unauthenticated requests without allocating body memory
+  app.use(createMcpHttpAuthMiddleware(config, oauthProxyRuntime));
 
   const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
   app.use(json({ limit: maxBodySize }));

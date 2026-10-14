@@ -151,7 +151,8 @@ All Zod schemas in tool handlers must:
 | `src/client/harness-client.ts` | Core HTTP transport |
 | `src/utils/log-resolver.ts` | Pre-signed CDN/S3 blob URLs must not receive API auth headers (would invalidate signatures) |
 | `src/utils/oauth-auth.ts` | Fetches HarnessID JWKS from the configured identity-provider host without attaching Harness API credentials |
-| `src/utils/oauth-proxy.ts` | OAuth proxy/broker token exchange and metadata against the configured IdP (not Harness API traffic) |
+| `src/utils/oauth-proxy.ts` | OAuth proxy token exchange and JWKS against the configured IdP (not Harness API traffic) |
+| `src/utils/oauth-broker.ts` | Upstream discovery and token exchange for the embedded OAuth broker (not Harness API traffic) |
 | `src/audit/sinks/webhook.ts` | Best-effort POST to a user-configured external audit webhook URL |
 | `src/search/remote-provider.ts` | Calls an external semantic-search service (not the Harness API) |
 

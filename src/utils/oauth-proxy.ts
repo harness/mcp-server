@@ -26,13 +26,6 @@ const CLOCK_TOLERANCE_SECONDS = 30;
 const JWKS_CACHE_TTL_MS = 5 * 60_000;
 const ACCESS_TOKEN_RENEWAL_SKEW_MS = 60_000;
 
-/** Decoded claims for local grant debugging. The raw token is not logged. */
-export function describeReceivedJwt(token: string | undefined): unknown {
-  if (!token) return undefined;
-  const claims = jwt.decode(token);
-  return claims && typeof claims !== "string" ? claims : { readable: false };
-}
-
 interface OAuthJwk extends NodeJsonWebKey {
   kid?: string;
   alg?: string;
@@ -65,20 +58,35 @@ export interface OAuthProxyRuntime {
 class TokenEndpointError extends Error {
   constructor(
     readonly status: number,
-    readonly responseBody: string,
+    readonly oauthError: string | undefined,
   ) {
-    super(`HarnessID token endpoint returned HTTP ${status}: ${clip(responseBody)}`);
+    super(
+      `HarnessID token endpoint returned HTTP ${status}` +
+      `${oauthError ? `: ${oauthError}` : ""}.`,
+    );
   }
 
   get invalidGrant(): boolean {
-    return this.responseBody.includes("invalid_grant")
-      || this.responseBody.includes("invalid_token");
+    return (this.status === 400 || this.status === 401)
+      && (this.oauthError === "invalid_grant" || this.oauthError === "invalid_token");
+  }
+}
+
+class LinkMismatchError extends Error {}
+
+function oauthErrorCode(body: string): string | undefined {
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown };
+    return typeof parsed.error === "string" ? parsed.error : undefined;
+  } catch {
+    return undefined;
   }
 }
 
 class JwtVerifier {
   private keys = new Map<string, KeyObject>();
   private expiresAt = 0;
+  private missRefreshedAt = 0;
 
   constructor(
     private readonly issuer: string,
@@ -106,9 +114,14 @@ class JwtVerifier {
   }
 
   private async key(kid: string): Promise<KeyObject> {
-    if (Date.now() >= this.expiresAt || !this.keys.has(kid)) {
-      await this.refresh();
+    const cached = this.keys.get(kid);
+    if (cached && Date.now() < this.expiresAt) return cached;
+    const cacheFresh = Date.now() < this.expiresAt;
+    if (cacheFresh && this.missRefreshedAt > 0) {
+      throw new Error(`No signing key found for kid "${kid}".`);
     }
+    await this.refresh();
+    this.missRefreshedAt = Date.now();
     const key = this.keys.get(kid);
     if (!key) throw new Error(`No signing key found for kid "${kid}".`);
     return key;
@@ -236,7 +249,22 @@ export function createOAuthProxyHttpAuthMiddleware(
       const result = await withIdentityLock(runtime, identity, async () => {
         const record = await runtime.vault.getRecord(identity.issuer, identity.subject);
         if (!record?.linked) return undefined;
-        return exchangeHarnessToken(runtime, identity, record, token);
+        try {
+          return await exchangeHarnessToken(runtime, identity, record, token);
+        } catch (error) {
+          if (error instanceof LinkMismatchError) {
+            await runtime.vault.deleteRecord(identity.issuer, identity.subject);
+            return undefined;
+          }
+          if (error instanceof TokenEndpointError && error.invalidGrant) {
+            const current = await runtime.vault.getRecord(identity.issuer, identity.subject);
+            if (current?.refreshToken === record.refreshToken) {
+              await runtime.vault.deleteRecord(identity.issuer, identity.subject);
+            }
+            return undefined;
+          }
+          throw error;
+        }
       });
       if (!result) {
         reauthenticateRequired(res, metadataUrl);
@@ -250,11 +278,6 @@ export function createOAuthProxyHttpAuthMiddleware(
       res.locals.upstreamOAuthClaims = identity.claims;
       next();
     } catch (error) {
-      if (error instanceof TokenEndpointError && error.invalidGrant) {
-        await runtime.vault.deleteRecord(identity.issuer, identity.subject);
-        reauthenticateRequired(res, metadataUrl);
-        return;
-      }
       log.error("HarnessID token exchange failed", { error: errorMessage(error) });
       res.status(502).json({
         jsonrpc: "2.0",
@@ -270,6 +293,17 @@ function cachedAccessTokenUsable(record: OAuthProxyVaultRecord): boolean {
     && record.accessToken.length > 0
     && typeof record.accessTokenExpiresAt === "number"
     && record.accessTokenExpiresAt - Date.now() > ACCESS_TOKEN_RENEWAL_SKEW_MS;
+}
+
+function linkAlternates(
+  runtime: OAuthProxyRuntime,
+  identity: VerifiedIdentity,
+  record: OAuthProxyVaultRecord,
+): string[] {
+  return [
+    ...(record.linkIdentifiers ?? []),
+    ...upstreamEmailIdentifiers(runtime.config, [identity.claims]),
+  ];
 }
 
 function accessTokenExpiresAt(claims: JwtPayload, expiresIn?: number): number {
@@ -289,8 +323,16 @@ async function exchangeHarnessToken(
     && cachedAccessTokenUsable(record)
   ) {
     try {
-      return await verifyHarnessToken(runtime, record.accessToken!);
+      const cached = await verifyHarnessToken(runtime, record.accessToken!);
+      assertLinkedIdentity(
+        runtime.config,
+        identity.subject,
+        cached.claims,
+        linkAlternates(runtime, identity, record),
+      );
+      return cached;
     } catch (error) {
+      if (error instanceof LinkMismatchError) throw error;
       log.warn("Cached HarnessID access token rejected; refreshing", {
         error: errorMessage(error),
       });
@@ -301,7 +343,7 @@ async function exchangeHarnessToken(
     runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
     && !record.refreshToken
   ) {
-    throw new TokenEndpointError(400, '{"error":"invalid_grant"}');
+    throw new TokenEndpointError(400, "invalid_grant");
   }
 
   const tokens = runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
@@ -316,6 +358,8 @@ async function exchangeHarnessToken(
       scope: runtime.config.HARNESS_MCP_OAUTH_SCOPES,
     });
   const harness = await verifyHarnessToken(runtime, tokens.accessToken);
+  const alternates = linkAlternates(runtime, identity, record);
+  assertLinkedIdentity(runtime.config, identity.subject, harness.claims, alternates);
   if (runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh") {
     await runtime.vault.putRecord(
       identity.issuer,
@@ -325,6 +369,7 @@ async function exchangeHarnessToken(
         refreshToken: tokens.refreshToken ?? record.refreshToken,
         accessToken: tokens.accessToken,
         accessTokenExpiresAt: accessTokenExpiresAt(harness.claims, tokens.expiresIn),
+        linkIdentifiers: alternates,
         updatedAt: new Date().toISOString(),
       },
     );
@@ -377,12 +422,8 @@ async function harnessGrant(
   const body = new URLSearchParams({
     ...fields,
     client_id: clientId,
-    client_secret: clientSecret,
   });
-  log.info("HarnessID token request", {
-    grantType: fields.grant_type,
-    assertion: describeReceivedJwt(fields.assertion),
-  });
+  log.info("HarnessID token request", { grantType: fields.grant_type });
   const response = await runtime.fetchImpl(
     `${runtime.config.HARNESS_MCP_OAUTH_ISSUER.replace(/\/+$/, "")}/protocol/openid-connect/token`,
     {
@@ -398,24 +439,22 @@ async function harnessGrant(
   );
   const text = await response.text();
   if (!response.ok) {
+    const oauthError = oauthErrorCode(text);
     log.warn("HarnessID token response rejected", {
       status: response.status,
-      body: text,
+      oauthError,
     });
-    throw new TokenEndpointError(response.status, text);
+    throw new TokenEndpointError(response.status, oauthError);
   }
   const parsed = JSON.parse(text) as Record<string, unknown>;
   if (typeof parsed.access_token !== "string") {
     throw new Error("HarnessID token response did not include access_token.");
   }
   log.info("HarnessID token response", {
-    accessToken: describeReceivedJwt(parsed.access_token),
-    idToken: typeof parsed.id_token === "string"
-      ? describeReceivedJwt(parsed.id_token)
-      : undefined,
+    grantType: fields.grant_type,
+    status: response.status,
     hasRefreshToken: typeof parsed.refresh_token === "string",
     expiresIn: parsed.expires_in,
-    scope: parsed.scope,
   });
   return {
     accessToken: parsed.access_token,
@@ -457,27 +496,23 @@ function normalizedEmail(value: unknown): string | undefined {
 }
 
 export function verifiedEmail(claims: JwtPayload): string | undefined {
-  if (claims.email_verified === false || claims.email_verified === "false") return undefined;
+  if (claims.email_verified !== true && claims.email_verified !== "true") return undefined;
   return normalizedEmail(claims.email);
 }
-
-const UPSTREAM_EMAIL_CLAIM_NAMES = ["email", "upn", "preferred_username", "unique_name"] as const;
 
 export function upstreamEmailIdentifiers(
   config: Config,
   claimSets: readonly JwtPayload[],
 ): string[] {
   const domains = config.HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS;
+  if (domains.length === 0) return [];
   const identifiers = new Set<string>();
   for (const claims of claimSets) {
-    if (claims.email_verified === false || claims.email_verified === "false") continue;
-    for (const name of UPSTREAM_EMAIL_CLAIM_NAMES) {
-      const email = normalizedEmail(claims[name]);
-      if (!email) continue;
-      const domain = email.slice(email.indexOf("@") + 1);
-      if (domains.length > 0 && !domains.includes(domain)) continue;
-      identifiers.add(email);
-    }
+    const email = verifiedEmail(claims);
+    if (!email) continue;
+    const domain = email.slice(email.indexOf("@") + 1);
+    if (!domains.includes(domain)) continue;
+    identifiers.add(email);
   }
   return [...identifiers];
 }
@@ -494,20 +529,10 @@ export function upstreamSubjectsMatch(accessClaims: JwtPayload, idClaims: JwtPay
   if (accessSub && idSub && accessSub === idSub) return true;
   const accessUid = claimString(accessClaims.uid);
   if (accessUid && idSub && accessUid === idSub) return true;
-  const idNames = [
-    verifiedEmail(idClaims),
-    normalizedEmail(idClaims.preferred_username),
-    claimString(idClaims.preferred_username)?.toLowerCase(),
-  ];
-  const accessNames = [
-    verifiedEmail(accessClaims),
-    normalizedEmail(accessClaims.preferred_username),
-    claimString(accessClaims.preferred_username)?.toLowerCase(),
-  ];
-  if (accessSub && idNames.includes(accessSub.toLowerCase())) return true;
-  if (idSub && accessNames.includes(idSub.toLowerCase())) return true;
   const idEmail = verifiedEmail(idClaims);
   const accessEmail = verifiedEmail(accessClaims);
+  if (accessSub && idEmail && accessSub.toLowerCase() === idEmail) return true;
+  if (idSub && accessEmail && idSub.toLowerCase() === accessEmail) return true;
   return idEmail !== undefined && idEmail === accessEmail;
 }
 
@@ -527,7 +552,7 @@ function assertLinkedIdentity(
   if (harnessEmail && identifiers.some((identifier) => identifier.toLowerCase() === harnessEmail)) {
     return;
   }
-  throw new Error(
+  throw new LinkMismatchError(
     `HarnessID token claim "${claimName}" does not match the upstream subject or verified email. ` +
     "Configure a HarnessID client mapper for the broker user ID, or include a verified email claim.",
   );
@@ -579,6 +604,7 @@ export async function completeHarnessAuthorization(
       accessTokenExpiresAt: runtime.config.HARNESS_MCP_OAUTH_PROXY_GRANT === "refresh"
         ? accessTokenExpiresAt(harness.claims, tokens.expiresIn)
         : undefined,
+      linkIdentifiers: [...alternateSubjects],
       updatedAt: new Date().toISOString(),
     },
   );
@@ -648,10 +674,6 @@ export function randomOAuthToken(): string {
 
 export function oauthPkceChallenge(verifier: string): string {
   return createHash("sha256").update(verifier).digest("base64url");
-}
-
-function clip(value: string, max = 400): string {
-  return value.replace(/\s+/g, " ").slice(0, max);
 }
 
 function errorMessage(error: unknown): string {

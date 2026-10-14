@@ -28,9 +28,9 @@ so the client starts `/oauth/authorize` again.
 
 The OAuth authorization broker and Harness token exchange both live inside the
 MCP server. There is no separate proxy process. Cursor starts a normal OAuth
-login, receives only the upstream provider's access and refresh tokens, and
-sends the upstream access token on every MCP request. HarnessID tokens never
-leave the server.
+login, receives the upstream access token and an opaque broker refresh
+token, and sends the upstream access token on every MCP request. The upstream
+refresh token stays in the vault. HarnessID tokens never leave the server.
 
 | Component | Role |
 | --- | --- |
@@ -74,7 +74,7 @@ sequenceDiagram
     K-->>M: /oauth/harnessid/callback with code
     M->>K: Exchange code + PKCE verifier
     K-->>M: HarnessID tokens
-    M->>M: Require external_sub == upstream sub
+    M->>M: Require external_sub to match upstream sub or verified email
     alt refresh grant
         M->>M: Encrypt refresh and access tokens in vault
     else jwt-bearer grant
@@ -82,7 +82,7 @@ sequenceDiagram
     end
     M-->>C: Broker authorization code
     C->>M: POST /oauth/token with Cursor PKCE verifier
-    M-->>C: Upstream access and refresh tokens only
+    M-->>C: Upstream access token and opaque broker refresh token
     C->>M: POST /mcp, Bearer upstream token
     alt refresh grant
         M->>M: Reuse cached HarnessID access token
@@ -148,16 +148,13 @@ sequenceDiagram
   when Cursor redeems its one-time code.
 - `/oauth/token` strips upstream ID tokens and every HarnessID token.
 - HarnessID linking accepts an exact upstream `sub` match. It also accepts
-  Okta's access-token `uid` when that equals the ID token `sub`, and an email
-  or `preferred_username` that equals the other token's subject. `external_sub`
-  may also equal an email-shaped `email`, `upn`, `preferred_username`, or
-  `unique_name` claim from the upstream access token or ID token. The vault
-  record stays keyed by the upstream access-token `sub`. An email is rejected
-  when `email_verified` is explicitly false. Set
-  `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS` to allow only those domains. Suffix
-  matches are rejected.
-- The upstream refresh-token grant is proxied so Cursor can rotate its upstream
-  token without receiving any Harness credential.
+  an access-token `uid` when that equals the ID token `sub`. An email matches
+  only when `email_verified` is true and its domain is listed in
+  `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS`. An empty domain list does not link by
+  email. The same check runs again whenever a new HarnessID token is stored.
+  The vault record stays keyed by the upstream access-token `sub`.
+- `/oauth/token` returns an opaque broker refresh token. The upstream refresh
+  token stays in the vault and is never returned to the client.
 
 The upstream token remains mandatory on every MCP request, including requests
 for an existing MCP session.
@@ -229,10 +226,10 @@ automatically links only when the upstream provider is authoritative for the
 email domain. Otherwise retain Keycloak's confirmation step.
 
 The HarnessID user must have a federated identity link whose provider user ID
-equals the upstream JWT `sub`, its `uid`, or its email. Okta often puts the
-user ID in the ID token `sub` and the email in the access token `sub`. The
-access token `uid` is the same user ID. An `email` or `preferred_username`
-claim is also accepted unless `email_verified` is explicitly false.
+equals the upstream JWT `sub` or its `uid`. Okta often puts the user ID in the
+ID token `sub` and the email in the access token `sub`. The access token `uid`
+is the same user ID. An email matches only when `email_verified` is true and
+the domain is listed in `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS`.
 
 ## 3. Configure the confidential HarnessID client
 
@@ -310,7 +307,8 @@ Operational requirements:
   the refresh token must survive a restart.
 - Redis mode shares the same encrypted records across pods. Set
   `HARNESS_MCP_OAUTH_PROXY_VAULT_MODE=redis` and
-  `HARNESS_MCP_OAUTH_PROXY_REDIS_URL` to a `redis://` or `rediss://` URL.
+  `HARNESS_MCP_OAUTH_PROXY_REDIS_URL` to a `rediss://` URL. `redis://` is
+  accepted only when `HARNESS_ALLOW_HTTP=true`.
   Redis 6.2 or newer is required. Login transactions and one-time
   authorization codes are stored there too, so an OAuth callback can land on
   any pod.
@@ -418,7 +416,7 @@ export HARNESS_MCP_OAUTH_RESOURCE=http://127.0.0.1:3000/mcp
 export HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL=http://127.0.0.1:3000
 export HARNESS_MCP_BROKER_ISSUER=http://127.0.0.1:3000
 export HARNESS_MCP_BROKER_CLIENT_ID=cursor-harness-mcp
-export HARNESS_MCP_BROKER_REDIRECT_URIS='*'
+export HARNESS_MCP_BROKER_REDIRECT_URIS='http://127.0.0.1:8787/callback'
 
 export HARNESS_MCP_OAUTH_ISSUER=https://id.harness-test.com/idp/realms/HarnessIDP
 export HARNESS_MCP_OAUTH_CLIENT_ID=harness-mcp-proxy
@@ -495,7 +493,8 @@ Then:
    the organization-linked identity-provider login.
 5. HarnessID returns to MCP; MCP returns a one-time authorization code to
    Cursor.
-6. Cursor redeems the code and stores only the upstream access/refresh tokens.
+6. Cursor redeems the code and stores the upstream access token plus the
+   broker refresh token.
 7. Cursor initializes `/mcp` with the upstream access token. MCP obtains the
    HarnessID token internally.
 
@@ -533,18 +532,19 @@ rm -f .harness-mcp/oauth-proxy-vault.enc
   exactly matches `HARNESS_MCP_BROKER_CLIENT_ID`.
 - `invalid_redirect_uri`: register `/oauth/upstream/callback` at the upstream
   provider, `/oauth/harnessid/callback` at HarnessID, and allow
-  the IDE callback through `HARNESS_MCP_BROKER_REDIRECT_URIS`. `*` allows
-  loopback and app-scheme callbacks.
+  the IDE callback through `HARNESS_MCP_BROKER_REDIRECT_URIS`. The default is
+  empty. `*` allows only loopback `http` and `https`. List `vscode://` and
+  other custom schemes exactly.
 - Upstream callback fails nonce validation: ensure the upstream client returns
   a signed ID token when `openid` is requested.
-- `does not match the access token subject or verified email`: the server log
-  lists the claim names on each token. Okta's access token needs `uid`, or one
-  token needs `email` or `preferred_username` equal to the other token's
-  subject. `email_verified: false` rejects the email.
+- `does not match the access token subject or verified email`: the access
+  token and ID token must share `sub`, or the access-token `uid` must equal
+  the ID token `sub`. A verified email matches only when `email_verified` is
+  true.
 - `HarnessID token claim "external_sub" does not match`: the HarnessID claim
-  is neither the upstream `sub` nor an email from the upstream access token or
-  ID token. A SAML NameID email matches `email`, `upn`, `preferred_username`,
-  or `unique_name`. `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS` drops every other domain.
+  is neither the upstream `sub` nor a verified email whose domain is listed in
+  `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS`. An empty domain list does not match
+  email. A SAML NameID email matches only that verified email.
 - `invalid_grant` in `jwt-bearer`: check the assertion `iss`, single-valued
   `aud`, `exp`, `jti`, signature, provider link, allowed provider, and replay
   setting.
@@ -555,8 +555,14 @@ rm -f .harness-mcp/oauth-proxy-vault.enc
 
 ## Deployment constraints
 
-- Use TLS.
+- Use TLS. Redis in this mode uses `rediss://` unless `HARNESS_ALLOW_HTTP=true`.
 - Store the confidential client secret and vault key in a secret manager.
 - Do not log upstream, HarnessID, or refresh tokens.
-- The encrypted file vault supports one replica. Use a shared transactional
-  secret store before running multiple replicas.
+- File mode keeps the encrypted vault on one pod. Mount
+  `HARNESS_MCP_OAUTH_PROXY_VAULT_PATH` on persistent storage if links must
+  survive a restart.
+- Redis mode is the shared vault for more than one pod. It does not move MCP
+  sessions, so replicas still need sticky sessions. See section 4A.
+- There is no revoke endpoint. To offboard a user, delete that user's vault
+  record. In Redis, delete the keys under `HARNESS_MCP_OAUTH_PROXY_REDIS_KEY_PREFIX`
+  for the deployment, or delete the vault file, and have the user sign in again.

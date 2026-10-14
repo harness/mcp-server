@@ -15,7 +15,11 @@ spec:
   # (Service sessionAffinity: ClientIP below is not sufficient through an
   # L7 ingress — configure sticky sessions at the ingress too).
   # OAuth refresh tokens can be shared separately with
-  # HARNESS_MCP_OAUTH_PROXY_VAULT_MODE=redis. That does not move MCP sessions.
+  # HARNESS_MCP_OAUTH_PROXY_VAULT_MODE=redis and
+  # HARNESS_MCP_OAUTH_PROXY_REDIS_URL=rediss://oauth-vault:6379.
+  # File mode writes HARNESS_MCP_OAUTH_PROXY_VAULT_PATH on local disk and
+  # loses every link on restart unless that path is a persistent volume.
+  # Redis does not move MCP sessions.
   replicas: 1
   selector:
     matchLabels:

@@ -271,13 +271,15 @@ async function completeBrowserFlow(
 }
 
 describe("broker redirect allowlist", () => {
-  it("accepts IDE loopback and app callbacks when the allowlist is *", () => {
+  it("limits * to loopback http(s) and requires exact custom schemes", () => {
     expect(brokerRedirectAllowed("*", "http://localhost:8787/callback")).toBe(true);
     expect(brokerRedirectAllowed("*", "http://127.0.0.1:54321/callback")).toBe(true);
     expect(brokerRedirectAllowed("*", "http://[::1]:8787/callback")).toBe(true);
-    expect(brokerRedirectAllowed("*", "vscode://mcp/callback")).toBe(true);
+    expect(brokerRedirectAllowed("*", "vscode://mcp/callback")).toBe(false);
+    expect(brokerRedirectAllowed("vscode://mcp/callback", "vscode://mcp/callback")).toBe(true);
     expect(brokerRedirectAllowed("*", "https://attacker.example/callback")).toBe(false);
     expect(brokerRedirectAllowed("*", "javascript:alert(1)")).toBe(false);
+    expect(brokerRedirectAllowed("", "http://localhost:8787/callback")).toBe(false);
   });
 
   it("keeps an exact allowlist closed", () => {
@@ -368,7 +370,8 @@ describe("integrated OAuth broker", () => {
       expect(tokenResponse.status).toBe(200);
       const tokens = await tokenResponse.json() as Record<string, unknown>;
       expect(tokens.access_token).toEqual(expect.any(String));
-      expect(tokens.refresh_token).toBe("upstream-refresh");
+      expect(tokens.refresh_token).toEqual(expect.any(String));
+      expect(tokens.refresh_token).not.toBe("upstream-refresh");
       expect(tokens).not.toHaveProperty("id_token");
       expect(JSON.stringify(tokens)).not.toContain("harness-refresh");
 
@@ -434,7 +437,7 @@ describe("integrated OAuth broker", () => {
       expect(mcp.status).toBe(200);
     });
 
-    expect(await proxy.vault.getRecord(upstreamIssuer, "upstream-user")).toEqual({
+    expect(await proxy.vault.getRecord(upstreamIssuer, "upstream-user")).toMatchObject({
       linked: true,
       updatedAt: expect.any(String),
     });
@@ -445,7 +448,7 @@ describe("integrated OAuth broker", () => {
     expect(jwtGrant).toBeDefined();
   });
 
-  it("proxies upstream refresh rotation without returning an ID token", async () => {
+  it("rotates only a broker-issued refresh token and does not return the upstream refresh token", async () => {
     directory = await mkdtemp(join(tmpdir(), "oauth-broker-refresh-"));
     const proxy = createOAuthProxyRuntime(
       brokerConfig(join(directory, "vault.enc")),
@@ -453,9 +456,20 @@ describe("integrated OAuth broker", () => {
     );
     const app = express();
     registerOAuthBrokerRoutes(app, createOAuthBrokerRuntime(proxy));
+    const presented = "broker-refresh-token";
+    await proxy.vault.putBrokerRefresh(
+      createHash("sha256").update(presented).digest("base64url"),
+      {
+        clientId: "cursor-harness-mcp",
+        upstreamIssuer,
+        upstreamSubject: "upstream-user",
+        upstreamRefreshToken: "upstream-refresh",
+        scope: "openid",
+      },
+    );
 
     await withListeningApp(app, async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/oauth/token`, {
+      const rejected = await fetch(`${baseUrl}/oauth/token`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -464,14 +478,38 @@ describe("integrated OAuth broker", () => {
           refresh_token: "upstream-refresh",
         }),
       });
+      expect(rejected.status).toBe(400);
+
+      const response = await fetch(`${baseUrl}/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: "cursor-harness-mcp",
+          refresh_token: presented,
+        }),
+      });
       expect(response.status).toBe(200);
       const tokens = await response.json() as Record<string, unknown>;
       expect(tokens).toMatchObject({
         access_token: expect.any(String),
-        refresh_token: "rotated-upstream-refresh",
         token_type: "Bearer",
       });
+      expect(tokens.refresh_token).toEqual(expect.any(String));
+      expect(tokens.refresh_token).not.toBe("rotated-upstream-refresh");
+      expect(tokens.refresh_token).not.toBe(presented);
       expect(tokens).not.toHaveProperty("id_token");
+
+      const replay = await fetch(`${baseUrl}/oauth/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: "cursor-harness-mcp",
+          refresh_token: presented,
+        }),
+      });
+      expect(replay.status).toBe(400);
     });
   });
 
@@ -622,6 +660,7 @@ describe("integrated OAuth broker", () => {
       accessSubject: "ida-user-1",
       idSubject: "ida-user-1",
       idEmail: "User@Jpmchase.com",
+      idEmailVerified: true,
       externalSubject: "user@jpmchase.com",
     };
     const proxy = createOAuthProxyRuntime(
@@ -743,7 +782,7 @@ describe("integrated OAuth broker", () => {
     });
   });
 
-  it("links an email when the ID token omits email_verified", async () => {
+  it("rejects an email link when the ID token omits email_verified", async () => {
     directory = await mkdtemp(join(tmpdir(), "oauth-broker-email-unspecified-"));
     const state: TokenState = {
       accessSubject: "user@example.com",
@@ -760,8 +799,25 @@ describe("integrated OAuth broker", () => {
 
     await withListeningApp(app, async (baseUrl) => {
       const verifier = randomBytes(32).toString("base64url");
-      const code = await completeBrowserFlow(baseUrl, state, verifier);
-      expect(code).toEqual(expect.any(String));
+      const authorize = new URL("/oauth/authorize", baseUrl);
+      authorize.searchParams.set("client_id", "cursor-harness-mcp");
+      authorize.searchParams.set("redirect_uri", cursorRedirect);
+      authorize.searchParams.set("response_type", "code");
+      authorize.searchParams.set("state", "cursor-state");
+      authorize.searchParams.set("resource", `${mcpOrigin}/mcp`);
+      authorize.searchParams.set("scope", "openid profile email offline_access");
+      authorize.searchParams.set("code_challenge", pkceChallenge(verifier));
+      authorize.searchParams.set("code_challenge_method", "S256");
+      const upstreamRedirect = new URL(
+        (await fetch(authorize, { redirect: "manual" })).headers.get("location")!,
+      );
+      state.nonce = upstreamRedirect.searchParams.get("nonce")!;
+      const upstreamCallback = new URL("/oauth/upstream/callback", baseUrl);
+      upstreamCallback.searchParams.set("state", upstreamRedirect.searchParams.get("state")!);
+      upstreamCallback.searchParams.set("code", "upstream-code");
+      const response = await fetch(upstreamCallback, { redirect: "manual" });
+      const cursorError = new URL(response.headers.get("location")!);
+      expect(cursorError.searchParams.get("error")).toBe("access_denied");
     });
   });
 

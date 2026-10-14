@@ -39,9 +39,14 @@ class MemoryRedis implements OAuthVaultRedis {
     for (const key of keys) this.values.delete(key);
   }
 
-  async eval(_script: string, keys: string[], args: string[]): Promise<unknown> {
+  async eval(script: string, keys: string[], args: string[]): Promise<unknown> {
     const current = await this.get(keys[0]);
     if (current !== args[0]) return 0;
+    if (script.includes("pexpire")) {
+      const entry = this.values.get(keys[0]);
+      if (entry) entry.expiresAt = Date.now() + Number(args[1]);
+      return 1;
+    }
     await this.del([keys[0]]);
     return 1;
   }
@@ -128,18 +133,26 @@ describe("Redis OAuth proxy vault", () => {
     expect(await first.takeBrokerCode("digest")).toBeUndefined();
   });
 
-  it("drops expired link transactions", async () => {
-    const { first } = vaultPair();
-    await first.putTransaction("txn-1", {
-      issuer: "https://okta.example",
-      subject: "user-1",
-      state: "state-1",
-      codeVerifier: "verifier",
-      expiresAt: Date.now() - 1_000,
+  it("rejects a record ciphertext opened under another identity", async () => {
+    const { redis, first } = vaultPair();
+    await first.putRecord("https://okta.example", "user-a", {
+      linked: true,
+      refreshToken: "refresh-a",
+      updatedAt: "2026-10-07T00:00:00Z",
     });
+    await first.putRecord("https://okta.example", "user-b", {
+      linked: true,
+      refreshToken: "refresh-b",
+      updatedAt: "2026-10-07T00:00:00Z",
+    });
+    const keys = [...redis.values.keys()];
+    const firstValue = redis.values.get(keys[0])!;
+    const secondValue = redis.values.get(keys[1])!;
+    redis.values.set(keys[0], secondValue);
+    redis.values.set(keys[1], firstValue);
 
-    expect(await first.getTransaction("txn-1")).toBeUndefined();
-    expect(await first.takeTransactionByState("state-1")).toBeUndefined();
+    await expect(first.getRecord("https://okta.example", "user-a")).rejects.toThrow();
+    await expect(first.getRecord("https://okta.example", "user-b")).rejects.toThrow();
   });
 
   it("serializes refresh work for the same user", async () => {
@@ -198,12 +211,24 @@ describe("oauth-proxy vault mode configuration", () => {
     })).toThrow("redis:// or rediss://");
   });
 
-  it("accepts an in-cluster redis URL", () => {
-    const config = ConfigSchema.parse({
+  it("requires rediss unless local HTTP is explicitly allowed", () => {
+    expect(() => ConfigSchema.parse({
       ...proxyEnv,
       HARNESS_MCP_OAUTH_PROXY_VAULT_MODE: "redis",
       HARNESS_MCP_OAUTH_PROXY_REDIS_URL: "redis://oauth-vault:6379/0",
+    })).toThrow("rediss://");
+    const local = ConfigSchema.parse({
+      ...proxyEnv,
+      HARNESS_ALLOW_HTTP: "true",
+      HARNESS_MCP_OAUTH_PROXY_VAULT_MODE: "redis",
+      HARNESS_MCP_OAUTH_PROXY_REDIS_URL: "redis://oauth-vault:6379/0",
     });
-    expect(config.HARNESS_MCP_OAUTH_PROXY_REDIS_KEY_PREFIX).toBe("harness-mcp:oauth");
+    expect(local.HARNESS_MCP_OAUTH_PROXY_REDIS_KEY_PREFIX).toBe("harness-mcp:oauth");
+    const tls = ConfigSchema.parse({
+      ...proxyEnv,
+      HARNESS_MCP_OAUTH_PROXY_VAULT_MODE: "redis",
+      HARNESS_MCP_OAUTH_PROXY_REDIS_URL: "rediss://oauth-vault:6379/0",
+    });
+    expect(tls.HARNESS_MCP_OAUTH_PROXY_VAULT_MODE).toBe("redis");
   });
 });

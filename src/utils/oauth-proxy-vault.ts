@@ -7,16 +7,16 @@ export interface OAuthProxyVaultRecord {
   refreshToken?: string;
   accessToken?: string;
   accessTokenExpiresAt?: number;
+  linkIdentifiers?: string[];
   updatedAt: string;
 }
 
-export interface OAuthProxyLinkTransaction {
-  issuer: string;
-  subject: string;
-  state: string;
-  codeVerifier: string;
-  expiresAt: number;
-  linkIdentifiers?: string[];
+export interface OAuthBrokerRefreshGrant {
+  clientId: string;
+  upstreamIssuer: string;
+  upstreamSubject: string;
+  upstreamRefreshToken: string;
+  scope: string;
 }
 
 export interface UpstreamTokenBundle {
@@ -62,10 +62,12 @@ export interface OAuthBrokerAuthorizationCode {
 
 interface VaultData {
   records: Record<string, OAuthProxyVaultRecord>;
-  transactions: Record<string, OAuthProxyLinkTransaction>;
   brokerTransactions: Record<string, OAuthBrokerTransaction>;
   brokerCodes: Record<string, OAuthBrokerAuthorizationCode>;
+  brokerRefreshes: Record<string, OAuthBrokerRefreshGrant>;
 }
+
+const FILE_VAULT_AAD = "oauth-proxy-file";
 
 interface EncryptedVault {
   version: 1;
@@ -78,11 +80,6 @@ export interface OAuthProxyVaultStore {
   getRecord(issuer: string, subject: string): Promise<OAuthProxyVaultRecord | undefined>;
   putRecord(issuer: string, subject: string, record: OAuthProxyVaultRecord): Promise<void>;
   deleteRecord(issuer: string, subject: string): Promise<void>;
-  putTransaction(id: string, transaction: OAuthProxyLinkTransaction): Promise<void>;
-  getTransaction(id: string): Promise<OAuthProxyLinkTransaction | undefined>;
-  takeTransactionByState(
-    state: string,
-  ): Promise<{ id: string; transaction: OAuthProxyLinkTransaction } | undefined>;
   putBrokerTransaction(id: string, transaction: OAuthBrokerTransaction): Promise<void>;
   deleteBrokerTransaction(id: string): Promise<void>;
   takeBrokerTransactionByUpstreamState(
@@ -93,6 +90,9 @@ export interface OAuthProxyVaultStore {
   ): Promise<{ id: string; transaction: OAuthBrokerTransaction } | undefined>;
   putBrokerCode(digest: string, code: OAuthBrokerAuthorizationCode): Promise<void>;
   takeBrokerCode(digest: string): Promise<OAuthBrokerAuthorizationCode | undefined>;
+  getBrokerRefresh(digest: string): Promise<OAuthBrokerRefreshGrant | undefined>;
+  putBrokerRefresh(digest: string, grant: OAuthBrokerRefreshGrant): Promise<void>;
+  deleteBrokerRefresh(digest: string): Promise<void>;
   withLock?<T>(name: string, work: () => Promise<T>): Promise<T>;
   connect?(): Promise<void>;
 }
@@ -112,9 +112,10 @@ export function decodeOAuthProxyVaultKey(encoded: string): Buffer {
   return key;
 }
 
-export function sealVaultValue(key: Buffer, value: unknown): string {
+export function sealVaultValue(key: Buffer, value: unknown, aad: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
+  cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([
     cipher.update(JSON.stringify(value), "utf8"),
     cipher.final(),
@@ -128,7 +129,7 @@ export function sealVaultValue(key: Buffer, value: unknown): string {
   return JSON.stringify(envelope);
 }
 
-export function openVaultValue<T>(key: Buffer, sealed: string): T {
+export function openVaultValue<T>(key: Buffer, sealed: string, aad: string): T {
   const envelope = JSON.parse(sealed) as Partial<EncryptedVault>;
   if (
     envelope.version !== 1
@@ -143,6 +144,7 @@ export function openVaultValue<T>(key: Buffer, sealed: string): T {
     key,
     Buffer.from(envelope.iv, "base64"),
   );
+  decipher.setAAD(Buffer.from(aad, "utf8"));
   decipher.setAuthTag(Buffer.from(envelope.tag, "base64"));
   const plaintext = Buffer.concat([
     decipher.update(Buffer.from(envelope.ciphertext, "base64")),
@@ -176,41 +178,6 @@ export class OAuthProxyVault implements OAuthProxyVaultStore {
   deleteRecord(issuer: string, subject: string): Promise<void> {
     return this.locked((vault) => {
       delete vault.records[recordKey(issuer, subject)];
-    });
-  }
-
-  putTransaction(id: string, transaction: OAuthProxyLinkTransaction): Promise<void> {
-    return this.locked((vault) => {
-      vault.transactions[id] = transaction;
-    });
-  }
-
-  getTransaction(id: string): Promise<OAuthProxyLinkTransaction | undefined> {
-    return this.locked((vault) => {
-      const transaction = vault.transactions[id];
-      if (transaction && transaction.expiresAt <= Date.now()) {
-        delete vault.transactions[id];
-        return undefined;
-      }
-      return transaction;
-    });
-  }
-
-  takeTransactionByState(
-    state: string,
-  ): Promise<{ id: string; transaction: OAuthProxyLinkTransaction } | undefined> {
-    return this.locked((vault) => {
-      for (const [id, transaction] of Object.entries(vault.transactions)) {
-        if (transaction.expiresAt <= Date.now()) {
-          delete vault.transactions[id];
-          continue;
-        }
-        if (transaction.state === state) {
-          delete vault.transactions[id];
-          return { id, transaction };
-        }
-      }
-      return undefined;
     });
   }
 
@@ -256,6 +223,22 @@ export class OAuthProxyVault implements OAuthProxyVaultStore {
     });
   }
 
+  getBrokerRefresh(digest: string): Promise<OAuthBrokerRefreshGrant | undefined> {
+    return this.locked((vault) => vault.brokerRefreshes[digest]);
+  }
+
+  putBrokerRefresh(digest: string, grant: OAuthBrokerRefreshGrant): Promise<void> {
+    return this.locked((vault) => {
+      vault.brokerRefreshes[digest] = grant;
+    });
+  }
+
+  deleteBrokerRefresh(digest: string): Promise<void> {
+    return this.locked((vault) => {
+      delete vault.brokerRefreshes[digest];
+    });
+  }
+
   private takeBrokerTransaction(
     matches: (transaction: OAuthBrokerTransaction) => boolean,
   ): Promise<{ id: string; transaction: OAuthBrokerTransaction } | undefined> {
@@ -277,9 +260,10 @@ export class OAuthProxyVault implements OAuthProxyVaultStore {
   private async locked<T>(work: (vault: VaultData) => T | Promise<T>): Promise<T> {
     const run = this.queue.then(async () => {
       const vault = await this.read();
+      const before = JSON.stringify(vault);
       this.pruneExpired(vault);
       const result = await work(vault);
-      await this.write(vault);
+      if (JSON.stringify(vault) !== before) await this.write(vault);
       return result;
     });
     this.queue = run.then(() => undefined, () => undefined);
@@ -288,9 +272,6 @@ export class OAuthProxyVault implements OAuthProxyVaultStore {
 
   private pruneExpired(vault: VaultData): void {
     const now = Date.now();
-    for (const [id, transaction] of Object.entries(vault.transactions)) {
-      if (transaction.expiresAt <= now) delete vault.transactions[id];
-    }
     for (const [id, transaction] of Object.entries(vault.brokerTransactions)) {
       if (transaction.expiresAt <= now) delete vault.brokerTransactions[id];
     }
@@ -301,20 +282,24 @@ export class OAuthProxyVault implements OAuthProxyVaultStore {
 
   private async read(): Promise<VaultData> {
     try {
-      const parsed = openVaultValue<Partial<VaultData>>(this.key, await readFile(this.path, "utf8"));
+      const parsed = openVaultValue<Partial<VaultData>>(
+        this.key,
+        await readFile(this.path, "utf8"),
+        FILE_VAULT_AAD,
+      );
       return {
         records: parsed.records ?? {},
-        transactions: parsed.transactions ?? {},
         brokerTransactions: parsed.brokerTransactions ?? {},
         brokerCodes: parsed.brokerCodes ?? {},
+        brokerRefreshes: parsed.brokerRefreshes ?? {},
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return {
           records: {},
-          transactions: {},
           brokerTransactions: {},
           brokerCodes: {},
+          brokerRefreshes: {},
         };
       }
       throw error;
@@ -324,7 +309,7 @@ export class OAuthProxyVault implements OAuthProxyVaultStore {
   private async write(vault: VaultData): Promise<void> {
     await mkdir(dirname(this.path), { recursive: true });
     const next = `${this.path}.tmp`;
-    await writeFile(next, sealVaultValue(this.key, vault), { mode: 0o600 });
+    await writeFile(next, sealVaultValue(this.key, vault, FILE_VAULT_AAD), { mode: 0o600 });
     await chmod(next, 0o600);
     await rename(next, this.path);
     await chmod(this.path, 0o600);

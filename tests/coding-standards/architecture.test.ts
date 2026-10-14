@@ -104,6 +104,7 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/utils/log-resolver.ts",
   "src/utils/oauth-auth.ts",
   "src/utils/oauth-proxy.ts",
+  "src/utils/oauth-broker.ts",
   "src/audit/sinks/webhook.ts",
   "src/search/remote-provider.ts",
   "src/client/typesafe-client.ts",
@@ -118,7 +119,7 @@ function zodV4RequiredFiles(): string[] {
 }
 
 /** Global fetch API calls — not method names like `async fetch(` or interface `fetch(...)`. */
-const GLOBAL_FETCH_PATTERN = /\bawait fetch\s*\(|\breturn fetch\s*\(|[^.\w]fetch\s*\(\s*["'`]|^fetch\s*\(|\bthis\.fetchImpl\s*\(/m;
+const GLOBAL_FETCH_PATTERN = /\bawait fetch\s*\(|\breturn fetch\s*\(|[^.\w]fetch\s*\(\s*["'`]|^fetch\s*\(|\.fetchImpl\s*\(/m;
 
 function walkTsFiles(dir: string): string[] {
   const results: string[] = [];

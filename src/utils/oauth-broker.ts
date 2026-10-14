@@ -9,7 +9,6 @@ import {
   upstreamEmailIdentifiers,
   oauthPkceChallenge,
   randomOAuthToken,
-  describeReceivedJwt,
   upstreamSubjectsMatch,
   type OAuthProxyRuntime,
   verifyUpstreamAccessToken,
@@ -334,7 +333,14 @@ async function redeemAuthorizationCode(
   ) {
     throw new OAuthRequestError("invalid_grant", "Authorization code binding validation failed.");
   }
-  sendUpstreamTokens(res, stored.upstreamTokens);
+  const brokerRefresh = await issueBrokerRefresh(runtime, {
+    clientId: stored.clientId,
+    upstreamIssuer: stored.upstreamIssuer,
+    upstreamSubject: stored.upstreamSubject,
+    upstreamRefreshToken: stored.upstreamTokens.refreshToken,
+    scope: stored.scope,
+  });
+  sendClientTokens(res, stored.upstreamTokens, brokerRefresh);
 }
 
 async function refreshUpstreamToken(
@@ -344,13 +350,57 @@ async function refreshUpstreamToken(
 ): Promise<void> {
   validateTokenClient(runtime.proxy.config, req);
   const refreshToken = requiredForm(req, "refresh_token");
-  const upstream = await upstreamMetadata(runtime);
-  const response = await postUpstreamToken(runtime, upstream.token_endpoint, {
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-    scope: optionalForm(req, "scope") ?? runtime.proxy.config.HARNESS_MCP_UPSTREAM_SCOPES,
+  const requestedScope = optionalForm(req, "scope");
+  if (requestedScope) validateScopes(runtime.proxy.config, requestedScope);
+  const digest = codeDigest(refreshToken);
+  const exchange = async () => {
+    const stored = await runtime.proxy.vault.getBrokerRefresh(digest);
+    if (!stored || stored.clientId !== runtime.proxy.config.HARNESS_MCP_BROKER_CLIENT_ID) {
+      throw new OAuthRequestError("invalid_grant", "Refresh token is invalid.");
+    }
+    const upstream = await upstreamMetadata(runtime);
+    const response = await postUpstreamToken(runtime, upstream.token_endpoint, {
+      grant_type: "refresh_token",
+      refresh_token: stored.upstreamRefreshToken,
+      scope: requestedScope ?? stored.scope,
+    });
+    await runtime.proxy.vault.deleteBrokerRefresh(digest);
+    const brokerRefresh = await issueBrokerRefresh(runtime, {
+      clientId: stored.clientId,
+      upstreamIssuer: stored.upstreamIssuer,
+      upstreamSubject: stored.upstreamSubject,
+      upstreamRefreshToken: response.refreshToken ?? stored.upstreamRefreshToken,
+      scope: requestedScope ?? stored.scope,
+    });
+    sendClientTokens(res, response, brokerRefresh);
+  };
+  if (runtime.proxy.vault.withLock) {
+    await runtime.proxy.vault.withLock(`broker-refresh\n${digest}`, exchange);
+    return;
+  }
+  await exchange();
+}
+
+async function issueBrokerRefresh(
+  runtime: OAuthBrokerRuntime,
+  grant: {
+    clientId: string;
+    upstreamIssuer: string;
+    upstreamSubject: string;
+    upstreamRefreshToken?: string;
+    scope: string;
+  },
+): Promise<string | undefined> {
+  if (!grant.upstreamRefreshToken) return undefined;
+  const token = randomOAuthToken();
+  await runtime.proxy.vault.putBrokerRefresh(codeDigest(token), {
+    clientId: grant.clientId,
+    upstreamIssuer: grant.upstreamIssuer,
+    upstreamSubject: grant.upstreamSubject,
+    upstreamRefreshToken: grant.upstreamRefreshToken,
+    scope: grant.scope,
   });
-  sendUpstreamTokens(res, response);
+  return token;
 }
 
 async function exchangeUpstreamCode(
@@ -387,19 +437,21 @@ async function postUpstreamToken(
   });
   const body = await response.json() as UpstreamTokenResponse;
   if (!response.ok || typeof body.access_token !== "string") {
+    log.warn("Upstream token response rejected", {
+      grantType: fields.grant_type,
+      status: response.status,
+      oauthError: typeof body.error === "string" ? body.error : undefined,
+    });
     throw new OAuthRequestError(
       typeof body.error === "string" ? body.error : "invalid_grant",
-      typeof body.error_description === "string"
-        ? body.error_description
-        : `Upstream token endpoint returned HTTP ${response.status}.`,
+      "Upstream token request was rejected.",
     );
   }
   log.info("Upstream token response", {
-    accessToken: describeReceivedJwt(body.access_token),
-    idToken: typeof body.id_token === "string" ? describeReceivedJwt(body.id_token) : undefined,
+    grantType: fields.grant_type,
+    status: response.status,
     hasRefreshToken: typeof body.refresh_token === "string",
     expiresIn: body.expires_in,
-    scope: body.scope,
   });
   const expiresIn = typeof body.expires_in === "number" ? body.expires_in : undefined;
   return {
@@ -498,10 +550,33 @@ async function upstreamMetadata(runtime: OAuthBrokerRuntime): Promise<UpstreamMe
   }
   runtime.metadata = {
     issuer: expectedIssuer,
-    authorization_endpoint: value.authorization_endpoint,
-    token_endpoint: value.token_endpoint,
+    authorization_endpoint: pinnedIssuerEndpoint(value.authorization_endpoint, expectedIssuer),
+    token_endpoint: pinnedIssuerEndpoint(value.token_endpoint, expectedIssuer),
   };
   return runtime.metadata;
+}
+
+function pinnedIssuerEndpoint(endpoint: string, issuer: string): string {
+  let url: URL;
+  let issuerUrl: URL;
+  try {
+    url = new URL(endpoint);
+    issuerUrl = new URL(issuer);
+  } catch {
+    throw new Error("Upstream discovery endpoint is not a valid URL.");
+  }
+  if (url.protocol !== "https:" || url.origin !== issuerUrl.origin) {
+    throw new Error("Upstream discovery endpoints must be https on the issuer origin.");
+  }
+  return url.toString();
+}
+
+function sendClientTokens(
+  res: Response,
+  tokens: UpstreamTokenBundle,
+  refreshToken: string | undefined,
+): void {
+  sendUpstreamTokens(res, { ...tokens, refreshToken });
 }
 
 function sendUpstreamTokens(res: Response, tokens: UpstreamTokenBundle): void {
@@ -566,7 +641,7 @@ function ideRedirectAllowed(redirectUri: string): boolean {
   if (scheme === "http" || scheme === "https") {
     return LOOPBACK_HOSTS.has(url.hostname.toLowerCase());
   }
-  return true;
+  return false;
 }
 
 function upstreamCallbackUrl(config: Config): string {

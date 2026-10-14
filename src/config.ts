@@ -37,7 +37,7 @@ function upstreamEmailDomains(value: string | undefined): string[] {
   return domains;
 }
 
-function assertRedisUrl(value: string | undefined): void {
+function assertRedisUrl(value: string | undefined, allowHttp: boolean): void {
   if (!value) {
     throw new Error(
       "oauth-proxy redis vault mode requires HARNESS_MCP_OAUTH_PROXY_REDIS_URL.",
@@ -54,6 +54,12 @@ function assertRedisUrl(value: string | undefined): void {
   if (url.protocol !== "redis:" && url.protocol !== "rediss:") {
     throw new Error(
       "HARNESS_MCP_OAUTH_PROXY_REDIS_URL must be a redis:// or rediss:// URL.",
+    );
+  }
+  if (url.protocol === "redis:" && !allowHttp) {
+    throw new Error(
+      "HARNESS_MCP_OAUTH_PROXY_REDIS_URL must use rediss://. " +
+      "Set HARNESS_ALLOW_HTTP=true only for local development.",
     );
   }
 }
@@ -152,7 +158,6 @@ const RawConfigSchema = z.object({
     emptyStringAsUndefined,
     z.string().regex(/^[A-Za-z0-9:_-]+$/).default("harness-mcp:oauth"),
   ),
-  HARNESS_MCP_OAUTH_PROXY_LINK_TTL_MS: z.coerce.number().int().min(30_000).default(5 * 60_000),
   HARNESS_MCP_UPSTREAM_ISSUER: optionalUrlFromEnv,
   HARNESS_MCP_UPSTREAM_AUDIENCE: optionalStringFromEnv,
   HARNESS_MCP_UPSTREAM_JWKS_URI: optionalUrlFromEnv,
@@ -171,7 +176,7 @@ const RawConfigSchema = z.object({
   ),
   HARNESS_MCP_BROKER_REDIRECT_URIS: z.preprocess(
     emptyStringAsUndefined,
-    z.string().default("*"),
+    z.string().default(""),
   ),
   HARNESS_MCP_BROKER_CODE_TTL_MS: z.coerce.number().int().min(30_000).max(10 * 60_000).default(60_000),
   HARNESS_MCP_BROKER_TRANSACTION_TTL_MS: z.coerce.number().int().min(60_000).max(30 * 60_000).default(10 * 60_000),
@@ -358,6 +363,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
       !data.HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID && "HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID",
       !data.HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET && "HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET",
       !data.HARNESS_MCP_OAUTH_PROXY_VAULT_KEY && "HARNESS_MCP_OAUTH_PROXY_VAULT_KEY",
+      !data.HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL && "HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL",
     ].filter(Boolean);
     if (missing.length > 0) {
       throw new Error(`oauth-proxy mode requires ${missing.join(", ")}.`);
@@ -394,8 +400,15 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
         "HARNESS_MCP_OAUTH_PROXY_VAULT_KEY must be a base64-encoded 32-byte key.",
       );
     }
+    const resourceOrigin = new URL(data.HARNESS_MCP_OAUTH_RESOURCE).origin;
+    const publicOrigin = new URL(data.HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL!).origin;
+    if (resourceOrigin !== publicOrigin) {
+      throw new Error(
+        "HARNESS_MCP_OAUTH_RESOURCE must use the same origin as HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL.",
+      );
+    }
     if (data.HARNESS_MCP_OAUTH_PROXY_VAULT_MODE === "redis") {
-      assertRedisUrl(data.HARNESS_MCP_OAUTH_PROXY_REDIS_URL);
+      assertRedisUrl(data.HARNESS_MCP_OAUTH_PROXY_REDIS_URL, data.HARNESS_ALLOW_HTTP);
     }
   }
 

@@ -55,7 +55,7 @@ function proxyConfig(vaultPath: string, grant: "refresh" | "jwt-bearer" = "refre
 }
 
 describe("upstreamEmailIdentifiers", () => {
-  it("collects email-shaped claims and keeps only configured domains", () => {
+  it("collects a verified email only when its domain is allowlisted", () => {
     const open = proxyConfig("/tmp/vault.enc");
     const restricted = ConfigSchema.parse({
       ...open,
@@ -64,14 +64,12 @@ describe("upstreamEmailIdentifiers", () => {
     const claims = {
       sub: "ida-user-1",
       email: "User@Jpmchase.com",
+      email_verified: true,
       upn: "user@jpmchase.com",
       preferred_username: "not-an-email",
       unique_name: "other@notjpmchase.com",
     };
-    expect(upstreamEmailIdentifiers(open, [claims])).toEqual([
-      "user@jpmchase.com",
-      "other@notjpmchase.com",
-    ]);
+    expect(upstreamEmailIdentifiers(open, [claims])).toEqual([]);
     expect(upstreamEmailIdentifiers(restricted, [claims])).toEqual([
       "user@jpmchase.com",
     ]);
@@ -386,6 +384,101 @@ describe("OAuth proxy mode", () => {
       expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
     });
     expect(await runtime.vault.getRecord(upstreamIssuer, "upstream-user")).toBeUndefined();
+  });
+
+  it("does not delete a rotated refresh token when a stale refresh is rejected", async () => {
+    directory = await mkdtemp(join(tmpdir(), "oauth-proxy-stale-refresh-"));
+    const config = proxyConfig(join(directory, "vault.enc"));
+    let releaseSecondRead: (() => void) | undefined;
+    let releaseStored: (() => void) | undefined;
+    const secondRead = new Promise<void>((resolve) => {
+      releaseSecondRead = resolve;
+    });
+    const storedRefresh = new Promise<void>((resolve) => {
+      releaseStored = resolve;
+    });
+    let reads = 0;
+    let tokenCalls = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/v1/keys")) return Response.json({ keys: [upstreamJwk] });
+      if (url.endsWith("/protocol/openid-connect/certs")) {
+        return Response.json({ keys: [harnessJwk] });
+      }
+      tokenCalls += 1;
+      if (tokenCalls === 1) {
+        await secondRead;
+        return Response.json({
+          access_token: harnessToken(),
+          refresh_token: "rotated-refresh-token",
+          expires_in: 300,
+        });
+      }
+      await storedRefresh;
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    }) as unknown as typeof fetch;
+    const first = createOAuthProxyRuntime(config, fetchImpl);
+    const second = createOAuthProxyRuntime(config, fetchImpl);
+    second.vault = first.vault;
+    const originalGet = first.vault.getRecord.bind(first.vault);
+    const originalPut = first.vault.putRecord.bind(first.vault);
+    first.vault.getRecord = async (issuer, subject) => {
+      const record = await originalGet(issuer, subject);
+      reads += 1;
+      if (reads >= 2) releaseSecondRead?.();
+      return record;
+    };
+    second.vault.getRecord = first.vault.getRecord;
+    first.vault.putRecord = async (issuer, subject, record) => {
+      await originalPut(issuer, subject, record);
+      if (record.refreshToken === "rotated-refresh-token") releaseStored?.();
+    };
+    second.vault.putRecord = first.vault.putRecord;
+    await first.vault.putRecord(upstreamIssuer, "upstream-user", {
+      linked: true,
+      refreshToken: "initial-refresh-token",
+      updatedAt: "2026-10-02T00:00:00Z",
+    });
+    reads = 0;
+
+    const appFor = (runtime: ReturnType<typeof createOAuthProxyRuntime>) => {
+      const app = express();
+      app.use(createOAuthProxyHttpAuthMiddleware(runtime));
+      app.post("/mcp", (_req, res) => res.json({ ok: true }));
+      return app;
+    };
+
+    const serverA = appFor(first).listen(0, "127.0.0.1");
+    const serverB = appFor(second).listen(0, "127.0.0.1");
+    const waitListening = (server: ReturnType<express.Express["listen"]>) =>
+      new Promise<void>((resolve) => {
+        if (server.listening) resolve();
+        else server.once("listening", () => resolve());
+      });
+    await waitListening(serverA);
+    await waitListening(serverB);
+    const baseA = `http://127.0.0.1:${(serverA.address() as AddressInfo).port}`;
+    const baseB = `http://127.0.0.1:${(serverB.address() as AddressInfo).port}`;
+    try {
+      const [firstResponse, secondResponse] = await Promise.all([
+        fetch(`${baseA}/mcp`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${upstreamToken()}` },
+        }),
+        fetch(`${baseB}/mcp`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${upstreamToken()}` },
+        }),
+      ]);
+      expect(firstResponse.status).toBe(200);
+      expect(secondResponse.status).toBe(401);
+    } finally {
+      serverA.close();
+      serverB.close();
+    }
+    expect(await first.vault.getRecord(upstreamIssuer, "upstream-user")).toMatchObject({
+      refreshToken: "rotated-refresh-token",
+    });
   });
 
   it("uses the upstream JWT assertion without storing a token", async () => {
