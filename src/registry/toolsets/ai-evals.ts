@@ -4,14 +4,21 @@
  * Uses Harness-Account header; no accountIdentifier query param (headerBasedScoping).
  */
 import type { BodySchema, PathBuilderConfig, PreflightContext, ToolsetDefinition } from "../types.js";
-import { aiEvalsArrayExtract, aiEvalsDataArrayExtract, aiEvalsListExtract, passthrough } from "../extractors.js";
+import {
+  aiEvalsArrayExtract,
+  aiEvalsDataArrayExtract,
+  aiEvalsListExtract,
+  aiEvalsRedactedExtract,
+  aiEvalsTraceExtract,
+  aiEvalsTraceListExtract,
+  passthrough,
+} from "../extractors.js";
 
 const AI = "/gateway/ai-evals/api/v1";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LLM_CONNECTOR_TYPES = new Set(["OpenAi", "OpenAI", "Anthropic", "AzureOpenAI", "AzureOpenAi", "GoogleAI", "GoogleAi"]);
 const JUDGE_BACKED_METRIC_TYPES = new Set(["llm", "ai_judge"]);
 const TARGET_TYPES = new Set(["prompt", "agent", "precomputed"]);
-const REGISTRY_ITEM_TYPES = new Set(["agent", "mcp_tool", "skill"]);
 const PROMPT_VARIABLE_TYPES = new Set(["string", "number", "boolean", "array", "object"]);
 const PROMPT_IDENTIFIER_PATTERN = /^[a-z][a-z0-9_-]{0,127}$/;
 const WHOLE_TEMPLATE_PLACEHOLDER_PATTERN = /^\s*\{\{\s*[^{}]+\s*\}\}\s*$/;
@@ -436,26 +443,6 @@ async function validatePromptWrite(ctx: PreflightContext, isCreate: boolean): Pr
     throw new Error("Prompt name must be a non-empty string when supplied.");
   }
   if (body.config !== undefined) validatePromptConfig(body.config, "body.config");
-}
-
-async function validateRegistryItemCreate(ctx: PreflightContext): Promise<void> {
-  const body = requireBody(ctx.input, "Registry item create");
-  const type = nonEmptyString(body.type);
-  if (type === "prompt") {
-    throw new Error(
-      "Create versioned prompts with resource_type=\"eval_prompt\", not eval_registry_item. " +
-      "eval_prompt validates prompt templates and supports versions, tags, and Prompt Registry targets.",
-    );
-  }
-  if (!type || !REGISTRY_ITEM_TYPES.has(type)) {
-    throw new Error(`body.type must be one of ${[...REGISTRY_ITEM_TYPES].join(", ")}.`);
-  }
-  const identifier = nonEmptyString(body.identifier);
-  if (!identifier || !PROMPT_IDENTIFIER_PATTERN.test(identifier)) {
-    throw new Error(
-      "body.identifier must match ^[a-z][a-z0-9_-]{0,127}$ (lowercase slug, starting with a letter).",
-    );
-  }
 }
 
 async function validateOutputUpload(ctx: PreflightContext): Promise<void> {
@@ -1241,31 +1228,6 @@ const upsertGitSettingsSchema: BodySchema = {
   ],
 };
 
-const createRegistryItemSchema: BodySchema = {
-  description: "Create registry item",
-  fields: [
-    { name: "name", type: "string", required: true, description: "Name" },
-    { name: "identifier", type: "string", required: true, description: "Unique id" },
-    { name: "type", type: "string", required: true, description: "agent | mcp_tool | skill. Use eval_prompt to create versioned prompts." },
-    { name: "config", type: "object", required: true, description: "Item config payload" },
-    { name: "description", type: "string", required: false, description: "Description" },
-    { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "labels", type: "object", required: false, description: "Key-value labels" },
-  ],
-};
-
-const updateRegistryItemSchema: BodySchema = {
-  description: "Update registry item",
-  fields: [
-    { name: "name", type: "string", required: false, description: "Name" },
-    { name: "description", type: "string", required: false, description: "Description" },
-    { name: "config", type: "object", required: false, description: "Item config payload" },
-    { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "labels", type: "object", required: false, description: "Key-value labels" },
-    { name: "enabled", type: "boolean", required: false, description: "Enabled" },
-  ],
-};
-
 const promptConfigDescription =
   "Versioned prompt content: { system_message: string (required Jinja2 template), " +
   "user_message_template?: string, variables?: [{ name, type?: 'string'|'number'|'boolean'|'array'|'object', " +
@@ -1462,7 +1424,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
   name: "ai-evals",
   displayName: "AI Evals",
   description:
-    "Harness AI Evals control plane: datasets, evaluations, runs, metrics, metric sets, suites, targets, models, annotations, analytics, registry, git settings.",
+    "Harness AI Evals control plane: datasets, evaluations, runs, metrics, metric sets, suites, targets, prompt registry, analytics, and git settings.",
   optIn: false,
   resources: [
     // --- Datasets ---
@@ -2557,7 +2519,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
             label: "label",
             annotator_type: "annotator_type",
           },
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsTraceListExtract,
           description: "List annotations",
         },
         get: {
@@ -2566,7 +2528,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/observe/annotations/${uuidPathSegment(input, "annotation_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           description: "Get annotation",
         },
         create: {
@@ -2576,7 +2538,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createAnnotationSchema,
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           description: "Create annotation",
         },
         update: {
@@ -2587,7 +2549,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateAnnotationSchema,
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           description: "Update annotation",
         },
         delete: {
@@ -2611,7 +2573,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
             end: "end",
             granularity: "granularity",
           },
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           actionDescription: "Annotation counts over time (optional start/end ISO, granularity auto|hour|day)",
           bodySchema: { description: "No body", fields: [] },
         },
@@ -2644,7 +2606,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: evaluateTraceSchema,
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           actionDescription:
             "Evaluate a production trace with metrics. Returns scores, summary (pass_rate), and trace metadata. " +
             "Provide at least one of metric_set_id or inline metrics.",
@@ -2752,7 +2714,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       resourceType: "eval_prompt",
       displayName: "AI Evals Prompt Registry",
       description:
-        "Versioned project Prompt Registry prompts used by prompt targets. Use this resource—not eval_registry_item—to create, " +
+        "Versioned project Prompt Registry prompts used by prompt targets. Use this resource to create, " +
         "update, version, tag, or resolve prompts. List returns UUID id plus identifier; use id for mutations and targets. " +
         "Harness-library entries are browse-only with the current API and cannot be fetched or used as prompt targets.",
       toolset: "ai-evals",
@@ -2764,7 +2726,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         "Prompt IDs are UUIDs from harness_list(resource_type='eval_prompt'); identifiers are lowercase slugs used only " +
         "with the get_by_identifier action. Prompt versions accept vN, N, or a named tag such as production. " +
         "Use the default library='custom' for prompts that can be fetched and used by targets. Harness-library prompts " +
-        "(library='harness' or 'all') are currently browse-only: the backend lists them but cannot fetch or resolve them.",
+        "(library='harness' or 'all') are currently browse-only: they can be listed but cannot be fetched or resolved.",
       relatedResources: [
         { resourceType: "eval_target", relationship: "used_by", description: "Prompt targets reference prompt_id and optional prompt_version" },
       ],
@@ -2800,7 +2762,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsRedactedExtract,
           description: "Get a prompt's latest version by UUID",
         },
         create: {
@@ -2811,7 +2773,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           preflight: async (ctx) => validatePromptWrite(ctx, true),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createPromptSchema,
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsRedactedExtract,
           description: "Create a versioned prompt",
         },
         update: {
@@ -2823,7 +2785,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           preflight: async (ctx) => validatePromptWrite(ctx, false),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updatePromptSchema,
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsRedactedExtract,
           description: "Update a prompt; config changes create a new version",
         },
         delete: {
@@ -2844,7 +2806,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
             `${base(input, config)}/registry/prompts/by-identifier/${pathSegment(input.identifier, "identifier")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { version: "version" },
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsRedactedExtract,
           actionDescription:
             "Resolve a prompt from params.identifier (slug), optionally at params.version (vN, N, or a tag such as production).",
           bodySchema: { description: "No body", fields: [] },
@@ -2867,7 +2829,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
             `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
             `/versions/${promptVersionSegment(input.version, "version")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsRedactedExtract,
           actionDescription: "Get params.version, which may be vN, N, or a named tag such as production.",
           bodySchema: { description: "No body", fields: [] },
         },
@@ -2928,73 +2890,6 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: "Delete params.tag_name; the prompt version remains available.",
           bodySchema: { description: "No body", fields: [] },
-        },
-      },
-    },
-    {
-      resourceType: "eval_registry_item",
-      displayName: "AI Evals Registry Item",
-      description:
-        "GenAI registry for agents, MCP tools, and skills. Prompt records may be listed for compatibility, " +
-        "but create and manage versioned prompts with eval_prompt so template validation, versions, and tags work correctly. " +
-        "Pass type as a query parameter for get/delete when needed.",
-      toolset: "ai-evals",
-      scope: "project",
-      scopeOptional: true,
-      headerBasedScoping: true,
-      identifierFields: ["item_id"],
-      listFilterFields: [{ name: "type", description: "prompt | agent | mcp_tool | skill" }],
-      operations: {
-        list: {
-          method: "GET",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/registry`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, type: "type" },
-          responseExtractor: aiEvalsListExtract,
-          description: "List registry items",
-        },
-        get: {
-          method: "GET",
-          path: "",
-          pathBuilder: (input, config) =>
-            `${base(input, config)}/registry/${pathSegment(input.item_id, "item_id")}`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { type: "type" },
-          responseExtractor: passthrough,
-          description: "Get registry item (optional type query)",
-        },
-        create: {
-          method: "POST",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/registry`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          preflight: validateRegistryItemCreate,
-          bodyBuilder: (input) => input.body ?? {},
-          bodySchema: createRegistryItemSchema,
-          responseExtractor: passthrough,
-          description: "Create registry item",
-        },
-        update: {
-          method: "PATCH",
-          path: "",
-          pathBuilder: (input, config) =>
-            `${base(input, config)}/registry/${pathSegment(input.item_id, "item_id")}`,
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          bodyBuilder: (input) => input.body ?? {},
-          bodySchema: updateRegistryItemSchema,
-          responseExtractor: passthrough,
-          description: "Update registry item",
-        },
-        delete: {
-          method: "DELETE",
-          path: "",
-          pathBuilder: (input, config) =>
-            `${base(input, config)}/registry/${pathSegment(input.item_id, "item_id")}`,
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          queryParams: { type: "type" },
-          responseExtractor: passthrough,
-          description: "Delete registry item",
         },
       },
     },

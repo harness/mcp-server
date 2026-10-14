@@ -94,8 +94,7 @@ describe("AI Evals path-scoped write bodies", () => {
     const redundant: string[] = [];
 
     // This toolset owns project resources: configuration, scores, failures, and
-    // the ad-hoc trace-evaluation write. Prompt Registry stays project-scoped
-    // even though its backing Config Service is tenant/account-scoped.
+    // the ad-hoc trace-evaluation write. Prompt Registry stays project-scoped.
     // Account-only trace viewing/querying must be a separate resource/toolset.
     for (const resource of aiEvalsToolset.resources) {
       expect(resource.scope).toBe("project");
@@ -261,6 +260,44 @@ describe("AI Evals online_eval resource", () => {
     expect(metadataText).toContain("metric_set_id");
     expect(metadataText).toContain("eval_metric_set");
     expect(metadataText).not.toContain("metric_ids");
+  });
+
+  it("redacts credentials and bounds large trace values", () => {
+    const extract = findResource("online_eval").executeActions!.evaluate.responseExtractor!;
+    const result = extract({
+      trace_metadata: {
+        authorization: "Bearer credential",
+        trajectory: "x".repeat(4_001),
+        spans: Array.from({ length: 101 }, (_, index) => ({ index })),
+        deep: {
+          nested: {
+            nested: {
+              nested: {
+                nested: {
+                  nested: {
+                    nested: { payload: "y".repeat(4_001) },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }) as {
+      trace_metadata: {
+        authorization: string;
+        trajectory: string;
+        spans: Array<{ index: number } | { mcp_truncated: boolean; mcp_original_count: number }>;
+        deep: { nested: { nested: { nested: { nested: { nested: { nested: { payload: string } } } } } } };
+      };
+    };
+
+    expect(result.trace_metadata.authorization).toBe("[REDACTED]");
+    expect(result.trace_metadata.trajectory).toHaveLength(4_000);
+    expect(result.trace_metadata.trajectory.endsWith("… [TRUNCATED]")).toBe(true);
+    expect(result.trace_metadata.spans.at(-1)).toEqual({ mcp_truncated: true, mcp_original_count: 101 });
+    expect(result.trace_metadata.deep.nested.nested.nested.nested.nested.nested.payload
+      .endsWith("… [TRUNCATED]")).toBe(true);
   });
 
   it("evaluate dispatch sends metric_set_id and judge_llm_connector_ref in the API body", async () => {
@@ -505,7 +542,7 @@ describe("AI Evals UUID path identifiers", () => {
     }));
   });
 
-  it("encodes opaque trace and registry-item path segments", async () => {
+  it("encodes opaque trace path segments", async () => {
     const request = vi.fn().mockResolvedValue({});
     const registry = new Registry(makeConfig());
 
@@ -513,15 +550,8 @@ describe("AI Evals UUID path identifiers", () => {
       trace_id: "trace/a?version=1",
       body: {},
     });
-    await registry.dispatch(makeClient(request), "eval_registry_item", "get", {
-      item_id: "prompt/a b",
-    });
-
     expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
       path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/traces/trace%2Fa%3Fversion%3D1/evaluate",
-    }));
-    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompt%2Fa%20b",
     }));
   });
 });
@@ -704,7 +734,7 @@ describe("AI Evals eval_target test action", () => {
 // ─── Prompt Registry ─────────────────────────────────────────────────────────
 
 describe("AI Evals Prompt Registry", () => {
-  it("exposes the versioned Prompt Registry separately from generic registry items", () => {
+  it("exposes the versioned Prompt Registry without eval_registry_item", () => {
     const prompt = findResource("eval_prompt");
 
     expect(prompt.operations).toMatchObject({
@@ -724,8 +754,7 @@ describe("AI Evals Prompt Registry", () => {
       set_tag: { method: "PUT" },
       delete_tag: { method: "DELETE" },
     });
-    expect(findResource("eval_registry_item").description).toContain("eval_prompt");
-    expect(findResource("eval_registry_item").description).not.toContain("proxy");
+    expect(aiEvalsToolset.resources.find(resource => resource.resourceType === "eval_registry_item")).toBeUndefined();
     expect(prompt.description).toContain("browse-only");
     expect(prompt.diagnosticHint).toContain("default library='custom'");
   });
@@ -810,26 +839,6 @@ describe("AI Evals Prompt Registry", () => {
       },
     })).rejects.toThrow(/reserved "input"/);
 
-    expect(request).not.toHaveBeenCalled();
-  });
-
-  it("does not create a prompt through generic registry items", async () => {
-    const registry = new Registry(makeConfig());
-    const request = vi.fn();
-
-    await expect(registry.dispatch(makeClient(request), "eval_registry_item", "create", {
-      body: {
-        name: "Wrong route",
-        identifier: "wrong-route",
-        type: "prompt",
-        config: {},
-      },
-    })).rejects.toThrow(/resource_type="eval_prompt"/);
-
-    const typeField = findResource("eval_registry_item").operations.create!.bodySchema!.fields
-      .find(field => field.name === "type");
-    expect(typeField?.description).not.toContain("prompt |");
-    expect(typeField?.description).toContain("Use eval_prompt");
     expect(request).not.toHaveBeenCalled();
   });
 
