@@ -220,4 +220,31 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream ASG rolling deploy standby and protected-instance policies in v0 pipeline", () => {
+    const cdSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>).pipeline.steps
+      .cd as Record<string, unknown>;
+    const stepInfo = cdSteps.AsgRollingDeployStepInfo as {
+      allOf: Array<{ properties?: Record<string, { oneOf?: Array<{ enum?: string[] }> }> }>;
+    };
+
+    const props = stepInfo.allOf.find((part) => part.properties)?.properties ?? {};
+    expect(props).toHaveProperty("standbyInstances");
+    expect(props).toHaveProperty("scaleInProtectedInstances");
+    expect(props.standbyInstances?.oneOf?.[0]?.enum).toEqual(["Terminate", "Ignore", "Wait"]);
+    expect(props.scaleInProtectedInstances?.oneOf?.[0]?.enum).toEqual(["Refresh", "Ignore", "Wait"]);
+  });
+
+  it("includes upstream ASG rolling deploy standby and protected-instance policies in v0 template", () => {
+    const cdSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>).pipeline.steps
+      .cd as Record<string, unknown>;
+    const stepInfo = cdSteps.AsgRollingDeployStepInfo as {
+      allOf: Array<{ properties?: Record<string, { oneOf?: Array<{ enum?: string[] }> }> }>;
+    };
+
+    const props = stepInfo.allOf.find((part) => part.properties)?.properties ?? {};
+    expect(props).toHaveProperty("standbyInstances");
+    expect(props).toHaveProperty("scaleInProtectedInstances");
+    expect(props.scaleInProtectedInstances?.oneOf?.[0]?.enum).toContain("Refresh");
+  });
 });
