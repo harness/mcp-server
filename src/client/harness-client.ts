@@ -254,11 +254,11 @@ export class HarnessClient {
   }
 
   private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
-    if (this.mcpMode === "oauth") {
+    if (this.mcpMode === "oauth" || this.mcpMode === "oauth-proxy") {
       deleteHeaderValues(headers, "x-api-key");
       if (isFme) {
         throw new HarnessApiError(
-          "Legacy workspace-based FME calls are unavailable in oauth mode. " +
+          `Legacy workspace-based FME calls are unavailable in ${this.mcpMode} mode. ` +
           "Pass org_id and project_id to use the Harness-native FME API.",
           401,
           "FME_AUTH_MISSING",
