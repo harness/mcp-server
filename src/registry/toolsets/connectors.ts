@@ -29,7 +29,7 @@ const connectorUpdateSchema: BodySchema = {
 const llmModelDiscoverySchema: BodySchema = {
   description: "LLM model discovery request. Use secret references (e.g. account.my_secret) — never raw API keys.",
   fields: [
-    { name: "provider", type: "string", required: true, description: "ANTHROPIC | OPENAI | GITHUB_COPILOT | HARNESS_OPENAI | HARNESS_ANTHROPIC" },
+    { name: "provider", type: "string", required: true, description: "ANTHROPIC | OPENAI | GITHUB_COPILOT | HARNESS_OPENAI | HARNESS_ANTHROPIC | HARNESS_LLM" },
     { name: "authentication", type: "object", required: false, description: "{type, spec}. Token: {type:'Token',spec:{tokenRef:'account.secret_id'}}. Anthropic also supports BedrockApiKey, Vertex, CloudProvider; OpenAI supports Vertex." },
     { name: "url", type: "string", required: false, description: "Optional custom base URL" },
     { name: "region", type: "string", required: false, description: "Optional region" },
@@ -156,7 +156,7 @@ export const connectorsToolset: ToolsetDefinition = {
       description:
         "Discover provider model targets (e.g. Claude, GPT models) available for draft LLM connector authentication details. " +
         "Supports list only; backed by POST /ng/api/llm-connector/models. Nothing is created or stored. " +
-        "Pass the discovery request through harness_list params: provider (ANTHROPIC | OPENAI | GITHUB_COPILOT | HARNESS_OPENAI | HARNESS_ANTHROPIC), " +
+        "Pass the discovery request through harness_list params: provider (ANTHROPIC | OPENAI | GITHUB_COPILOT | HARNESS_OPENAI | HARNESS_ANTHROPIC | HARNESS_LLM), " +
         "authentication ({type, spec}), and optional url / region. " +
         "SECRETS: authentication must reference Harness secrets (e.g. spec.tokenRef='account.my_secret'); NEVER paste raw API keys. " +
         "Authentication shapes — ANTHROPIC: {type:'Token',spec:{tokenRef}} | {type:'BedrockApiKey',...} | {type:'Vertex',...} | {type:'CloudProvider',...}; " +
@@ -170,7 +170,7 @@ export const connectorsToolset: ToolsetDefinition = {
       identifierFields: [],
       compactItem: (item) => ({ value: item.value, displayName: item.displayName }),
       listFilterFields: [
-        { name: "provider", description: "LLM provider (required)", required: true, enum: ["ANTHROPIC", "OPENAI", "GITHUB_COPILOT", "HARNESS_OPENAI", "HARNESS_ANTHROPIC"] },
+        { name: "provider", description: "LLM provider (required)", required: true, enum: ["ANTHROPIC", "OPENAI", "GITHUB_COPILOT", "HARNESS_OPENAI", "HARNESS_ANTHROPIC", "HARNESS_LLM"] },
         { name: "authentication", description: "Provider authentication object {type, spec}. Use secret references only (e.g. spec.tokenRef='account.my_secret'), never raw keys." },
         { name: "url", description: "Optional custom provider base URL" },
         { name: "region", description: "Optional provider region (e.g. for Bedrock/Vertex)" },
