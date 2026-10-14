@@ -31,6 +31,16 @@ function makeClient(requestFn: ReturnType<typeof vi.fn>): HarnessClient {
   return { request: requestFn, account: "test-account" } as unknown as HarnessClient;
 }
 
+/** Canonical provider list — must match connectors toolset listFilterFields + bodySchema. */
+const LLM_MODEL_PROVIDERS = [
+  "ANTHROPIC",
+  "OPENAI",
+  "GITHUB_COPILOT",
+  "HARNESS_OPENAI",
+  "HARNESS_ANTHROPIC",
+  "HARNESS_LLM",
+] as const;
+
 describe("llm_model", () => {
   it("declares list-only discovery metadata with required provider filter", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
@@ -44,9 +54,17 @@ describe("llm_model", () => {
     expect(def.operations.get).toBeUndefined();
     const providerField = def.listFilterFields?.find((f) => f.name === "provider");
     expect(providerField?.required).toBe(true);
-    expect(providerField?.enum).toEqual(
-      expect.arrayContaining(["ANTHROPIC", "OPENAI", "GITHUB_COPILOT", "HARNESS_OPENAI", "HARNESS_ANTHROPIC", "HARNESS_LLM"]),
-    );
+    expect(providerField?.enum).toEqual([...LLM_MODEL_PROVIDERS]);
+  });
+
+  it("documents every list provider in the list bodySchema provider field", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    const def = registry.getResource("llm_model");
+    const providerSchemaField = def.operations.list?.bodySchema?.fields.find((f) => f.name === "provider");
+    expect(providerSchemaField?.required).toBe(true);
+    for (const provider of LLM_MODEL_PROVIDERS) {
+      expect(providerSchemaField?.description).toContain(provider);
+    }
   });
 
   it("POSTs discovery body to llm-connector/models at account scope and returns options", async () => {
@@ -64,6 +82,24 @@ describe("llm_model", () => {
     expect(call.params?.orgIdentifier).toBeUndefined();
     expect(call.params?.projectIdentifier).toBeUndefined();
     expect(JSON.stringify(res)).toContain("displayName");
+  });
+
+  it("POSTs HARNESS_LLM provider through to llm-connector/models discovery", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    const request = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: [{ value: "harness-model", displayName: "Harness LLM" }],
+    });
+    const client = makeClient(request);
+    await registry.dispatch(client, "llm_model", "list", {
+      provider: "HARNESS_LLM",
+      authentication: { type: "Token", spec: { tokenRef: "account.harness_llm" } },
+    });
+    const call = request.mock.calls[0][0];
+    expect(call.body).toMatchObject({
+      provider: "HARNESS_LLM",
+      authentication: { type: "Token", spec: { tokenRef: "account.harness_llm" } },
+    });
   });
 
   it("merges optional discovery fields from body when provider is a top-level filter", async () => {
