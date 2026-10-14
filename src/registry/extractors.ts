@@ -488,6 +488,15 @@ export const aiEvalsArrayExtract = (raw: unknown): { items: unknown[]; total: nu
 };
 
 /**
+ * AI Evals array wrapper without pagination metadata (for example, prompt tags).
+ */
+export const aiEvalsDataArrayExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const data = (raw as { data?: unknown[] }).data;
+  const items = Array.isArray(data) ? data : [];
+  return { items, total: items.length };
+};
+
+/**
  * SCS-specific extractor — strips null, undefined, empty string, empty array,
  * and empty object fields recursively from API responses. SCS payloads contain
  * ~40% empty/null fields; removing them yields significant token savings.

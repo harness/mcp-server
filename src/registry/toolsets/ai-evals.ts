@@ -4,14 +4,17 @@
  * Uses Harness-Account header; no accountIdentifier query param (headerBasedScoping).
  */
 import type { BodySchema, PathBuilderConfig, PreflightContext, ToolsetDefinition } from "../types.js";
-import { aiEvalsArrayExtract, aiEvalsListExtract, passthrough } from "../extractors.js";
+import { aiEvalsArrayExtract, aiEvalsDataArrayExtract, aiEvalsListExtract, passthrough } from "../extractors.js";
 
 const AI = "/gateway/ai-evals/api/v1";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LLM_CONNECTOR_TYPES = new Set(["OpenAi", "OpenAI", "Anthropic", "AzureOpenAI", "AzureOpenAi", "GoogleAI", "GoogleAi"]);
 const JUDGE_BACKED_METRIC_TYPES = new Set(["llm", "ai_judge"]);
 const TARGET_TYPES = new Set(["prompt", "agent", "precomputed"]);
-const AGENT_METHODS = new Set(["GET", "POST", "PUT"]);
+const REGISTRY_ITEM_TYPES = new Set(["prompt", "agent", "mcp_tool", "skill"]);
+const PROMPT_VARIABLE_TYPES = new Set(["string", "number", "boolean", "array", "object"]);
+const PROMPT_IDENTIFIER_PATTERN = /^[a-z][a-z0-9_-]{0,127}$/;
+const WHOLE_TEMPLATE_PLACEHOLDER_PATTERN = /^\s*\{\{\s*[^{}]+\s*\}\}\s*$/;
 const UUID_404_HINT =
   "Use the id from harness_list for get, update, delete, and execute actions; identifiers and display names are not accepted. " +
   "Verify org_id and project_id. An HTML nginx 404 means AI Evals is not deployed at this Harness base URL.";
@@ -239,30 +242,120 @@ async function validateHttpConnector(ctx: PreflightContext, connectorRef: string
 }
 
 function validateAgentConfig(config: JsonRecord): void {
-  const endpoint = nonEmptyString(config.endpoint_url);
+  const endpoint = nonEmptyString(config.endpoint) ?? nonEmptyString(config.endpoint_url);
   if (!endpoint || !/^https?:\/\//i.test(endpoint)) {
-    throw new Error("target.config.endpoint_url is required and must be an HTTP(S) URL.");
+    throw new Error(
+      "target.config.endpoint is required and must be an HTTP(S) URL (endpoint_url is accepted as a legacy alias).",
+    );
   }
-  const method = nonEmptyString(config.method) ?? "POST";
-  if (!AGENT_METHODS.has(method)) {
-    throw new Error(`target.config.method must be one of ${[...AGENT_METHODS].join(", ")}.`);
-  }
-  if (!nonEmptyString(config.response_path)) {
-    throw new Error("target.config.response_path is required (for example, choices.0.message.content).");
+  const method = (nonEmptyString(config.method) ?? "POST").toUpperCase();
+  if (!/^[A-Z]+$/.test(method)) {
+    throw new Error("target.config.method must be a valid HTTP method token (for example, POST).");
   }
   if (config.request_template !== undefined) {
     const requestTemplate = asRecord(config.request_template);
-    if (!requestTemplate) {
-      throw new Error("target.config.request_template must be a JSON object, such as { input: '{{input}}' }.");
+    if (!requestTemplate &&
+      (typeof config.request_template !== "string" || !WHOLE_TEMPLATE_PLACEHOLDER_PATTERN.test(config.request_template))) {
+      throw new Error(
+        "target.config.request_template must be a JSON object, or exactly one placeholder string such as '{{input}}' or '{{ input.text }}'.",
+      );
     }
   }
 }
 
+function validatePromptConfig(value: unknown, field: string): void {
+  const config = asRecord(value);
+  if (!config || !nonEmptyString(config.system_message)) {
+    throw new Error(
+      `${field} must be a prompt config object with a non-empty system_message Jinja2 template.`,
+    );
+  }
+  if (config.user_message_template !== undefined && config.user_message_template !== null &&
+    !nonEmptyString(config.user_message_template)) {
+    throw new Error(`${field}.user_message_template must be a non-empty Jinja2 template when supplied.`);
+  }
+  if (config.variables !== undefined && config.variables !== null) {
+    const variables = asArray(config.variables);
+    if (!Array.isArray(config.variables)) {
+      throw new Error(`${field}.variables must be an array of variable definitions.`);
+    }
+    for (const variable of variables) {
+      const definition = asRecord(variable);
+      const name = nonEmptyString(definition?.name);
+      if (!definition || !name || name.length > 64 || name === "input") {
+        throw new Error(
+          `${field}.variables entries need a 1–64 character name other than reserved "input".`,
+        );
+      }
+      if (definition.type !== undefined && !PROMPT_VARIABLE_TYPES.has(String(definition.type))) {
+        throw new Error(
+          `${field}.variables[].type must be one of ${[...PROMPT_VARIABLE_TYPES].join(", ")}.`,
+        );
+      }
+    }
+  }
+  if (config.default_params !== undefined && config.default_params !== null) {
+    const params = asRecord(config.default_params);
+    if (!params) throw new Error(`${field}.default_params must be an object when supplied.`);
+    const bounded = [
+      ["temperature", 0, 2],
+      ["top_p", 0, 1],
+      ["frequency_penalty", -2, 2],
+      ["presence_penalty", -2, 2],
+    ] as const;
+    for (const [name, min, max] of bounded) {
+      const value = params[name];
+      if (value !== undefined && (typeof value !== "number" || value < min || value > max)) {
+        throw new Error(`${field}.default_params.${name} must be a number from ${min} to ${max}.`);
+      }
+    }
+    if (params.max_tokens !== undefined &&
+      (!Number.isInteger(params.max_tokens) || (params.max_tokens as number) < 1)) {
+      throw new Error(`${field}.default_params.max_tokens must be a positive integer.`);
+    }
+  }
+}
+
+async function validatePromptReference(
+  ctx: PreflightContext,
+  rawPromptId: unknown,
+  rawPromptVersion: unknown,
+): Promise<void> {
+  const promptId = requireUuid(rawPromptId, "prompt_id");
+  const version = rawPromptVersion === undefined || rawPromptVersion === null
+    ? undefined
+    : nonEmptyString(rawPromptVersion);
+  if (rawPromptVersion !== undefined && rawPromptVersion !== null && !version) {
+    throw new Error("prompt_version must be a non-empty version (for example, v3) or tag (for example, production).");
+  }
+  const { org_id, project_id } = preflightScope(ctx);
+  const path = `${AI}/orgs/${encodeURIComponent(org_id)}/projects/${encodeURIComponent(project_id)}` +
+    `/registry/prompts/${encodeURIComponent(promptId)}` +
+    (version ? `/versions/${pathSegment(version, "prompt_version")}` : "");
+  try {
+    await ctx.client.request({
+      method: "GET",
+      path,
+      retryPolicy: "safe",
+      signal: ctx.signal,
+    });
+  } catch (error) {
+    throw new Error(
+      `prompt_id=${promptId}${version ? ` at prompt_version=${version}` : ""} is not a readable Prompt Registry entry in this org/project. ` +
+      "Use harness_list(resource_type=\"eval_prompt\") to find a prompt, then use its id and optional version or tag. " +
+      `Details: ${(error as Error).message}`,
+    );
+  }
+}
+
 async function validateTarget(ctx: PreflightContext, target: JsonRecord): Promise<void> {
-  const type = nonEmptyString(target.type);
+  const rawType = nonEmptyString(target.type);
+  const type = rawType === "app" ? "agent" : rawType === "static" ? "precomputed" : rawType;
   const config = asRecord(target.config);
   if (!type || !TARGET_TYPES.has(type) || !config) {
-    throw new Error("A managed target requires type ('prompt', 'agent', or 'precomputed') and a JSON config object.");
+    throw new Error(
+      "A managed target requires type ('prompt', 'agent', or 'precomputed'; legacy 'app'/'static' are accepted) and a JSON config object.",
+    );
   }
   if (type === "prompt") {
     await validateLlmConfig(ctx, "target.config.llm_config", {
@@ -270,11 +363,7 @@ async function validateTarget(ctx: PreflightContext, target: JsonRecord): Promis
       model: config.model,
     });
     if (config.prompt_source === "registry") {
-      if (!nonEmptyString(config.prompt_id) || !nonEmptyString(config.prompt_version)) {
-        throw new Error(
-          "Registry prompt targets require target.config.prompt_id and target.config.prompt_version from the Prompt Registry.",
-        );
-      }
+      await validatePromptReference(ctx, config.prompt_id, config.prompt_version);
     } else if (!nonEmptyString(config.system_message) || !nonEmptyString(config.user_message_template)) {
       throw new Error("Inline prompt targets require non-empty system_message and user_message_template.");
     } else if (!String(config.user_message_template).includes("{{input}}")) {
@@ -305,6 +394,45 @@ async function validateTargetWrite(ctx: PreflightContext, isUpdate: boolean): Pr
     config: body.config ?? existing?.config,
     connector_ref: body.connector_ref ?? existing?.connector_ref,
   });
+}
+
+async function validatePromptWrite(ctx: PreflightContext, isCreate: boolean): Promise<void> {
+  const body = requireBody(ctx.input, "Prompt write");
+  if (isCreate) {
+    if (!nonEmptyString(body.name)) throw new Error("Prompt create requires a non-empty name.");
+    const identifier = nonEmptyString(body.identifier);
+    if (!identifier || !PROMPT_IDENTIFIER_PATTERN.test(identifier)) {
+      throw new Error(
+        "Prompt identifier must match ^[a-z][a-z0-9_-]{0,127}$ (lowercase slug, starting with a letter).",
+      );
+    }
+    if (body.config === undefined) {
+      throw new Error("Prompt create requires body.config with a non-empty system_message template.");
+    }
+  } else if (body.name !== undefined && !nonEmptyString(body.name)) {
+    throw new Error("Prompt name must be a non-empty string when supplied.");
+  }
+  if (body.config !== undefined) validatePromptConfig(body.config, "body.config");
+}
+
+async function validateRegistryItemCreate(ctx: PreflightContext): Promise<void> {
+  const body = requireBody(ctx.input, "Registry item create");
+  const type = nonEmptyString(body.type);
+  if (!type || !REGISTRY_ITEM_TYPES.has(type)) {
+    throw new Error(`body.type must be one of ${[...REGISTRY_ITEM_TYPES].join(", ")}.`);
+  }
+  const identifier = nonEmptyString(body.identifier);
+  if (!identifier || !PROMPT_IDENTIFIER_PATTERN.test(identifier)) {
+    throw new Error(
+      "body.identifier must match ^[a-z][a-z0-9_-]{0,127}$ (lowercase slug, starting with a letter).",
+    );
+  }
+  if (type === "prompt") {
+    throw new Error(
+      "Create versioned prompts with resource_type=\"eval_prompt\", not eval_registry_item. " +
+      "eval_prompt validates prompt templates and supports versions, tags, and Prompt Registry targets.",
+    );
+  }
 }
 
 async function validateOutputUpload(ctx: PreflightContext): Promise<void> {
@@ -956,7 +1084,7 @@ const createTargetSchema: BodySchema = {
   description: "Create target. For managed: type + config are required. For git-backed: omit type/config and provide storage_type='git' + git_source.",
   fields: [
     { name: "name", type: "string", required: true, description: "Name" },
-    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (required when storage_type='managed', omit for git)" },
+    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (required when storage_type='managed', omit for git; legacy app→agent and static→precomputed are normalized)" },
     {
       name: "config",
       type: "object",
@@ -964,10 +1092,12 @@ const createTargetSchema: BodySchema = {
       description:
         "Target config (required when storage_type='managed', omit for git). " +
         "For type='prompt': { llm_connector_ref: '<existing Harness LLM connector identifier>', " +
-        "model?: string, prompt_source?: 'inline'|'registry', prompt_id?: string, prompt_version?: string, " +
+        "model?: string, prompt_source?: 'inline'|'registry', prompt_id?: '<Prompt Registry UUID>', " +
+        "prompt_version?: 'vN'|'N'|'<tag>' (optional; omit for latest), " +
         "system_message?: string, user_message_template?: '...{{input}}...', temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
         "frequency_penalty?: -2 to 2, presence_penalty?: -2 to 2 }. " +
-        "For type='agent': { endpoint_url: '<agent HTTP URL>', method: 'GET'|'POST'|'PUT', response_path: '<response JSON path>', request_template?: object }. " +
+        "For type='agent': { endpoint: '<agent HTTP URL>' (endpoint_url is a legacy alias), method?: '<HTTP method>' (default POST), " +
+        "response_path?: '<response JSON path>' (default output), request_template?: object | '{{ input.field }}' }. " +
         "For type='precomputed': { dataset_id?: string, model_name?: string, model_version?: string }.",
     },
     { name: "description", type: "string", required: false, description: "Description" },
@@ -985,14 +1115,18 @@ const updateTargetSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
-    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed" },
+    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (legacy app→agent and static→precomputed accepted)" },
     {
       name: "config",
       type: "object",
       required: false,
       description:
-        "Target config. For type='prompt': { llm_connector_ref, prompt_source?, prompt_id?, prompt_version?, system_message?, user_message_template?, model? }. " +
-        "For type='agent': { endpoint_url, method, response_path, request_template? }. For type='precomputed': { dataset_id?, model_name?, model_version? }.",
+        "Target config. For type='prompt': { llm_connector_ref, prompt_source?: 'inline'|'registry', " +
+        "prompt_id?: '<Prompt Registry UUID>', prompt_version?: 'vN'|'N'|'<tag>' (omit for latest), " +
+        "system_message?, user_message_template?, model? }. " +
+        "For type='agent': { endpoint (or legacy endpoint_url), method?: '<HTTP method>' (default POST), " +
+        "response_path?: '<response JSON path>' (default output), request_template?: object | '{{ input.field }}' }. " +
+        "For type='precomputed': { dataset_id?, model_name?, model_version? }.",
     },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
     { name: "is_active", type: "boolean", required: false, description: "Active" },
@@ -1006,7 +1140,14 @@ const updateTargetSchema: BodySchema = {
 const testTargetSchema: BodySchema = {
   description: "Test target invocation",
   fields: [
-    { name: "input", type: "object", required: true, description: "Sample input: string or JSON object matching a dataset item input" },
+    {
+      name: "input",
+      type: "object",
+      required: true,
+      description:
+        "Required sample input. The API accepts either a string (resolves {{input}}) or a JSON object " +
+        "(so templates can resolve paths such as {{input.text}}). The object type is advisory; pass a string directly when appropriate.",
+    },
     { name: "item_identifier", type: "string", required: false, description: "Dataset item identifier (used by precomputed targets to look up output)" },
   ],
 };
@@ -1099,6 +1240,55 @@ const updateRegistryItemSchema: BodySchema = {
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
     { name: "labels", type: "object", required: false, description: "Key-value labels" },
     { name: "enabled", type: "boolean", required: false, description: "Enabled" },
+  ],
+};
+
+const promptConfigDescription =
+  "Versioned prompt content: { system_message: string (required Jinja2 template), " +
+  "user_message_template?: string, variables?: [{ name, type?: 'string'|'number'|'boolean'|'array'|'object', " +
+  "description?, required?, default? }], default_params?: { temperature?: 0-2, max_tokens?: positive integer, " +
+  "top_p?: 0-1, frequency_penalty?: -2 to 2, presence_penalty?: -2 to 2 } }. " +
+  "Variable name 'input' is reserved; use {{input}} only when the dataset input itself should be interpolated.";
+
+const createPromptSchema: BodySchema = {
+  description: "Create a versioned Prompt Registry prompt",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Display name (1-256 characters)" },
+    {
+      name: "identifier",
+      type: "string",
+      required: true,
+      description: "Stable lowercase slug, unique per project: ^[a-z][a-z0-9_-]{0,127}$",
+    },
+    { name: "config", type: "object", required: true, description: promptConfigDescription },
+    { name: "description", type: "string", required: false, description: "Prompt-level description (not versioned)" },
+    { name: "category", type: "string", required: false, description: "Prompt-level category (not versioned)" },
+    { name: "labels", type: "array", required: false, description: "Prompt-level labels (not versioned)", itemType: "string" },
+  ],
+};
+
+const updatePromptSchema: BodySchema = {
+  description: "Update a Prompt Registry prompt. Supplying config creates a new version.",
+  fields: [
+    { name: "name", type: "string", required: false, description: "New display name (1-256 characters)" },
+    { name: "config", type: "object", required: false, description: promptConfigDescription },
+    { name: "description", type: "string", required: false, description: "Prompt-level description (not versioned)" },
+    { name: "category", type: "string", required: false, description: "Prompt-level category (not versioned)" },
+    { name: "labels", type: "array", required: false, description: "Replace prompt-level labels (not version labels)", itemType: "string" },
+  ],
+};
+
+const replacePromptVersionLabelsSchema: BodySchema = {
+  description: "Replace labels on one prompt version",
+  fields: [
+    { name: "labels", type: "array", required: true, description: "Full replacement list of labels for this version", itemType: "string" },
+  ],
+};
+
+const setPromptTagSchema: BodySchema = {
+  description: "Create or move a named prompt tag",
+  fields: [
+    { name: "version", type: "number", required: true, description: "Positive integer version to point the tag at (for example, 3)" },
   ],
 };
 
@@ -2536,9 +2726,194 @@ export const aiEvalsToolset: ToolsetDefinition = {
       },
     },
     {
+      resourceType: "eval_prompt",
+      displayName: "AI Evals Prompt Registry",
+      description:
+        "Versioned Prompt Registry prompts used by prompt targets. Use this resource—not eval_registry_item—to create, " +
+        "update, version, tag, or resolve prompts. List returns UUID id plus identifier; use id for mutations and targets. " +
+        "Use get_by_identifier only when a human-readable slug is all you have.",
+      toolset: "ai-evals",
+      scope: "project",
+      scopeOptional: true,
+      headerBasedScoping: true,
+      identifierFields: ["prompt_id"],
+      diagnosticHint:
+        "Prompt IDs are UUIDs from harness_list(resource_type='eval_prompt'); identifiers are lowercase slugs used only " +
+        "with the get_by_identifier action. Prompt versions accept vN, N, or a named tag such as production. " +
+        "Harness-library prompts are read-only—list with filters: { library: 'harness' | 'all' } but do not update or delete them.",
+      relatedResources: [
+        { resourceType: "eval_target", relationship: "used_by", description: "Prompt targets reference prompt_id and optional prompt_version" },
+      ],
+      listFilterFields: [
+        { name: "search", description: "Search prompt name, identifier, or description" },
+        { name: "labels", description: "Comma-separated prompt-level labels (OR matching)" },
+        { name: "category", description: "Prompt category" },
+        { name: "sort", description: "name | created_at | identifier" },
+        { name: "order", description: "asc | desc" },
+        { name: "library", description: "custom (default) | harness (read-only library) | all" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) => `${base(input, config)}/registry/prompts`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            ...listQ,
+            search: "search",
+            labels: "labels",
+            category: "category",
+            sort: "sort",
+            order: "order",
+            library: "library",
+          },
+          responseExtractor: aiEvalsListExtract,
+          description: "List versioned prompts",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a prompt's latest version by UUID",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) => `${base(input, config)}/registry/prompts`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => validatePromptWrite(ctx, true),
+          bodyBuilder: (input) => input.body ?? {},
+          bodySchema: createPromptSchema,
+          responseExtractor: passthrough,
+          description: "Create a versioned prompt",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => validatePromptWrite(ctx, false),
+          bodyBuilder: (input) => input.body ?? {},
+          bodySchema: updatePromptSchema,
+          responseExtractor: passthrough,
+          description: "Update a prompt; config changes create a new version",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description: "Soft-delete a custom prompt and its version metadata",
+        },
+      },
+      executeActions: {
+        get_by_identifier: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/by-identifier/${pathSegment(input.identifier, "identifier")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { version: "version" },
+          responseExtractor: passthrough,
+          actionDescription:
+            "Resolve a prompt from params.identifier (slug), optionally at params.version (vN, N, or a tag such as production).",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        list_versions: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}/versions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page_size: "page_size" },
+          responseExtractor: aiEvalsListExtract,
+          actionDescription: "List prompt version history. Pass optional params.page_size (1-100).",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        get_version: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/versions/${pathSegment(input.version, "version")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          actionDescription: "Get params.version, which may be vN, N, or a named tag such as production.",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        replace_version_labels: {
+          method: "PATCH",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/versions/${pathSegment(input.version, "version")}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          bodyBuilder: bodyFromInput,
+          bodySchema: replacePromptVersionLabelsSchema,
+          responseExtractor: passthrough,
+          actionDescription: "Replace every label on params.version.",
+        },
+        restore_version: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/versions/${pathSegment(input.version, "version")}/restore`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: bodyFromInput,
+          bodySchema: { description: "No body", fields: [] },
+          responseExtractor: passthrough,
+          actionDescription: "Restore params.version into a new latest prompt version.",
+        },
+        list_tags: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}/tags`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: aiEvalsDataArrayExtract,
+          actionDescription: "List named tag pointers for a prompt.",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        set_tag: {
+          method: "PUT",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/tags/${pathSegment(input.tag_name, "tag_name")}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          bodyBuilder: bodyFromInput,
+          bodySchema: setPromptTagSchema,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Create or move params.tag_name to body.version. Tag names must be descriptive, not numeric or vN.",
+        },
+        delete_tag: {
+          method: "DELETE",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/tags/${pathSegment(input.tag_name, "tag_name")}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          actionDescription: "Delete params.tag_name; the prompt version remains available.",
+          bodySchema: { description: "No body", fields: [] },
+        },
+      },
+    },
+    {
       resourceType: "eval_registry_item",
       displayName: "AI Evals Registry Item",
-      description: "GenAI registry proxy (prompts, agents, tools). Pass type as query param for get/delete when needed.",
+      description:
+        "GenAI registry proxy for agents, MCP tools, and skills. Prompt records may be listed for compatibility, " +
+        "but create and manage versioned prompts with eval_prompt so template validation, versions, and tags work correctly. " +
+        "Pass type as a query parameter for get/delete when needed.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
@@ -2570,6 +2945,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/registry`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: validateRegistryItemCreate,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createRegistryItemSchema,
           responseExtractor: passthrough,
