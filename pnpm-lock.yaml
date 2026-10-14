@@ -50,6 +50,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.3
         version: 9.0.3
+      redis:
+        specifier: ^6.3.0
+        version: 6.3.0(@opentelemetry/api@1.9.1)
       yaml:
         specifier: ^2.8.3
         version: 2.8.3
@@ -505,6 +508,42 @@ packages:
   '@opentelemetry/semantic-conventions@1.40.0':
     resolution: {integrity: sha512-cifvXDhcqMwwTlTK04GBNeIe7yyo28Mfby85QXFe1Yk8nmi36Ab/5UQwptOx84SsoGNRg+EVSjwzfSZMy6pmlw==}
     engines: {node: '>=14'}
+
+  '@redis/bloom@6.3.0':
+    resolution: {integrity: sha512-NQ5poYpZr0jv6zazN1cy6JY5kIipKFZ3R9GTL4kOUTX3a9YAfY29U8bsE4lWhVQEM+G4V0BXVC57mubIdDijeA==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@redis/client': ^6.3.0
+
+  '@redis/client@6.3.0':
+    resolution: {integrity: sha512-fHrjwGCBvAANGi+TuRuwKi83sIOzgHr8eh+Uf48w3fSX7Hhrz174NrWqfJhAC2vnN0d/tfaZpdr6+o6JC3QHwg==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@node-rs/xxhash': ^1.1.0
+      '@opentelemetry/api': '>=1 <2'
+    peerDependenciesMeta:
+      '@node-rs/xxhash':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+
+  '@redis/json@6.3.0':
+    resolution: {integrity: sha512-yt6vRfPBXtW/3qm53cF81TSQpLMjWdW4/2E9WQ2GgbvsKkuCKCFQIcMiKlil1ZMnezK+IQuS795xKU5psbaegw==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@redis/client': ^6.3.0
+
+  '@redis/search@6.3.0':
+    resolution: {integrity: sha512-RPXAZmKjZZG7Tm7m1w9keFdXzbL91PiSHQBfQRe9xwW40jNsTRbG0FwhIz4QlHPU4gKDAsCy8IQHj4yZl4H9rw==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@redis/client': ^6.3.0
+
+  '@redis/time-series@6.3.0':
+    resolution: {integrity: sha512-+fJOB8mN1z5WRakCJNh5lVdz1KqvHGSOistsKeitD24QsCtPwyRQXWC0iq6T/i/ubLE/YcguZqPm8F598MKk4A==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      '@redis/client': ^6.3.0
 
   '@rollup/rollup-android-arm-eabi@4.62.0':
     resolution: {integrity: sha512-IPIQ55ythEHkfEd9jMEi32OQ7SxURsGA43JI22lj01OLZNt2NUbJX8YUHxkVWyQ6daHPNn0truF5nSj3DQp6YQ==}
@@ -1224,6 +1263,10 @@ packages:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
     engines: {node: '>= 0.10'}
 
+  redis@6.3.0:
+    resolution: {integrity: sha512-XFQbPie1lGpKeUZ8ySYY43yLnQy/iIQtHNvIr/1XdaABpb96rUSdm3Mfl+98FEVbv9ZJIzINMno5s0Nh8E5LEw==}
+    engines: {node: '>= 20.0.0'}
+
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
@@ -1795,6 +1838,26 @@ snapshots:
       '@opentelemetry/semantic-conventions': 1.40.0
 
   '@opentelemetry/semantic-conventions@1.40.0': {}
+
+  '@redis/bloom@6.3.0(@redis/client@6.3.0(@opentelemetry/api@1.9.1))':
+    dependencies:
+      '@redis/client': 6.3.0(@opentelemetry/api@1.9.1)
+
+  '@redis/client@6.3.0(@opentelemetry/api@1.9.1)':
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.1
+
+  '@redis/json@6.3.0(@redis/client@6.3.0(@opentelemetry/api@1.9.1))':
+    dependencies:
+      '@redis/client': 6.3.0(@opentelemetry/api@1.9.1)
+
+  '@redis/search@6.3.0(@redis/client@6.3.0(@opentelemetry/api@1.9.1))':
+    dependencies:
+      '@redis/client': 6.3.0(@opentelemetry/api@1.9.1)
+
+  '@redis/time-series@6.3.0(@redis/client@6.3.0(@opentelemetry/api@1.9.1))':
+    dependencies:
+      '@redis/client': 6.3.0(@opentelemetry/api@1.9.1)
 
   '@rollup/rollup-android-arm-eabi@4.62.0':
     optional: true
@@ -2492,6 +2555,17 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.2
       unpipe: 1.0.0
+
+  redis@6.3.0(@opentelemetry/api@1.9.1):
+    dependencies:
+      '@redis/bloom': 6.3.0(@redis/client@6.3.0(@opentelemetry/api@1.9.1))
+      '@redis/client': 6.3.0(@opentelemetry/api@1.9.1)
+      '@redis/json': 6.3.0(@redis/client@6.3.0(@opentelemetry/api@1.9.1))
+      '@redis/search': 6.3.0(@redis/client@6.3.0(@opentelemetry/api@1.9.1))
+      '@redis/time-series': 6.3.0(@redis/client@6.3.0(@opentelemetry/api@1.9.1))
+    transitivePeerDependencies:
+      - '@node-rs/xxhash'
+      - '@opentelemetry/api'
 
   require-from-string@2.0.2: {}
 

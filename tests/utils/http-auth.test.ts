@@ -4,9 +4,11 @@ import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
   createHttpAuthMiddleware,
+  createMcpHttpAuthMiddleware,
   isAuthorizedHttpRequest,
   validateHttpAuthForBindHost,
 } from "../../src/utils/http-auth.js";
+import type { OAuthProxyRuntime } from "../../src/utils/oauth-proxy.js";
 
 async function withListeningApp(app: express.Express, fn: (baseUrl: string) => Promise<void>): Promise<void> {
   const server = app.listen(0, "127.0.0.1");
@@ -214,5 +216,49 @@ describe("HTTP MCP auth", () => {
 
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it("accepts non-loopback oauth-proxy mode without a static auth token", () => {
+    const warnSpy = vi.spyOn(console, "error");
+
+    expect(() =>
+      validateHttpAuthForBindHost("0.0.0.0", {
+        HARNESS_MCP_AUTH_TOKEN: undefined,
+        HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+        HARNESS_MCP_MODE: "oauth-proxy",
+        HARNESS_API_KEY: "",
+      }),
+    ).not.toThrow();
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("requires an initialized OAuth proxy runtime in oauth-proxy mode", () => {
+    expect(() =>
+      createMcpHttpAuthMiddleware({
+        HARNESS_MCP_AUTH_TOKEN: undefined,
+        HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+        HARNESS_MCP_MODE: "oauth-proxy",
+        HARNESS_API_KEY: "",
+      }),
+    ).toThrow("oauth-proxy mode requires an initialized OAuth proxy runtime");
+  });
+
+  it("selects the OAuth proxy middleware when a runtime is provided", () => {
+    const middleware = createMcpHttpAuthMiddleware(
+      {
+        HARNESS_MCP_AUTH_TOKEN: undefined,
+        HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+        HARNESS_MCP_MODE: "oauth-proxy",
+        HARNESS_API_KEY: "",
+      },
+      {
+        config: {
+          HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.example.com/mcp",
+        },
+      } as OAuthProxyRuntime,
+    );
+    expect(typeof middleware).toBe("function");
   });
 });
