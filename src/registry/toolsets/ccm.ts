@@ -550,6 +550,52 @@ const aiBudgetReviewBodySchema: BodySchema = {
   ],
 };
 
+const COST_CATEGORY_RULES_NOTE =
+  "Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier, identifierName }, viewOperator: 'IN'|'NOT_IN'|'LIKE'|'NOT_NULL'|'NULL', values: string[] }. " +
+  "When the user says a value equals something, use IN with those values: 'equals xyz' -> values ['xyz']; 'equals xyz or abc' -> values ['xyz', 'abc']. Never use EQUALS.";
+
+const COST_CATEGORY_RULES_ITEM_TYPE =
+  "rules: [{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_IN' | 'LIKE' | 'NOT_NULL' | 'NULL', values: string[] }] }]";
+
+function normalizeCostCategoryRules(rules: unknown): unknown {
+  if (!Array.isArray(rules)) return rules;
+  return rules.map((rule) => {
+    const conditions = (rule as { viewConditions?: unknown })?.viewConditions;
+    if (!Array.isArray(conditions)) return rule;
+    return {
+      ...(rule as Record<string, unknown>),
+      viewConditions: conditions.map((condition) =>
+        (condition as { viewOperator?: unknown })?.viewOperator === "EQUALS"
+          ? { ...(condition as Record<string, unknown>), viewOperator: "IN" }
+          : condition,
+      ),
+    };
+  });
+}
+
+function normalizeCostCategoryBuckets(buckets: unknown): unknown {
+  if (!Array.isArray(buckets)) return buckets;
+  return buckets.map((bucket) =>
+    bucket && typeof bucket === "object" && "rules" in bucket
+      ? { ...(bucket as Record<string, unknown>), rules: normalizeCostCategoryRules((bucket as { rules: unknown }).rules) }
+      : bucket,
+  );
+}
+
+/**
+ * The CCM UI only offers IN / NOT_IN / LIKE / NULL / NOT_NULL, so send every EQUALS as IN,
+ * single- or multi-value. Cost explorer already reads EQUALS as IN, but recommendations,
+ * anomalies and column aggregates match only values[0], and with
+ * CCM_COST_BUCKET_SHARED_COST_VALIDATION on, a multi-value EQUALS is rejected at save.
+ */
+function normalizeCostCategoryBody(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const result: Record<string, unknown> = { ...(body as Record<string, unknown>) };
+  if ("costTargets" in result) result.costTargets = normalizeCostCategoryBuckets(result.costTargets);
+  if ("sharedCosts" in result) result.sharedCosts = normalizeCostCategoryBuckets(result.sharedCosts);
+  return result;
+}
+
 /**
  * Normalizes REST cost_category responses into the same {values} shape
  * that perspectiveFilters returns, so callers get a uniform interface.
@@ -1710,20 +1756,20 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           path: "/ccm/api/business-mapping",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => normalizeCostCategoryBody(input.body),
           bodySchema: {
             description: "Cost category (business mapping) definition. costTargets are cost buckets — each bucket has a name and rules that determine which costs fall into it. Rules use the same ViewIdCondition structure as perspectives.",
             fields: [
               { name: "name", type: "string", required: true, description: "Cost category name" },
               {
                 name: "costTargets", type: "array", required: true,
-                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
-                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+                description: `Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE} }`,
               },
               {
                 name: "sharedCosts", type: "array", required: false,
-                description: "Shared cost buckets with allocation strategy. Each has a name, rules, strategy (PROPORTIONAL or FIXED), and optional splits for FIXED strategy.",
-                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+                description: `Shared cost buckets with allocation strategy. Each has a name, rules, strategy (PROPORTIONAL or FIXED), and optional splits for FIXED strategy. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE}, strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }`,
               },
               {
                 name: "unallocatedCost", type: "object", required: false,
@@ -1743,7 +1789,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           path: "/ccm/api/business-mapping",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => normalizeCostCategoryBody(input.body),
           bodySchema: {
             description: "Cost category update (full replacement). Fetch the existing category via harness_get first, modify the fields, and send the full object back.",
             fields: [
@@ -1751,13 +1797,13 @@ For cost time-series data, use harness_get with start_time and end_time.`,
               { name: "name", type: "string", required: true, description: "Cost category name" },
               {
                 name: "costTargets", type: "array", required: true,
-                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
-                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+                description: `Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE} }`,
               },
               {
                 name: "sharedCosts", type: "array", required: false,
-                description: "Shared cost buckets with allocation strategy",
-                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+                description: `Shared cost buckets with allocation strategy. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE}, strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }`,
               },
               {
                 name: "unallocatedCost", type: "object", required: false,
