@@ -404,23 +404,79 @@ const RISK_RULE_BODY_FIELDS: BodyFieldSpec[] = [
   { name: "spec", type: "object", required: true, description: descRiskRuleSpec },
 ];
 
+const RISK_RULE_DATA_SOURCE = "SourceCode";
+const RISK_RULE_PROMPT_LIST_LIMIT = 10;
+const RISK_RULE_PROMPT_ENTRY_LIMIT = 500;
+
+/** Custom rules are SourceCode-only; an omitted dataSource defaults to that. */
+function riskRuleDataSource(value: unknown): string[] {
+  const dataSource = value ?? [RISK_RULE_DATA_SOURCE];
+  if (
+    !Array.isArray(dataSource) ||
+    dataSource.length !== 1 ||
+    dataSource[0] !== RISK_RULE_DATA_SOURCE
+  ) {
+    throw new Error('spec.dataSource must be exactly ["SourceCode"]. Custom rules are SourceCode-only.');
+  }
+  return dataSource;
+}
+
+/**
+ * prompt.do and prompt.outcome are required; prompt.dont is optional.
+ * Each list holds at most 10 entries of 500 characters.
+ */
+function riskRulePromptList(value: unknown, field: string, required: boolean): void {
+  if (value == null) {
+    if (required) throw new Error(`${field} must list at least one entry.`);
+    return;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${field} must be an array of strings.`);
+  }
+  if (required && value.length === 0) {
+    throw new Error(`${field} must list at least one entry.`);
+  }
+  if (value.length > RISK_RULE_PROMPT_LIST_LIMIT) {
+    throw new Error(`${field} holds at most ${RISK_RULE_PROMPT_LIST_LIMIT} entries.`);
+  }
+  for (const entry of value) {
+    if (typeof entry !== "string" || entry.trim() === "") {
+      throw new Error(`${field} entries must be non-empty strings.`);
+    }
+    if (entry.length > RISK_RULE_PROMPT_ENTRY_LIMIT) {
+      throw new Error(`${field} entries must be at most ${RISK_RULE_PROMPT_ENTRY_LIMIT} characters.`);
+    }
+  }
+}
+
 /** Builds the mutable part of a custom risk rule; spec.dataSource defaults to SourceCode. */
 function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> {
   const missing = ["name", "severity", "category", "spec"].filter((k) => b[k] == null || b[k] === "");
   if (missing.length > 0) {
     throw new Error(`Missing required field(s): ${missing.join(", ")}.`);
   }
+  if (typeof b.spec !== "object" || b.spec == null || Array.isArray(b.spec)) {
+    throw new Error("spec must be an object.");
+  }
   const spec = b.spec as Record<string, unknown>;
+  const dataSource = riskRuleDataSource(spec.dataSource);
   if (!Array.isArray(spec.faults) || spec.faults.length === 0) {
     throw new Error("spec.faults must list at least one chaos fault that can prove the risk (e.g. pod-network-latency).");
   }
+  if (typeof spec.prompt !== "object" || spec.prompt == null || Array.isArray(spec.prompt)) {
+    throw new Error("spec.prompt must include non-empty do and outcome lists.");
+  }
+  const prompt = spec.prompt as Record<string, unknown>;
+  riskRulePromptList(prompt.do, "spec.prompt.do", true);
+  riskRulePromptList(prompt.dont, "spec.prompt.dont", false);
+  riskRulePromptList(prompt.outcome, "spec.prompt.outcome", true);
   return {
     name: b.name,
     ...(b.description != null ? { description: b.description } : {}),
     ...(b.tags != null ? { tags: b.tags } : {}),
     severity: b.severity,
     category: b.category,
-    spec: { ...spec, dataSource: spec.dataSource ?? ["SourceCode"] },
+    spec: { ...spec, dataSource },
   };
 }
 

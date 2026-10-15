@@ -919,6 +919,37 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("create: rejects a dataSource other than SourceCode and a prompt missing do or outcome", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { ...ruleBody.spec, dataSource: ["ApplicationManifest"] } },
+      }),
+    ).rejects.toThrow(/spec\.dataSource/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { faults: ["pod-delete"], prompt: { outcome: ["hypothesis"] } } },
+      }),
+    ).rejects.toThrow(/spec\.prompt\.do/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { faults: ["pod-delete"], prompt: { do: [""], outcome: ["hypothesis"] } } },
+      }),
+    ).rejects.toThrow(/spec\.prompt\.do/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { faults: ["pod-delete"], prompt: { do: ["signal"] } } },
+      }),
+    ).rejects.toThrow(/spec\.prompt\.outcome/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("create: keeps a caller-supplied dataSource and an empty description", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
