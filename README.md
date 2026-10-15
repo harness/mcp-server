@@ -1786,8 +1786,8 @@ In single-user/self-hosted mode, legacy-mode auth uses a Bearer token from `HARN
 | `chaos_risk`                     | x    | x   |        |        |        |                                                                              |
 | `chaos_dr_test`                  | x    |     | x      |        |        |                                                                              |
 | `scanned_risk`                   | x    | x   |        |        |        | `occurrences`, `summary_by_service`                                          |
-| `chaos_risk_rule`                | x    | x   |        |        |        |                                                                              |
-| `chaos_risk_scan`                | x    | x   | x      | x      | x      | `retry`, `abort`, `report`, `report_download`, `heatmap`, `submit_findings`  |
+| `chaos_risk_rule`                | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_risk_scan`                | x    | x   | x      | x      | x      | `retry`, `abort`, `report`, `report_download`, `heatmap` , `submit_findings` |
 
 ### Cloud Cost Management (CCM)
 

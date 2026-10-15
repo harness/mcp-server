@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import YAML from "yaml";
-import type { ToolsetDefinition, ParamsSchema } from "../types.js";
+import type { ToolsetDefinition, ParamsSchema, BodyFieldSpec } from "../types.js";
 import {
   passthrough,
   ngExtract,
@@ -180,7 +180,10 @@ import {
   // Scanned Risks / Risk Rules / Risk Scans (chaos-manager v3)
   descScannedRisk, descChaosRiskRule, descChaosRiskScan,
   descListScannedRisks, descGetScannedRisk, descListScannedRiskOccurrences, descSummarizeScannedRisksByService,
-  descListRiskRules, descGetRiskRule,
+  descListRiskRules, descGetRiskRule, descCreateRiskRule, descUpdateRiskRule, descDeleteRiskRule,
+  descBodyRiskRuleCreate, descBodyRiskRuleUpdate,
+  descRiskRuleIdentity, descRiskRuleName, descRiskRuleDescription, descRiskRuleTags,
+  descRiskRuleSeverity, descRiskRuleCategory, descRiskRuleSpec, descRiskRuleCustomOnly,
   descListRiskScans, descGetRiskScan, descCreateRiskScan, descUpdateRiskScan, descDeleteRiskScan,
   descRetryRiskScan, descAbortRiskScan,
   descSubmitRiskScanFindings, descBodySubmitRiskScanFindings, descRiskScanFindings, descRiskScanDetectionMethod,
@@ -392,6 +395,34 @@ function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
 }
 
 const MAX_RISK_SCAN_FINDINGS = 100;
+const RISK_RULE_BODY_FIELDS: BodyFieldSpec[] = [
+  { name: "name", type: "string", required: true, description: descRiskRuleName },
+  { name: "description", type: "string", required: false, description: descRiskRuleDescription },
+  { name: "tags", type: "array", required: false, itemType: "string", description: descRiskRuleTags },
+  { name: "severity", type: "string", required: true, description: descRiskRuleSeverity },
+  { name: "category", type: "string", required: true, description: descRiskRuleCategory },
+  { name: "spec", type: "object", required: true, description: descRiskRuleSpec },
+];
+
+/** Builds the mutable part of a custom risk rule; spec.dataSource defaults to SourceCode. */
+function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> {
+  const missing = ["name", "severity", "category", "spec"].filter((k) => b[k] == null || b[k] === "");
+  if (missing.length > 0) {
+    throw new Error(`Missing required field(s): ${missing.join(", ")}.`);
+  }
+  const spec = b.spec as Record<string, unknown>;
+  if (!Array.isArray(spec.faults) || spec.faults.length === 0) {
+    throw new Error("spec.faults must list at least one chaos fault that can prove the risk (e.g. pod-network-latency).");
+  }
+  return {
+    name: b.name,
+    ...(b.description != null ? { description: b.description } : {}),
+    ...(b.tags != null ? { tags: b.tags } : {}),
+    severity: b.severity,
+    category: b.category,
+    spec: { ...spec, dataSource: spec.dataSource ?? ["SourceCode"] },
+  };
+}
 
 /**
  * Detects whether a chaos experiment identifier looks like the internal UUID
@@ -4622,13 +4653,14 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
-      searchAliases: ["risk rule", "risk check", "manifest risk rule"],
+      searchAliases: ["risk rule", "risk check", "manifest risk rule", "code risk rule", "source code risk rule", "umbrella risk rule"],
       listFilterFields: [
         { name: "search", description: descRiskSearch },
         { name: "sort_field", description: descRiskSortField },
         { name: "sort_ascending", description: descRiskSortAscending, type: "boolean" },
         { name: "tags", description: descRiskTags },
         { name: "is_system", description: descRiskRuleIsSystem, type: "boolean" },
+        { name: "custom_only", description: descRiskRuleCustomOnly, type: "boolean" },
         { name: "data_source", description: descRiskRuleDataSource },
         { name: "include_all_scope", description: descRiskIncludeAllScope, type: "boolean" },
       ],
@@ -4648,6 +4680,7 @@ export const chaosToolset: ToolsetDefinition = {
             sort_ascending: "sortAscending",
             tags: "tags",
             is_system: "isSystem",
+            custom_only: "customOnly",
             data_source: "dataSource",
             include_all_scope: "includeAllScope",
           },
@@ -4662,6 +4695,48 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { identity: "identity" },
           responseExtractor: passthrough,
           description: descGetRiskRule,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/v3/risk-rules`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            if (!b.identity) {
+              throw new Error("Missing required field: identity. Use code-<failure-mode>, e.g. code-outbound-call-without-timeout.");
+            }
+            return { identity: b.identity, ...buildRiskRuleBody(b) };
+          },
+          responseExtractor: passthrough,
+          description: descCreateRiskRule,
+          bodySchema: {
+            description: descBodyRiskRuleCreate,
+            fields: [
+              { name: "identity", type: "string", required: true, description: descRiskRuleIdentity },
+              ...RISK_RULE_BODY_FIELDS,
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/v3/risk-rules/{identity}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { identity: "identity" },
+          bodyBuilder: (input) => buildRiskRuleBody(coerceBody(input)),
+          responseExtractor: passthrough,
+          description: descUpdateRiskRule,
+          bodySchema: {
+            description: descBodyRiskRuleUpdate,
+            fields: RISK_RULE_BODY_FIELDS,
+          },
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/v3/risk-rules/{identity}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { identity: "identity" },
+          responseExtractor: passthrough,
+          description: descDeleteRiskRule,
         },
       },
     },
