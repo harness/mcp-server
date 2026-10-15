@@ -1,5 +1,12 @@
 # Harness MCP Server — Task Tracking
 
+## v0 template branch_name writes the default branch (2026-10-13)
+
+- [x] Reproduce: remote v0 template update with `branch_name` and no lock ids GETs without `branch`, then PUTs the default branch's SHAs.
+- [x] Map `branch_name` → `branch` on v0 template get and update.
+- [x] Regression tests for the hydration path and a complete `branch_name` lock.
+- [x] `pnpm exec vitest run tests/registry/templates.test.ts tests/registry/pipeline-v1-git.test.ts tests/registry/registry.test.ts`
+
 ## AI Evals reads return 404 (2026-10-08)
 
 Base: `main@upstream` `bf89204b` (v3.2.33). Reproduced with a local build against QA

@@ -24,6 +24,11 @@ const TEMPLATE_V0_GET_PARAMS: ParamsSchema = {
       description: "Git branch for remote/git-backed templates. Pass via params.",
     },
     {
+      name: "branch_name",
+      required: false,
+      description: "Git branch alias of branch. Pass via params.",
+    },
+    {
       name: "store_type",
       required: false,
       description: "Storage type (e.g. INLINE, REMOTE). Pass via params.",
@@ -59,6 +64,11 @@ const TEMPLATE_V0_UPDATE_PARAMS: ParamsSchema = {
       required: false,
       description:
         "Git branch for remote updates. Required when store_type=REMOTE. Pass via params.",
+    },
+    {
+      name: "branch_name",
+      required: false,
+      description: "Git branch alias of branch. Pass via params.",
     },
     {
       name: "connector_ref",
@@ -521,6 +531,9 @@ export const templatesToolset: ToolsetDefinition = {
             version_label: "versionLabel",
             account_id: "accountIdentifier",
             branch: "branch",
+            // branch_name is the v1 / URL alias. v0 wire name is `branch`.
+            // Keep this after `branch` so an explicit branch_name wins.
+            branch_name: "branch",
             store_type: "storeType",
             connector_ref: "connectorRef",
             repo_name: "repoName",
@@ -571,6 +584,9 @@ export const templatesToolset: ToolsetDefinition = {
             connector_ref: "connectorRef",
             repo_name: "repoName",
             branch: "branch",
+            // Same alias as get. A complete lock passed only as branch_name
+            // skips preflight, so the update itself must still send `branch`.
+            branch_name: "branch",
             file_path: "filePath",
             base_branch: "baseBranch",
             commit_msg: "commitMsg",

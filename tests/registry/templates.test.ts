@@ -184,6 +184,99 @@ describe("remote template update hydration", () => {
     }));
   });
 
+  it("hydrates a v0 update from the branch named by branch_name, not the default branch", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockImplementation((req: { params?: Record<string, unknown> }) => {
+      const branch = req.params?.branch;
+      if (branch === "feature") {
+        return Promise.resolve({
+          data: {
+            identifier: "remote_step",
+            storeType: "REMOTE",
+            gitDetails: {
+              branch: "feature",
+              repoName: "harness-ci-templates",
+              filePath: ".harness/templates/remote_step/v1.yaml",
+              connectorRef: "account.GitHub",
+              objectId: "feature-obj",
+              commitId: "feature-commit",
+            },
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          identifier: "remote_step",
+          storeType: "REMOTE",
+          gitDetails: {
+            branch: "main",
+            repoName: "harness-ci-templates",
+            filePath: ".harness/templates/remote_step/v1.yaml",
+            connectorRef: "account.GitHub",
+            objectId: "main-obj",
+            commitId: "main-commit",
+          },
+        },
+      });
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "update", {
+      template_id: "remote_step",
+      version_label: "v1",
+      resource_scope: "account",
+      branch_name: "feature",
+      body: "template:\n  identifier: remote_step\n  versionLabel: v1\n",
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({
+      method: "GET",
+      params: expect.objectContaining({ branch: "feature" }),
+    }));
+    expect(mockRequest.mock.calls[1]![0]).toEqual(expect.objectContaining({
+      method: "PUT",
+      params: expect.objectContaining({
+        branch: "feature",
+        repoName: "harness-ci-templates",
+        filePath: ".harness/templates/remote_step/v1.yaml",
+        lastObjectId: "feature-obj",
+        lastCommitId: "feature-commit",
+      }),
+    }));
+    const putParams = (mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> }).params;
+    expect(putParams.lastObjectId).not.toBe("main-obj");
+  });
+
+  it("sends a complete branch_name lock on the v0 update without reading the default branch", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "remote_step" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "update", {
+      template_id: "remote_step",
+      version_label: "v1",
+      resource_scope: "account",
+      branch_name: "feature",
+      repo_name: "harness-ci-templates",
+      file_path: ".harness/templates/remote_step/v1.yaml",
+      last_object_id: "feature-obj",
+      last_commit_id: "feature-commit",
+      body: "template:\n  identifier: remote_step\n  versionLabel: v1\n",
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({
+      method: "PUT",
+      params: expect.objectContaining({
+        branch: "feature",
+        repoName: "harness-ci-templates",
+        filePath: ".harness/templates/remote_step/v1.yaml",
+        lastObjectId: "feature-obj",
+        lastCommitId: "feature-commit",
+      }),
+    }));
+  });
+
   it("loads v1 git_details from the current template when the update sends only YAML", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const mockRequest = vi.fn()
@@ -413,7 +506,7 @@ describe("template paramsSchema for harness_describe", () => {
     const get = registry.getResource("template").operations.get!;
     const names = get.paramsSchema!.fields.map((f) => f.name);
     expect(names).toEqual(
-      expect.arrayContaining(["global", "version_label", "branch", "store_type", "connector_ref", "repo_name"]),
+      expect.arrayContaining(["global", "version_label", "branch", "branch_name", "store_type", "connector_ref", "repo_name"]),
     );
     expect(get.paramsSchema!.fields.find((f) => f.name === "global")?.required).toBe(false);
   });
@@ -427,6 +520,7 @@ describe("template paramsSchema for harness_describe", () => {
         "version_label",
         "store_type",
         "branch",
+        "branch_name",
         "connector_ref",
         "repo_name",
         "file_path",

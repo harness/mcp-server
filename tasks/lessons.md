@@ -187,6 +187,11 @@
 - `pnpm update ip-address --depth 20` also rewrote unrelated direct dependency ranges to match existing overrides. Restore those incidental manifest changes before validating shrinkwrap consistency; review the full diff even for targeted updates.
 - `pnpm install --frozen-lockfile` does not delete an unlinked `node_modules/.pnpm/ip-address@<old>` directory once the lockfile already matches. Security scans of that virtual store must follow dependency symlinks; otherwise a leftover 10.4.0 fails NAT64 tests even when express-rate-limit links the patched release.
 
+## v0 Template branch_name Is a Real Branch
+- **Issue**: v0 template get/update send Git branch as the `branch` query param. `branch_name` is the v1 and URL alias, and the remote-update preflight treats it as the selected branch. The v0 get ignored it, loaded the default branch, and the preflight then committed the caller's YAML there with that branch's lock ids.
+- **Fix**: Map `branch_name` to `branch` on v0 template get and update, with `branch_name` after `branch` so an explicit alias wins. Keep both names on the params schema.
+- **Rule**: When a preflight hydrates a Git write from a get, every branch alias the preflight accepts must be on that get's query map and on the write. Otherwise a named branch becomes a default-branch commit.
+
 ## AI Evals Read Identifiers and Route Availability
 - **Issue**: AI Evals list responses expose both a display name/identifier and an opaque entity UUID. Sending the former to UUID detail routes produces a backend 404; old MCP compact results hid the UUID entirely. Dataset reads are the exception: the service exposes a dedicated `by-identifier` route.
 - **Fix**: Validate UUID-only path IDs before making a request, encode every path segment, and route non-UUID dataset reads to `dataset/by-identifier`. Keep trace and registry-item IDs free-form but encode them. Make 404 hints tell callers to use `id`/`uuid`, verify scope, and distinguish an API response from an HTML nginx 404 caused by an undeployed route.
