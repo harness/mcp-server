@@ -95,6 +95,32 @@ describe("remoteGitUpdatePreflight", () => {
     expect((ctx.registry as { dispatch: ReturnType<typeof vi.fn> }).dispatch).not.toHaveBeenCalled();
   });
 
+  it("skips the lookup when INLINE store_type is only in body.git_details", async () => {
+    const ctx = makePreflightCtx({
+      pipeline_id: "p1",
+      body: { git_details: { store_type: "inline" } },
+    }, {});
+    await preflight(ctx);
+    expect((ctx.registry as { dispatch: ReturnType<typeof vi.fn> }).dispatch).not.toHaveBeenCalled();
+  });
+
+  it("skips the lookup when the optimistic lock lives in body.git_details", async () => {
+    const ctx = makePreflightCtx({
+      pipeline_id: "p1",
+      body: {
+        git_details: {
+          branch_name: "main",
+          repo_name: "repo",
+          file_path: "path.yaml",
+          object_id: "obj",
+          commit_id: "commit",
+        },
+      },
+    }, {});
+    await preflight(ctx);
+    expect((ctx.registry as { dispatch: ReturnType<typeof vi.fn> }).dispatch).not.toHaveBeenCalled();
+  });
+
   it("skips the lookup when the update already carries a complete remote lock", async () => {
     const ctx = makePreflightCtx({
       pipeline_id: "p1",
@@ -106,6 +132,58 @@ describe("remoteGitUpdatePreflight", () => {
     }, {});
     await preflight(ctx);
     expect((ctx.registry as { dispatch: ReturnType<typeof vi.fn> }).dispatch).not.toHaveBeenCalled();
+  });
+
+  it("hydrates from camelCase gitDetails on a pipeline GET response", async () => {
+    const input: Record<string, unknown> = { pipeline_id: "ci" };
+    const ctx = makePreflightCtx(input, {
+      storeType: "REMOTE",
+      gitDetails: {
+        branchName: "main",
+        repoName: "repo",
+        filePath: ".harness/ci.yaml",
+        objectId: "obj-1",
+        commitId: "cmt-1",
+        connectorRef: "account.git",
+      },
+    });
+
+    await preflight(ctx);
+
+    expect(input).toMatchObject({
+      store_type: "REMOTE",
+      branch: "main",
+      repo_name: "repo",
+      file_path: ".harness/ci.yaml",
+      last_object_id: "obj-1",
+      last_commit_id: "cmt-1",
+      connector_ref: "account.git",
+    });
+  });
+
+  it("does not overwrite caller-supplied Git fields when hydrating from GET", async () => {
+    const input: Record<string, unknown> = {
+      pipeline_id: "ci",
+      branch: "feature",
+      repo_name: "caller-repo",
+    };
+    const ctx = makePreflightCtx(input, {
+      store_type: "REMOTE",
+      git_details: {
+        branch_name: "main",
+        repo_name: "server-repo",
+        file_path: ".harness/ci.yaml",
+        object_id: "obj-1",
+        commit_id: "cmt-1",
+      },
+    });
+
+    await preflight(ctx);
+
+    expect(input.branch).toBe("feature");
+    expect(input.repo_name).toBe("caller-repo");
+    expect(input.file_path).toBe(".harness/ci.yaml");
+    expect(input.last_object_id).toBe("obj-1");
   });
 
   it("hydrates missing Git fields from a pipeline GET response", async () => {
@@ -189,6 +267,35 @@ describe("remoteGitUpdatePreflight", () => {
       connector_ref: "org.git",
       name: "Template",
     });
+  });
+
+  it("returns without mutating input when GET reports an INLINE entity", async () => {
+    const input: Record<string, unknown> = { pipeline_id: "ci" };
+    const ctx = makePreflightCtx(input, {
+      store_type: "INLINE",
+      git_details: {
+        branch_name: "main",
+        repo_name: "repo",
+        file_path: "path.yaml",
+        object_id: "obj",
+        commit_id: "commit",
+      },
+    });
+
+    await preflight(ctx);
+
+    expect(input.branch).toBeUndefined();
+    expect(input.store_type).toBeUndefined();
+  });
+
+  it("returns without error when GET has no remote metadata to hydrate", async () => {
+    const input: Record<string, unknown> = { pipeline_id: "ci" };
+    const ctx = makePreflightCtx(input, { name: "Local pipeline" });
+
+    await preflight(ctx);
+
+    expect(input.branch).toBeUndefined();
+    expect(input.store_type).toBeUndefined();
   });
 
   it("does not block the write when the preflight GET fails", async () => {
