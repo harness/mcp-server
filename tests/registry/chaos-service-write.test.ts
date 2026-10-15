@@ -138,6 +138,37 @@ describe("chaos_service create", () => {
       externalId: "disc-1",
     });
   });
+
+  it("rejects a non-code-repository create that omits environment or infrastructure", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_service", "create", {
+      org_id: "o",
+      project_id: "p",
+      identity: "svc-1",
+      name: "svc-1",
+      external_service_id: "ext-1",
+      agent_id: "agent-1",
+    })).rejects.toThrow(/environment_id, infrastructure_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects a partial linked discovered service", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_service", "create", {
+      org_id: "o",
+      project_id: "p",
+      identity: "repo-svc",
+      name: "repo svc",
+      external_service_id: "ext-repo",
+      agent_id: "custom-discovery-agent",
+      linked_discovered_service: { external_id: "disc-1" },
+    })).rejects.toThrow(/requires agent_id, environment_id, and external_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("custom_service", () => {
@@ -473,6 +504,22 @@ describe("chaos_service update", () => {
     expect(body.environmentId).toBe("test");
     expect(body.infrastructureId).toBe("test27");
     expect(body.infrastructureType).toBe("KubernetesV2");
+  });
+
+  it("rejects a non-code-repository update that omits environment or infrastructure", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_service", "update", {
+      identity: "svc-1",
+      org_id: "o",
+      project_id: "p",
+      name: "svc-1",
+      external_service_id: "ext-1",
+      agent_id: "agent-1",
+      probes: [],
+    })).rejects.toThrow(/environment_id, infrastructure_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("rejects an update that omits probes (required full desired-state replace)", async () => {

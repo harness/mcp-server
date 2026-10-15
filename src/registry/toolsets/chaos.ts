@@ -271,17 +271,46 @@ function stringList(value: unknown): string[] | undefined {
 }
 
 function linkedDiscoveredService(value: unknown): Record<string, string> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (value == null || value === "") return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(
+      "linked_discovered_service must be an object with agent_id, environment_id, and external_id.",
+    );
+  }
   const linked = value as Record<string, unknown>;
   const agentId = optionalText(linked.agent_id ?? linked.agentId);
   const environmentId = optionalText(linked.environment_id ?? linked.environmentId);
   const externalId = optionalText(linked.external_id ?? linked.externalId);
   if (!agentId && !environmentId && !externalId) return undefined;
-  return {
-    ...(agentId ? { agentId } : {}),
-    ...(environmentId ? { environmentId } : {}),
-    ...(externalId ? { externalId } : {}),
-  };
+  if (!agentId || !environmentId || !externalId) {
+    throw new Error(
+      "linked_discovered_service requires agent_id, environment_id, and external_id. " +
+      "external_id is the discovered workload id (namespace:kind:name with kind Deployment, DaemonSet, or StatefulSet).",
+    );
+  }
+  return { agentId, environmentId, externalId };
+}
+
+/**
+ * CodeRepository chaos services use the custom discovery agent and may omit
+ * environment and infrastructure. Every other agent still needs both, because
+ * chaos service update is a full replace of those fields.
+ */
+function assertChaosServiceInfra(
+  agentId: string | undefined,
+  environmentId: string | undefined,
+  infrastructureId: string | undefined,
+): void {
+  if (!agentId || agentId === CUSTOM_DISCOVERY_AGENT) return;
+  const missing: string[] = [];
+  if (!environmentId) missing.push("environment_id");
+  if (!infrastructureId) missing.push("infrastructure_id");
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required field(s): ${missing.join(", ")}. ` +
+      `Required unless agent_id is ${CUSTOM_DISCOVERY_AGENT} (a CodeRepository chaos service).`,
+    );
+  }
 }
 
 function buildCustomServiceBody(input: Record<string, unknown>): Record<string, unknown> {
@@ -2569,6 +2598,7 @@ export const chaosToolset: ToolsetDefinition = {
             const onboardingId = optionalText(b.onboarding_id ?? b.onboardingId);
             const tags = stringList(b.tags);
             const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            assertChaosServiceInfra(agentId, environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
               ...(p.inputs ? { inputs: p.inputs } : {}),
@@ -2629,6 +2659,7 @@ export const chaosToolset: ToolsetDefinition = {
             const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const tags = stringList(b.tags);
             const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            assertChaosServiceInfra(optionalText(agentId), environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
               ...(p.inputs ? { inputs: p.inputs } : {}),
