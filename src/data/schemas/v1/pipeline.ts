@@ -2107,6 +2107,18 @@ const schema: Record<string, any> = {
           "webhook": {
             "description": "Slack webhook URL.",
             "type": "string"
+          },
+          "bot-token": {
+            "description": "Slack bot token secret.",
+            "type": "string"
+          },
+          "channel": {
+            "description": "Slack channel name or ID for bot token notifications.",
+            "type": "string"
+          },
+          "use-bot-token": {
+            "description": "When true, send Slack notifications via bot token.",
+            "type": "boolean"
           }
         },
         "$schema": "http://json-schema.org/draft-07/schema#"
