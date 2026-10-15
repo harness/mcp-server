@@ -4,7 +4,7 @@
  * Uses Harness-Account header; no accountIdentifier query param (headerBasedScoping).
  */
 import type { BodySchema, PathBuilderConfig, PreflightContext, ToolsetDefinition } from "../types.js";
-import { aiEvalsArrayExtract, aiEvalsListExtract, passthrough } from "../extractors.js";
+import { aiEvalsArrayExtract, aiEvalsListExtract, aiEvalsListExtractWithId, passthrough } from "../extractors.js";
 
 const AI = "/gateway/ai-evals/api/v1";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -1283,7 +1283,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/dataset`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { ...listQ, search: "search", target_id: "target_id" },
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("uuid"),
           description: "List datasets",
         },
         get: {
@@ -1370,7 +1370,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
             `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/items`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("uuid"),
           description: "List items (filters.dataset_id required)",
         },
         get: {
@@ -1627,7 +1627,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { ...listQ, target_id: "target_id" },
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("run_id"),
           description: "List runs in project. Use eval_run_by_eval resource to filter by eval_id.",
         },
         get: {
@@ -1722,7 +1722,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
             `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("run_id"),
           description: "List runs for an eval",
         },
       },
@@ -2017,7 +2017,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/suites`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("suite_id"),
           description: "List suites",
         },
         get: {
@@ -2173,7 +2173,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
             `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("suite_run_id"),
           description: "List suite runs for a suite",
         },
         get: {

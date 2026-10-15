@@ -895,3 +895,10 @@ Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, b
 Delivery: push `chore/version-3.2.34` and open a PR against `main`.
 
 Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
+
+## AI Evals List Identity and Network Diagnostics (2026-10-13)
+
+- [x] Normalize list responses with resource-declared primary identifiers.
+- [x] Retry transient transport failures only for explicitly safe requests.
+- [x] Diagnose nginx HTML route failures without exposing raw HTML.
+- [x] Add focused regression coverage, then run full verification.
