@@ -138,6 +138,33 @@ describe("chaos_service create", () => {
       externalId: "disc-1",
     });
   });
+
+  it("rejects a normal service that omits environment or infrastructure", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_service", "create", {
+      org_id: "o", project_id: "p", identity: "svc", name: "svc",
+      external_service_id: "ext-1", agent_id: "agent-1", infrastructure_id: "infra-1",
+    })).rejects.toThrow(/environment_id/);
+    await expect(registry.dispatch(client, "chaos_service", "create", {
+      org_id: "o", project_id: "p", identity: "svc", name: "svc",
+      external_service_id: "ext-1", agent_id: "agent-1", environment_id: "env-1",
+    })).rejects.toThrow(/infrastructure_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects a linked discovered service that is missing one of its identifiers", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_service", "create", {
+      org_id: "o", project_id: "p", identity: "repo-svc", name: "repo svc",
+      external_service_id: "ext-repo", agent_id: "custom-discovery-agent",
+      linked_discovered_service: { agent_id: "agent-1" },
+    })).rejects.toThrow(/environment_id, external_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("custom_service", () => {
@@ -295,6 +322,7 @@ describe("custom_service", () => {
     });
     expect(mockRequest.mock.calls[0][0].path).toBe("/gateway/servicediscovery/api/v2/services");
     expect(mockRequest.mock.calls[0][0].params.type).toBe("CodeRepository");
+    expect(mockRequest.mock.calls[0][0].params.agentIdentifier).toBe("custom-discovery-agent");
     expect(listed).toMatchObject({ total: 1 });
 
     await registry.dispatch(client, "custom_service", "get", {
@@ -323,7 +351,7 @@ describe("custom_service", () => {
       items: [{ identity: "payments" }, { identity: "orders" }],
       total: 7,
     });
-    expect(mockRequest.mock.calls[0][0].params.agentIdentifier).toBeUndefined();
+    expect(mockRequest.mock.calls[0][0].params.agentIdentifier).toBe("custom-discovery-agent");
   });
 
   it("links get and list results to the custom service page", async () => {
@@ -473,6 +501,17 @@ describe("chaos_service update", () => {
     expect(body.environmentId).toBe("test");
     expect(body.infrastructureId).toBe("test27");
     expect(body.infrastructureType).toBe("KubernetesV2");
+  });
+
+  it("rejects a normal update that omits infrastructure and would clear the mapping", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const { environment_id: _environment, infrastructure_id: _infrastructure, ...withoutInfra } = REQUIRED;
+
+    await expect(registry.dispatch(client, "chaos_service", "update", {
+      ...withoutInfra, probes: [],
+    })).rejects.toThrow(/environment_id and infrastructure_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("rejects an update that omits probes (required full desired-state replace)", async () => {

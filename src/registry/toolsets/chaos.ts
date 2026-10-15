@@ -277,11 +277,46 @@ function linkedDiscoveredService(value: unknown): Record<string, string> | undef
   const environmentId = optionalText(linked.environment_id ?? linked.environmentId);
   const externalId = optionalText(linked.external_id ?? linked.externalId);
   if (!agentId && !environmentId && !externalId) return undefined;
-  return {
-    ...(agentId ? { agentId } : {}),
-    ...(environmentId ? { environmentId } : {}),
-    ...(externalId ? { externalId } : {}),
-  };
+  if (!agentId || !environmentId || !externalId) {
+    const missing = [
+      !agentId ? "agent_id" : "",
+      !environmentId ? "environment_id" : "",
+      !externalId ? "external_id" : "",
+    ].filter(Boolean);
+    throw new Error(
+      `linked_discovered_service requires agent_id, environment_id, and external_id. Missing: ${missing.join(", ")}.`,
+    );
+  }
+  return { agentId, environmentId, externalId };
+}
+
+/**
+ * A CodeRepository chaos service is the only one that may omit infrastructure,
+ * and only when agent_id is the custom discovery agent. Every other service
+ * must send both identifiers so an update cannot clear its mapping.
+ */
+function assertChaosServiceInfrastructure(
+  agentId: string | undefined,
+  environmentId: string | undefined,
+  infrastructureId: string | undefined,
+): void {
+  if (agentId === CUSTOM_DISCOVERY_AGENT) {
+    if (Boolean(environmentId) !== Boolean(infrastructureId)) {
+      throw new Error(
+        "environment_id and infrastructure_id must both be set or both omitted for a CodeRepository service (agent_id custom-discovery-agent).",
+      );
+    }
+    return;
+  }
+  const missing = [
+    !environmentId ? "environment_id" : "",
+    !infrastructureId ? "infrastructure_id" : "",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing.join(" and ")} required for a chaos service. Omit both only for a CodeRepository service with agent_id ${CUSTOM_DISCOVERY_AGENT}.`,
+    );
+  }
 }
 
 function buildCustomServiceBody(input: Record<string, unknown>): Record<string, unknown> {
@@ -2569,6 +2604,7 @@ export const chaosToolset: ToolsetDefinition = {
             const onboardingId = optionalText(b.onboarding_id ?? b.onboardingId);
             const tags = stringList(b.tags);
             const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            assertChaosServiceInfrastructure(agentId, environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
               ...(p.inputs ? { inputs: p.inputs } : {}),
@@ -2584,7 +2620,7 @@ export const chaosToolset: ToolsetDefinition = {
               // (which checks bodySchema.fields names against this transformed
               // payload) sees the fields it expects. See getBodySchemaValidationPayload
               // in registry/index.ts. environment and infrastructure are omitted
-              // when empty so a CodeRepository service can be created without them.
+              // only for a CodeRepository service (agent_id custom-discovery-agent).
               external_service_id: externalServiceId,
               agent_id: agentId,
               ...(environmentId ? { environmentId, environment_id: environmentId } : {}),
@@ -2629,6 +2665,7 @@ export const chaosToolset: ToolsetDefinition = {
             const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const tags = stringList(b.tags);
             const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            assertChaosServiceInfrastructure(optionalText(agentId), environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
               ...(p.inputs ? { inputs: p.inputs } : {}),
@@ -2649,8 +2686,8 @@ export const chaosToolset: ToolsetDefinition = {
               externalServiceId,
               agentId,
               // Dual-write snake_case keys — see comment in create bodyBuilder above.
-              // Empty environment and infrastructure are omitted so a CodeRepository
-              // service can be updated without them.
+              // Empty environment and infrastructure are omitted only for a
+              // CodeRepository service, so a normal update cannot clear its mapping.
               external_service_id: externalServiceId,
               agent_id: agentId,
               ...(environmentId ? { environmentId, environment_id: environmentId } : {}),
@@ -4172,6 +4209,7 @@ export const chaosToolset: ToolsetDefinition = {
             type: "type",
             category: "category",
           },
+          staticQueryParams: { agentIdentifier: CUSTOM_DISCOVERY_AGENT },
           responseExtractor: sdV2PageExtract,
           description: descListCustomServices,
         },
