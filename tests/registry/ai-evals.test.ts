@@ -19,6 +19,8 @@ const DATASET_ID = "11111111-1111-4111-8111-111111111111";
 const EVAL_ID = "22222222-2222-4222-8222-222222222222";
 const METRIC_ID = "33333333-3333-4333-8333-333333333333";
 const ANNOTATION_ID = "44444444-4444-4444-8444-444444444444";
+const RUN_ID = "55555555-5555-4555-8555-555555555555";
+const SUITE_RUN_ID = "66666666-6666-4666-8666-666666666666";
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     HARNESS_MCP_MODE: "single-user",
@@ -1382,6 +1384,28 @@ describe("AI Evals dataset export removed", () => {
 // ─── Extractors ─────────────────────────────────────────────────────────────
 
 describe("AI Evals extractors", () => {
+  it("returns a run list whose generic id is usable for the next get call", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" }],
+        total_elements: 1,
+      })
+      .mockResolvedValueOnce({ run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" });
+
+    const result = await registry.dispatch(makeClient(mockRequest), "eval_run", "list", {}) as {
+      items: Array<Record<string, unknown>>;
+      total: number;
+    };
+
+    expect(result).toEqual({
+      items: [{ id: RUN_ID, run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" }],
+      total: 1,
+    });
+    await registry.dispatch(makeClient(mockRequest), "eval_run", "get", { run_id: result.items[0]!.id });
+    expect(mockRequest.mock.calls[1][0].path).toMatch(new RegExp(`/runs/${RUN_ID}$`));
+  });
+
   it("aiEvalsListExtract handles standard paginated response", () => {
     const result = aiEvalsListExtract({ data: [{ id: "1" }, { id: "2" }], total_elements: 5 });
     expect(result).toEqual({ items: [{ id: "1" }, { id: "2" }], total: 5 });
@@ -1397,6 +1421,27 @@ describe("AI Evals extractors", () => {
       { id: EVAL_ID, name: "Eval" },
       { uuid: DATASET_ID, name: "Dataset" },
     ]);
+  });
+
+  it.each([
+    ["eval_dataset", { uuid: DATASET_ID, name: "Dataset" }, DATASET_ID],
+    ["eval_dataset_item", { uuid: DATASET_ID, item_identifier: "row-1" }, DATASET_ID],
+    ["eval_run", { run_id: RUN_ID, suite_run_id: SUITE_RUN_ID, eval_id: EVAL_ID }, RUN_ID],
+    ["eval_run_by_eval", { run_id: RUN_ID, eval_id: EVAL_ID }, RUN_ID],
+    ["eval_suite", { suite_id: EVAL_ID, name: "Suite" }, EVAL_ID],
+    ["eval_suite_run", { suite_run_id: SUITE_RUN_ID, suite_id: EVAL_ID }, SUITE_RUN_ID],
+  ])("%s list mirrors its declared primary key into id", (resourceType, row, expectedId) => {
+    const extract = findResource(resourceType).operations.list!.responseExtractor!;
+    const extracted = extract({ data: [row], total_elements: 1 }) as { items: unknown[] };
+
+    expect(extracted.items).toEqual([{ id: expectedId, ...row }]);
+  });
+
+  it("keeps an existing id instead of overwriting it with a foreign key", () => {
+    const extract = findResource("eval_run_item").operations.list!.responseExtractor!;
+    const row = { id: METRIC_ID, run_id: RUN_ID, dataset_item_id: "row-1" };
+
+    expect((extract({ data: [row], total_elements: 1 }) as { items: unknown[] }).items).toEqual([row]);
   });
 
   it("aiEvalsListExtract handles empty response", () => {

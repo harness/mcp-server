@@ -49,6 +49,9 @@ const schema: Record<string, any> = {
             "type": "string",
             "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
           },
+          "identities": {
+            "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+          },
           "name": {
             "type": "string",
             "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
@@ -6804,10 +6807,25 @@ const schema: Record<string, any> = {
               },
               {
                 "type": "object",
-                "required": [
-                  "artifact_name"
-                ],
                 "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "local_image",
+                      "local_archive",
+                      "local_non_container"
+                    ]
+                  },
+                  "target": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "manual"
+                    ]
+                  },
+                  "image": {
+                    "type": "string"
+                  },
                   "workspace": {
                     "type": "string"
                   },
@@ -70052,6 +70070,9 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
               },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+              },
               "name": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
@@ -109894,6 +109915,15 @@ const schema: Record<string, any> = {
               },
               "webhookUrl": {
                 "type": "string"
+              },
+              "botToken": {
+                "type": "string"
+              },
+              "channel": {
+                "type": "string"
+              },
+              "useBotToken": {
+                "type": "boolean"
               }
             }
           }

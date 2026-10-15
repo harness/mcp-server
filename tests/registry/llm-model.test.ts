@@ -45,7 +45,7 @@ describe("llm_model", () => {
     const providerField = def.listFilterFields?.find((f) => f.name === "provider");
     expect(providerField?.required).toBe(true);
     expect(providerField?.enum).toEqual(
-      expect.arrayContaining(["ANTHROPIC", "OPENAI", "GITHUB_COPILOT", "HARNESS_OPENAI", "HARNESS_ANTHROPIC"]),
+      expect.arrayContaining(["ANTHROPIC", "OPENAI", "GITHUB_COPILOT", "HARNESS_OPENAI", "HARNESS_ANTHROPIC", "HARNESS_LLM"]),
     );
   });
 
