@@ -92,6 +92,11 @@ describe("Observability Evaluations toolset", () => {
     expect(observabilityEvaluationsToolset.optIn).toBe(true);
   });
 
+  it("does not register the retired observability_evaluation_rule resource type (#1045)", () => {
+    const registry = new Registry(makeConfig());
+    expect(() => registry.getResource("observability_evaluation_rule")).toThrow(/Unknown resource_type/);
+  });
+
   it("exposes only configuration CRUD", () => {
     expect(Object.keys(resource().operations)).toEqual(["list", "get", "create", "update", "delete"]);
     expect(resource().executeActions).toBeUndefined();
