@@ -1631,6 +1631,17 @@ export const sdPageExtract = (raw: unknown): { items: unknown[]; total: number; 
   return { items, total };
 };
 
+/**
+ * Extract Service Discovery v2 list response (custom services):
+ *   { items: [...], pagination: { total, pageSize, pageCount, pageNumber }, correlationID }
+ * v2 reports pagination.total, not the v1 page.totalItems envelope.
+ */
+export const sdV2PageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { items?: unknown[]; pagination?: { total?: number } };
+  const items = r.items ?? [];
+  return { items, total: r.pagination?.total ?? items.length };
+};
+
 // ---------------------------------------------------------------------------
 // Feature Management Enterprise (FME) extractors
 // ---------------------------------------------------------------------------

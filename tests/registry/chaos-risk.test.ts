@@ -384,6 +384,19 @@ describe("chaos_risk_scan list/get", () => {
     expect(params.endTime).toBe(1700100000);
   });
 
+  it("list: canonicalizes a CodeRepository scan_type filter", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_scan", "list", {
+      org_id: "org1",
+      project_id: "proj1",
+      scan_type: "coderepository",
+    });
+
+    expect(mockRequest.mock.calls[0][0].params.scanType).toBe("CodeRepository");
+  });
+
   it("get: builds correct path with identity param", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       identity: "scan-1",
@@ -729,5 +742,81 @@ describe("chaos_risk_scan execute actions", () => {
     expect(result.total).toBe(5);
     expect(result.riskRules).toHaveLength(1);
     expect(result.summary).toEqual({ score: 333, totalRisks: 15 });
+  });
+
+  it("submit_findings: POSTs findings to /v3/risk-scans/{identity}/findings", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ accepted: 1 });
+    const client = makeClient(mockRequest);
+    const findings = [{ riskRuleId: "code-outbound-call-without-timeout", riskName: "No timeout" }];
+
+    await registry.dispatchExecute(client, "chaos_risk_scan", "submit_findings", {
+      identity: "code-scan-1",
+      org_id: "default",
+      project_id: "chaos-proj",
+      body: { findings },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/v3/risk-scans/code-scan-1/findings");
+    expect(call.body).toMatchObject({ findings });
+  });
+
+  it("submit_findings: rejects a missing findings array and more than 100 findings", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "chaos_risk_scan", "submit_findings", {
+        identity: "code-scan-1", org_id: "o", project_id: "p", body: {},
+      }),
+    ).rejects.toThrow(/findings/);
+    await expect(
+      registry.dispatchExecute(client, "chaos_risk_scan", "submit_findings", {
+        identity: "code-scan-1", org_id: "o", project_id: "p",
+        body: { findings: Array.from({ length: 101 }, () => ({})) },
+      }),
+    ).rejects.toThrow(/At most 100 findings/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("chaos_risk_scan create (CodeRepository)", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("defaults detectionMethod to External for CodeRepository scans", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "code-scan-1" });
+    const client = makeClient(mockRequest);
+    const source = { codeRepository: { repoURL: "github.com/acme/payments", commitSHA: "abc123" } };
+
+    await registry.dispatch(client, "chaos_risk_scan", "create", {
+      org_id: "o",
+      project_id: "p",
+      body: { identity: "code-scan-1", name: "Code scan", scanType: "CodeRepository", source },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body).toMatchObject({ scanType: "CodeRepository", detectionMethod: "External", source });
+  });
+
+  it("passes an explicit detectionMethod through and omits it when absent for other types", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_scan", "create", {
+      org_id: "o", project_id: "p",
+      body: { identity: "s1", name: "S1", scanType: "DiscoveryAgent", detectionMethod: "RiskAnalyzer", source: { discoveryAgent: {} } },
+    });
+    await registry.dispatch(client, "chaos_risk_scan", "create", {
+      org_id: "o", project_id: "p",
+      body: { identity: "s2", name: "S2", scanType: "DiscoveryAgent", source: { discoveryAgent: {} } },
+    });
+
+    expect(mockRequest.mock.calls[0][0].body.detectionMethod).toBe("RiskAnalyzer");
+    expect(mockRequest.mock.calls[1][0].body.detectionMethod).toBeUndefined();
   });
 });
