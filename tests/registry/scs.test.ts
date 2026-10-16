@@ -2400,3 +2400,20 @@ describe("scs_sbom download dispatch", () => {
     ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
+
+describe("SCS artifact deep links (#1030)", () => {
+  it("artifact_security get resolves {artifact} from artifact_id pathParams", async () => {
+    const request = vi.fn().mockResolvedValue({ id: "art-99", name: "nginx" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+
+    const result = (await registry.dispatch(makeClient(request), "artifact_security", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      source_id: "src-1",
+      artifact_id: "art-99",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toContain("/supply-chain/artifacts/art-99");
+    expect(String(result.openInHarness)).not.toContain("{artifact}");
+  });
+});
