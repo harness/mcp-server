@@ -404,6 +404,7 @@ const RISK_RULE_BODY_FIELDS: BodyFieldSpec[] = [
   { name: "spec", type: "object", required: true, description: descRiskRuleSpec },
 ];
 
+const RISK_RULE_IDENTITY_RE = /^code-[a-z0-9-]{3,60}$/;
 const RISK_RULE_DATA_SOURCE = "SourceCode";
 const RISK_RULE_PROMPT_LIST_LIMIT = 10;
 const RISK_RULE_PROMPT_ENTRY_LIMIT = 500;
@@ -4760,6 +4761,11 @@ export const chaosToolset: ToolsetDefinition = {
             const b = coerceBody(input);
             if (!b.identity) {
               throw new Error("Missing required field: identity. Use code-<failure-mode>, e.g. code-outbound-call-without-timeout.");
+            }
+            if (typeof b.identity !== "string" || !RISK_RULE_IDENTITY_RE.test(b.identity)) {
+              throw new Error(
+                `identity must match ${RISK_RULE_IDENTITY_RE.source} (lowercase letters, digits and hyphens), e.g. code-outbound-call-without-timeout.`,
+              );
             }
             return { identity: b.identity, ...buildRiskRuleBody(b) };
           },

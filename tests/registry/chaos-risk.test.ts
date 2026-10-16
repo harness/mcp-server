@@ -874,6 +874,20 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("create: rejects an identity that does not match code-<failure-mode>", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    for (const identity of ["outbound-call-without-timeout", "code-Outbound_Call", "code-ab", `code-${"a".repeat(61)}`]) {
+      await expect(
+        registry.dispatch(client, "chaos_risk_rule", "create", {
+          org_id: "o", project_id: "p", body: { ...ruleBody, identity },
+        }),
+      ).rejects.toThrow(/identity must match/);
+    }
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("update: PUTs to /v3/risk-rules/{identity} without identity in the body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
