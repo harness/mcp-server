@@ -19,6 +19,7 @@ import {
   chaosHubListExtract,
   chaosDRTestListExtract,
   sdPageExtract,
+  sdV2PageExtract,
   chaosRunTimeInputsExtract,
   chaosActionExtract,
 } from "../extractors.js";
@@ -57,7 +58,13 @@ import {
   descChaosServiceExternalServiceId, descChaosServiceAgentId,
   descChaosServiceEnvironmentId, descChaosServiceInfrastructureId,
   descChaosServiceInfrastructureType, descChaosServiceOnboardingId,
+  descChaosServiceLinkedDiscoveredService,
   descChaosServiceProbes,
+  descCustomService, descListCustomServices, descGetCustomService, descCreateCustomService,
+  descBodyCustomServiceCreate, descCustomServiceIdentity, descCustomServiceName,
+  descCustomServiceType, descCustomServiceRepoURL, descCustomServiceModule, descCustomServiceBranch, descCustomServiceSpec,
+  descUpdateCustomService, descBodyCustomServiceUpdate,
+  descCustomServiceTypeFilter, descCustomServiceCategoryFilter,
   descChaosServiceProbesUpdate,
   descListK8sInfra, descGetK8sInfra, descCreateK8sInfra, descListChaosEnabledInfra,
   descBodyK8sInfraCreate, descK8sInfraIdentityCreate, descK8sInfraNameCreate,
@@ -176,6 +183,7 @@ import {
   descListRiskRules, descGetRiskRule,
   descListRiskScans, descGetRiskScan, descCreateRiskScan, descUpdateRiskScan, descDeleteRiskScan,
   descRetryRiskScan, descAbortRiskScan,
+  descSubmitRiskScanFindings, descBodySubmitRiskScanFindings, descRiskScanFindings, descRiskScanDetectionMethod,
   descGetRiskScanReport, descGetRiskScanReportDownload, descGetRiskScanHeatmap,
   descBodyRiskScanCreate, descBodyRiskScanUpdate,
   descRiskScanIdentity, descRiskScanName, descRiskScanDescription, descRiskScanTags,
@@ -205,6 +213,8 @@ const CHAOS_LOADTEST = "/loadTest/manager/api";
  * collected by an SD agent running inside the user's cluster.
  */
 const SD = "/gateway/servicediscovery/api/v1";
+const SD_V2 = "/gateway/servicediscovery/api/v2";
+const CUSTOM_DISCOVERY_AGENT = "custom-discovery-agent";
 
 /** Chaos scope override — Chaos REST API uses organizationIdentifier (not orgIdentifier). */
 const CHAOS_SCOPE = { org: "organizationIdentifier" } as const;
@@ -248,6 +258,119 @@ function compactDiscoveredAgent(item: Record<string, unknown>): Record<string, u
   return slim;
 }
 
+function optionalText(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const text = String(value).trim();
+  return text === "" ? undefined : text;
+}
+
+function stringList(value: unknown): string[] | undefined {
+  if (value == null || value === "") return undefined;
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  return String(value).split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function linkedDiscoveredService(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const linked = value as Record<string, unknown>;
+  const agentId = optionalText(linked.agent_id ?? linked.agentId);
+  const environmentId = optionalText(linked.environment_id ?? linked.environmentId);
+  const externalId = optionalText(linked.external_id ?? linked.externalId);
+  if (!agentId && !environmentId && !externalId) return undefined;
+  if (!agentId || !environmentId || !externalId) {
+    const missing = [
+      !agentId ? "agent_id" : "",
+      !environmentId ? "environment_id" : "",
+      !externalId ? "external_id" : "",
+    ].filter(Boolean);
+    throw new Error(
+      `linked_discovered_service requires agent_id, environment_id, and external_id. Missing: ${missing.join(", ")}.`,
+    );
+  }
+  return { agentId, environmentId, externalId };
+}
+
+/**
+ * A CodeRepository chaos service is the only one that may omit infrastructure,
+ * and only when agent_id is the custom discovery agent. Every other service
+ * must send both identifiers so an update cannot clear its mapping.
+ */
+function assertChaosServiceInfrastructure(
+  agentId: string | undefined,
+  environmentId: string | undefined,
+  infrastructureId: string | undefined,
+): void {
+  if (agentId === CUSTOM_DISCOVERY_AGENT) {
+    if (Boolean(environmentId) !== Boolean(infrastructureId)) {
+      throw new Error(
+        "environment_id and infrastructure_id must both be set or both omitted for a CodeRepository service (agent_id custom-discovery-agent).",
+      );
+    }
+    return;
+  }
+  const missing = [
+    !environmentId ? "environment_id" : "",
+    !infrastructureId ? "infrastructure_id" : "",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing.join(" and ")} required for a chaos service. Omit both only for a CodeRepository service with agent_id ${CUSTOM_DISCOVERY_AGENT}.`,
+    );
+  }
+}
+
+function buildCustomServiceBody(input: Record<string, unknown>): Record<string, unknown> {
+  const b = coerceBody(input);
+  const type = optionalText(b.type) ?? "";
+  const specInput = b.spec;
+  const specRecord = specInput && typeof specInput === "object" && !Array.isArray(specInput)
+    ? specInput as Record<string, unknown>
+    : undefined;
+  let spec: Record<string, unknown> | undefined;
+  if (type === "CodeRepository") {
+    const nested = specRecord?.codeRepository;
+    const nestedRecord = nested && typeof nested === "object" && !Array.isArray(nested)
+      ? nested as Record<string, unknown>
+      : undefined;
+    const repoURL = optionalText(b.repo_url ?? b.repoURL ?? nestedRecord?.repoURL ?? nestedRecord?.repo_url);
+    if (!repoURL) {
+      throw new Error("repo_url is required when type is CodeRepository");
+    }
+    const branch = optionalText(b.branch ?? nestedRecord?.branch);
+    spec = {
+      codeRepository: {
+        repoURL,
+        module: optionalText(b.module ?? nestedRecord?.module) ?? ".",
+        ...(branch ? { branch } : {}),
+      },
+    };
+  } else if (specRecord) {
+    spec = specRecord;
+  } else if (type) {
+    throw new Error(`spec is required when type is ${type}`);
+  }
+  const tags = stringList(b.tags);
+  return {
+    ...(optionalText(b.identity) ? { identity: optionalText(b.identity) } : {}),
+    ...(optionalText(b.name) ? { name: optionalText(b.name) } : {}),
+    ...(type ? { type } : {}),
+    ...(optionalText(b.description) ? { description: optionalText(b.description) } : {}),
+    ...(tags ? { tags } : {}),
+    ...(spec ? { spec } : {}),
+  };
+}
+
+/**
+ * PUT /api/v2/services/{identity} replaces name, description, tags, type and spec.
+ * The identity belongs on the path, not in the body, and the API requires name and type.
+ */
+function buildCustomServiceUpdateBody(input: Record<string, unknown>): Record<string, unknown> {
+  const { identity: _identity, ...body } = buildCustomServiceBody(input);
+  if (!body.name) throw new Error("name is required to update a custom service");
+  if (!body.type) throw new Error("type is required to update a custom service");
+  return body;
+}
+
 /**
  * Parse input.body when LLMs double-serialize it as a JSON string instead of an object.
  * Fails loudly on malformed JSON so callers' defaults can never silently produce a
@@ -267,6 +390,8 @@ function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
   }
   return raw as Record<string, unknown>;
 }
+
+const MAX_RISK_SCAN_FINDINGS = 100;
 
 /**
  * Detects whether a chaos experiment identifier looks like the internal UUID
@@ -2420,9 +2545,10 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "onboarding_id", description: descChaosServiceOnboardingIdFilter },
       ],
       relatedResources: [
-        { resourceType: "discovered_agent", relationship: "prerequisite", description: "STEP 1 of create: pick the Service Discovery agent. Its 'identity' becomes agent_id, its environmentIdentifier becomes environment_id, and (for SD K8s) its identity is also the bare infrastructure_id." },
+        { resourceType: "discovered_agent", relationship: "prerequisite", description: "STEP 1 of create: pick the Service Discovery agent. Its 'identity' becomes agent_id, its environmentIdentifier becomes environment_id, and (for SD K8s) its identity is also the bare infrastructure_id. A code-repository service uses agent_id custom-discovery-agent and omits environment and infrastructure." },
         { resourceType: "discovered_namespace", relationship: "filters", description: "Optional STEP 2a: list namespaces for the chosen agent to narrow the discovered_service list before picking a service." },
-        { resourceType: "discovered_service", relationship: "prerequisite", description: "STEP 2b of create: pick the service to onboard. Its 'id' becomes external_service_id (the server derives serviceType/namespace from it)." },
+        { resourceType: "discovered_service", relationship: "prerequisite", description: "STEP 2b of create: pick the runtime service to onboard. Its 'id' becomes external_service_id (the server derives serviceType/namespace from it)." },
+        { resourceType: "custom_service", relationship: "prerequisite", description: "Code-repository create: pick or create the custom service. Its 'id' becomes external_service_id and agent_id is custom-discovery-agent. Omit environment_id and infrastructure_id." },
         { resourceType: "chaos_probe", relationship: "associates", description: "STEP 4 of create: optional health-check probes to attach. Source probe identities and their inputs[] schema here; fill each input value before adding to the create body's probes array." },
       ],
       operations: {
@@ -2470,13 +2596,15 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = coerceBody(input);
-            const externalServiceId = b.external_service_id ?? b.externalServiceId;
-            const agentId = b.agent_id ?? b.agentId;
-            const environmentId = b.environment_id ?? b.environmentId;
-            const infrastructureId = b.infrastructure_id ?? b.infrastructureId;
-            const infrastructureType = b.infrastructure_type ?? b.infrastructureType;
-            const onboardingId = b.onboarding_id ?? b.onboardingId;
-            const tags = b.tags;
+            const externalServiceId = optionalText(b.external_service_id ?? b.externalServiceId);
+            const agentId = optionalText(b.agent_id ?? b.agentId);
+            const environmentId = optionalText(b.environment_id ?? b.environmentId);
+            const infrastructureId = optionalText(b.infrastructure_id ?? b.infrastructureId);
+            const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
+            const onboardingId = optionalText(b.onboarding_id ?? b.onboardingId);
+            const tags = stringList(b.tags);
+            const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            assertChaosServiceInfrastructure(agentId, environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
               ...(p.inputs ? { inputs: p.inputs } : {}),
@@ -2485,30 +2613,21 @@ export const chaosToolset: ToolsetDefinition = {
               identity: b.identity,
               name: b.name,
               ...(b.description ? { description: b.description } : {}),
-              ...(tags
-                ? {
-                    tags: Array.isArray(tags)
-                      ? tags
-                      : String(tags)
-                          .split(",")
-                          .map((t) => t.trim())
-                          .filter(Boolean),
-                  }
-                : {}),
+              ...(tags ? { tags } : {}),
               externalServiceId,
               agentId,
-              environmentId,
-              infrastructureId,
               // Dual-write snake_case keys so registry required-field validation
               // (which checks bodySchema.fields names against this transformed
               // payload) sees the fields it expects. See getBodySchemaValidationPayload
-              // in registry/index.ts.
+              // in registry/index.ts. environment and infrastructure are omitted
+              // only for a CodeRepository service (agent_id custom-discovery-agent).
               external_service_id: externalServiceId,
               agent_id: agentId,
-              environment_id: environmentId,
-              infrastructure_id: infrastructureId,
+              ...(environmentId ? { environmentId, environment_id: environmentId } : {}),
+              ...(infrastructureId ? { infrastructureId, infrastructure_id: infrastructureId } : {}),
               ...(infrastructureType ? { infrastructureType } : {}),
               ...(onboardingId ? { onboardingId } : {}),
+              ...(linked ? { linkedDiscoveredService: linked } : {}),
               ...(probes && probes.length > 0 ? { probes } : {}),
             };
           },
@@ -2521,13 +2640,14 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "name", type: "string", required: true, description: descChaosServiceName },
               { name: "external_service_id", type: "string", required: true, description: descChaosServiceExternalServiceId },
               { name: "agent_id", type: "string", required: true, description: descChaosServiceAgentId },
-              { name: "environment_id", type: "string", required: true, description: descChaosServiceEnvironmentId },
-              { name: "infrastructure_id", type: "string", required: true, description: descChaosServiceInfrastructureId },
+              { name: "environment_id", type: "string", required: false, description: descChaosServiceEnvironmentId },
+              { name: "infrastructure_id", type: "string", required: false, description: descChaosServiceInfrastructureId },
               { name: "infrastructure_type", type: "string", required: false, description: descChaosServiceInfrastructureType },
               { name: "description", type: "string", required: false, description: descChaosServiceDescription },
               { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
               { name: "onboarding_id", type: "string", required: false, description: descChaosServiceOnboardingId },
               { name: "probes", type: "array", required: false, description: descChaosServiceProbes },
+              { name: "linked_discovered_service", type: "object", required: false, description: descChaosServiceLinkedDiscoveredService },
             ],
           },
         },
@@ -2540,9 +2660,12 @@ export const chaosToolset: ToolsetDefinition = {
             const b = coerceBody(input);
             const externalServiceId = b.external_service_id ?? b.externalServiceId;
             const agentId = b.agent_id ?? b.agentId;
-            const environmentId = b.environment_id ?? b.environmentId;
-            const infrastructureId = b.infrastructure_id ?? b.infrastructureId;
-            const tags = b.tags;
+            const environmentId = optionalText(b.environment_id ?? b.environmentId);
+            const infrastructureId = optionalText(b.infrastructure_id ?? b.infrastructureId);
+            const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
+            const tags = stringList(b.tags);
+            const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            assertChaosServiceInfrastructure(optionalText(agentId), environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
               ...(p.inputs ? { inputs: p.inputs } : {}),
@@ -2562,13 +2685,15 @@ export const chaosToolset: ToolsetDefinition = {
                 : {}),
               externalServiceId,
               agentId,
-              environmentId,
-              infrastructureId,
               // Dual-write snake_case keys — see comment in create bodyBuilder above.
+              // Empty environment and infrastructure are omitted only for a
+              // CodeRepository service, so a normal update cannot clear its mapping.
               external_service_id: externalServiceId,
               agent_id: agentId,
-              environment_id: environmentId,
-              infrastructure_id: infrastructureId,
+              ...(environmentId ? { environmentId, environment_id: environmentId } : {}),
+              ...(infrastructureId ? { infrastructureId, infrastructure_id: infrastructureId } : {}),
+              ...(infrastructureType ? { infrastructureType } : {}),
+              ...(linked ? { linkedDiscoveredService: linked } : {}),
               // Full desired-state replace (hce-saas reconcileProbeMappings):
               // pass an explicit [] straight through (detach all) rather than
               // dropping it, but leave the key absent when the caller omitted it
@@ -2585,11 +2710,13 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "name", type: "string", required: true, description: descChaosServiceName },
               { name: "external_service_id", type: "string", required: true, description: descChaosServiceExternalServiceId },
               { name: "agent_id", type: "string", required: true, description: descChaosServiceAgentId },
-              { name: "environment_id", type: "string", required: true, description: descChaosServiceEnvironmentId },
-              { name: "infrastructure_id", type: "string", required: true, description: descChaosServiceInfrastructureId },
+              { name: "environment_id", type: "string", required: false, description: descChaosServiceEnvironmentId },
+              { name: "infrastructure_id", type: "string", required: false, description: descChaosServiceInfrastructureId },
+              { name: "infrastructure_type", type: "string", required: false, description: descChaosServiceInfrastructureType },
               { name: "description", type: "string", required: false, description: descChaosServiceDescription },
               { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
               { name: "probes", type: "array", required: true, description: descChaosServiceProbesUpdate },
+              { name: "linked_discovered_service", type: "object", required: false, description: descChaosServiceLinkedDiscoveredService },
             ],
           },
         },
@@ -4040,6 +4167,112 @@ export const chaosToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Custom services (service-discovery v2) ─────────────────────────
+    // POST/GET /gateway/servicediscovery/api/v2/services. Creates are pinned
+    // to the custom discovery agent; the API rejects any other agent.
+    {
+      resourceType: "custom_service",
+      displayName: "Custom Service",
+      description: descCustomService,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["identity"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/discovery/custom-discovery-agent/custom-service/{identity}",
+      searchAliases: [
+        "custom service", "custom discovery service", "code repository service",
+        "code repository", "repository service",
+      ],
+      listFilterFields: [
+        { name: "type", description: descCustomServiceTypeFilter },
+        { name: "category", description: descCustomServiceCategoryFilter },
+        { name: "search", description: descChaosServiceSearch },
+      ],
+      relatedResources: [
+        {
+          resourceType: "chaos_service",
+          relationship: "promoted_to",
+          description: "Onboard the custom service as a chaos service. Pass this record's id as external_service_id and agent_id custom-discovery-agent. For type CodeRepository, omit environment_id and infrastructure_id.",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SD_V2}/services`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            size: "limit",
+            search: "search",
+            search_term: "search",
+            type: "type",
+            category: "category",
+          },
+          staticQueryParams: { agentIdentifier: CUSTOM_DISCOVERY_AGENT },
+          responseExtractor: sdV2PageExtract,
+          description: descListCustomServices,
+        },
+        get: {
+          method: "GET",
+          path: `${SD_V2}/services/{identity}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { identity: "identity" },
+          staticQueryParams: { agentIdentifier: CUSTOM_DISCOVERY_AGENT },
+          responseExtractor: passthrough,
+          description: descGetCustomService,
+        },
+        create: {
+          method: "POST",
+          path: `${SD_V2}/services`,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          staticQueryParams: { agentIdentifier: CUSTOM_DISCOVERY_AGENT },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildCustomServiceBody,
+          responseExtractor: passthrough,
+          description: descCreateCustomService,
+          bodySchema: {
+            description: descBodyCustomServiceCreate,
+            fields: [
+              { name: "identity", type: "string", required: true, description: descCustomServiceIdentity },
+              { name: "name", type: "string", required: true, description: descCustomServiceName },
+              { name: "type", type: "string", required: true, description: descCustomServiceType },
+              { name: "repo_url", type: "string", required: false, description: descCustomServiceRepoURL },
+              { name: "module", type: "string", required: false, description: descCustomServiceModule },
+              { name: "branch", type: "string", required: false, description: descCustomServiceBranch },
+              { name: "spec", type: "object", required: false, description: descCustomServiceSpec },
+              { name: "description", type: "string", required: false, description: descChaosServiceDescription },
+              { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${SD_V2}/services/{identity}`,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: { identity: "identity" },
+          staticQueryParams: { agentIdentifier: CUSTOM_DISCOVERY_AGENT },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildCustomServiceUpdateBody,
+          responseExtractor: passthrough,
+          description: descUpdateCustomService,
+          bodySchema: {
+            description: descBodyCustomServiceUpdate,
+            fields: [
+              { name: "name", type: "string", required: true, description: descCustomServiceName },
+              { name: "type", type: "string", required: true, description: descCustomServiceType },
+              { name: "repo_url", type: "string", required: false, description: descCustomServiceRepoURL },
+              { name: "module", type: "string", required: false, description: descCustomServiceModule },
+              { name: "branch", type: "string", required: false, description: descCustomServiceBranch },
+              { name: "spec", type: "object", required: false, description: descCustomServiceSpec },
+              { name: "description", type: "string", required: false, description: descChaosServiceDescription },
+              { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
+            ],
+          },
+        },
+      },
+    },
+
     // ── Service Discovery: Agents ──────────────────────────────────────
     // GET /gateway/servicediscovery/api/v1/agents (service-discovery repo).
     // Envelope matches the other SD list endpoints:
@@ -4442,13 +4675,13 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
-      searchAliases: ["risk scan", "resilience risk scan", "manifest scan"],
+      searchAliases: ["risk scan", "resilience risk scan", "manifest scan", "code scan", "code repository risk scan"],
       listFilterFields: [
         { name: "search", description: descRiskSearch },
         { name: "sort_field", description: descRiskSortField },
         { name: "sort_ascending", description: descRiskSortAscending, type: "boolean" },
         { name: "tags", description: descRiskTags },
-        { name: "scan_type", description: descScannedRiskScanType, enum: ["PipelineExecution", "DiscoveryAgent"] },
+        { name: "scan_type", description: descScannedRiskScanType, enum: ["PipelineExecution", "DiscoveryAgent", "CodeRepository"] },
         { name: "status", description: descRiskScanStatus, enum: ["PENDING", "COLLECTING", "ANALYSING", "REPORTING", "COMPLETED", "ERRORED", "ABORTED"] },
         { name: "pipeline_identity", description: descRiskPipelineIdentity },
         { name: "agent_identity", description: descRiskAgentIdentity },
@@ -4508,12 +4741,15 @@ export const chaosToolset: ToolsetDefinition = {
             if (missing.length > 0) {
               throw new Error(`Missing required field(s): ${missing.join(", ")}. All are required to create a risk scan.`);
             }
+            const detectionMethod = b.detectionMethod ?? b.detection_method
+              ?? (scanType === "CodeRepository" ? "External" : undefined);
             return {
               identity: b.identity,
               name: b.name,
               ...(b.description != null ? { description: b.description } : {}),
               ...(b.tags != null ? { tags: b.tags } : {}),
               scanType,
+              ...(detectionMethod != null ? { detectionMethod } : {}),
               source: b.source,
             };
           },
@@ -4527,6 +4763,7 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "description", type: "string", required: false, description: descRiskScanDescription },
               { name: "tags", type: "array", required: false, itemType: "string", description: descRiskScanTags },
               { name: "scanType", type: "string", required: true, description: descRiskScanType },
+              { name: "detectionMethod", type: "string", required: false, description: descRiskScanDetectionMethod },
               { name: "source", type: "object", required: true, description: descRiskScanSource },
             ],
           },
@@ -4584,6 +4821,31 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: descAbortRiskScan,
           bodySchema: { description: descBodyNoBody, fields: [] },
+        },
+        submit_findings: {
+          method: "POST",
+          path: `${CHAOS}/v3/risk-scans/{identity}/findings`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { identity: "identity" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const findings = b.findings;
+            if (!Array.isArray(findings)) {
+              throw new Error("Missing required field: findings (array). Submit an empty array to complete a scan with no findings.");
+            }
+            if (findings.length > MAX_RISK_SCAN_FINDINGS) {
+              throw new Error(`Too many findings: ${findings.length}. At most ${MAX_RISK_SCAN_FINDINGS} findings can be submitted per scan; aggregate call sites into one finding per rule and module.`);
+            }
+            return { findings };
+          },
+          responseExtractor: passthrough,
+          actionDescription: descSubmitRiskScanFindings,
+          bodySchema: {
+            description: descBodySubmitRiskScanFindings,
+            fields: [
+              { name: "findings", type: "array", required: true, itemType: "object", description: descRiskScanFindings },
+            ],
+          },
         },
         report: {
           method: "GET",
