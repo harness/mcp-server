@@ -237,6 +237,29 @@ describe("T14-v2: SCS list filter enrichment", () => {
   });
 });
 
+// ─── Deep link placeholder alignment (#1030) ───────────────────────────────
+
+describe("SCS deep link placeholder alignment (#1030)", () => {
+  const artifactScopedTypes = [
+    "artifact_security",
+    "scs_artifact_remediation",
+    "scs_chain_of_custody",
+  ] as const;
+
+  for (const type of artifactScopedTypes) {
+    it(`${type} deepLinkTemplate placeholders match pathParams API names`, () => {
+      const res = findResource(type);
+      expect(res.deepLinkTemplate).toBeDefined();
+      const template = res.deepLinkTemplate!;
+      expect(template).not.toContain("{artifactId}");
+
+      const getSpec = res.operations.get;
+      expect(getSpec?.pathParams?.artifact_id).toBe("artifact");
+      expect(template).toContain("{artifact}");
+    });
+  }
+});
+
 // ─── T4-v2: remediation limitation note ───────────────────────────────────
 
 describe("T4-v2: remediation limitation note", () => {
