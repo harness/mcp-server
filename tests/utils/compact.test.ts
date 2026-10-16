@@ -104,6 +104,24 @@ describe("compactItems", () => {
     expect(result[0].openInHarness).toBe("https://app.harness.io/ng/pipelines/p1");
   });
 
+  it("keeps SCS list marker fields _summary, _message, and _result", () => {
+    const items = [{
+      identifier: "art-1",
+      _summary: "3 critical findings",
+      _message: "Scan incomplete for one source",
+      _result: "partial",
+      rawScanPayload: { should: "strip" },
+    }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toMatchObject({
+      identifier: "art-1",
+      _summary: "3 critical findings",
+      _message: "Scan incomplete for one source",
+      _result: "partial",
+    });
+    expect(result[0]).not.toHaveProperty("rawScanPayload");
+  });
+
   it("passes through non-object items unchanged", () => {
     const items = ["string", 42, null];
     expect(compactItems(items)).toEqual(["string", 42, null]);
