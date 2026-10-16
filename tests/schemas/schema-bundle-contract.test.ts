@@ -220,4 +220,58 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream DownloadNexusArtifact step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("DownloadNexusArtifactStepNode");
+    expect(cdSteps).toHaveProperty("DownloadNexusArtifactStepInfo");
+
+    const stepNode = cdSteps.DownloadNexusArtifactStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("DownloadNexusArtifact");
+
+    const stepInfo = cdSteps.DownloadNexusArtifactStepInfo as {
+      allOf: Array<{ properties?: Record<string, { enum?: string[] }> }>;
+    };
+    const objectShard = stepInfo.allOf.find((part) => part.properties?.repositoryFormat);
+    expect(objectShard?.properties?.repositoryFormat?.enum).toEqual(
+      expect.arrayContaining(["raw", "maven", "npm", "nuget"]),
+    );
+    expect(objectShard?.properties).toHaveProperty("connectorRef");
+    expect(objectShard?.properties).toHaveProperty("validateChecksum");
+  });
+
+  it("includes upstream DownloadNexusArtifact step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = templateDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("DownloadNexusArtifactStepNode");
+    expect(cdSteps).toHaveProperty("DownloadNexusArtifactStepNode_template");
+    expect(cdSteps).toHaveProperty("DownloadNexusArtifactStepInfo");
+  });
+
+  it("includes upstream agent merge metadata on v1 TemplateRef and RunStepInfoV1", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const common = defs[key].common as Record<string, unknown>;
+      const unified = defs[key].steps.unified as Record<string, unknown>;
+
+      const templateRef = common.TemplateRef as {
+        properties: Record<string, { description?: string }>;
+      };
+      expect(templateRef.properties).toHaveProperty("sourceStepType");
+      expect(templateRef.properties).toHaveProperty("sourceName");
+      expect(templateRef.properties.sourceStepType.description).toContain("agent");
+
+      const runStep = unified.RunStepInfoV1 as {
+        properties: Record<string, { description?: string }>;
+      };
+      expect(runStep.properties).toHaveProperty("sourceStepType");
+      expect(runStep.properties).toHaveProperty("sourceName");
+      expect(runStep.properties.sourceName.description).toContain("First write wins");
+    }
+  });
 });
