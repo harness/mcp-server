@@ -204,6 +204,51 @@ describe("schema bundle contract", () => {
     expect(identitySpec.properties.scope?.enum).toContain("STEP");
   });
 
+  it("wires upstream identities on pipeline root and ShellScriptProvision nodes in v0 schemas", () => {
+    const identitiesRef = "#/definitions/pipeline/common/IdentitiesConfig";
+
+    const expectIdentities = (
+      properties: Record<string, { $ref?: string }>,
+      label: string,
+    ): void => {
+      expect(properties.identities?.$ref, label).toBe(identitiesRef);
+    };
+
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const pipelineRoot = pipelineDefs.pipeline.pipeline as {
+      properties: Record<string, { $ref?: string }>;
+    };
+    expectIdentities(pipelineRoot.properties, "v0 pipeline root");
+
+    const pipelineCdSteps = pipelineDefs.pipeline.steps.cd as Record<
+      string,
+      { properties: Record<string, { $ref?: string }> }
+    >;
+    expectIdentities(
+      pipelineCdSteps.ShellScriptProvisionStepNode.properties,
+      "v0 ShellScriptProvisionStepNode",
+    );
+
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const templatePipelineRoot = templateDefs.template.pipeline.pipeline as {
+      properties: Record<string, { $ref?: string }>;
+    };
+    expectIdentities(templatePipelineRoot.properties, "v0 template pipeline root");
+
+    const templateCdSteps = templateDefs.pipeline.steps.cd as Record<
+      string,
+      { properties: Record<string, { $ref?: string }> }
+    >;
+    expectIdentities(
+      templateCdSteps.ShellScriptProvisionStepNode.properties,
+      "v0 template ShellScriptProvisionStepNode",
+    );
+    expectIdentities(
+      templateCdSteps.ShellScriptProvisionStepNode_template.properties,
+      "v0 template ShellScriptProvisionStepNode_template",
+    );
+  });
+
   it("includes upstream DynamicStageNodeV1 in v1 pipeline and template unified stages", () => {
     for (const key of ["pipeline_v1", "template_v1"] as const) {
       const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
