@@ -29,6 +29,36 @@ function extractStringSet(source: string, constName: string): Set<string> {
 const REMOVED_V1_SCHEMAS = ["trigger", "service", "infra"] as const;
 const REMOVED_V1_KEYS = REMOVED_V1_SCHEMAS.map((name) => `${name}_v1`);
 
+type JsonSchemaObject = Record<string, unknown>;
+
+function allOfBranchWithOneOfRequired(
+  def: { allOf?: JsonSchemaObject[] },
+  requiredField: string,
+): JsonSchemaObject | undefined {
+  for (const branch of def.allOf ?? []) {
+    const oneOf = branch.oneOf as Array<{ required?: string[] }> | undefined;
+    if (oneOf?.some((variant) => variant.required?.includes(requiredField))) {
+      return branch;
+    }
+  }
+  return undefined;
+}
+
+function oneOfRequiredFields(def: { oneOf?: Array<{ required?: string[] }> }): string[][] {
+  return (def.oneOf ?? [])
+    .map((variant) => variant.required ?? [])
+    .filter((fields) => fields.length > 0);
+}
+
+function syncInitiatedSuccessCriteriaRule(def: { allOf?: JsonSchemaObject[] }): JsonSchemaObject | undefined {
+  return def.allOf?.find((branch) => {
+    const ifClause = branch.if as JsonSchemaObject | undefined;
+    const properties = ifClause?.properties as JsonSchemaObject | undefined;
+    const successCriteria = properties?.successCriteria as { const?: string } | undefined;
+    return successCriteria?.const === "syncInitiated";
+  });
+}
+
 describe("schema bundle contract", () => {
   it("keeps sync-schemas.js and check-schema-coverage.js v1 lists aligned", () => {
     const syncScript = readFileSync(join(ROOT, "scripts/sync-schemas.js"), "utf8");
@@ -219,5 +249,81 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source");
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
+  });
+
+  it("includes changesetFQN rollback selector on DB schema rollback step specs in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const commonSteps = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline
+        .steps.common as Record<string, { allOf?: JsonSchemaObject[] }>;
+
+      for (const stepInfoName of ["DBRollbackSchemaStepInfo", "DBSchemaRollbackSQLInfo"] as const) {
+        const branch = allOfBranchWithOneOfRequired(commonSteps[stepInfoName], "changesetFQN");
+        expect(branch, `${key} ${stepInfoName}`).toBeDefined();
+
+        const requiredVariants = oneOfRequiredFields(branch as { oneOf?: Array<{ required?: string[] }> });
+        expect(requiredVariants).toEqual(
+          expect.arrayContaining([["tag"], ["changeSetCount"], ["changesetFQN"]]),
+        );
+
+        const properties = branch?.properties as Record<string, { type?: string; minLength?: number }>;
+        expect(properties?.changesetFQN).toEqual({ type: "string", minLength: 1 });
+      }
+    }
+  });
+
+  it("includes GitOps successCriteria and syncInitiated guardrails on sync and rollback step specs", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const cdSteps = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline.steps
+        .cd as Record<string, JsonSchemaObject>;
+
+      for (const stepInfoName of ["SyncStepInfo", "GitOpsRollbackStepInfo"] as const) {
+        const stepInfo = cdSteps[stepInfoName];
+        const successCriteria = stepInfo.properties as {
+          successCriteria?: { oneOf?: Array<{ enum?: string[] }> };
+        };
+        const literalBranch = successCriteria.successCriteria?.oneOf?.find((branch) => branch.enum != null);
+        expect(literalBranch?.enum).toEqual(["syncInitiated", "syncSucceeded"]);
+
+        const syncInitiatedRule = syncInitiatedSuccessCriteriaRule(
+          stepInfo as { allOf?: JsonSchemaObject[] },
+        );
+        expect(syncInitiatedRule, `${key} ${stepInfoName}`).toBeDefined();
+
+        const thenClause = syncInitiatedRule?.then as {
+          properties?: Record<string, { not?: Record<string, unknown> }>;
+        };
+        expect(thenClause?.properties?.waitTillHealthy?.not).toEqual({ enum: [true, "true"] });
+        expect(thenClause?.properties?.failOnTimeout?.not).toEqual({ const: true });
+      }
+    }
+  });
+
+  it("exposes identities on step and stage nodes from upstream OIDC schema sync", () => {
+    const identitiesRef = "#/definitions/pipeline/common/IdentitiesConfig";
+
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const pipelineCommon = pipelineDefs.pipeline.common as Record<string, JsonSchemaObject>;
+    const pipelineStages = pipelineDefs.pipeline.stages as Record<string, Record<string, JsonSchemaObject>>;
+
+    const stepElement = pipelineCommon.StepElementConfig.properties as Record<string, { $ref?: string }>;
+    expect(stepElement.identities?.$ref).toBe(identitiesRef);
+
+    const deploymentStage = pipelineStages.cd.DeploymentStageNode.properties as Record<string, { $ref?: string }>;
+    expect(deploymentStage.identities?.$ref).toBe(identitiesRef);
+
+    const customStage = pipelineStages.custom.CustomStageNode.properties as Record<string, { $ref?: string }>;
+    expect(customStage.identities?.$ref).toBe(identitiesRef);
+
+    const templateStages = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>).pipeline
+      .stages as Record<string, Record<string, JsonSchemaObject>>;
+
+    const templateCustom = templateStages.custom.CustomStageNode.properties as Record<string, { $ref?: string }>;
+    expect(templateCustom.identities?.$ref).toBe(identitiesRef);
+
+    const templateCustomTemplate = templateStages.custom.CustomStageNode_template.properties as Record<
+      string,
+      { $ref?: string }
+    >;
+    expect(templateCustomTemplate.identities?.$ref).toBe(identitiesRef);
   });
 });
