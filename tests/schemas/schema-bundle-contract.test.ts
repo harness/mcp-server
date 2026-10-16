@@ -220,4 +220,72 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream multi-deployment config in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const common = defs[key].common as Record<string, unknown>;
+      const unified = defs[key].stages.unified as Record<string, unknown>;
+
+      expect(common).toHaveProperty("MultiDeploymentConfigV1");
+      expect(common).toHaveProperty("StrategyOnFailureTypeV1");
+
+      const onFailureType = common.StrategyOnFailureTypeV1 as { enum: string[] };
+      expect(onFailureType.enum).toEqual(["run-all", "skip-queued"]);
+
+      const multiDeployment = common.MultiDeploymentConfigV1 as {
+        additionalProperties: boolean;
+        properties: Record<string, { oneOf?: { $ref: string }[] }>;
+      };
+      expect(multiDeployment.additionalProperties).toBe(false);
+      expect(multiDeployment.properties).toHaveProperty("on-failure");
+      expect(multiDeployment.properties).toHaveProperty("when");
+      expect(multiDeployment.properties).toHaveProperty("max-concurrency");
+      expect(multiDeployment.properties["on-failure"].oneOf?.[0].$ref).toContain(
+        "StrategyOnFailureTypeV1",
+      );
+
+      const unifiedStage = unified.UnifiedStageNodeV1 as {
+        properties: Record<string, { $ref?: string }>;
+      };
+      expect(unifiedStage.properties["multi-deployment"].$ref).toContain("MultiDeploymentConfigV1");
+    }
+  });
+
+  it("allows expression-based environment and infrastructure filters in v1 unified stages", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const filters = (defs[key].stages.unified as Record<string, unknown>).Filters as {
+        oneOf: { $ref?: string; type?: string }[];
+      };
+
+      expect(filters.oneOf[0].$ref).toContain("Expression");
+      expect(filters.oneOf[1].type).toBe("array");
+
+      const filterItem = filters.oneOf[1] as {
+        items: {
+          properties: Record<
+            string,
+            {
+              oneOf: {
+                $ref?: string;
+                type?: string;
+                items?: { $ref?: string };
+                properties?: Record<string, { oneOf: { $ref?: string }[] }>;
+              }[];
+            }
+          >;
+        };
+      };
+      const infraOneOf = filterItem.items.properties.infrastructures.oneOf;
+      expect(infraOneOf.some((branch) => branch.$ref?.includes("Expression"))).toBe(true);
+      expect(
+        infraOneOf.some((branch) => branch.items?.$ref?.includes("FilterCondition")),
+      ).toBe(true);
+      const compositeBranch = infraOneOf.find((branch) => branch.properties?.or);
+      expect(
+        compositeBranch?.properties?.or.oneOf?.some((branch) => branch.$ref?.includes("Expression")),
+      ).toBe(true);
+    }
+  });
 });
