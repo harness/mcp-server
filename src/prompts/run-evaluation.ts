@@ -32,7 +32,7 @@ ${org_id ? `org_id=${org_id}` : "Use default HARNESS_ORG"}; ${project_id ? `proj
 - This workflow creates **managed offline evaluations only**. Do not assume identifiers, connector settings, models, dataset content, prompt versions, or agent response paths.
 - Before every write, ask for any required value that the user has not explicitly supplied, in the field's documented JSON format. Never fabricate UUIDs, connector refs, sample data, or outputs.
 - Use the IDs returned from the matching list/create call, in this exact org/project. The MCP preflight rejects inaccessible or mismatched references.
-- For \`eval_registry_item\`, specify \`filters: { type: "prompt" | "agent" | "mcp_tool" | "skill" }\` when discovering a particular registry item kind.
+- For Prompt Registry prompts, use \`harness_list(resource_type="eval_prompt")\`; use its returned UUID when creating a prompt target.
 - Actions that contact an LLM, target, or execution pipeline require an explicit confirmation. Explain the likely cost and external effect immediately before invoking them.
 
 ## Steps (use generic MCP tools only)
@@ -41,7 +41,7 @@ ${org_id ? `org_id=${org_id}` : "Use default HARNESS_ORG"}; ${project_id ? `proj
 
 2. **Gather valid resources before wiring**
    - Datasets: \`harness_list(resource_type="eval_dataset")\`. Each item needs a stable \`item_identifier\` and a JSON \`input\`; ask the user for representative, real test data when it does not exist.
-   - Targets: \`harness_list(resource_type="eval_target")\`. A prompt target needs an existing LLM connector and an explicit model for Harness-managed connectors. An agent target needs an HTTP(S) endpoint, method, request template, and response path. A precomputed target needs complete output coverage for the selected dataset.
+   - Targets: \`harness_list(resource_type="eval_target")\`. A prompt target needs an existing LLM connector and an explicit model for Harness-managed connectors. An agent target needs an HTTP(S) endpoint and method; provide a request template or response path only when the target contract requires one. A precomputed target needs complete output coverage for the selected dataset.
    - Metric sets: \`harness_list(resource_type="eval_metric_set")\`. LLM-as-judge metrics require \`judge_llm_config: { connector_ref, model? }\`; do not use raw API keys or deprecated flat fields.
    - Connectors: list the user's existing Harness connectors and have them select one by scoped identifier. Never create a connector or substitute a placeholder.
 

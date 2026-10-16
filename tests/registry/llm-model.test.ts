@@ -44,9 +44,37 @@ describe("llm_model", () => {
     expect(def.operations.get).toBeUndefined();
     const providerField = def.listFilterFields?.find((f) => f.name === "provider");
     expect(providerField?.required).toBe(true);
-    expect(providerField?.enum).toEqual(
-      expect.arrayContaining(["ANTHROPIC", "OPENAI", "GITHUB_COPILOT", "HARNESS_OPENAI", "HARNESS_ANTHROPIC", "HARNESS_LLM"]),
-    );
+    expect(providerField?.enum).toEqual([
+      "ANTHROPIC",
+      "OPENAI",
+      "GITHUB_COPILOT",
+      "HARNESS_OPENAI",
+      "HARNESS_ANTHROPIC",
+      "HARNESS_LLM",
+    ]);
+    const bodySchema = def.operations.list?.bodySchema;
+    const schemaProvider = bodySchema?.fields.find((f) => f.name === "provider");
+    expect(schemaProvider?.description).toContain("HARNESS_LLM");
+    expect(bodySchema?.description).toMatch(/secret references/i);
+  });
+
+  it("POSTs HARNESS_LLM discovery with the same body shape as other providers", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    const request = vi.fn().mockResolvedValue({ status: "SUCCESS", data: [{ value: "harness-model", displayName: "Harness Model" }] });
+    const client = makeClient(request);
+    await registry.dispatch(client, "llm_model", "list", {
+      provider: "HARNESS_LLM",
+      authentication: { type: "Token", spec: { tokenRef: "account.harness_llm" } },
+      url: "https://llm.harness.example",
+      region: "us-west-2",
+    });
+    const call = request.mock.calls[0][0];
+    expect(call.body).toEqual({
+      provider: "HARNESS_LLM",
+      authentication: { type: "Token", spec: { tokenRef: "account.harness_llm" } },
+      url: "https://llm.harness.example",
+      region: "us-west-2",
+    });
   });
 
   it("POSTs discovery body to llm-connector/models at account scope and returns options", async () => {
