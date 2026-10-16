@@ -113,6 +113,21 @@ describe("compactItems", () => {
     expect(compactItems([])).toEqual([]);
   });
 
+  it("keeps SCS list marker fields (_summary, _message, _result) through generic compaction", () => {
+    const items = [
+      { identifier: "src-1", name: "repo", yaml: "dropped" },
+      { _summary: { total: 3, by_type: { IMAGE: 2 } } },
+      { _result: "EMPTY", _message: "No dependencies — do not fabricate." },
+    ];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toEqual({ identifier: "src-1", name: "repo" });
+    expect(result[1]).toEqual({ _summary: { total: 3, by_type: { IMAGE: 2 } } });
+    expect(result[2]).toEqual({
+      _result: "EMPTY",
+      _message: "No dependencies — do not fabricate.",
+    });
+  });
+
   it("uses compactFn when provided instead of the generic whitelist", () => {
     const compactFn = (item: Record<string, unknown>) => ({
       id: item.id,
