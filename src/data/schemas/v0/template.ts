@@ -906,9 +906,6 @@ const schema: Record<string, any> = {
                   "$ref": "#/definitions/pipeline/steps/cd/GoogleFunctionsGenOneRollbackStepNode_template"
                 },
                 {
-                  "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentConfig_template"
-                },
-                {
                   "$ref": "#/definitions/pipeline/steps/common/AwsCdkDeployStepNode_template"
                 },
                 {
@@ -20629,7 +20626,8 @@ const schema: Record<string, any> = {
               "provider": {
                 "type": "string",
                 "enum": [
-                  "istio"
+                  "istio",
+                  "gateway"
                 ]
               },
               "spec": {
@@ -20649,6 +20647,22 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/cd/IstioProviderSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "provider": {
+                      "const": "gateway"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/GatewayProviderSpec"
                     }
                   }
                 }
@@ -21209,6 +21223,94 @@ const schema: Record<string, any> = {
                 "$schema": "http://json-schema.org/draft-07/schema#"
               }
             ]
+          },
+          "GatewayProviderSpec": {
+            "title": "GatewayProviderSpec",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/cd/K8sTrafficRoutingProviderBaseSpec"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "gateways"
+                ],
+                "properties": {
+                  "gateways": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "name"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "namespace": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "sectionName": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "hostnames": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "routes": {
+                    "items": {
+                      "properties": {
+                        "route": {
+                          "properties": {
+                            "destinations": {
+                              "items": {
+                                "properties": {
+                                  "destination": {
+                                    "required": [
+                                      "port"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "K8sCanaryDeleteStepNode_template": {
             "title": "K8sCanaryDeleteStepNode_template",
@@ -138445,6 +138547,83 @@ const schema: Record<string, any> = {
             }
           }
         },
+        "IdentitiesConfig": {
+          "title": "IdentitiesConfig",
+          "type": "object",
+          "description": "Map of named identities. Each key is a user-defined identity name that doubles as the\nenvironment variable injected into the step, and each value is an IdentitySpec.\nReserved names (HARNESS_*, PATH, HOME, AWS_*/GOOGLE_*/AZURE_*) are not allowed, and a\nstep may declare at most 10 identities.\n",
+          "maxProperties": 10,
+          "propertyNames": {
+            "pattern": "^(?!HARNESS_)(?!AWS_)(?!GOOGLE_)(?!AZURE_)(?!PATH$)(?!HOME$)[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/pipeline/common/IdentitySpec"
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "IdentitySpec": {
+          "title": "IdentitySpec",
+          "type": "object",
+          "description": "Definition of a single named identity that produces an independent OIDC ID_TOKEN.\nThe identity name (the map key under identities) doubles as the environment variable\nthe step receives at runtime.\n",
+          "properties": {
+            "audience": {
+              "description": "Audience (aud) the minted ID_TOKEN is issued for.",
+              "type": "string",
+              "minLength": 1
+            },
+            "subjectTemplate": {
+              "description": "Template for the sub claim. Supports literals and allowlisted Harness expressions\n(e.g. <+account.identifier>, <+pipeline.identifier>, <+step.identifier>).\n",
+              "type": "string"
+            },
+            "customClaims": {
+              "description": "Additional custom claims stamped on this identity's token.",
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "scope": {
+              "description": "Visibility scope of the identity. Step-level entries default to STEP.",
+              "type": "string",
+              "enum": [
+                "STEP",
+                "STAGE",
+                "PIPELINE"
+              ]
+            },
+            "disabled": {
+              "description": "When true, suppresses this identity (not generated, not injected).",
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^<\\+input>$",
+                  "minLength": 1
+                }
+              ]
+            },
+            "tokenMode": {
+              "description": "Token exchange mode for this identity.",
+              "type": "string",
+              "enum": [
+                "STANDARD",
+                "CLIENT_ASSERTION"
+              ]
+            },
+            "cloudProvider": {
+              "description": "Target cloud provider for this identity. Determines claim formatting (e.g. AWS session tags).",
+              "type": "string",
+              "enum": [
+                "AWS",
+                "GCP",
+                "AZURE",
+                "VAULT"
+              ]
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
         "OutputNGVariable": {
           "title": "OutputNGVariable",
           "type": "object",
@@ -138521,83 +138700,6 @@ const schema: Record<string, any> = {
             "inputProperties": {
               "type": "string",
               "internalType": "duration"
-            }
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "IdentitiesConfig": {
-          "title": "IdentitiesConfig",
-          "type": "object",
-          "description": "Map of named identities. Each key is a user-defined identity name that doubles as the\nenvironment variable injected into the step, and each value is an IdentitySpec.\nReserved names (HARNESS_*, PATH, HOME, AWS_*/GOOGLE_*/AZURE_*) are not allowed, and a\nstep may declare at most 10 identities.\n",
-          "maxProperties": 10,
-          "propertyNames": {
-            "pattern": "^(?!HARNESS_)(?!AWS_)(?!GOOGLE_)(?!AZURE_)(?!PATH$)(?!HOME$)[A-Za-z_][A-Za-z0-9_]*$"
-          },
-          "additionalProperties": {
-            "$ref": "#/definitions/pipeline/common/IdentitySpec"
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "IdentitySpec": {
-          "title": "IdentitySpec",
-          "type": "object",
-          "description": "Definition of a single named identity that produces an independent OIDC ID_TOKEN.\nThe identity name (the map key under identities) doubles as the environment variable\nthe step receives at runtime.\n",
-          "properties": {
-            "audience": {
-              "description": "Audience (aud) the minted ID_TOKEN is issued for.",
-              "type": "string",
-              "minLength": 1
-            },
-            "subjectTemplate": {
-              "description": "Template for the sub claim. Supports literals and allowlisted Harness expressions\n(e.g. <+account.identifier>, <+pipeline.identifier>, <+step.identifier>).\n",
-              "type": "string"
-            },
-            "customClaims": {
-              "description": "Additional custom claims stamped on this identity's token.",
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "scope": {
-              "description": "Visibility scope of the identity. Step-level entries default to STEP.",
-              "type": "string",
-              "enum": [
-                "STEP",
-                "STAGE",
-                "PIPELINE"
-              ]
-            },
-            "disabled": {
-              "description": "When true, suppresses this identity (not generated, not injected).",
-              "oneOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "string",
-                  "pattern": "^<\\+input>$",
-                  "minLength": 1
-                }
-              ]
-            },
-            "tokenMode": {
-              "description": "Token exchange mode for this identity.",
-              "type": "string",
-              "enum": [
-                "STANDARD",
-                "CLIENT_ASSERTION"
-              ]
-            },
-            "cloudProvider": {
-              "description": "Target cloud provider for this identity. Determines claim formatting (e.g. AWS session tags).",
-              "type": "string",
-              "enum": [
-                "AWS",
-                "GCP",
-                "AZURE",
-                "VAULT"
-              ]
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -139033,314 +139135,1954 @@ const schema: Record<string, any> = {
         }
       },
       "stages": {
-        "cd": {
-          "CustomDeploymentConfig_template": {
-            "title": "CustomDeploymentConfig_template",
+        "custom": {
+          "CustomStageNode_template": {
+            "title": "CustomStageNode_template",
             "type": "object",
             "required": [
-              "execution",
-              "infrastructure"
+              "type"
             ],
             "properties": {
-              "execution": {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentExecutionConfig"
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
               },
-              "infrastructure": {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentInfraConfig"
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
               },
-              "metadata": {
-                "type": "string"
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
               },
-              "description": {
-                "desc": "This is the description for CustomDeploymentConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentExecutionConfig": {
-            "title": "CustomDeploymentExecutionConfig",
-            "type": "object",
-            "properties": {
-              "stepTemplateRefs": {
-                "type": "array",
-                "items": {
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "tags": {
+                "type": "object",
+                "additionalProperties": {
                   "type": "string"
                 }
               },
-              "description": {
-                "desc": "This is the description for CustomDeploymentExecutionConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentInfraConfig": {
-            "title": "CustomDeploymentInfraConfig",
-            "type": "object",
-            "required": [
-              "fetchInstancesScript",
-              "instanceAttributes",
-              "instancesListPath"
-            ],
-            "properties": {
-              "fetchInstancesScript": {
-                "minLength": 1,
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentFetchInstancesScriptConfig"
-              },
-              "instanceAttributes": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentInstanceAttributes"
-                },
-                "minLength": 1
-              },
-              "instancesListPath": {
+              "type": {
                 "type": "string",
-                "minLength": 1
+                "enum": [
+                  "Custom"
+                ]
               },
               "variables": {
                 "type": "array",
                 "items": {
                   "oneOf": [
                     {
-                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentConnectorNGVariable"
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
                     },
                     {
-                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNumberNGVariable"
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
                     },
                     {
-                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentSecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentStringNGVariable"
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
                     }
                   ]
                 }
               },
-              "description": {
-                "desc": "This is the description for CustomDeploymentInfraConfig"
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "runMode": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
               }
             },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentFetchInstancesScriptConfig": {
-            "title": "CustomDeploymentFetchInstancesScriptConfig",
-            "type": "object",
-            "required": [
-              "store"
-            ],
-            "properties": {
-              "metadata": {
-                "type": "string"
-              },
-              "store": {
-                "minLength": 1,
-                "$ref": "#/definitions/pipeline/steps/cd/StoreConfigWrapper"
-              },
-              "description": {
-                "desc": "This is the description for CustomDeploymentFetchInstancesScriptConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentInstanceAttributes": {
-            "title": "CustomDeploymentInstanceAttributes",
-            "type": "object",
-            "required": [
-              "jsonPath",
-              "name"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for CustomDeploymentInstanceAttributes"
-              },
-              "jsonPath": {
-                "type": "string",
-                "minLength": 1
-              },
-              "name": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomDeploymentConnectorNGVariable": {
-            "title": "CustomDeploymentConnectorNGVariable",
+            "$schema": "http://json-schema.org/draft-07/schema#",
             "allOf": [
               {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNGVariable"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "value"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "Connector"
-                    ]
-                  },
-                  "value": {
-                    "type": "string"
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Custom"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/custom/CustomStageConfig"
+                    }
                   }
                 }
               }
+            ]
+          },
+          "CustomStageConfig": {
+            "title": "CustomStageConfig",
+            "type": "object",
+            "required": [
+              "execution"
             ],
+            "properties": {
+              "execution": {
+                "$ref": "#/definitions/pipeline/stages/custom/ExecutionElementConfig"
+              },
+              "description": {
+                "desc": "This is the description for CustomStageConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ExecutionElementConfig": {
+            "title": "ExecutionElementConfig",
+            "type": "object",
+            "required": [
+              "steps"
+            ],
+            "properties": {
+              "rollbackSteps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
+                }
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
+                },
+                "maxItems": 2147483647,
+                "minItems": 1
+              },
+              "description": {
+                "desc": "This is the description for ExecutionElementConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ExecutionWrapperConfig": {
+            "title": "ExecutionWrapperConfig",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/ExecutionWrapperValidation"
+              }
+            ],
+            "properties": {
+              "parallel": {
+                "$ref": "#/definitions/pipeline/stages/custom/ParallelStepElementConfig"
+              },
+              "insert": {
+                "$ref": "#/definitions/pipeline/stages/custom/InsertStepsNode"
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepElementConfig"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/BackgroundStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/ci/GitCloneStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerraformApplyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerraformPlanStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerraformDestroyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerraformRollbackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/CloudformationCreateStackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/CloudformationDeleteStackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/CloudformationRollbackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/AzureCreateARMResourceStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/AzureCreateBPStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/AzureARMRollbackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/JenkinsBuildStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/ShellScriptProvisionStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/LoadTestStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosProbeNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosActionNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosFaultNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/ci/AiEvalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/AiTestAutomationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerragruntPlanStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerragruntApplyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerragruntDestroyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerragruntRollbackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerraformCloudRunStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/DownloadManifestsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/TerraformCloudRollbackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/AwsLambdaRollbackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/BambooBuildStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/HttpStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/EmailStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/QueueStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ShellScriptStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/CustomApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraUpdateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/TemplateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/HarnessApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/BarrierStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowUpdateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowImportSetStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FlagConfigurationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/PolicyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/WaitStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ContainerStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/RunStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/PluginStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkBootstrapStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkSynthStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkDiffStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkDeployStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DBApplySchemaStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkDestroyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkRollbackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/DownloadAwsS3StepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/DownloadGcsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/DownloadNexusArtifactStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/DownloadHarnessStoreStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/LiquibaseCommandStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/FilesUploadStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/idp/IDPSlackNotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/GoogleCloudRunJobStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/AsgSteadyStateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/HelmDeleteStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/ci/S3UploadNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/CustomIngestScanNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AIExperimentStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DBOPSTestAndPreviewStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DBSchemaUpdateSQLNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DBSchemaRollbackSQLNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/FlywayCommandStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/WizScanNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/aisre/AisreCreateIncidentStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/aisre/AisreCreateAlertStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeChangeProposalSubmitStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDeleteStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagArchiveStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagLimitExposureStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagUpdateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefaultAllocationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagAddRemoveIndividualTargetsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetIndividualTargetsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagKillStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetImpressionTrackingStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagRestoreStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagReallocateTrafficStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetDynamicConfigurationsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetTreatmentsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagPatchDefinitionStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetTargetingRulesStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentUpdateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentDeleteStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentAddRemoveTargetsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentSetTargetingRulesStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagsetCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagsetDeleteStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagAddRemoveFlagsetsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefinitionInstructionsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/GCEProvisionBackendServiceStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/EcsScaleStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AgentStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceApexTestStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceDeployStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceRollbackStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceSourceBackupStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceValidateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceQuickDeployStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceCreateScratchOrgStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceDeleteScratchOrgStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceDownloadDeployablesStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceDownloadOrgStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceEvaluateDiffStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaAibomOrchestrationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaComplianceStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaPrAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaJunitAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SlsaVerificationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/ProvenanceStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/ArtifactSigningStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/ArtifactVerificationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DeployAttestationStepNode"
+                  }
+                ]
+              },
+              "stepGroup": {
+                "$ref": "#/definitions/pipeline/stages/custom/StepGroupElementConfig"
+              },
+              "description": {
+                "desc": "This is the description for ExecutionWrapperConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ParallelStepElementConfig": {
+            "title": "ParallelStepElementConfig",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
+            },
             "$schema": "http://json-schema.org/draft-07/schema#",
             "properties": {
               "description": {
-                "desc": "This is the description for CustomDeploymentConnectorNGVariable"
+                "desc": "This is the description for ParallelStepElementConfig"
               }
             }
           },
-          "CustomDeploymentNGVariable": {
-            "title": "CustomDeploymentNGVariable",
+          "InsertStepsNode": {
+            "title": "InsertStepsNode",
             "type": "object",
-            "discriminator": "type",
+            "required": [
+              "identifier",
+              "name",
+              "steps"
+            ],
             "properties": {
-              "description": {
+              "identifier": {
                 "type": "string",
-                "desc": "This is the description for CustomDeploymentNGVariable"
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
               },
               "name": {
-                "type": "string"
-              },
-              "required": {
-                "type": "boolean"
-              },
-              "type": {
                 "type": "string",
-                "enum": [
-                  "String",
-                  "Number",
-                  "Secret",
-                  "Connector"
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "steps": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
+                    },
+                    "maxItems": 2147483647,
+                    "minItems": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[\\s]*$"
+                  }
                 ]
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
-          "CustomDeploymentNumberNGVariable": {
-            "title": "CustomDeploymentNumberNGVariable",
+          "StepGroupElementConfig": {
+            "title": "StepGroupElementConfig",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name"
+            ],
+            "properties": {
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "sharedPaths": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "stepGroupInfra": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/K8sDirectInfra"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/common/VMInfra"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/common/ECSDirectInfra"
+                  }
+                ]
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
+                },
+                "maxItems": 2147483647,
+                "minItems": 1
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "template": {
+                "$ref": "#/definitions/pipeline/steps/custom/TemplateLinkConfig"
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for StepGroupElementConfig"
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
             "allOf": [
               {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNGVariable"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "value"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+                "oneOf": [
+                  {
+                    "required": [
+                      "template"
+                    ]
                   },
+                  {
+                    "required": [
+                      "steps"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "PipelineStageNode": {
+            "title": "PipelineStageNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for PipelineStageNode"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "tags": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Pipeline"
+                ]
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Pipeline"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/custom/PipelineStageConfig"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "PipelineStageConfig": {
+            "title": "PipelineStageConfig",
+            "type": "object",
+            "required": [
+              "org",
+              "pipeline",
+              "project"
+            ],
+            "properties": {
+              "inputSetReferences": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "inputs": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/JsonNode"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "org": {
+                "type": "string"
+              },
+              "outputs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/stages/custom/PipelineStageOutputs"
+                }
+              },
+              "pipeline": {
+                "type": "string"
+              },
+              "pipelineInputs": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/JsonNode"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "project": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for PipelineStageConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "PipelineStageOutputs": {
+            "title": "PipelineStageOutputs",
+            "type": "object",
+            "required": [
+              "name",
+              "value"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "value": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for PipelineStageOutputs"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "DynamicStageNode": {
+            "title": "DynamicStageNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for DynamicStageNode"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Dynamic"
+                ]
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Dynamic"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/custom/DynamicStageConfig"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "DynamicStageConfig": {
+            "title": "DynamicStageConfig",
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "not": {
+                  "const": "<+input>"
+                },
+                "description": "Inline YAML source (base64 encoded) - for backward compatibility"
+              },
+              "sourceConfig": {
+                "type": "object",
+                "description": "Source configuration - supports Git/Remote sources",
+                "properties": {
                   "type": {
                     "type": "string",
                     "enum": [
-                      "Number"
-                    ]
+                      "Git"
+                    ],
+                    "description": "Type of source configuration"
                   },
-                  "value": {
-                    "oneOf": [
-                      {
-                        "type": "number",
-                        "format": "double"
-                      },
-                      {
+                  "spec": {
+                    "type": "object",
+                    "description": "Source-specific configuration",
+                    "properties": {
+                      "connectorRef": {
                         "type": "string",
-                        "pattern": "(^[+-]?[0-9]+\\.?[0-9]*$|(<\\+.+>.*)|^$)"
+                        "description": "Git connector reference"
+                      },
+                      "branchName": {
+                        "type": "string",
+                        "description": "Git branch name"
+                      },
+                      "commitId": {
+                        "type": "string",
+                        "description": "Git commit ID"
+                      },
+                      "filePath": {
+                        "type": "string",
+                        "description": "Path to the pipeline YAML file in Git"
+                      },
+                      "repoName": {
+                        "type": "string",
+                        "description": "Git repository name"
                       }
+                    },
+                    "required": [
+                      "repoName",
+                      "filePath"
                     ]
                   }
-                }
+                },
+                "required": [
+                  "type",
+                  "spec"
+                ]
               }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for CustomDeploymentNumberNGVariable"
-              }
-            }
-          },
-          "CustomDeploymentSecretNGVariable": {
-            "title": "CustomDeploymentSecretNGVariable",
-            "allOf": [
+            },
+            "oneOf": [
               {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNGVariable"
+                "type": "object",
+                "required": [
+                  "source"
+                ]
               },
               {
                 "type": "object",
                 "required": [
-                  "value"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "Secret"
-                    ]
-                  },
-                  "value": {
-                    "type": "string"
-                  }
-                }
+                  "sourceConfig"
+                ]
               }
             ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for CustomDeploymentSecretNGVariable"
-              }
-            }
+            "description": "This is the description for DynamicStageConfig",
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
-          "CustomDeploymentStringNGVariable": {
-            "title": "CustomDeploymentStringNGVariable",
+          "CustomStageNode": {
+            "title": "CustomStageNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "type": "string",
+                "desc": "This is the description for CustomStageNode"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "tags": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Custom"
+                ]
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "runMode": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
             "allOf": [
               {
-                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNGVariable"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "value"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "String"
-                    ]
-                  },
-                  "value": {
-                    "type": "string"
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Custom"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/custom/CustomStageConfig"
+                    }
                   }
                 }
               }
+            ]
+          }
+        },
+        "approval": {
+          "ApprovalStageNode_template": {
+            "title": "ApprovalStageNode_template",
+            "type": "object",
+            "required": [
+              "type"
             ],
+            "properties": {
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "tags": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Approval"
+                ]
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "runMode": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Approval"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/approval/ApprovalStageConfig"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "ApprovalStageConfig": {
+            "title": "ApprovalStageConfig",
+            "type": "object",
+            "required": [
+              "execution"
+            ],
+            "properties": {
+              "execution": {
+                "$ref": "#/definitions/pipeline/stages/approval/ExecutionElementConfig"
+              },
+              "description": {
+                "desc": "This is the description for ApprovalStageConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ExecutionElementConfig": {
+            "title": "ExecutionElementConfig",
+            "type": "object",
+            "required": [
+              "steps"
+            ],
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/stages/approval/ExecutionWrapperConfig"
+                },
+                "maxItems": 2147483647,
+                "minItems": 1
+              },
+              "description": {
+                "desc": "This is the description for ExecutionElementConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ExecutionWrapperConfig": {
+            "title": "ExecutionWrapperConfig",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/ExecutionWrapperValidation"
+              }
+            ],
+            "properties": {
+              "parallel": {
+                "$ref": "#/definitions/pipeline/stages/approval/ParallelStepElementConfig"
+              },
+              "insert": {
+                "$ref": "#/definitions/pipeline/stages/approval/InsertStepsNode"
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepElementConfig"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/BarrierStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/WaitStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/TemplateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/HarnessApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowUpdateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/HttpStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/EmailStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/QueueStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ShellScriptStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/CdSscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/CdSscaOrchestrationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraUpdateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ContainerStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/CustomApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowImportSetStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/PolicyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DBApplySchemaStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/LiquibaseCommandStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/FilesUploadStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/AIExperimentStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
+                  }
+                ]
+              },
+              "stepGroup": {
+                "$ref": "#/definitions/pipeline/stages/approval/StepGroupElementConfig"
+              },
+              "description": {
+                "desc": "This is the description for ExecutionWrapperConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ParallelStepElementConfig": {
+            "title": "ParallelStepElementConfig",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/pipeline/stages/approval/ExecutionWrapperConfig"
+            },
             "$schema": "http://json-schema.org/draft-07/schema#",
             "properties": {
               "description": {
-                "desc": "This is the description for CustomDeploymentStringNGVariable"
+                "desc": "This is the description for ParallelStepElementConfig"
               }
             }
           },
+          "InsertStepsNode": {
+            "title": "InsertStepsNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "steps"
+            ],
+            "properties": {
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "steps": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/stages/approval/ExecutionWrapperConfig"
+                    },
+                    "maxItems": 2147483647,
+                    "minItems": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[\\s]*$"
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "StepGroupElementConfig": {
+            "title": "StepGroupElementConfig",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name"
+            ],
+            "properties": {
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "sharedPaths": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "stepGroupInfra": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/K8sDirectInfra"
+                  }
+                ]
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/stages/approval/ExecutionWrapperConfig"
+                },
+                "maxItems": 2147483647,
+                "minItems": 1
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "template": {
+                "$ref": "#/definitions/pipeline/steps/custom/TemplateLinkConfig"
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for StepGroupElementConfig"
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "oneOf": [
+                  {
+                    "required": [
+                      "template"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "steps"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "ApprovalStageNode": {
+            "title": "ApprovalStageNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "type": "string",
+                "desc": "This is the description for ApprovalStageNode"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "tags": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Approval"
+                ]
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "runMode": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Approval"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/approval/ApprovalStageConfig"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "cd": {
           "DeploymentStageNode_template": {
             "title": "DeploymentStageNode_template",
             "type": "object",
@@ -142319,6 +144061,182 @@ const schema: Record<string, any> = {
             "properties": {
               "description": {
                 "desc": "This is the description for CustomDeploymentInfrastructure"
+              }
+            }
+          },
+          "CustomDeploymentConnectorNGVariable": {
+            "title": "CustomDeploymentConnectorNGVariable",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNGVariable"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "value"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "Connector"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for CustomDeploymentConnectorNGVariable"
+              }
+            }
+          },
+          "CustomDeploymentNGVariable": {
+            "title": "CustomDeploymentNGVariable",
+            "type": "object",
+            "discriminator": "type",
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for CustomDeploymentNGVariable"
+              },
+              "name": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "String",
+                  "Number",
+                  "Secret",
+                  "Connector"
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "CustomDeploymentNumberNGVariable": {
+            "title": "CustomDeploymentNumberNGVariable",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNGVariable"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "value"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "Number"
+                    ]
+                  },
+                  "value": {
+                    "oneOf": [
+                      {
+                        "type": "number",
+                        "format": "double"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(^[+-]?[0-9]+\\.?[0-9]*$|(<\\+.+>.*)|^$)"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for CustomDeploymentNumberNGVariable"
+              }
+            }
+          },
+          "CustomDeploymentSecretNGVariable": {
+            "title": "CustomDeploymentSecretNGVariable",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNGVariable"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "value"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "Secret"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for CustomDeploymentSecretNGVariable"
+              }
+            }
+          },
+          "CustomDeploymentStringNGVariable": {
+            "title": "CustomDeploymentStringNGVariable",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNGVariable"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "value"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "String"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for CustomDeploymentStringNGVariable"
               }
             }
           },
@@ -149803,1953 +151721,137 @@ const schema: Record<string, any> = {
                 }
               }
             ]
-          }
-        },
-        "custom": {
-          "CustomStageNode_template": {
-            "title": "CustomStageNode_template",
-            "type": "object",
-            "required": [
-              "type"
-            ],
-            "properties": {
-              "delegateSelectors": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identities": {
-                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "tags": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Custom"
-                ]
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
-                    }
-                  ]
-                }
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "runMode": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Custom"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/stages/custom/CustomStageConfig"
-                    }
-                  }
-                }
-              }
-            ]
           },
-          "CustomStageConfig": {
-            "title": "CustomStageConfig",
+          "CustomDeploymentConfig_template": {
+            "title": "CustomDeploymentConfig_template",
             "type": "object",
             "required": [
-              "execution"
+              "execution",
+              "infrastructure"
             ],
             "properties": {
               "execution": {
-                "$ref": "#/definitions/pipeline/stages/custom/ExecutionElementConfig"
+                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentExecutionConfig"
+              },
+              "infrastructure": {
+                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentInfraConfig"
+              },
+              "metadata": {
+                "type": "string"
               },
               "description": {
-                "desc": "This is the description for CustomStageConfig"
+                "desc": "This is the description for CustomDeploymentConfig"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
-          "ExecutionElementConfig": {
-            "title": "ExecutionElementConfig",
+          "CustomDeploymentExecutionConfig": {
+            "title": "CustomDeploymentExecutionConfig",
             "type": "object",
-            "required": [
-              "steps"
-            ],
             "properties": {
-              "rollbackSteps": {
+              "stepTemplateRefs": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
+                  "type": "string"
                 }
               },
-              "steps": {
+              "description": {
+                "desc": "This is the description for CustomDeploymentExecutionConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "CustomDeploymentInfraConfig": {
+            "title": "CustomDeploymentInfraConfig",
+            "type": "object",
+            "required": [
+              "fetchInstancesScript",
+              "instanceAttributes",
+              "instancesListPath"
+            ],
+            "properties": {
+              "fetchInstancesScript": {
+                "minLength": 1,
+                "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentFetchInstancesScriptConfig"
+              },
+              "instanceAttributes": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
+                  "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentInstanceAttributes"
                 },
-                "maxItems": 2147483647,
-                "minItems": 1
+                "minLength": 1
               },
-              "description": {
-                "desc": "This is the description for ExecutionElementConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ExecutionWrapperConfig": {
-            "title": "ExecutionWrapperConfig",
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/common/ExecutionWrapperValidation"
-              }
-            ],
-            "properties": {
-              "parallel": {
-                "$ref": "#/definitions/pipeline/stages/custom/ParallelStepElementConfig"
-              },
-              "insert": {
-                "$ref": "#/definitions/pipeline/stages/custom/InsertStepsNode"
-              },
-              "step": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepElementConfig"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/BackgroundStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/ci/GitCloneStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerraformApplyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerraformPlanStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerraformDestroyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerraformRollbackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/CloudformationCreateStackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/CloudformationDeleteStackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/CloudformationRollbackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/AzureCreateARMResourceStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/AzureCreateBPStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/AzureARMRollbackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/JenkinsBuildStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/ShellScriptProvisionStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/LoadTestStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosProbeNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosActionNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosFaultNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/ci/AiEvalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/AiTestAutomationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerragruntPlanStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerragruntApplyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerragruntDestroyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerragruntRollbackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerraformCloudRunStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/DownloadManifestsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/TerraformCloudRollbackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/AwsLambdaRollbackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/BambooBuildStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/HttpStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/EmailStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/QueueStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ShellScriptStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/CustomApprovalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/JiraCreateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/JiraUpdateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/TemplateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowApprovalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/JiraApprovalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/HarnessApprovalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/BarrierStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowCreateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowUpdateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowImportSetStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FlagConfigurationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/PolicyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/WaitStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ContainerStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/RunStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/PluginStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkBootstrapStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkSynthStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkDiffStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkDeployStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/DBApplySchemaStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkDestroyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AwsCdkRollbackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/DownloadAwsS3StepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/DownloadGcsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/DownloadNexusArtifactStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/DownloadHarnessStoreStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/LiquibaseCommandStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/FilesUploadStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/idp/IDPSlackNotifyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/GoogleCloudRunJobStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/AsgSteadyStateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/HelmDeleteStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/ci/S3UploadNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/CustomIngestScanNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AIExperimentStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/DBOPSTestAndPreviewStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/DBSchemaUpdateSQLNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/DBSchemaRollbackSQLNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/FlywayCommandStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/WizScanNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/aisre/AisreCreateIncidentStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/aisre/AisreCreateAlertStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeChangeProposalSubmitStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagCreateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentCreateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDeleteStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagArchiveStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagLimitExposureStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagUpdateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefaultAllocationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagAddRemoveIndividualTargetsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetIndividualTargetsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagKillStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetImpressionTrackingStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagRestoreStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagReallocateTrafficStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetDynamicConfigurationsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetTreatmentsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagPatchDefinitionStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagSetTargetingRulesStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentUpdateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentDeleteStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentAddRemoveTargetsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentSetTargetingRulesStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagsetCreateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagsetDeleteStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagAddRemoveFlagsetsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeFlagDefinitionInstructionsStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/GCEProvisionBackendServiceStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/EcsScaleStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AgentStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceApexTestStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceDeployStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceRollbackStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceSourceBackupStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceValidateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceQuickDeployStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceCreateScratchOrgStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceDeleteScratchOrgStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceDownloadDeployablesStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceDownloadOrgStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/SalesforceEvaluateDiffStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/SscaAibomOrchestrationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/SscaComplianceStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/SscaPrAttestationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/SscaJunitAttestationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/SlsaVerificationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/ProvenanceStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/ArtifactSigningStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/ArtifactVerificationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/DeployAttestationStepNode"
-                  }
-                ]
-              },
-              "stepGroup": {
-                "$ref": "#/definitions/pipeline/stages/custom/StepGroupElementConfig"
-              },
-              "description": {
-                "desc": "This is the description for ExecutionWrapperConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ParallelStepElementConfig": {
-            "title": "ParallelStepElementConfig",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for ParallelStepElementConfig"
-              }
-            }
-          },
-          "InsertStepsNode": {
-            "title": "InsertStepsNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "steps"
-            ],
-            "properties": {
-              "identifier": {
+              "instancesListPath": {
                 "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+                "minLength": 1
               },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "steps": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentConnectorNGVariable"
                     },
-                    "maxItems": 2147483647,
-                    "minItems": 1
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^[\\s]*$"
-                  }
-                ]
+                    {
+                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentNumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentSecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/stages/cd/CustomDeploymentStringNGVariable"
+                    }
+                  ]
+                }
+              },
+              "description": {
+                "desc": "This is the description for CustomDeploymentInfraConfig"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
-          "StepGroupElementConfig": {
-            "title": "StepGroupElementConfig",
+          "CustomDeploymentFetchInstancesScriptConfig": {
+            "title": "CustomDeploymentFetchInstancesScriptConfig",
             "type": "object",
             "required": [
-              "identifier",
+              "store"
+            ],
+            "properties": {
+              "metadata": {
+                "type": "string"
+              },
+              "store": {
+                "minLength": 1,
+                "$ref": "#/definitions/pipeline/steps/cd/StoreConfigWrapper"
+              },
+              "description": {
+                "desc": "This is the description for CustomDeploymentFetchInstancesScriptConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "CustomDeploymentInstanceAttributes": {
+            "title": "CustomDeploymentInstanceAttributes",
+            "type": "object",
+            "required": [
+              "jsonPath",
               "name"
             ],
             "properties": {
-              "delegateSelectors": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
+              "description": {
                 "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+                "desc": "This is the description for CustomDeploymentInstanceAttributes"
               },
-              "identities": {
-                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+              "jsonPath": {
+                "type": "string",
+                "minLength": 1
               },
               "name": {
                 "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "sharedPaths": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "stepGroupInfra": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/K8sDirectInfra"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/common/VMInfra"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/common/ECSDirectInfra"
-                  }
-                ]
-              },
-              "steps": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline/stages/custom/ExecutionWrapperConfig"
-                },
-                "maxItems": 2147483647,
-                "minItems": 1
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "template": {
-                "$ref": "#/definitions/pipeline/steps/custom/TemplateLinkConfig"
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for StepGroupElementConfig"
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
-                    }
-                  ]
-                }
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "template"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "steps"
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          "PipelineStageNode": {
-            "title": "PipelineStageNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "type"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for PipelineStageNode"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "tags": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Pipeline"
-                ]
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
-                    }
-                  ]
-                }
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Pipeline"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/stages/custom/PipelineStageConfig"
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "PipelineStageConfig": {
-            "title": "PipelineStageConfig",
-            "type": "object",
-            "required": [
-              "org",
-              "pipeline",
-              "project"
-            ],
-            "properties": {
-              "inputSetReferences": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "inputs": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/JsonNode"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "org": {
-                "type": "string"
-              },
-              "outputs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline/stages/custom/PipelineStageOutputs"
-                }
-              },
-              "pipeline": {
-                "type": "string"
-              },
-              "pipelineInputs": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/JsonNode"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "project": {
-                "type": "string"
-              },
-              "description": {
-                "desc": "This is the description for PipelineStageConfig"
+                "minLength": 1
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "PipelineStageOutputs": {
-            "title": "PipelineStageOutputs",
-            "type": "object",
-            "required": [
-              "name",
-              "value"
-            ],
-            "properties": {
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "value": {
-                "type": "string"
-              },
-              "description": {
-                "desc": "This is the description for PipelineStageOutputs"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "DynamicStageNode": {
-            "title": "DynamicStageNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "type"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for DynamicStageNode"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Dynamic"
-                ]
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
-                    }
-                  ]
-                }
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Dynamic"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/stages/custom/DynamicStageConfig"
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "DynamicStageConfig": {
-            "title": "DynamicStageConfig",
-            "type": "object",
-            "properties": {
-              "source": {
-                "type": "string",
-                "not": {
-                  "const": "<+input>"
-                },
-                "description": "Inline YAML source (base64 encoded) - for backward compatibility"
-              },
-              "sourceConfig": {
-                "type": "object",
-                "description": "Source configuration - supports Git/Remote sources",
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "Git"
-                    ],
-                    "description": "Type of source configuration"
-                  },
-                  "spec": {
-                    "type": "object",
-                    "description": "Source-specific configuration",
-                    "properties": {
-                      "connectorRef": {
-                        "type": "string",
-                        "description": "Git connector reference"
-                      },
-                      "branchName": {
-                        "type": "string",
-                        "description": "Git branch name"
-                      },
-                      "commitId": {
-                        "type": "string",
-                        "description": "Git commit ID"
-                      },
-                      "filePath": {
-                        "type": "string",
-                        "description": "Path to the pipeline YAML file in Git"
-                      },
-                      "repoName": {
-                        "type": "string",
-                        "description": "Git repository name"
-                      }
-                    },
-                    "required": [
-                      "repoName",
-                      "filePath"
-                    ]
-                  }
-                },
-                "required": [
-                  "type",
-                  "spec"
-                ]
-              }
-            },
-            "oneOf": [
-              {
-                "type": "object",
-                "required": [
-                  "source"
-                ]
-              },
-              {
-                "type": "object",
-                "required": [
-                  "sourceConfig"
-                ]
-              }
-            ],
-            "description": "This is the description for DynamicStageConfig",
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "CustomStageNode": {
-            "title": "CustomStageNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "type"
-            ],
-            "properties": {
-              "delegateSelectors": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "type": "string",
-                "desc": "This is the description for CustomStageNode"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "identities": {
-                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "tags": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Custom"
-                ]
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
-                    }
-                  ]
-                }
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "runMode": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Custom"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/stages/custom/CustomStageConfig"
-                    }
-                  }
-                }
-              }
-            ]
-          }
-        },
-        "approval": {
-          "ApprovalStageNode_template": {
-            "title": "ApprovalStageNode_template",
-            "type": "object",
-            "required": [
-              "type"
-            ],
-            "properties": {
-              "delegateSelectors": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "tags": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Approval"
-                ]
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
-                    }
-                  ]
-                }
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "runMode": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Approval"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/stages/approval/ApprovalStageConfig"
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "ApprovalStageConfig": {
-            "title": "ApprovalStageConfig",
-            "type": "object",
-            "required": [
-              "execution"
-            ],
-            "properties": {
-              "execution": {
-                "$ref": "#/definitions/pipeline/stages/approval/ExecutionElementConfig"
-              },
-              "description": {
-                "desc": "This is the description for ApprovalStageConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ExecutionElementConfig": {
-            "title": "ExecutionElementConfig",
-            "type": "object",
-            "required": [
-              "steps"
-            ],
-            "properties": {
-              "steps": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline/stages/approval/ExecutionWrapperConfig"
-                },
-                "maxItems": 2147483647,
-                "minItems": 1
-              },
-              "description": {
-                "desc": "This is the description for ExecutionElementConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ExecutionWrapperConfig": {
-            "title": "ExecutionWrapperConfig",
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/common/ExecutionWrapperValidation"
-              }
-            ],
-            "properties": {
-              "parallel": {
-                "$ref": "#/definitions/pipeline/stages/approval/ParallelStepElementConfig"
-              },
-              "insert": {
-                "$ref": "#/definitions/pipeline/stages/approval/InsertStepsNode"
-              },
-              "step": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepElementConfig"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/BarrierStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/WaitStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowApprovalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/TemplateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/HarnessApprovalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowUpdateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/HttpStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/EmailStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/QueueStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowCreateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ShellScriptStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/CdSscaEnforcementStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/JiraCreateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/CdSscaOrchestrationStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/JiraUpdateStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ContainerStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/JiraApprovalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/CustomApprovalStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowImportSetStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/PolicyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/DBApplySchemaStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/LiquibaseCommandStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/FilesUploadStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/AIExperimentStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
-                  }
-                ]
-              },
-              "stepGroup": {
-                "$ref": "#/definitions/pipeline/stages/approval/StepGroupElementConfig"
-              },
-              "description": {
-                "desc": "This is the description for ExecutionWrapperConfig"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ParallelStepElementConfig": {
-            "title": "ParallelStepElementConfig",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/pipeline/stages/approval/ExecutionWrapperConfig"
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for ParallelStepElementConfig"
-              }
-            }
-          },
-          "InsertStepsNode": {
-            "title": "InsertStepsNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "steps"
-            ],
-            "properties": {
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "steps": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/stages/approval/ExecutionWrapperConfig"
-                    },
-                    "maxItems": 2147483647,
-                    "minItems": 1
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^[\\s]*$"
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "StepGroupElementConfig": {
-            "title": "StepGroupElementConfig",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name"
-            ],
-            "properties": {
-              "delegateSelectors": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "sharedPaths": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "stepGroupInfra": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/K8sDirectInfra"
-                  }
-                ]
-              },
-              "steps": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline/stages/approval/ExecutionWrapperConfig"
-                },
-                "maxItems": 2147483647,
-                "minItems": 1
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "template": {
-                "$ref": "#/definitions/pipeline/steps/custom/TemplateLinkConfig"
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for StepGroupElementConfig"
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
-                    }
-                  ]
-                }
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "template"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "steps"
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          "ApprovalStageNode": {
-            "title": "ApprovalStageNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "type"
-            ],
-            "properties": {
-              "delegateSelectors": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "type": "string",
-                "desc": "This is the description for ApprovalStageNode"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "tags": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Approval"
-                ]
-              },
-              "variables": {
-                "type": "array",
-                "items": {
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
-                    },
-                    {
-                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
-                    }
-                  ]
-                }
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "runMode": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/RunModeConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Approval"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/stages/approval/ApprovalStageConfig"
-                    }
-                  }
-                }
-              }
-            ]
           }
         },
         "ci": {

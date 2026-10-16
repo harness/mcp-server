@@ -1590,6 +1590,52 @@ const schema: Record<string, any> = {
             "if-not-exists"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "MultiDeploymentConfigV1": {
+          "title": "MultiDeploymentConfigV1",
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional configuration for deployments across multiple services and/or environments.",
+          "properties": {
+            "on-failure": {
+              "description": "Behaviour when one of the multiple deployments fails. Supports expressions.",
+              "oneOf": [
+                {
+                  "$ref": "#/definitions/pipeline_v1/common/StrategyOnFailureTypeV1"
+                },
+                {
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
+                }
+              ]
+            },
+            "when": {
+              "type": "string",
+              "description": "Conditional expression controlling whether queued deployments proceed."
+            },
+            "max-concurrency": {
+              "description": "Maximum number of concurrent service/environment deployments. Supports expressions.",
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "$ref": "#/definitions/pipeline_v1/common/Expression"
+                }
+              ]
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "StrategyOnFailureTypeV1": {
+          "title": "StrategyOnFailureTypeV1",
+          "description": "Defines behaviour when one of the multiple service/environment deployments fails.",
+          "type": "string",
+          "enum": [
+            "run-all",
+            "skip-queued"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
         }
       },
       "Reference": {
@@ -2594,6 +2640,10 @@ const schema: Record<string, any> = {
               "environment": {
                 "description": "Environment configuration for CD stages.",
                 "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentV1"
+              },
+              "multi-deployment": {
+                "description": "Configuration for deployments across multiple services and/or environments.",
+                "$ref": "#/definitions/pipeline_v1/common/MultiDeploymentConfigV1"
               },
               "workspace": {
                 "type": "string",
@@ -3746,83 +3796,124 @@ const schema: Record<string, any> = {
           "Filters": {
             "title": "Filters",
             "description": "Filters for selecting environments or infrastructures.",
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "infrastructures": {
-                  "description": "Infrastructure filters.",
-                  "oneOf": [
-                    {
-                      "type": "string",
-                      "enum": [
-                        "all"
-                      ]
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
-                      }
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "or": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
-                          }
-                        },
-                        "and": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
-                          }
-                        }
-                      },
-                      "additionalProperties": false
-                    }
-                  ]
-                },
-                "environments": {
-                  "description": "Environment filters.",
-                  "oneOf": [
-                    {
-                      "type": "string",
-                      "enum": [
-                        "all"
-                      ]
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
-                      }
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "or": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
-                          }
-                        },
-                        "and": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
-                          }
-                        }
-                      },
-                      "additionalProperties": false
-                    }
-                  ]
-                }
+            "oneOf": [
+              {
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               },
-              "additionalProperties": false
-            },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "infrastructures": {
+                      "description": "Infrastructure filters.",
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "all"
+                          ]
+                        },
+                        {
+                          "$ref": "#/definitions/pipeline_v1/common/Expression"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "or": {
+                              "oneOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
+                                  }
+                                },
+                                {
+                                  "$ref": "#/definitions/pipeline_v1/common/Expression"
+                                }
+                              ]
+                            },
+                            "and": {
+                              "oneOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
+                                  }
+                                },
+                                {
+                                  "$ref": "#/definitions/pipeline_v1/common/Expression"
+                                }
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "environments": {
+                      "description": "Environment filters.",
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "all"
+                          ]
+                        },
+                        {
+                          "$ref": "#/definitions/pipeline_v1/common/Expression"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "or": {
+                              "oneOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
+                                  }
+                                },
+                                {
+                                  "$ref": "#/definitions/pipeline_v1/common/Expression"
+                                }
+                              ]
+                            },
+                            "and": {
+                              "oneOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/pipeline_v1/stages/unified/FilterCondition"
+                                  }
+                                },
+                                {
+                                  "$ref": "#/definitions/pipeline_v1/common/Expression"
+                                }
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "FilterCondition": {
@@ -3832,9 +3923,12 @@ const schema: Record<string, any> = {
             "properties": {
               "tags": {
                 "description": "Tag-based filter conditions.",
-                "type": "object",
                 "oneOf": [
                   {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  },
+                  {
+                    "type": "object",
                     "required": [
                       "in"
                     ],
@@ -3857,6 +3951,7 @@ const schema: Record<string, any> = {
                     "additionalProperties": false
                   },
                   {
+                    "type": "object",
                     "required": [
                       "all"
                     ],
@@ -3872,6 +3967,45 @@ const schema: Record<string, any> = {
                           },
                           {
                             "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "match-type",
+                      "values"
+                    ],
+                    "properties": {
+                      "match-type": {
+                        "description": "How the tags are matched - `all` to require every tag (AND), `in` to require any one of them (OR).",
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "all",
+                              "in"
+                            ]
+                          },
+                          {
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
+                          }
+                        ]
+                      },
+                      "values": {
+                        "description": "Tags to filter on, as key/value pairs.",
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
                           }
                         ]
                       }
@@ -4466,6 +4600,11 @@ const schema: Record<string, any> = {
                   "required": [
                     "ai-eval"
                   ]
+                },
+                {
+                  "required": [
+                    "render"
+                  ]
                 }
               ]
             },
@@ -4642,6 +4781,16 @@ const schema: Record<string, any> = {
                   },
                   "then": {
                     "$ref": "#/definitions/pipeline_v1/common/UnifiedTemplate"
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "render"
+                    ]
+                  },
+                  "then": {
+                    "$ref": "#/definitions/pipeline_v1/steps/unified/UnifiedRenderStepNode"
                   }
                 }
               ]
@@ -6079,6 +6228,44 @@ const schema: Record<string, any> = {
                 }
               }
             },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "UnifiedRenderStepNode": {
+            "title": "UnifiedRenderStepNode",
+            "description": "Render step node for manifest rendering.",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline_v1/steps/unified/UnifiedPmsAbstractStepNode"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "render"
+                ],
+                "properties": {
+                  "render": {
+                    "description": "Render step configuration.",
+                    "type": "object",
+                    "properties": {
+                      "with": {
+                        "description": "Render step parameters including manifest type and inputs.",
+                        "type": "object",
+                        "required": [
+                          "kind"
+                        ],
+                        "properties": {
+                          "kind": {
+                            "description": "Manifest type to render (e.g., k8s).",
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           }
         },
