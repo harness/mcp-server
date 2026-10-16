@@ -12,6 +12,8 @@ import {
   SEMANTIC_ROUTING_SAFETY_FLOOR,
   extractRoutingTypes,
   applyRoutingSafetyFloor,
+  keywordSearchListInput,
+  missesRequiredListFilter,
 } from "../../src/tools/harness-search.js";
 
 const ROUTING_THRESHOLD = 0.5;
@@ -97,6 +99,14 @@ function makeIndexingSearchManager() {
 
 function parseResult(result: ToolResult): unknown {
   return JSON.parse(result.content[0]!.text);
+}
+
+/** Listable types a default keyword search can call without a missing-filter error. */
+function keywordSearchCandidateCount(registry: Registry, query: string): number {
+  const input = keywordSearchListInput({ query }, { query });
+  return registry.getTypesForOperation("list").filter(
+    (rt) => !missesRequiredListFilter(registry.getResource(rt).listFilterFields, input),
+  ).length;
 }
 
 describe("extractRoutingTypes", () => {
@@ -209,7 +219,7 @@ describe("harness_search semantic routing integration", () => {
     const { registerSearchTool } = await import("../../src/tools/harness-search.js");
     registerSearchTool(server, registry, client, searchManager);
 
-    const fullTypeCount = registry.getTypesForOperation("list").filter((rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required)).length;
+    const fullTypeCount = keywordSearchCandidateCount(registry, "github connector");
     const result = await server.call("harness_search", { query: "github connector" });
     const data = parseResult(result) as {
       semantic_routed?: boolean;
@@ -226,13 +236,25 @@ describe("harness_search semantic routing integration", () => {
     expect(mockRequest).toHaveBeenCalledTimes(2);
   });
 
-  it("excludes llm_model from default scatter-gather (required provider filter)", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
-    const searchable = registry.getTypesForOperation("list").filter(
-      (rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required),
-    );
-    expect(searchable).not.toContain("llm_model");
-    expect(registry.getResource("llm_model").listFilterFields?.some((f) => f.name === "provider" && f.required)).toBe(true);
+  it("searches scs_component_search by keyword and skips llm_model", async () => {
+    const scsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs,connectors" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, scsRegistry, makeClient(mockRequest));
+
+    const result = await searchServer.call("harness_search", { query: "lodash" });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { searched_types: number; errors?: Record<string, string> };
+    expect(data.searched_types).toBe(keywordSearchCandidateCount(scsRegistry, "lodash"));
+    expect(data.errors?.llm_model).toBeUndefined();
+    expect(data.errors?.artifact_security).toBeUndefined();
+
+    const calls = mockRequest.mock.calls.map((call) => call[0] as { path: string; params?: Record<string, unknown> });
+    const componentSearch = calls.find((call) => call.path.endsWith("/components/search"));
+    expect(componentSearch?.path).toBe("/ssca-manager/v1/orgs/default/projects/test-project/components/search");
+    expect(componentSearch?.params?.search_term).toBe("lodash");
+    expect(calls.some((call) => call.path.includes("/llm-connector/models"))).toBe(false);
   });
 
   it("falls back to full scatter-gather when routing scores are below threshold", async () => {
@@ -242,7 +264,7 @@ describe("harness_search semantic routing integration", () => {
     const { registerSearchTool } = await import("../../src/tools/harness-search.js");
     registerSearchTool(server, registry, client, searchManager);
 
-    const fullTypeCount = registry.getTypesForOperation("list").filter((rt) => !registry.getResource(rt).listFilterFields?.some((f) => f.required)).length;
+    const fullTypeCount = keywordSearchCandidateCount(registry, "deploy");
     const result = await server.call("harness_search", { query: "deploy" });
     const data = parseResult(result) as { semantic_routed?: boolean; searched_types: number };
 
