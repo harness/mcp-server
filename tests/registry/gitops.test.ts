@@ -2274,6 +2274,36 @@ describe("gitops_app_project_mapping import execute dispatch", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("import: project_names snake_case alias is accepted like projectNames", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      importRequestId: "alias-test",
+      applicationCount: 1,
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "gitops_app_project_mapping", "import", {
+      agent_id: "account.myagent",
+      resource_scope: "account",
+      body: { project_names: ["team-a"] },
+    });
+
+    expect(mockRequest.mock.calls[0][0].body).toEqual({ projectNames: ["team-a"] });
+  });
+
+  it("import: blank projectNames entries are rejected before any request", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "gitops_app_project_mapping", "import", {
+        agent_id: "account.myagent",
+        resource_scope: "account",
+        body: { projectNames: ["team-a", "  "] },
+      }),
+    ).rejects.toThrow(/entries must be non-empty/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("import: EndpointSpec declares timeoutMs 120_000", () => {
     const action = registry.getResource("gitops_app_project_mapping").executeActions?.import;
     expect(action?.timeoutMs).toBe(120_000);
