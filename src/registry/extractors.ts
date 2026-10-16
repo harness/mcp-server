@@ -13,6 +13,7 @@ import {
 import type { PreflightContext } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { toUtcDateString, parseCustomWindow } from "../utils/ccm-time.js";
+import { redactSensitiveFields } from "../utils/redact.js";
 
 /** Vibe returns unwrapped, mixed-case DTOs. Keep contract fields without forwarding internal metadata. */
 function pickVibeFields(value: unknown, fields: readonly string[]): Record<string, unknown> {
@@ -505,6 +506,53 @@ export const aiEvalsArrayExtract = (raw: unknown): { items: unknown[]; total: nu
   const arr = Array.isArray(raw) ? raw : [];
   return { items: arr, total: arr.length };
 };
+
+/**
+ * AI Evals array wrapper without pagination metadata (for example, prompt tags).
+ */
+export const aiEvalsDataArrayExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const data = (raw as { data?: unknown[] }).data;
+  const items = Array.isArray(data) ? data : [];
+  return { items, total: items.length };
+};
+
+const TRACE_RESPONSE_MAX_STRING_LENGTH = 4_000;
+const TRACE_RESPONSE_MAX_COLLECTION_SIZE = 100;
+const TRACE_RESPONSE_TRUNCATION_MARKER = "… [TRUNCATED]";
+
+function boundTraceResponse(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") {
+    return value.length > TRACE_RESPONSE_MAX_STRING_LENGTH
+      ? `${value.slice(0, TRACE_RESPONSE_MAX_STRING_LENGTH - TRACE_RESPONSE_TRUNCATION_MARKER.length)}${TRACE_RESPONSE_TRUNCATION_MARKER}`
+      : value;
+  }
+  if (value === null || typeof value !== "object" || depth > 10) return value;
+  if (Array.isArray(value)) {
+    const bounded = value.slice(0, TRACE_RESPONSE_MAX_COLLECTION_SIZE)
+      .map((item) => boundTraceResponse(item, depth + 1));
+    return value.length > TRACE_RESPONSE_MAX_COLLECTION_SIZE
+      ? [...bounded, { mcp_truncated: true, mcp_original_count: value.length }]
+      : bounded;
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  const bounded = Object.fromEntries(
+    entries
+      .slice(0, TRACE_RESPONSE_MAX_COLLECTION_SIZE)
+      .map(([key, item]) => [key, boundTraceResponse(item, depth + 1)]),
+  );
+  return entries.length > TRACE_RESPONSE_MAX_COLLECTION_SIZE
+    ? { ...bounded, mcp_truncated: true, mcp_original_count: entries.length }
+    : bounded;
+}
+
+/** AI Evals responses with credential-shaped fields redacted. */
+export const aiEvalsRedactedExtract = (raw: unknown): unknown => redactSensitiveFields(raw);
+
+/** AI Evals trace responses with credential-shaped fields redacted and large values bounded. */
+export const aiEvalsTraceExtract = (raw: unknown): unknown => boundTraceResponse(redactSensitiveFields(raw));
+
+/** AI Evals trace list response with the same redaction and bounds as trace detail responses. */
+export const aiEvalsTraceListExtract = (raw: unknown): unknown => aiEvalsTraceExtract(aiEvalsListExtract(raw));
 
 /**
  * SCS-specific extractor — strips null, undefined, empty string, empty array,

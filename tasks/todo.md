@@ -1,5 +1,15 @@
 # Harness MCP Server — Task Tracking
 
+## AI Evals MCP exposure boundary (2026-10-14)
+
+### Plan
+
+- [x] Keep project-scoped Prompt Registry in the default AI Evals toolset.
+- [x] Remove the generic eval_registry_item resource from MCP.
+- [x] Keep trace annotations and on-demand trace evaluation in the default toolset.
+- [x] Redact credential-shaped fields and bound large trace response fields.
+- [x] Add scope and response-shaping regressions; verify and update PR #1102.
+
 ## AI Evals reads return 404 (2026-10-08)
 
 Base: `main@upstream` `bf89204b` (v3.2.33). Reproduced with a local build against QA
