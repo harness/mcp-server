@@ -149,4 +149,15 @@ describe("compactItems", () => {
     expect(result[0].name).toBe("[Incident 1](https://app.harness.io/inc/1)");
     expect(result[0]).not.toHaveProperty("openInHarness");
   });
+
+  it("keeps SCS summary marker fields (_summary, _message, _result)", () => {
+    const items = [
+      { id: "src-1", name: "ECR" },
+      { _summary: { total: 1, by_type: { CONTAINER: 1 } } },
+      { _result: "EMPTY", _message: "No CVEs found for this component." },
+    ];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[1]).toEqual({ _summary: { total: 1, by_type: { CONTAINER: 1 } } });
+    expect(result[2]).toEqual({ _result: "EMPTY", _message: "No CVEs found for this component." });
+  });
 });
