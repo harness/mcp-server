@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { chaosActionExtract, chaosDRTestListExtract, chaosExperimentListExtract, chaosInputSetListExtract } from "../../src/registry/extractors.js";
+import {
+  chaosActionExtract,
+  chaosDRTestListExtract,
+  chaosExperimentListExtract,
+  chaosInputSetListExtract,
+  sdV2PageExtract,
+} from "../../src/registry/extractors.js";
 
 describe("chaosInputSetListExtract", () => {
   it("injects experimentId from input into each item", () => {
@@ -100,6 +106,28 @@ describe("chaosDRTestListExtract", () => {
       items: [{ id: "dr-1" }, { id: "dr-2" }],
       total: 50,
     });
+  });
+});
+
+describe("sdV2PageExtract", () => {
+  it("uses pagination.total when present", () => {
+    const raw = {
+      items: [{ identity: "a" }, { identity: "b" }],
+      pagination: { total: 42, pageSize: 2, pageCount: 21, pageNumber: 0 },
+      correlationID: "corr-ignored",
+    };
+    expect(sdV2PageExtract(raw)).toEqual({
+      items: [{ identity: "a" }, { identity: "b" }],
+      total: 42,
+    });
+  });
+
+  it("falls back to items.length when pagination.total is missing", () => {
+    expect(sdV2PageExtract({ items: [{ identity: "only" }] })).toEqual({
+      items: [{ identity: "only" }],
+      total: 1,
+    });
+    expect(sdV2PageExtract({ correlationID: "x" })).toEqual({ items: [], total: 0 });
   });
 });
 
