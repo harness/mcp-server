@@ -1,5 +1,14 @@
 # Harness MCP Server — Task Tracking
 
+## Code openInHarness numeric repo id (2026-10-17)
+
+### Plan
+
+- [x] Use the repository slug in Code `openInHarness` links when the caller passed a numeric repo id
+- [x] Resolve the slug from the payload when present, otherwise look up `GET /code/api/v1/repos/{id}`
+- [x] Attach per-item links for raw Code list arrays
+- [x] Cover pull request get/list and repository get with regression tests
+
 ## AI Evals MCP exposure boundary (2026-10-14)
 
 ### Plan
