@@ -8,7 +8,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
-import { formatBodyPreview } from "../utils/body-preview.js";
+import { buildWriteConfirmationMessage, readConfirmationPreview } from "../utils/confirmation-message.js";
 import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { createOutputSchema } from "./output-schemas.js";
 
@@ -59,7 +59,8 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           return errorResult(`Resource "${args.resource_type}" does not support "create". Supported: ${Object.keys(def.operations).join(", ")}`);
         }
 
-        const risk = def.operations.create!.operationPolicy.risk;
+        const createSpec = def.operations.create!;
+        const risk = createSpec.operationPolicy.risk;
         // Fail fast on HARNESS_READ_ONLY before elicitation. The registry
         // re-checks at dispatch time and is the source of truth, but we
         // mirror the gate here so users aren't asked to approve a write
@@ -77,11 +78,15 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           );
           return errorResult(reason);
         }
-        const bodyPreview = formatBodyPreview(args.body);
+        const confirmationMessage = buildWriteConfirmationMessage({
+          headline: `Create ${args.resource_type}?`,
+          body: args.body,
+          confirmationPreview: createSpec.confirmationPreview,
+        });
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_create",
-          message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
+          message: confirmationMessage,
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
@@ -94,7 +99,11 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
             { tool: "harness_create", confirmation: elicit.method },
             describeBlockedAudit(elicit),
           );
-          return errorResult(describeElicitationFailure(elicit));
+          const failure = describeElicitationFailure(elicit);
+          const focused = elicit.method === "blocked"
+            ? readConfirmationPreview(createSpec.confirmationPreview, args.body)
+            : undefined;
+          return errorResult(focused ? `${failure}\n\nReview before retrying:\n${focused}` : failure);
         }
 
         const result = await registry.dispatch(client, args.resource_type, "create", input, { tool: "harness_create", confirmation: elicit.method });
