@@ -8,7 +8,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
-import { formatBodyPreview } from "../utils/body-preview.js";
+import { buildWriteConfirmationMessage, readConfirmationPreview } from "../utils/confirmation-message.js";
 import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { updateOutputSchema } from "./output-schemas.js";
 
@@ -81,7 +81,8 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           input[primaryField] = resolvedResourceId;
         }
 
-        const risk = def.operations.update!.operationPolicy.risk;
+        const updateSpec = def.operations.update!;
+        const risk = updateSpec.operationPolicy.risk;
         // Fail fast on HARNESS_READ_ONLY before elicitation — see
         // harness_create.ts for the rationale. Mirrors registry.dispatch().
         if (config.HARNESS_READ_ONLY) {
@@ -95,11 +96,15 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           );
           return errorResult(reason);
         }
-        const bodyPreview = formatBodyPreview(args.body);
+        const confirmationMessage = buildWriteConfirmationMessage({
+          headline: `Update ${args.resource_type} "${resolvedResourceId}"?`,
+          body: args.body,
+          confirmationPreview: updateSpec.confirmationPreview,
+        });
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_update",
-          message: `Update ${args.resource_type} "${resolvedResourceId}"?\n\n${bodyPreview}`,
+          message: confirmationMessage,
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
@@ -112,7 +117,11 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
             { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId },
             describeBlockedAudit(elicit),
           );
-          return errorResult(describeElicitationFailure(elicit));
+          const failure = describeElicitationFailure(elicit);
+          const focused = elicit.method === "blocked"
+            ? readConfirmationPreview(updateSpec.confirmationPreview, args.body)
+            : undefined;
+          return errorResult(focused ? `${failure}\n\nReview before retrying:\n${focused}` : failure);
         }
         // Lift version_label from body when callers put it there instead of params.
         // Do not invent a default — template update requires an explicit version_label

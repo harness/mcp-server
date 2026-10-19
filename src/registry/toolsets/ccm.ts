@@ -1,5 +1,6 @@
 import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec, BodySchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
+import { previewCostCategoryWrite, previewCostPerspectiveWrite } from "../../utils/ccm-write-preview.js";
 import { parseCustomWindow, parseTimeInput } from "../../utils/ccm-time.js";
 import {
   ngExtract,
@@ -911,7 +912,7 @@ export const ccmToolset: ToolsetDefinition = {
       resourceType: "cost_perspective",
       displayName: "Cost Perspective",
       description:
-        "A cloud cost perspective (saved view). Use harness_list to see all perspectives, harness_get for details. This is the starting point — get a perspective_id first, then use cost_breakdown or cost_timeseries to drill into costs.",
+        "A cloud cost perspective (saved view). Use harness_list to see all perspectives, harness_get for details. This is the starting point — get a perspective_id first, then use cost_breakdown or cost_timeseries to drill into costs. Create and update require confirmation.",
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
@@ -955,7 +956,9 @@ export const ccmToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ccm/api/perspective",
           preflight: perspectiveCreatePreflight,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          // medium_write: filter rules, data sources, and cost basis change dashboards and budgets immediately.
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          confirmationPreview: (body) => previewCostPerspectiveWrite(body, { publishDefaults: true }),
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective definition. viewPreferences defaults are auto-fetched from account settings and merged — agent-provided values override.",
@@ -978,12 +981,14 @@ export const ccmToolset: ToolsetDefinition = {
             ],
           },
           responseExtractor: ngExtract,
-          description: "Create a new cost perspective",
+          description: "Create a new cost perspective. Requires confirmation. The prompt previews the name, filter rules, data sources, and cost-basis preferences before dispatch.",
         },
         update: {
           method: "PUT",
           path: "/ccm/api/perspective",
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          // medium_write: update replaces the saved view, including filters and cost basis.
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
+          confirmationPreview: (body) => previewCostPerspectiveWrite(body, { publishDefaults: false }),
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
@@ -1007,7 +1012,7 @@ export const ccmToolset: ToolsetDefinition = {
             ],
           },
           responseExtractor: ngExtract,
-          description: "Update an existing cost perspective",
+          description: "Update an existing cost perspective. Requires confirmation. The prompt previews the name, filter rules, data sources, and cost-basis preferences before dispatch.",
         },
         delete: {
           method: "DELETE",
@@ -1685,7 +1690,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       resourceType: "cost_category",
       displayName: "Cost Category",
       description:
-        "Cost categories (business mappings) for organizing cloud costs into business units. Use harness_list to see all categories, harness_get with category_id for details. Use harness_create to create a new cost category with cost targets and rules.",
+        "Cost categories (business mappings) for organizing cloud costs into business units. Use harness_list to see all categories, harness_get with category_id for details. Use harness_create to create a new cost category with cost targets and rules. Create and update require confirmation.",
       toolset: "ccm",
       scope: "account",
       identifierFields: ["category_id"],
@@ -1720,7 +1725,9 @@ For cost time-series data, use harness_get with start_time and end_time.`,
         create: {
           method: "POST",
           path: "/ccm/api/business-mapping",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          // medium_write: bucket rules, FIXED splits, and HIDE rewrite chargeback.
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          confirmationPreview: previewCostCategoryWrite,
           injectAccountInBody: "accountId",
           bodyBuilder: (input) => input.body,
           bodySchema: {
@@ -1748,12 +1755,14 @@ For cost time-series data, use harness_get with start_time and end_time.`,
             ],
           },
           responseExtractor: ngExtract,
-          description: "Create a new cost category (business mapping). The accountId is injected automatically.",
+          description: "Create a new cost category (business mapping). Requires confirmation. The prompt previews bucket rules, shared-cost strategy, and unallocated-cost strategy before dispatch. The accountId is injected automatically.",
         },
         update: {
           method: "PUT",
           path: "/ccm/api/business-mapping",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          // medium_write: update replaces bucket rules and can hide or reallocate spend.
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          confirmationPreview: previewCostCategoryWrite,
           injectAccountInBody: "accountId",
           bodyBuilder: (input) => input.body,
           bodySchema: {
@@ -1782,7 +1791,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
             ],
           },
           responseExtractor: ngExtract,
-          description: "Update an existing cost category (full replacement)",
+          description: "Update an existing cost category (full replacement). Requires confirmation. The prompt previews bucket rules, shared-cost strategy, and unallocated-cost strategy before dispatch.",
         },
         delete: {
           method: "DELETE",

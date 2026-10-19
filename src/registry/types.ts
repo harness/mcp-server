@@ -359,6 +359,12 @@ export interface EndpointSpec {
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**
+   * Optional text included in the create/update confirmation prompt before
+   * dispatch. Use it to keep security-sensitive fields visible when the raw
+   * body preview is truncated.
+   */
+  confirmationPreview?: (body: unknown) => string;
+  /**
    * Declarative input expansion rules. When present, matching shorthand keys
    * in user input are expanded into full nested structures before resolution.
    */
