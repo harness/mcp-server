@@ -149,4 +149,26 @@ describe("compactItems", () => {
     expect(result[0].name).toBe("[Incident 1](https://app.harness.io/inc/1)");
     expect(result[0]).not.toHaveProperty("openInHarness");
   });
+
+  it("preserves SCS list marker fields _summary, _message, and _result (#1030)", () => {
+    const items = [
+      {
+        id: "a1",
+        name: "artifact",
+        _summary: "3 policy violations",
+        _message: "Use scs_bom_violation next",
+        _result: "partial",
+        yaml: "stripped",
+      },
+    ];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toMatchObject({
+      id: "a1",
+      name: "artifact",
+      _summary: "3 policy violations",
+      _message: "Use scs_bom_violation next",
+      _result: "partial",
+    });
+    expect(result[0]).not.toHaveProperty("yaml");
+  });
 });
