@@ -1,6 +1,11 @@
 import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec, BodySchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
 import {
+  COST_CATEGORY_RULES_NOTE,
+  COST_CATEGORY_RULES_ITEM_TYPE,
+  normalizeCostCategoryBody,
+} from "./ccm-cost-category.js";
+import {
   ngExtract,
   passthrough,
   gqlExtract,
@@ -549,52 +554,6 @@ const aiBudgetReviewBodySchema: BodySchema = {
     },
   ],
 };
-
-const COST_CATEGORY_RULES_NOTE =
-  "Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier, identifierName }, viewOperator: 'IN'|'NOT_IN'|'LIKE'|'NOT_NULL'|'NULL', values: string[] }. " +
-  "When the user says a value equals something, use IN with those values: 'equals xyz' -> values ['xyz']; 'equals xyz or abc' -> values ['xyz', 'abc']. Never use EQUALS.";
-
-const COST_CATEGORY_RULES_ITEM_TYPE =
-  "rules: [{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_IN' | 'LIKE' | 'NOT_NULL' | 'NULL', values: string[] }] }]";
-
-function normalizeCostCategoryRules(rules: unknown): unknown {
-  if (!Array.isArray(rules)) return rules;
-  return rules.map((rule) => {
-    const conditions = (rule as { viewConditions?: unknown })?.viewConditions;
-    if (!Array.isArray(conditions)) return rule;
-    return {
-      ...(rule as Record<string, unknown>),
-      viewConditions: conditions.map((condition) =>
-        (condition as { viewOperator?: unknown })?.viewOperator === "EQUALS"
-          ? { ...(condition as Record<string, unknown>), viewOperator: "IN" }
-          : condition,
-      ),
-    };
-  });
-}
-
-function normalizeCostCategoryBuckets(buckets: unknown): unknown {
-  if (!Array.isArray(buckets)) return buckets;
-  return buckets.map((bucket) =>
-    bucket && typeof bucket === "object" && "rules" in bucket
-      ? { ...(bucket as Record<string, unknown>), rules: normalizeCostCategoryRules((bucket as { rules: unknown }).rules) }
-      : bucket,
-  );
-}
-
-/**
- * The CCM UI only offers IN / NOT_IN / LIKE / NULL / NOT_NULL, so send every EQUALS as IN,
- * single- or multi-value. Cost explorer already reads EQUALS as IN, but recommendations,
- * anomalies and column aggregates match only values[0], and with
- * CCM_COST_BUCKET_SHARED_COST_VALIDATION on, a multi-value EQUALS is rejected at save.
- */
-function normalizeCostCategoryBody(body: unknown): unknown {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
-  const result: Record<string, unknown> = { ...(body as Record<string, unknown>) };
-  if ("costTargets" in result) result.costTargets = normalizeCostCategoryBuckets(result.costTargets);
-  if ("sharedCosts" in result) result.sharedCosts = normalizeCostCategoryBuckets(result.sharedCosts);
-  return result;
-}
 
 /**
  * Normalizes REST cost_category responses into the same {values} shape

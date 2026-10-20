@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
+import { normalizeCostCategoryBody } from "../../src/registry/toolsets/ccm-cost-category.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -123,7 +124,7 @@ describe("cost category rules — EQUALS is sent as IN", () => {
   });
 });
 
-describe("cost category CRUD without EQUALS — requests unchanged", () => {
+describe("cost category normalizer without EQUALS — bodies unchanged", () => {
   const labelField = { fieldId: "labels.value", fieldName: "team", identifier: "LABEL_V2", identifierName: "Label V2" };
   const awsAccountField = { fieldId: "awsUsageaccountid", fieldName: "Account", identifier: "AWS", identifierName: "AWS" };
   const clusterField = { fieldId: "clusterName", fieldName: "Cluster Name", identifier: "CLUSTER", identifierName: "Cluster" };
@@ -184,39 +185,22 @@ describe("cost category CRUD without EQUALS — requests unchanged", () => {
     lastUpdatedBy: { uuid: "user-1", name: "FinOps", email: "finops@example.com" },
   });
 
-  async function captureRequest(operation: "create" | "update", body: unknown, bodyBuilder?: (input: Record<string, unknown>) => unknown) {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
-    const spec = registry.getResource("cost_category").operations[operation]!;
-    const original = spec.bodyBuilder;
-    if (bodyBuilder) spec.bodyBuilder = bodyBuilder;
-    try {
-      const mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
-      await registry.dispatch(makeClient(mockRequest), "cost_category", operation, { body });
-      expect(mockRequest).toHaveBeenCalledOnce();
-      return mockRequest.mock.calls[0][0];
-    } finally {
-      spec.bodyBuilder = original;
-    }
+  const createBodyOf = () => (({ uuid, accountId, ...rest }) => rest)(existingCategory());
+
+  /** Without EQUALS the normalizer must return a body identical to its input, key order included. */
+  function expectUnchanged(body: unknown) {
+    const input = structuredClone(body);
+    const output = normalizeCostCategoryBody(input);
+    expect(output).toEqual(body);
+    expect(JSON.stringify(output)).toBe(JSON.stringify(body));
+    expect(input).toEqual(body); // input not mutated
   }
 
-  const passThrough = (input: Record<string, unknown>) => input.body;
-
-  it.each(["create", "update"] as const)("%s sends a byte-identical request to the pre-normalization pass-through", async (operation) => {
-    const body = operation === "create" ? (({ uuid, accountId, ...rest }) => rest)(existingCategory()) : existingCategory();
-
-    const sent = await captureRequest(operation, structuredClone(body));
-    const baseline = await captureRequest(operation, structuredClone(body), passThrough);
-
-    expect(sent).toEqual(baseline);
-    expect(JSON.stringify(sent.body)).toBe(JSON.stringify(baseline.body));
-  });
-
-  it("injects accountId on create without one and keeps an existing accountId on update", async () => {
-    const { uuid: _uuid, accountId: _accountId, ...createBody } = existingCategory();
-    expect((await captureRequest("create", createBody)).body.accountId).toBe("test-account");
-
-    const updateBody = { ...existingCategory(), accountId: "category-owner-account" };
-    expect((await captureRequest("update", updateBody)).body.accountId).toBe("category-owner-account");
+  it.each([
+    ["create body", createBodyOf()],
+    ["update body", existingCategory()],
+  ])("normalizer leaves a %s without EQUALS unchanged", (_label, body) => {
+    expectUnchanged(body);
   });
 
   it.each([
@@ -227,10 +211,42 @@ describe("cost category CRUD without EQUALS — requests unchanged", () => {
     ["null rule and condition entries", { name: "Sparse", costTargets: [{ name: "A", rules: [null, { viewConditions: [null] }] }] }],
     ["condition without viewOperator", { name: "Partial", costTargets: [{ name: "A", rules: [{ viewConditions: [{ type: "VIEW_ID_CONDITION", values: ["x"] }] }] }] }],
     ["lowercase equals (not the enum value)", { name: "Case", costTargets: [{ name: "A", rules: [{ viewConditions: [condition(labelField, "equals", ["x"])] }] }] }],
-  ])("passes edge-case bodies through as before: %s", async (_label, body) => {
-    const sent = await captureRequest("create", structuredClone(body));
-    const baseline = await captureRequest("create", structuredClone(body), passThrough);
-    expect(sent).toEqual(baseline);
+  ])("normalizer passes edge-case bodies through as before: %s", (_label, body) => {
+    expectUnchanged(body);
+  });
+
+  it.each([undefined, null, "text", 42, [1, 2]])("normalizer returns non-object body %j as is", (body) => {
+    expect(normalizeCostCategoryBody(body)).toBe(body);
+  });
+
+  it("normalizer rewrites EQUALS without mutating its input", () => {
+    const input = { name: "X", costTargets: [{ name: "A", rules: [{ viewConditions: [condition(labelField, "EQUALS", ["x"])] }] }] };
+    const snapshot = structuredClone(input);
+    const output = normalizeCostCategoryBody(input) as typeof input;
+    expect(output.costTargets[0].rules[0].viewConditions[0].viewOperator).toBe("IN");
+    expect(input).toEqual(snapshot);
+  });
+
+  it.each(["create", "update"] as const)("%s dispatch wires the normalizer and injects accountId", async (operation) => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
+    const { accountId: _accountId, ...rest } = existingCategory();
+    const body = { ...rest, costTargets: [{ name: "Eq", rules: [{ viewConditions: [condition(labelField, "EQUALS", ["x"])] }] }] };
+
+    await registry.dispatch(makeClient(mockRequest), "cost_category", operation, { body });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const sent = mockRequest.mock.calls[0][0].body;
+    expect(sent.costTargets[0].rules[0].viewConditions[0].viewOperator).toBe("IN");
+    expect(sent.accountId).toBe("test-account");
+  });
+
+  it("update keeps an existing accountId", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
+    const body = { ...existingCategory(), accountId: "category-owner-account" };
+    await registry.dispatch(makeClient(mockRequest), "cost_category", "update", { body });
+    expect(mockRequest.mock.calls[0][0].body.accountId).toBe("category-owner-account");
   });
 
   it.each(["get", "list", "delete"] as const)("%s has no bodyBuilder (untouched by normalization)", (operation) => {
