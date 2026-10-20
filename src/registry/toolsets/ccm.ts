@@ -955,7 +955,7 @@ export const ccmToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ccm/api/perspective",
           preflight: perspectiveCreatePreflight,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective definition. viewPreferences defaults are auto-fetched from account settings and merged — agent-provided values override.",
@@ -983,7 +983,7 @@ export const ccmToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ccm/api/perspective",
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
@@ -1720,7 +1720,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
         create: {
           method: "POST",
           path: "/ccm/api/business-mapping",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
           bodyBuilder: (input) => input.body,
           bodySchema: {
@@ -1753,7 +1753,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
         update: {
           method: "PUT",
           path: "/ccm/api/business-mapping",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
           bodyBuilder: (input) => input.body,
           bodySchema: {
