@@ -977,10 +977,11 @@ Each scanned risk records the offending risk rule, severity (Critical/High/Mediu
 Supports list and get, plus execute actions: 'occurrences' (per-scan detection history for one scanned risk) and 'summary_by_service' (aggregated risk counts per target service).
 Use chaos_risk_scan to discover scans that produce these findings, and chaos_risk_rule to inspect the rule (via riskRuleId) that flagged each finding.`;
 
-export const descChaosRiskRule = `A chaos risk rule: an LLM-driven check applied to a service's application manifest during a risk scan.
-Read-only: risk rules are synced from the ChaosHub, not created via this API.
-Each rule carries a severity, category, data source (e.g. ApplicationManifest), and a prompt spec (do/dont/outcome). System rules (isSystem=true) ship out of the box.
-Supports list and get. Use the rule identity as riskRuleId when filtering scanned_risk findings.`;
+export const descChaosRiskRule = `A chaos risk rule: a check that flags a resilience risk a chaos experiment can prove.
+Each rule carries a severity, category, data source (ApplicationManifest or SourceCode), a prompt spec (do/dont/outcome), and for SourceCode rules the chaos faults (spec.faults) that prove the risk.
+System rules (isSystem=true) are synced from the ChaosHub and cannot be modified. Custom rules are project-scoped, SourceCode-only, and support create, update and delete.
+Custom rule identities must match ^code-[a-z0-9-]{3,60}$ and name a generic failure mode (e.g. code-outbound-call-without-timeout), never a repo, file or service. A project can hold at most 30 custom SourceCode rules.
+Supports list and get for every rule. Use the rule identity as riskRuleId when filtering scanned_risk findings.`;
 
 export const descChaosRiskScan = `A chaos risk scan: an analysis run that inspects services (from a pipeline execution, a service-discovery agent, or a source code repository) and produces risk findings (scanned_risk).
 Supports full CRUD (create, get, list, update, delete) plus execute actions: 'retry' (re-run an errored scan), 'abort' (stop a running scan), 'report' (full findings report), 'report_download' (signed PDF URL), 'heatmap' (services vs risk-rules matrix), and 'submit_findings' (submit externally analysed CodeRepository findings).
@@ -995,6 +996,21 @@ export const descSummarizeScannedRisksByService = `Aggregate scanned-risk counts
 // Risk Rule operation descriptions
 export const descListRiskRules = `List chaos risk rules. Supports filtering by data source, isSystem, tags, and free-text search.`;
 export const descGetRiskRule = `Get a single chaos risk rule by its identity.`;
+export const descCreateRiskRule = `Create a project-scoped custom SourceCode risk rule. Requires identity (code-<failure-mode>), name, severity, category and spec {dataSource: ["SourceCode"], faults, prompt {do, dont, outcome}}. Fails when the project already holds 30 custom SourceCode rules.`;
+export const descUpdateRiskRule = `Replace the mutable fields of a custom risk rule (name, description, tags, severity, category, spec). System rules cannot be updated.`;
+export const descDeleteRiskRule = `Delete a custom risk rule by its identity. System rules cannot be deleted.`;
+
+// Risk Rule create/update body descriptions
+export const descBodyRiskRuleCreate = `Custom risk rule payload. identity, name, severity, category and spec are required.`;
+export const descBodyRiskRuleUpdate = `Custom risk rule payload. Replaces name, description, tags, severity, category and spec; all of name, severity, category and spec are required. Omitting description or tags clears them.`;
+export const descRiskRuleIdentity = `Rule identity matching ^code-[a-z0-9-]{3,60}$, naming a generic failure mode (e.g. code-retry-without-backoff).`;
+export const descRiskRuleName = `Human-readable rule name (at most 128 characters).`;
+export const descRiskRuleDescription = `What the failure mode is and why it hurts resilience (at most 2000 characters).`;
+export const descRiskRuleTags = `Optional tags (at most 10).`;
+export const descRiskRuleSeverity = `One of: Critical, High, Medium, Low. Critical is reserved for failures that take a whole service down on a single dependency fault.`;
+export const descRiskRuleCategory = `One of: Availability, Performance, Dependency, Resilience, Config.`;
+export const descRiskRuleSpec = `Rule spec: { dataSource: ["SourceCode"], faults: [allowlisted chaos fault ids such as pod-network-latency, pod-http-status-code, pod-delete], prompt: { do: [code signals], dont: [mitigations that make a signal a non-finding], outcome: [hypothesis with fault and probe signal] } }. dataSource defaults to ["SourceCode"] and must be exactly that. faults, prompt.do and prompt.outcome must be non-empty; prompt.dont is optional. Each prompt list holds at most 10 entries of at most 500 characters.`;
+export const descRiskRuleCustomOnly = `When true, return only custom (project-authored) risk rules.`;
 
 // Risk Scan operation descriptions
 export const descListRiskScans = `List chaos risk scans. Supports filtering by scan type, status, pipeline/agent/environment identity, tags, time range, and free-text search.`;
