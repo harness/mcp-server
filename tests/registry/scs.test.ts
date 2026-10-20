@@ -2400,3 +2400,37 @@ describe("scs_sbom download dispatch", () => {
     ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
+
+describe("SCS artifact deep links ({artifact} placeholder)", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+
+  it("scs_chain_of_custody get substitutes artifact_id into {artifact} on wrapped list items", async () => {
+    const request = vi.fn().mockResolvedValue([{ event: "build" }]);
+    const result = (await registry.dispatch(makeClient(request), "scs_chain_of_custody", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      artifact_id: "art-uuid-9",
+    })) as { items: Array<Record<string, unknown>> };
+
+    const link = result.items[0]?.openInHarness as string;
+    expect(link).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/SSCA/projects/Sanity/supply-chain/artifacts/art-uuid-9",
+    );
+    expect(link).not.toContain("{artifact}");
+  });
+
+  it("scs_artifact_remediation get substitutes artifact_id into {artifact}", async () => {
+    const request = vi.fn().mockResolvedValue({ remediation: [] });
+    const result = (await registry.dispatch(makeClient(request), "scs_artifact_remediation", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      artifact_id: "repo-art-1",
+      purl: "pkg:npm/lodash@4.17.21",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/SSCA/projects/Sanity/supply-chain/artifacts/repo-art-1",
+    );
+    expect(String(result.openInHarness)).not.toContain("{artifact}");
+  });
+});

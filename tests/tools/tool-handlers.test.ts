@@ -840,6 +840,26 @@ describe("harness_create", () => {
     });
   });
 
+  it("harness_create declines medium_write cost_category when the user declines elicitation", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
+    client = makeClient(mockRequest);
+    const declineServer = makeMcpServer("decline");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(declineServer, registry, client, makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+
+    const result = await declineServer.call("harness_create", {
+      resource_type: "cost_category",
+      body: {
+        name: "Engineering",
+        costTargets: [{ name: "Development", rules: [] }],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("uses account scope from account-level connector URLs during create", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "account_conn" } });
