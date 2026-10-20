@@ -218,10 +218,9 @@ describe("custom_service", () => {
       type: "CodeRepository",
       repo_url: "git0.harness.io/acme/payments",
       module: "graphql/server",
-      branch: "main",
     });
-    expect((mockRequest.mock.calls[0][0].body as { spec: { codeRepository: { module: string; branch: string } } }).spec.codeRepository)
-      .toMatchObject({ module: "graphql/server", branch: "main" });
+    expect((mockRequest.mock.calls[0][0].body as { spec: { codeRepository: { module: string } } }).spec.codeRepository)
+      .toMatchObject({ module: "graphql/server" });
 
     await expect(registry.dispatch(client, "custom_service", "create", {
       org_id: "o",
@@ -256,7 +255,7 @@ describe("custom_service", () => {
     })).rejects.toThrow(/spec is required/);
   });
 
-  it("updates a CodeRepository service with the branch, identity on the path only", async () => {
+  it("updates a CodeRepository service with the module, identity on the path only", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ identity: "payments" });
     const client = makeClient(mockRequest);
 
@@ -268,7 +267,6 @@ describe("custom_service", () => {
       type: "CodeRepository",
       repo_url: "https://github.com/acme/payments.git",
       module: "graphql/server",
-      branch: "code-scan",
       tags: "repo, code",
     });
 
@@ -286,7 +284,6 @@ describe("custom_service", () => {
         codeRepository: {
           repoURL: "https://github.com/acme/payments.git",
           module: "graphql/server",
-          branch: "code-scan",
         },
       },
     });

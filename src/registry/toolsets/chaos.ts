@@ -62,7 +62,7 @@ import {
   descChaosServiceProbes,
   descCustomService, descListCustomServices, descGetCustomService, descCreateCustomService,
   descBodyCustomServiceCreate, descCustomServiceIdentity, descCustomServiceName,
-  descCustomServiceType, descCustomServiceRepoURL, descCustomServiceModule, descCustomServiceBranch, descCustomServiceSpec,
+  descCustomServiceType, descCustomServiceRepoURL, descCustomServiceModule, descCustomServiceSpec,
   descUpdateCustomService, descBodyCustomServiceUpdate,
   descCustomServiceTypeFilter, descCustomServiceCategoryFilter,
   descChaosServiceProbesUpdate,
@@ -339,12 +339,10 @@ function buildCustomServiceBody(input: Record<string, unknown>): Record<string, 
     if (!repoURL) {
       throw new Error("repo_url is required when type is CodeRepository");
     }
-    const branch = optionalText(b.branch ?? nestedRecord?.branch);
     spec = {
       codeRepository: {
         repoURL,
         module: optionalText(b.module ?? nestedRecord?.module) ?? ".",
-        ...(branch ? { branch } : {}),
       },
     };
   } else if (specRecord) {
@@ -4327,7 +4325,6 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "type", type: "string", required: true, description: descCustomServiceType },
               { name: "repo_url", type: "string", required: false, description: descCustomServiceRepoURL },
               { name: "module", type: "string", required: false, description: descCustomServiceModule },
-              { name: "branch", type: "string", required: false, description: descCustomServiceBranch },
               { name: "spec", type: "object", required: false, description: descCustomServiceSpec },
               { name: "description", type: "string", required: false, description: descChaosServiceDescription },
               { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
@@ -4351,7 +4348,6 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "type", type: "string", required: true, description: descCustomServiceType },
               { name: "repo_url", type: "string", required: false, description: descCustomServiceRepoURL },
               { name: "module", type: "string", required: false, description: descCustomServiceModule },
-              { name: "branch", type: "string", required: false, description: descCustomServiceBranch },
               { name: "spec", type: "object", required: false, description: descCustomServiceSpec },
               { name: "description", type: "string", required: false, description: descChaosServiceDescription },
               { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
