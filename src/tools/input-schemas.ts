@@ -106,5 +106,7 @@ export function resourceTypeSchema(resourceTypes: string[], compact = false) {
 
 /** Description suffix for resource_type that points compact-mode callers at discovery. */
 export function resourceTypeHint(compact: boolean): string {
-  return compact ? " Call harness_describe() to list valid resource types." : "";
+  return compact
+    ? " Examples: pipeline, service, environment, connector, secret, template, trigger, input_set, execution, repository, pull_request. Call harness_describe(search_term) to find other types."
+    : "";
 }
