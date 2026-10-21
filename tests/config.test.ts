@@ -110,6 +110,29 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("defaults HARNESS_SCHEMA_MODE to full", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SCHEMA_MODE).toBe("full");
+    }
+  });
+
+  it("accepts HARNESS_SCHEMA_MODE=compact and treats empty string as full default", () => {
+    const compact = ConfigSchema.safeParse({ ...validConfig, HARNESS_SCHEMA_MODE: "compact" });
+    expect(compact.success).toBe(true);
+    if (compact.success) expect(compact.data.HARNESS_SCHEMA_MODE).toBe("compact");
+
+    const empty = ConfigSchema.safeParse({ ...validConfig, HARNESS_SCHEMA_MODE: "" });
+    expect(empty.success).toBe(true);
+    if (empty.success) expect(empty.data.HARNESS_SCHEMA_MODE).toBe("full");
+  });
+
+  it("rejects invalid HARNESS_SCHEMA_MODE values", () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_SCHEMA_MODE: "tiny" });
+    expect(result.success).toBe(false);
+  });
+
   it("defaults HARNESS_ORG to undefined when not provided", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);

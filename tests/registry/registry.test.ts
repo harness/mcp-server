@@ -2745,6 +2745,15 @@ describe("Registry", () => {
 
 });
 
+describe("Registry schema profile", () => {
+  it("compactSchemas follows HARNESS_SCHEMA_MODE", () => {
+    expect(new Registry(makeConfig()).compactSchemas).toBe(false);
+    expect(new Registry(makeConfig({ HARNESS_SCHEMA_MODE: "full" })).compactSchemas).toBe(false);
+    expect(new Registry(makeConfig({ HARNESS_SCHEMA_MODE: "compact" })).compactSchemas).toBe(true);
+    expect(new Registry(makeConfig({ HARNESS_SCHEMA_MODE: "compact" })).schemaProfile).toBe("compact");
+  });
+});
+
 describe("Registry resource_type near-miss resolution", () => {
   const registry = new Registry({ HARNESS_API_KEY: "pat.a.b.c", HARNESS_BASE_URL: "https://app.harness.io" } as never);
   it.each([

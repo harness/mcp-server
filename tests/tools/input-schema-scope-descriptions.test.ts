@@ -7,6 +7,7 @@ import {
   orgIdDescription,
   projectIdDescription,
   RESOURCE_SCOPE_DESCRIPTION,
+  RESOURCE_SCOPE_DESCRIPTION_COMPACT,
 } from "../../src/tools/input-schemas.js";
 
 type InputSchema = Record<string, { description?: string | null } | undefined>;
@@ -79,6 +80,14 @@ describe("scope field descriptions", () => {
   it("does not tell the model that account scope is a way to skip known org/project", () => {
     expect(RESOURCE_SCOPE_DESCRIPTION).toContain("do not use account to skip a known org/project");
     expect(RESOURCE_SCOPE_DESCRIPTION).not.toContain("omit org/project defaults");
+    expect(RESOURCE_SCOPE_DESCRIPTION_COMPACT).toMatch(/never use account to skip a known org\/project/i);
+  });
+
+  it("compact org/project copy is shorter and does not repeat session-default lecture", () => {
+    expect(orgIdDescription(undefined, true).length).toBeLessThan(orgIdDescription(undefined).length);
+    expect(orgIdDescription(undefined, true)).not.toContain("pass the current org_id on the first call");
+    expect(projectIdDescription(undefined, true)).not.toContain("pass the current project_id on the first call");
+    expect(orgIdDescription("acme", true)).toContain("acme");
   });
 
   it("harness_describe scopeHint requires explicit ids when defaults are unset", () => {
