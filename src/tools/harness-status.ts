@@ -75,8 +75,8 @@ export function registerStatusTool(
     {
       description: "Get a live project health overview: recent failed executions, currently running executions, and recent deployment activity. You can pass a Harness URL to auto-extract org and project. Ideal first question: 'what's happening in my project right now?'",
       inputSchema: {
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
         url: z.string().optional().describe("A Harness UI URL — org and project are extracted automatically"),
         limit: z.number().default(5).optional().describe("Max items per section (default 5, max 20)"),
       },

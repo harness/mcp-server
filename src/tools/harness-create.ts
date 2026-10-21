@@ -9,7 +9,7 @@ import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
-import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { createOutputSchema } from "./output-schemas.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
@@ -20,15 +20,15 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     {
       description: "Create a Harness resource. For pipelines/input sets: pass body as a YAML string directly (recommended for complex definitions), or use body.yamlPipeline (YAML string), or body.pipeline (JSON object). For remote pipelines, pass git details in params: external Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path) or Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). For others: call harness_describe for the body format.",
       inputSchema: {
-        resource_type: resourceTypeSchema(creatableTypes).describe("The type of resource to create"),
+        resource_type: resourceTypeSchema(creatableTypes, registry.compactSchemas).describe("The type of resource to create"),
         body: z.union([
           z.record(z.string(), z.unknown()),
           z.string(),
         ]).describe("The resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object). For other resources: pass a JSON object"),
         url: z.string().optional().describe("A Harness UI URL — org, project, and supported resource_scope are extracted automatically"),
-        resource_scope: resourceScopeSchema,
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
+        resource_scope: resourceScopeField(registry.compactSchemas),
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
         confirm: z.boolean().optional().describe("Set to true to confirm the operation. Only required when the operation risk is medium_write or above (most write resources) AND the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk creates. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path."),
       },

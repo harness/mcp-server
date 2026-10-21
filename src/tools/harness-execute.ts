@@ -14,7 +14,7 @@ import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntime
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml, mergeRuntimePipelineFragments } from "../utils/materialize-input-sets.js";
 import { normalizeV1PipelineRunInputs } from "../utils/pipeline-v1-runtime-inputs.js";
-import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema } from "./output-schemas.js";
@@ -147,13 +147,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // inner schema (verified on @modelcontextprotocol/sdk via
         // getSchemaDescription). A description set before any of those
         // would be invisible to MCP clients listing this tool.
-        resource_type: resourceTypeSchema(executableTypes).optional().describe("Resource type with executable actions. Auto-detected from url."),
+        resource_type: resourceTypeSchema(executableTypes, registry.compactSchemas).optional().describe("Resource type with executable actions. Auto-detected from url."),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
         action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
         resource_id: z.string().optional().describe("Primary resource identifier"),
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
-        resource_scope: resourceScopeSchema,
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
+        resource_scope: resourceScopeField(registry.compactSchemas),
         inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe("Pipeline runtime inputs. For v0 pipeline, check runtime_input_template and pass key-value pairs or full overlay YAML. For pipeline_v1, check runtime_input_template_v1 and pass named values; the server sends them as an inputs: YAML document."),
         input_set_ids: z.array(z.string()).optional().describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})."),
         body: z.record(z.string(), z.unknown()).optional().describe("Additional body payload for the action"),

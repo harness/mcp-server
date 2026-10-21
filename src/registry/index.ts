@@ -314,15 +314,37 @@ export class Registry {
 
   get orgId(): string | undefined { return this.config.HARNESS_ORG; }
   get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
+  /** True when tool schemas should not inline the resource_type enum. */
+  get compactSchemas(): boolean { return this.config.HARNESS_SCHEMA_MODE === "compact"; }
 
   /** Get a resource definition by type, or throw. */
   getResource(resourceType: string): ResourceDefinition {
     const def = this.resourceMap.get(resourceType);
     if (!def) {
-      const available = Array.from(this.resourceMap.keys()).sort().join(", ");
-      throw new Error(`Unknown resource_type "${resourceType}". Available: ${available}`);
+      const closest = this.suggestResourceTypes(resourceType);
+      const hint = closest.length > 0 ? ` Did you mean: ${closest.join(", ")}?` : "";
+      throw new Error(
+        `Unknown resource_type "${resourceType}".${hint} Call harness_describe(search_term="...") to find valid resource types.`,
+      );
     }
     return def;
+  }
+
+  /** Closest enabled resource types to an unknown input (substring / shared-token match). */
+  private suggestResourceTypes(input: string, limit = 5): string[] {
+    const needle = input.toLowerCase();
+    const tokens = needle.split(/[^a-z0-9]+/).filter((t) => t.length > 1);
+    return this.getAllResourceTypes()
+      .map((rt) => {
+        const lower = rt.toLowerCase();
+        let score = lower.includes(needle) || needle.includes(lower) ? 10 : 0;
+        for (const t of tokens) if (lower.includes(t)) score += 1;
+        return { rt, score };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || a.rt.localeCompare(b.rt))
+      .slice(0, limit)
+      .map((x) => x.rt);
   }
 
   /** Get all enabled resource types. */

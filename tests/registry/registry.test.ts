@@ -217,9 +217,13 @@ describe("Registry", () => {
       expect(def.displayName).toBe("Pipeline");
     });
 
-    it("throws for unknown resource type with available list", () => {
+    it("throws for unknown resource type and points to harness_describe", () => {
       expect(() => registry.getResource("nonexistent")).toThrow(/Unknown resource_type "nonexistent"/);
-      expect(() => registry.getResource("nonexistent")).toThrow(/Available:/);
+      expect(() => registry.getResource("nonexistent")).toThrow(/harness_describe/);
+    });
+
+    it("suggests close matches for a misspelled resource type", () => {
+      expect(() => registry.getResource("pipelines")).toThrow(/Did you mean: .*pipeline/);
     });
   });
 

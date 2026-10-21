@@ -11,7 +11,7 @@ import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
-import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema } from "./output-schemas.js";
 
 function isTrue(value: unknown): boolean {
@@ -26,12 +26,12 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
     {
       description: "Get a Harness resource by ID. Accepts a Harness URL to auto-extract identifiers. For failure analysis, prefer harness_diagnose.",
       inputSchema: {
-        resource_type: resourceTypeSchema(gettableTypes).optional().describe("Resource type to retrieve. Auto-detected from url."),
+        resource_type: resourceTypeSchema(gettableTypes, registry.compactSchemas).optional().describe("Resource type to retrieve. Auto-detected from url."),
         resource_id: z.string().optional().describe("Primary resource identifier. Auto-detected from url."),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
-        resource_scope: resourceScopeSchema,
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
+        resource_scope: resourceScopeField(registry.compactSchemas),
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type."),
         return_download_url: z.union([z.boolean(), z.enum(["true", "false"])]).optional().describe("For execution_log only: return a directly fetchable log download URL instead of buffering log content."),
       },
