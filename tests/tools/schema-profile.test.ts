@@ -10,6 +10,10 @@ import { registerAllTools } from "../../src/tools/index.js";
 // copy changes; update this only for an intentional full-mode contract change.
 const FULL_MODE_SCHEMA_SHA256 = "b4ade5b6a6399eedaec3d73c51df6463ece04e4ec8d9ae51c8438d0d81c4d32c";
 
+// Measured: tool descriptions + input schemas in compact mode. Measured 19986 B total, 3459 B largest tool; headroom is deliberately small (~5%).
+const COMPACT_TOTAL_BUDGET_BYTES = 21000;
+const COMPACT_PER_TOOL_BUDGET_BYTES = 3700;
+
 function makeConfig(mode: "full" | "compact"): Config {
   return {
     HARNESS_API_KEY: "pat.test.abc.xyz",
@@ -57,5 +61,29 @@ describe("HARNESS_SCHEMA_MODE", () => {
       expect(props.confirm?.description, name).toMatch(/only with user intent/i);
       expect(props.confirm?.description, name).toMatch(/never overrides a user's decline/i);
     }
+  });
+
+  // Size budget for compact mode: the point of the mode is a small tools/list. Raise a budget only
+  // deliberately and say why in the PR (see docs/schema-budget.md).
+  it("compact mode stays within its size budget", () => {
+    const tools = collectTools("compact");
+    const sizes = [...tools.entries()].map(([name, t]) => [name, JSON.stringify(t).length] as const);
+    const total = sizes.reduce((n, [, b]) => n + b, 0);
+    const worst = [...sizes].sort((a, b) => b[1] - a[1])[0]!;
+    expect(total, `total ${total}B; per tool: ${sizes.map(([n, b]) => `${n}=${b}`).join(" ")}`).toBeLessThanOrEqual(COMPACT_TOTAL_BUDGET_BYTES);
+    expect(worst[1], `${worst[0]} is ${worst[1]}B`).toBeLessThanOrEqual(COMPACT_PER_TOOL_BUDGET_BYTES);
+  });
+
+  it("compact mode does not inline long enums", () => {
+    const longest = (node: unknown): number => {
+      if (Array.isArray(node)) return Math.max(0, ...node.map(longest));
+      if (node && typeof node === "object") {
+        const o = node as Record<string, unknown>;
+        const here = Array.isArray(o.enum) ? o.enum.length : 0;
+        return Math.max(here, ...Object.values(o).map(longest));
+      }
+      return 0;
+    };
+    for (const [name, t] of collectTools("compact")) expect(longest(t.schema), name).toBeLessThanOrEqual(20);
   });
 });
