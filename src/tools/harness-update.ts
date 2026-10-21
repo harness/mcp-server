@@ -10,6 +10,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { fieldCopy } from "./field-copy.js";
 import { updateOutputSchema } from "./output-schemas.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
@@ -30,7 +31,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         ]).describe("The updated resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
         org_id: orgIdField(registry.orgId, registry.compactSchemas),
         project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Only required when the operation risk is medium_write or above AND the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk updates. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
+        confirm: z.boolean().optional().describe(fieldCopy("confirm.update", registry.schemaProfile)),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates)."),
       },
       outputSchema: updateOutputSchema,

@@ -397,7 +397,9 @@ export function registerSchemaTool(
           .enum(availableSchemas as [string, ...string[]])
           .optional()
           .describe(
-            `Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`,
+            _registry?.compactSchemas
+              ? "Schema to fetch. Required for schema/path lookups, optional for example_search. Valid values are listed in the tool description."
+              : `Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`,
           ),
         path: z
           .string()

@@ -15,6 +15,7 @@ import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml, mergeRuntimePipelineFragments } from "../utils/materialize-input-sets.js";
 import { normalizeV1PipelineRunInputs } from "../utils/pipeline-v1-runtime-inputs.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { fieldCopy } from "./field-copy.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema } from "./output-schemas.js";
@@ -154,14 +155,18 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         org_id: orgIdField(registry.orgId, registry.compactSchemas),
         project_id: projectIdField(registry.projectId, registry.compactSchemas),
         resource_scope: resourceScopeField(registry.compactSchemas),
-        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe("Pipeline runtime inputs. For v0 pipeline, check runtime_input_template and pass key-value pairs or full overlay YAML. For pipeline_v1, check runtime_input_template_v1 and pass named values; the server sends them as an inputs: YAML document."),
+        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe(
+          registry.compactSchemas
+            ? "Pipeline runtime inputs (key-value pairs or overlay YAML). Check runtime_input_template (v0) or runtime_input_template_v1 first."
+            : "Pipeline runtime inputs. For v0 pipeline, check runtime_input_template and pass key-value pairs or full overlay YAML. For pipeline_v1, check runtime_input_template_v1 and pass named values; the server sends them as an inputs: YAML document.",
+        ),
         input_set_ids: z.array(z.string()).optional().describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})."),
         body: z.record(z.string(), z.unknown()).optional().describe("Additional body payload for the action"),
         params: z.record(z.string(), z.unknown()).optional().describe("Action-specific parameters. Call harness_describe for available fields per resource_type."),
-        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Only required when the action's risk is medium_write or above (e.g. pipeline.run is high_write; hql_query.run/validate are read and need no confirmation) AND the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk actions. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
-        wait: z.boolean().optional().describe("For pipeline run/retry actions: block until the execution reaches a terminal status (Success/Failed/Aborted/Errored/Expired). Server-side polling — a single tool call gives the agent the final outcome instead of an LLM polling loop. Ignored for other actions."),
-        wait_timeout_seconds: z.number().min(10).max(7200).optional().describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status."),
-        wait_poll_interval_seconds: z.number().min(2).max(60).optional().describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s."),
+        confirm: z.boolean().optional().describe(fieldCopy("confirm.execute", registry.schemaProfile)),
+        wait: z.boolean().optional().describe(fieldCopy("execute.wait", registry.schemaProfile)),
+        wait_timeout_seconds: z.number().min(10).max(7200).optional().describe(fieldCopy("execute.wait_timeout_seconds", registry.schemaProfile)),
+        wait_poll_interval_seconds: z.number().min(2).max(60).optional().describe(fieldCopy("execute.wait_poll_interval_seconds", registry.schemaProfile)),
         queries: z.array(
           z.object({
             query_string: z.string().describe("HQL query string"),

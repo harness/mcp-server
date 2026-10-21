@@ -9,6 +9,7 @@ import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord, asString } from "../utils/type-guards.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { fieldCopy } from "./field-copy.js";
 import { deleteOutputSchema } from "./output-schemas.js";
 
 export function registerDeleteTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
@@ -25,7 +26,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         resource_scope: resourceScopeField(registry.compactSchemas),
         org_id: orgIdField(registry.orgId, registry.compactSchemas),
         project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        confirm: z.boolean().optional().describe("Set to true to confirm the destructive operation. Required when the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
+        confirm: z.boolean().optional().describe(fieldCopy("confirm.delete", registry.schemaProfile)),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure)."),
       },
       outputSchema: deleteOutputSchema,

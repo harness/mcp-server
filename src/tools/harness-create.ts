@@ -10,6 +10,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { fieldCopy } from "./field-copy.js";
 import { createOutputSchema } from "./output-schemas.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
@@ -29,8 +30,8 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         resource_scope: resourceScopeField(registry.compactSchemas),
         org_id: orgIdField(registry.orgId, registry.compactSchemas),
         project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Only required when the operation risk is medium_write or above (most write resources) AND the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk creates. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
-        params: z.record(z.string(), z.unknown()).optional().describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path."),
+        confirm: z.boolean().optional().describe(fieldCopy("confirm.create", registry.schemaProfile)),
+        params: z.record(z.string(), z.unknown()).optional().describe(fieldCopy("create.params", registry.schemaProfile)),
       },
       outputSchema: createOutputSchema,
       annotations: {
