@@ -11,7 +11,7 @@ import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { fieldCopy } from "./field-copy.js";
-import { updateOutputSchema } from "./output-schemas.js";
+import { updateOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
@@ -34,7 +34,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         confirm: z.boolean().optional().describe(fieldCopy("confirm.update", registry.schemaProfile)),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates)."),
       },
-      outputSchema: updateOutputSchema,
+      outputSchema: compactOutputSchema(updateOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Update Harness Resource",
         readOnlyHint: false,

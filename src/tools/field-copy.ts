@@ -5,6 +5,14 @@
 export type SchemaProfile = "full" | "compact";
 
 const COPY = {
+  "diagnose.options": {
+    full: "Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, include_all_step_logs (boolean, fetch logs for ALL steps not just failed/deepest \u2014 logs are fetched in batches of 3 for memory safety, capped at max_all_step_logs, use for pipeline summarization), max_all_step_logs (number, default 25, max steps to include in all_step_logs \u2014 prevents OOM on large matrix/loop pipelines), return_download_url (boolean, return signed logs.zip URLs instead of inline log text), log_snippet_lines, max_failed_steps. Pipeline diagnosis requires a completed execution. When a Harness URL contains ?step=<nodeExecutionId>, setting include_logs:true fetches that specific step's log regardless of pass/fail status and returns it as requested_step_log alongside any failed_step_logs. GitOps: agent_id. Call harness_describe for details.",
+    compact: "Resource-specific options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, include_all_step_logs, return_download_url, log_snippet_lines, max_failed_steps (needs a completed execution; a ?step= URL with include_logs fetches that step). GitOps: agent_id.",
+  },
+  "execute.queries": {
+    full: "Batch HQL queries \u2014 use with resource_type='hql_query' and action='validate' or 'run'. Fans out in parallel, returns per-query results.",
+    compact: "Batch HQL queries for resource_type='hql_query' with action validate or run; run in parallel.",
+  },
   "confirm.execute": {
     full: "Set to true to confirm the operation. Only required when the action's risk is medium_write or above (e.g. pipeline.run is high_write; hql_query.run/validate are read and need no confirmation) AND the client cannot surface a confirmation prompt \u2014 e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk actions. Does NOT override an explicit decline from a client that completed an elicitation prompt \u2014 a user's decline is authoritative.",
     compact: "User-approved confirmation for medium/high-risk operations when the client cannot show a prompt. Set only with user intent; never overrides a user's decline.",

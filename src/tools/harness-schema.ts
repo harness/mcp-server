@@ -7,7 +7,7 @@ import { SCHEMAS } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 import { createLogger } from "../utils/logger.js";
-import { schemaOutputSchema } from "./output-schemas.js";
+import { schemaOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import type { Config } from "../config.js";
 import {
   createLiveSchemaFetcher,
@@ -436,7 +436,7 @@ export function registerSchemaTool(
               "identifier is sent automatically for all live entity types at any scope.",
           ),
       },
-      outputSchema: schemaOutputSchema,
+      outputSchema: compactOutputSchema(schemaOutputSchema, _registry?.compactSchemas),
       annotations: {
         title: "Harness YAML Schema",
         readOnlyHint: true,

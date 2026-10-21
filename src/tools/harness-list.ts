@@ -11,7 +11,7 @@ import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
-import { listOutputSchema } from "./output-schemas.js";
+import { listOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
   const filtersDesc =
@@ -37,7 +37,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. repo_id for pull requests). Call harness_describe for fields per resource_type."),
         filters: z.record(z.string(), z.unknown()).optional().describe(filtersDesc),
       },
-      outputSchema: listOutputSchema,
+      outputSchema: compactOutputSchema(listOutputSchema, registry.compactSchemas),
       annotations: {
         title: "List Harness Resources",
         readOnlyHint: true,

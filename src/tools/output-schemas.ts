@@ -74,3 +74,11 @@ export const statusOutputSchema = z.object({
 
 // --- harness_schema ---
 export const schemaOutputSchema = z.object({}).catchall(z.unknown()).describe("Schema data — shape varies by query mode");
+
+/**
+ * Compact mode ships a permissive output schema: the model reads the text result, and the
+ * per-field descriptions here cost ~5 KB per tools/list for no routing benefit.
+ */
+export function compactOutputSchema<T extends z.ZodType>(full: T, compact: boolean | undefined): z.ZodType {
+  return compact ? dynamicObject : full;
+}

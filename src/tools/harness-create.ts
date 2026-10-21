@@ -11,7 +11,7 @@ import { coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { fieldCopy } from "./field-copy.js";
-import { createOutputSchema } from "./output-schemas.js";
+import { createOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const creatableTypes = registry.getTypesForOperation("create");
@@ -33,7 +33,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         confirm: z.boolean().optional().describe(fieldCopy("confirm.create", registry.schemaProfile)),
         params: z.record(z.string(), z.unknown()).optional().describe(fieldCopy("create.params", registry.schemaProfile)),
       },
-      outputSchema: createOutputSchema,
+      outputSchema: compactOutputSchema(createOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Create Harness Resource",
         readOnlyHint: false,

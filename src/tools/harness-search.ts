@@ -10,7 +10,7 @@ import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import type { ResourceScope } from "../registry/types.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
-import { searchOutputSchema } from "./output-schemas.js";
+import { searchOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import type { SearchManager } from "../search/index.js";
 import type { SearchResult } from "../search/types.js";
 import { entityResultMatchesEffectiveScope } from "../search/entity-index.js";
@@ -116,7 +116,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         max_per_type: z.number().default(5).optional().describe("Max results per type"),
         compact: z.boolean().default(true).optional().describe("Strip verbose metadata (default true)"),
       },
-      outputSchema: searchOutputSchema,
+      outputSchema: compactOutputSchema(searchOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Search Harness Resources",
         readOnlyHint: true,

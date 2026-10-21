@@ -18,7 +18,7 @@ import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } fr
 import { fieldCopy } from "./field-copy.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
-import { executeOutputSchema } from "./output-schemas.js";
+import { executeOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("execute");
 
@@ -173,9 +173,9 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             timeout_ms: z.number().optional().describe("Per-query timeout in milliseconds"),
             max_results: z.number().optional().describe("Maximum rows to return"),
           })
-        ).max(20).optional().describe("Batch HQL queries — use with resource_type='hql_query' and action='validate' or 'run'. Fans out in parallel, returns per-query results."),
+        ).max(20).optional().describe(fieldCopy("execute.queries", registry.schemaProfile)),
       },
-      outputSchema: executeOutputSchema,
+      outputSchema: compactOutputSchema(executeOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Execute Harness Action",
         readOnlyHint: false,

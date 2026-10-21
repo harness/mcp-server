@@ -10,7 +10,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord, asString } from "../utils/type-guards.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { fieldCopy } from "./field-copy.js";
-import { deleteOutputSchema } from "./output-schemas.js";
+import { deleteOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
 export function registerDeleteTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const deletableTypes = registry.getTypesForOperation("delete");
@@ -29,7 +29,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         confirm: z.boolean().optional().describe(fieldCopy("confirm.delete", registry.schemaProfile)),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure)."),
       },
-      outputSchema: deleteOutputSchema,
+      outputSchema: compactOutputSchema(deleteOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Delete Harness Resource",
         readOnlyHint: false,

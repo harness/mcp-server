@@ -12,7 +12,7 @@ import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
-import { getOutputSchema } from "./output-schemas.js";
+import { getOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
 function isTrue(value: unknown): boolean {
   return value === true || value === "true";
@@ -35,7 +35,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type."),
         return_download_url: z.union([z.boolean(), z.enum(["true", "false"])]).optional().describe("For execution_log only: return a directly fetchable log download URL instead of buffering log content."),
       },
-      outputSchema: getOutputSchema,
+      outputSchema: compactOutputSchema(getOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Get Harness Resource",
         readOnlyHint: true,
