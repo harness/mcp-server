@@ -48,8 +48,10 @@ export const searchOutputSchema = z.object({
     match_count: z.number().describe("Number of matches in this type"),
     items: z.array(dynamicObject).describe("Matching resources"),
   }).catchall(z.unknown())).describe("Search results grouped by resource type"),
+  semantic_routed: z.boolean().optional().describe("True when semantic routing narrowed the searched types"),
+  types_skipped: z.array(z.string()).optional().describe("Resource types skipped by semantic routing"),
   errors: z.record(z.string(), z.string()).optional().describe("Per-resource-type errors for types that could not be searched"),
-}).catchall(z.unknown());
+});
 
 // --- harness_describe ---
 export const describeOutputSchema = z.object({}).catchall(z.unknown()).describe("Resource type metadata, toolset info, or registry summary");

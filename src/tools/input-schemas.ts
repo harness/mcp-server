@@ -104,9 +104,3 @@ export function resourceTypeSchema(resourceTypes: string[], compact = false) {
   return z.enum(resourceTypes as [string, ...string[]]);
 }
 
-/** Description suffix for resource_type that points compact-mode callers at discovery. */
-export function resourceTypeHint(compact: boolean): string {
-  return compact
-    ? " Examples: pipeline, service, environment, connector, secret, template, trigger, input_set, execution, repository, pull_request. Call harness_describe(search_term) to find other types."
-    : "";
-}

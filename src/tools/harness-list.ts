@@ -12,6 +12,7 @@ import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { listOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
   const filtersDesc =
@@ -45,7 +46,8 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (rawArgs) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, filters, ...rest } = args;
         // Use coerceRecord to handle LLMs that serialize objects as JSON strings

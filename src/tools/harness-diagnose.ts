@@ -15,6 +15,7 @@ import { delegateHandler } from "./diagnose/delegate.js";
 import { gitopsApplicationHandler } from "./diagnose/gitops-application.js";
 import { orgIdField, projectIdField } from "./input-schemas.js";
 import { diagnoseOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 const ALIASES: Record<string, string> = { execution: "pipeline", gitops_app: "gitops_application" };
 
@@ -51,7 +52,8 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
+    async (rawArgs, extra) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { options, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);

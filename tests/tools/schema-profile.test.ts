@@ -6,13 +6,13 @@ import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
 import { registerAllTools } from "../../src/tools/index.js";
 
-// Pinned hash of the full-mode tool schemas. Full mode must stay byte-identical when compact-mode
+// Pinned hash of the full-mode tool schemas (descriptions, input and output schemas as advertised by tools/list). Full mode must stay byte-identical when compact-mode
 // copy changes; update this only for an intentional full-mode contract change.
-const FULL_MODE_SCHEMA_SHA256 = "b4ade5b6a6399eedaec3d73c51df6463ece04e4ec8d9ae51c8438d0d81c4d32c";
+const FULL_MODE_SCHEMA_SHA256 = "6628ca41d3c97a33f652bb37cff80de9c3e37aebaa5ccb96d7fa4a2c312fb2e4";
 
-// Measured: tool descriptions + input schemas in compact mode. Measured 19986 B total, 3459 B largest tool; headroom is deliberately small (~5%).
-const COMPACT_TOTAL_BUDGET_BYTES = 21000;
-const COMPACT_PER_TOOL_BUDGET_BYTES = 3700;
+// Measured: tool descriptions + input and output schemas in compact mode. Measured 21372 B total, 3585 B largest tool; headroom is deliberately small (~5%).
+const COMPACT_TOTAL_BUDGET_BYTES = 22500;
+const COMPACT_PER_TOOL_BUDGET_BYTES = 3800;
 
 function makeConfig(mode: "full" | "compact"): Config {
   return {
@@ -30,10 +30,14 @@ function makeConfig(mode: "full" | "compact"): Config {
 
 function collectTools(mode: "full" | "compact") {
   const config = makeConfig(mode);
-  const tools = new Map<string, { description?: string; schema: unknown }>();
+  const tools = new Map<string, { description?: string; schema: unknown; output?: unknown }>();
   const server = {
-    registerTool: vi.fn((name: string, def: { description?: string; inputSchema: z.ZodRawShape }) => {
-      tools.set(name, { description: def.description, schema: z.toJSONSchema(z.object(def.inputSchema)) });
+    registerTool: vi.fn((name: string, def: { description?: string; inputSchema: z.ZodRawShape; outputSchema?: z.ZodType }) => {
+      tools.set(name, {
+        description: def.description,
+        schema: z.toJSONSchema(z.object(def.inputSchema)),
+        output: def.outputSchema ? z.toJSONSchema(def.outputSchema) : undefined,
+      });
     }),
   };
   const client = { request: vi.fn(), account: "test-account" } as unknown as HarnessClient;

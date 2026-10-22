@@ -9,13 +9,13 @@ Code defers them). Its size is a per-request tax, so it is treated as a budgeted
 
 | | `full` | `compact` |
 |---|---|---|
-| `resource_type` | `z.enum` of every supported type, repeated per tool | plain string, with common examples and a pointer to `harness_describe` |
+| `resource_type` | `z.enum` of every supported type, repeated per tool | plain string; types are discovered via `harness_describe` |
 | Unknown / near-miss type | error with suggestions | near-misses (case, hyphen, plural, `repo`, `pr`, `exec`…) resolve; others error with "did you mean" |
 | Long field copy | original wording | short form from `src/tools/field-copy.ts` (safety rules kept) |
 | Output schemas | typed, described | one permissive object schema |
 | Scope field copy | long | short; full rules are in the server `instructions` |
 
-Full mode is pinned byte-for-byte by a hash test (`tests/tools/schema-profile.test.ts`).
+Full mode (descriptions, input and output schemas as advertised) is pinned byte-for-byte by a hash test (`tests/tools/schema-profile.test.ts`).
 
 ## Results
 
@@ -23,27 +23,27 @@ Measured with `evals/schema-profile`: 51 distinct tasks × 2 repeats (102 runs p
 Harness API, real `tools/list` over stdio, Anthropic Messages API. "Instructions" is whether the
 server `instructions` string was given to the model.
 
-`tools/list`: full 57,082 B → compact 24,688 B (−57%).
+`tools/list`: full 57,324 B → compact 24,775 B (−57%).
 
 | model | mode | instructions | any call correct | first call correct | calls/task | input tokens/task | wrong scope |
 |---|---|---|---|---|---|---|---|
-| Haiku 5.5 | full | on | 97% | 94% | 2.26 | 63.0k | 1.0% |
-| Haiku 5.5 | compact | on | 98% | 94% | 2.25 | 28.6k | 0% |
-| Haiku 5.5 | full | off | 98% | 92% | 2.30 | 61.9k | 1.0% |
-| Haiku 5.5 | compact | off | 98% | 93% | 2.86 | 29.5k | 0% |
-| Sonnet 5.5 | full | on | 98% | 97% | 1.67 | 53.7k | 0% |
-| Sonnet 5.5 | compact | on | 96% | 90% | 1.95 | 25.5k | 0% |
-| Sonnet 5.5 | full | off | 98% | 96% | 1.91 | 53.1k | 2.0% |
-| Sonnet 5.5 | compact | off | 96% | 93% | 2.10 | 22.8k | 1.0% |
+| Haiku 5.5 | full | on | 98% | 94% | 2.34 | 64.3k | 2% |
+| Haiku 5.5 | full | off | 98% | 92% | 2.41 | 62.8k | 2% |
+| Haiku 5.5 | compact | on | 98% | 91% | 2.53 | 30.5k | 0% |
+| Haiku 5.5 | compact | off | 98% | 92% | 2.56 | 27.6k | 0% |
+| Sonnet 5.5 | full | on | 98% | 98% | 1.72 | 54.3k | 1% |
+| Sonnet 5.5 | full | off | 98% | 98% | 1.84 | 52.7k | 1% |
+| Sonnet 5.5 | compact | on | 98% | 93% | 1.83 | 24.9k | 0% |
+| Sonnet 5.5 | compact | off | 98% | 95% | 2.05 | 23.3k | 1% |
 
 Reading the table:
 
-- Input tokens per task fall 50–57% on both models; task success is within about 2 points.
-- Unknown-type errors: 0% everywhere except Haiku/compact/instructions-off (1%). Before near-miss
+- Input tokens per task fall 52–56% on both models; any-call success is identical (98%) in every cell.
+- Unknown-type errors: 0% in all but one cell (Haiku/compact/instructions-on, 1%). Before near-miss
   resolution, compact mode hit 5.7% (the model guessed `repo` for `repository`).
 - Sonnet in compact mode often calls `harness_describe` first on writes and unfamiliar types
-  (+~0.3 calls/task). That is a read, and the net token cost is still about half of full mode.
-- Haiku with no instructions needs ~0.6 more calls/task in compact mode — the weakest cell.
+  (+~0.1–0.2 calls/task). That is a read, and the net token cost is still about half of full mode.
+- Haiku in compact mode needs ~0.2 more calls/task than full.
 - No `confirm: true` was ever set on a read-only task in any run.
 
 Limits: two models, one vendor, stubbed API (empty lists), 51 tasks. Differences of a couple of
@@ -76,7 +76,7 @@ export ANTHROPIC_API_KEY=...            # never commit keys
 cd evals/schema-profile
 python -m venv .venv && .venv/bin/pip install mcp anthropic && .venv/bin/pip install -e ../../../harness-evals
 .venv/bin/python run_eval.py --mode compact --instructions on --model claude-sonnet-5-5 --repeats 2
-./run_gate.sh                           # full matrix: 2 models × 2 modes × instructions on/off
+./run_gate.sh                           # full matrix; exits non-zero on a failed run or missed threshold (check_gate.py)
 ```
 
 Results are written to `evals/schema-profile/results/` (git-ignored).
@@ -84,7 +84,7 @@ Results are written to `evals/schema-profile/results/` (git-ignored).
 ## Keeping it from bloating
 
 - **Budget test.** `tests/tools/schema-profile.test.ts` fails if compact-mode tool descriptions +
-  input schemas exceed 21,000 B in total (19,986 B today) or any tool exceeds 3,700 B, or if any
+  input and output schemas exceed 22,500 B in total (21,372 B today) or any tool exceeds 3,800 B, or if any
   compact enum has more than 20 values. If you must raise a budget, do it in the same PR, say why,
   and attach an eval run.
 - **Full mode is pinned.** Changing full-mode schemas requires updating the hash on purpose.

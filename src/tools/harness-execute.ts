@@ -19,6 +19,7 @@ import { fieldCopy } from "./field-copy.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 const log = createLogger("execute");
 
@@ -184,7 +185,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
+    async (rawArgs, extra) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, confirm: _confirm, queries: batchQueries, ...rest } = args;
         const coercedParams = coerceRecord(params);

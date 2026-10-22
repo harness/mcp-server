@@ -12,6 +12,7 @@ import { formatBodyPreview } from "../utils/body-preview.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { fieldCopy } from "./field-copy.js";
 import { createOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const creatableTypes = registry.getTypesForOperation("create");
@@ -42,7 +43,8 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (rawArgs) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, body, confirm: _confirm, ...rest } = args;
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;

@@ -14,6 +14,7 @@ import { searchOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import type { SearchManager } from "../search/index.js";
 import type { SearchResult } from "../search/types.js";
 import { entityResultMatchesEffectiveScope } from "../search/entity-index.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 const log = createLogger("search");
 const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
@@ -124,7 +125,8 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
+    async (rawArgs, extra) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const signal = extra.signal;
         const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url, { includeResourceScope: true });

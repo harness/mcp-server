@@ -332,7 +332,7 @@ export class Registry {
 
   /** Get a resource definition by type, or throw. */
   getResource(resourceType: string): ResourceDefinition {
-    const def = this.resourceMap.get(resourceType) ?? this.resourceMap.get(this.resolveAlias(resourceType) ?? "");
+    const def = this.findDefinition(resourceType);
     if (!def) {
       const closest = this.suggestResourceTypes(resourceType);
       const hint = closest.length > 0 ? ` Did you mean: ${closest.join(", ")}?` : "";
@@ -341,6 +341,15 @@ export class Registry {
       );
     }
     return def;
+  }
+
+  private findDefinition(resourceType: string): ResourceDefinition | undefined {
+    return this.resourceMap.get(resourceType) ?? this.resourceMap.get(this.resolveAlias(resourceType) ?? "");
+  }
+
+  /** Canonical name for a resource_type (resolving near-misses); unknown input is returned unchanged. */
+  canonicalResourceType(resourceType: string): string {
+    return this.findDefinition(resourceType)?.resourceType ?? resourceType;
   }
 
   /**
@@ -419,13 +428,13 @@ export class Registry {
 
   /** Check if a resource type supports an operation. */
   supportsOperation(resourceType: string, operation: OperationName): boolean {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     return def?.operations[operation] !== undefined;
   }
 
   /** Check if a resource type has execute actions. */
   getExecuteActions(resourceType: string): Record<string, EndpointSpec & { actionDescription: string }> | undefined {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     return def?.executeActions;
   }
 
@@ -585,7 +594,7 @@ export class Registry {
     blockReason: string,
   ): void {
     if (!this.auditManager) return;
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     if (!def) return;
     let spec: EndpointSpec | undefined;
     if (operation === "execute") {

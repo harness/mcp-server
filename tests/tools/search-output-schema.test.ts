@@ -12,4 +12,9 @@ describe("searchOutputSchema", () => {
   it("still accepts results without errors", () => {
     expect(searchOutputSchema.safeParse(base).success).toBe(true);
   });
+
+  it("accepts the semantic routing fields", () => {
+    const parsed = searchOutputSchema.safeParse({ ...base, semantic_routed: true, types_skipped: ["branch"] });
+    expect(parsed.success).toBe(true);
+  });
 });

@@ -61,18 +61,25 @@ def start_stub() -> tuple[HTTPServer, int]:
 ALIASES = {"repo": "repository", "repos": "repository", "pr": "pull_request", "exec": "execution", "env": "environment", "svc": "service"}
 
 
-def canon(key: str, v: object) -> str:
-    s = str(v).lower().replace("-", "_")
-    if key == "resource_type":
-        s = ALIASES.get(s, s)
-        s = ALIASES.get(s.rstrip("s"), s.rstrip("s") if s.rstrip("s") != s else s)
-    return s
+def canon(key: str, v: object) -> set[str]:
+    """Candidate canonical forms of a value; resource_type mirrors the server's alias resolution."""
+    s = str(v).strip().lower().replace("-", "_").replace(" ", "_")
+    if key != "resource_type":
+        return {s}
+    stems = [s]
+    if s.endswith("ies"):
+        stems.append(s[:-3] + "y")
+    if s.endswith("es"):
+        stems.append(s[:-2])
+    if s.endswith("s"):
+        stems.append(s[:-1])
+    return {x for t in stems for x in (t, ALIASES.get(t, t))}
 
 
 def find(obj: object, key: str, value: object) -> bool:
     """True if `key: value` appears anywhere in a nested args structure."""
     if isinstance(obj, dict):
-        return any((k == key and canon(k, v) == canon(k, value)) or find(v, key, value) for k, v in obj.items())
+        return any((k == key and canon(k, v) & canon(k, value)) or find(v, key, value) for k, v in obj.items())
     if isinstance(obj, list):
         return any(find(v, key, value) for v in obj)
     return False

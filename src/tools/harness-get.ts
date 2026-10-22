@@ -13,6 +13,7 @@ import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 function isTrue(value: unknown): boolean {
   return value === true || value === "true";
@@ -43,7 +44,8 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (rawArgs) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, ...rest } = args;
         const coercedParams = coerceRecord(params);

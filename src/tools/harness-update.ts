@@ -12,6 +12,7 @@ import { formatBodyPreview } from "../utils/body-preview.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { fieldCopy } from "./field-copy.js";
 import { updateOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
@@ -43,7 +44,8 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (rawArgs) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         // Validate resource_type and operation before asking user to confirm
         const def = registry.getResource(args.resource_type);
