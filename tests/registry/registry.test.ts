@@ -2760,4 +2760,11 @@ describe("Registry resource_type near-miss resolution", () => {
   it("still rejects unrelated names", () => {
     expect(() => registry.getResource("banana")).toThrow(/Unknown resource_type/);
   });
+  it("follows near-miss names for operation and execute lookups", () => {
+    expect(registry.supportsOperation("pipelines", "list")).toBe(registry.supportsOperation("pipeline", "list"));
+    expect(registry.supportsOperation("pipelines", "list")).toBe(true);
+    expect(registry.getExecuteActions("pipeline-v1")?.run).toBe(registry.getExecuteActions("pipeline_v1")?.run);
+    expect(registry.supportsOperation("banana", "list")).toBe(false);
+    expect(registry.getExecuteActions("banana")).toBeUndefined();
+  });
 });

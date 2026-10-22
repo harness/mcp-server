@@ -14,7 +14,7 @@ import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntime
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml, mergeRuntimePipelineFragments } from "../utils/materialize-input-sets.js";
 import { normalizeV1PipelineRunInputs } from "../utils/pipeline-v1-runtime-inputs.js";
-import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeDescription, resourceTypeSchema } from "./input-schemas.js";
 import { fieldCopy } from "./field-copy.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
@@ -148,7 +148,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // inner schema (verified on @modelcontextprotocol/sdk via
         // getSchemaDescription). A description set before any of those
         // would be invisible to MCP clients listing this tool.
-        resource_type: resourceTypeSchema(executableTypes, registry.compactSchemas).optional().describe("Resource type with executable actions. Auto-detected from url."),
+        resource_type: resourceTypeSchema(executableTypes, registry.compactSchemas).optional().describe(resourceTypeDescription("Resource type with executable actions. Auto-detected from url.", registry.compactSchemas)),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
         action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
         resource_id: z.string().optional().describe("Primary resource identifier"),
@@ -198,6 +198,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         let resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
+        }
+        // Near-miss names (case, hyphen, plural) must be canonical before the pipeline/v1
+        // branches below. Those branches compare the string; getResource alone is not enough.
+        const resolvedType = registry.getResource(resourceType).resourceType;
+        if (resolvedType) {
+          resourceType = resolvedType;
+          input.resource_type = resourceType;
         }
         // Interrupt is registered on resource_type=execution; accept pipeline as an alias.
         if (resourceType === "pipeline" && args.action === "interrupt") {

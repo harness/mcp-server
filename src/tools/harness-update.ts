@@ -9,7 +9,7 @@ import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
-import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeDescription, resourceTypeSchema } from "./input-schemas.js";
 import { fieldCopy } from "./field-copy.js";
 import { updateOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
@@ -21,7 +21,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
     {
       description: "Update an existing Harness resource. For pipelines/input sets: pass body as a YAML string directly (recommended for complex definitions), or use body.yamlPipeline/body.pipeline. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable.",
       inputSchema: {
-        resource_type: resourceTypeSchema(updatableTypes, registry.compactSchemas).describe("The type of resource to update"),
+        resource_type: resourceTypeSchema(updatableTypes, registry.compactSchemas).describe(resourceTypeDescription("The type of resource to update", registry.compactSchemas)),
         resource_id: z.string().optional().describe("The identifier of the resource to update. Optional when url contains the resource ID."),
         url: z.string().optional().describe("A Harness UI URL — org, project, resource type, ID, and supported resource_scope are extracted automatically"),
         resource_scope: resourceScopeField(registry.compactSchemas),

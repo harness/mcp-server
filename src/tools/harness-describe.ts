@@ -5,7 +5,7 @@ import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
 import { describeOutputSchema, compactOutputSchema } from "./output-schemas.js";
-import { describeScopeHint, resourceTypeSchema } from "./input-schemas.js";
+import { describeScopeHint, resourceTypeDescription, resourceTypeSchema } from "./input-schemas.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
@@ -16,7 +16,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
     {
       description: "Describe available Harness resource types, their supported operations, and fields. No API call — returns local metadata only. Use this to discover what resource_types you can use with other harness_ tools.",
       inputSchema: {
-        resource_type: resourceTypeSchema(allTypes, registry.compactSchemas).optional().describe("Get details for a specific resource type"),
+        resource_type: resourceTypeSchema(allTypes, registry.compactSchemas).optional().describe(resourceTypeDescription("Get details for a specific resource type", registry.compactSchemas)),
         toolset: (registry.compactSchemas ? z.string() : z.enum(allToolsets)).optional().describe("Filter to a specific toolset"),
         search_term: z.string().optional().describe("Search for resource types by keyword (matches type name, display name, toolset, description)"),
       },

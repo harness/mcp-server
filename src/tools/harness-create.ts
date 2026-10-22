@@ -9,7 +9,7 @@ import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
-import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeDescription, resourceTypeSchema } from "./input-schemas.js";
 import { fieldCopy } from "./field-copy.js";
 import { createOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
@@ -21,7 +21,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     {
       description: "Create a Harness resource. For pipelines/input sets: pass body as a YAML string directly (recommended for complex definitions), or use body.yamlPipeline (YAML string), or body.pipeline (JSON object). For remote pipelines, pass git details in params: external Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path) or Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). For others: call harness_describe for the body format.",
       inputSchema: {
-        resource_type: resourceTypeSchema(creatableTypes, registry.compactSchemas).describe("The type of resource to create"),
+        resource_type: resourceTypeSchema(creatableTypes, registry.compactSchemas).describe(resourceTypeDescription("The type of resource to create", registry.compactSchemas)),
         body: z.union([
           z.record(z.string(), z.unknown()),
           z.string(),
