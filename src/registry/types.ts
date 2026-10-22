@@ -164,6 +164,7 @@ export type ToolsetName =
   | "alerts"
   | "deploys"
   | "timelines"
+  | "runbooks"
   | "release-management"
   | "vibe"
   | "knowledge-graph"
