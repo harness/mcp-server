@@ -62,11 +62,22 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
           Object.assign(mergedArgs, options);
         }
 
-        // Resolve resource_type: explicit > URL-derived > default
+        // Resolve resource_type: explicit > URL-derived > default.
+        // Fold case and hyphens, then the diagnose aliases, then the registry near-miss
+        // map so "pipelines" reaches the pipeline handler instead of "not supported".
         let resourceType = asString(args.resource_type)
           ?? asString(input.resource_type)
           ?? "pipeline";
-        resourceType = ALIASES[resourceType] ?? resourceType;
+        const folded = resourceType.trim().toLowerCase().replace(/[\s-]+/g, "_");
+        resourceType = ALIASES[folded] ?? folded;
+        if (!handlers[resourceType]) {
+          try {
+            const canonical = registry.getResource(folded).resourceType;
+            if (canonical) resourceType = ALIASES[canonical] ?? canonical;
+          } catch {
+            // Unknown to the registry. The handler check below names the diagnose types.
+          }
+        }
 
         const handler = handlers[resourceType];
         if (!handler) {

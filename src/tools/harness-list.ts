@@ -10,7 +10,7 @@ import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
-import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeDescription, resourceTypeSchema } from "./input-schemas.js";
 import { listOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
@@ -25,7 +25,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     {
       description: "List Harness resources with filtering and pagination. Accepts a Harness URL to auto-extract scope. For project-scoped types, pass org_id and project_id on the first call unless the field descriptions name a configured default.",
       inputSchema: {
-        resource_type: resourceTypeSchema(listableTypes, registry.compactSchemas).optional().describe("Resource type to list. Auto-detected from url."),
+        resource_type: resourceTypeSchema(listableTypes, registry.compactSchemas).optional().describe(resourceTypeDescription("Resource type to list. Auto-detected from url.", registry.compactSchemas)),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, and type"),
         resource_scope: resourceScopeField(registry.compactSchemas),
         org_id: orgIdField(registry.orgId, registry.compactSchemas),
@@ -59,9 +59,14 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         // Spread caller-supplied params (path identifiers) and filters into the input
         if (coercedParams) Object.assign(input, coercedParams);
         if (coercedFilters) Object.assign(input, coercedFilters);
-        const resourceType = asString(input.resource_type);
+        let resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
+        }
+        const resolvedType = registry.getResource(resourceType).resourceType;
+        if (resolvedType) {
+          resourceType = resolvedType;
+          input.resource_type = resourceType;
         }
         if (resourceType === "template" && input.template_list_type === undefined) {
           input.template_list_type = "All";

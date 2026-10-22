@@ -119,6 +119,20 @@ describe("harness_list", () => {
     expect(data.items).toBeDefined();
   });
 
+  it("defaults template_list_type when resource_type is a plural near-miss", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer();
+    mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    client = makeClient(mockRequest);
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(templateServer, templateRegistry, client);
+
+    const result = await templateServer.call("harness_list", { resource_type: "templates" });
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.templateListType).toBe("All");
+  });
+
   it("returns schema-valid structured content for passthrough list responses", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
     mockRequest = vi.fn().mockResolvedValue({ content: [{ identifier: "repo-1" }], totalElements: 1 });
@@ -508,6 +522,21 @@ describe("harness_get — execution_log", () => {
     expect(data.download_url).toBe("https://storage.example.com/logs.zip?signed=1");
     expect(resolveLogDownloadUrlMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
     expect(resolveLogContentMock).not.toHaveBeenCalled();
+  });
+
+  it("maps resource_id to execution_id for a plural near-miss", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_logs",
+      resource_id: "exec-123",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(buildLogPrefixMock).toHaveBeenCalledWith(
+      client,
+      registry,
+      "exec-123",
+      expect.objectContaining({ execution_id: "exec-123", resource_type: "execution_log" }),
+    );
+    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
   });
 
   it("maps resource_id to execution_id and auto-builds prefix", async () => {
@@ -2040,6 +2069,22 @@ describe("harness_execute", () => {
     expect(call.body.inputs_yaml).toContain("inputs:");
     expect(call.body.inputs_yaml).toContain("branch: feature/my-fix");
     expect(call.body.inputs_yaml).toContain("environment: qa");
+  });
+
+  it("wraps pipeline_v1 inputs when resource_type is a hyphenated near-miss", async () => {
+    mockRequest.mockResolvedValueOnce({
+      execution_details: { execution_id: "v1-exec", status: "RUNNING" },
+    });
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline-v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: { branch: "feature/my-fix" },
+    });
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; body: { inputs_yaml: string } };
+    expect(call.path).toBe("/v1/orgs/default/projects/test-project/pipelines/my-pipe/execute");
+    expect(call.body.inputs_yaml).toContain("branch: feature/my-fix");
   });
 
   it("sends an empty body when pipeline_v1 has no runtime inputs", async () => {
@@ -4191,6 +4236,29 @@ describe("harness_diagnose", () => {
       options: { execution_id: "e1" },
     });
     // Should not return unsupported error — "execution" is aliased to "pipeline"
+    if (result.isError) {
+      const data = parseResult(result) as { error: string };
+      expect(data.error).not.toContain("not supported");
+    }
+  });
+
+  it("diagnoses a plural pipeline near-miss", async () => {
+    mockRequest.mockResolvedValue({
+      data: {
+        pipelineExecutionSummary: {
+          status: "Failed",
+          pipelineIdentifier: "test",
+          planExecutionId: "e1",
+          executionErrorInfo: { message: "test" },
+          layoutNodeMap: {},
+        },
+      },
+    });
+
+    const result = await server.call("harness_diagnose", {
+      resource_type: "pipelines",
+      options: { execution_id: "e1" },
+    });
     if (result.isError) {
       const data = parseResult(result) as { error: string };
       expect(data.error).not.toContain("not supported");

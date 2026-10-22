@@ -11,7 +11,7 @@ import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
-import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeDescription, resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema, compactOutputSchema } from "./output-schemas.js";
 
 function isTrue(value: unknown): boolean {
@@ -26,7 +26,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
     {
       description: "Get a Harness resource by ID. Accepts a Harness URL to auto-extract identifiers. For failure analysis, prefer harness_diagnose.",
       inputSchema: {
-        resource_type: resourceTypeSchema(gettableTypes, registry.compactSchemas).optional().describe("Resource type to retrieve. Auto-detected from url."),
+        resource_type: resourceTypeSchema(gettableTypes, registry.compactSchemas).optional().describe(resourceTypeDescription("Resource type to retrieve. Auto-detected from url.", registry.compactSchemas)),
         resource_id: z.string().optional().describe("Primary resource identifier. Auto-detected from url."),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
         resource_scope: resourceScopeField(registry.compactSchemas),
@@ -53,13 +53,19 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         const argsForUrlDefaults = coercedParams ? { ...rest, ...coercedParams } : rest;
         const input = applyUrlDefaults(argsForUrlDefaults as Record<string, unknown>, args.url, { includeResourceScope: true });
         if (coercedParams) Object.assign(input, coercedParams);
-        const resourceType = asString(input.resource_type);
+        let resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
         }
         const resourceId = asString(input.resource_id);
 
         const def = registry.getResource(resourceType);
+        // execution_log and global-template branches compare this string. A plural or
+        // hyphenated near-miss must not skip them and write an execution id into prefix.
+        if (def.resourceType) {
+          resourceType = def.resourceType;
+          input.resource_type = resourceType;
+        }
 
         // Map resource_id to the resource's own identifier field.
         // For multi-identifier resources (e.g. pull_request: ["repo_id", "pr_number"]),

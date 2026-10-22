@@ -10,9 +10,11 @@ import { registerAllTools } from "../../src/tools/index.js";
 // copy changes; update this only for an intentional full-mode contract change.
 const FULL_MODE_SCHEMA_SHA256 = "b4ade5b6a6399eedaec3d73c51df6463ece04e4ec8d9ae51c8438d0d81c4d32c";
 
-// Measured: tool descriptions + input schemas in compact mode. Measured 19986 B total, 3459 B largest tool; headroom is deliberately small (~5%).
-const COMPACT_TOTAL_BUDGET_BYTES = 21000;
-const COMPACT_PER_TOOL_BUDGET_BYTES = 3700;
+// Measured: tool descriptions + input schemas in compact mode. Measured 21458 B total, 3643 B largest
+// tool (harness_execute). The ~1.5 KB over the pre-example 19986 B is resourceTypeHint on each
+// resource_type field. Headroom stays about 5%.
+const COMPACT_TOTAL_BUDGET_BYTES = 22500;
+const COMPACT_PER_TOOL_BUDGET_BYTES = 3850;
 
 function makeConfig(mode: "full" | "compact"): Config {
   return {
@@ -52,6 +54,17 @@ describe("HARNESS_SCHEMA_MODE", () => {
 
   it("compact mode is meaningfully smaller than full", () => {
     expect(serialize(collectTools("compact")).length).toBeLessThan(serialize(collectTools("full")).length * 0.65);
+  });
+
+  it("compact resource_type copy lists examples and points at harness_describe", () => {
+    const tools = collectTools("compact");
+    for (const name of ["harness_list", "harness_get", "harness_create", "harness_execute", "harness_describe"]) {
+      const props = (tools.get(name)!.schema as { properties: Record<string, { description?: string }> }).properties;
+      expect(props.resource_type?.description, name).toMatch(/pipeline/);
+      expect(props.resource_type?.description, name).toMatch(/harness_describe/);
+    }
+    const searchProps = (tools.get("harness_search")!.schema as { properties: Record<string, { description?: string }> }).properties;
+    expect(searchProps.resource_types?.description).toMatch(/harness_describe/);
   });
 
   it("compact confirm copy keeps the user-intent and decline-is-final rules", () => {

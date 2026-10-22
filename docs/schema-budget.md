@@ -23,7 +23,9 @@ Measured with `evals/schema-profile`: 51 distinct tasks × 2 repeats (102 runs p
 Harness API, real `tools/list` over stdio, Anthropic Messages API. "Instructions" is whether the
 server `instructions` string was given to the model.
 
-`tools/list`: full 57,082 B → compact 24,688 B (−57%).
+`tools/list`: full 57,082 B → compact 24,688 B (−57%). That measurement predates attaching the
+compact `resource_type` example suffix (about 1.5 KB across the tool descriptions). The budget
+test below includes the suffix.
 
 | model | mode | instructions | any call correct | first call correct | calls/task | input tokens/task | wrong scope |
 |---|---|---|---|---|---|---|---|
@@ -84,8 +86,9 @@ Results are written to `evals/schema-profile/results/` (git-ignored).
 ## Keeping it from bloating
 
 - **Budget test.** `tests/tools/schema-profile.test.ts` fails if compact-mode tool descriptions +
-  input schemas exceed 21,000 B in total (19,986 B today) or any tool exceeds 3,700 B, or if any
-  compact enum has more than 20 values. If you must raise a budget, do it in the same PR, say why,
+  input schemas exceed 22,500 B in total (21,458 B today) or any tool exceeds 3,850 B, or if any
+  compact enum has more than 20 values. The example suffix on each compact `resource_type` field
+  (`resourceTypeHint`) is included in that 21,458 B. If you must raise a budget, do it in the same PR, say why,
   and attach an eval run.
 - **Full mode is pinned.** Changing full-mode schemas requires updating the hash on purpose.
 - **Put long copy in one place.** Long field descriptions go in `src/tools/field-copy.ts` with a

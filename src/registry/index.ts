@@ -330,9 +330,14 @@ export class Registry {
   get compactSchemas(): boolean { return this.config.HARNESS_SCHEMA_MODE === "compact"; }
   get schemaProfile(): "full" | "compact" { return this.compactSchemas ? "compact" : "full"; }
 
+  /** Exact match, or the one enabled type a near-miss unambiguously means. */
+  private findResource(resourceType: string): ResourceDefinition | undefined {
+    return this.resourceMap.get(resourceType) ?? this.resourceMap.get(this.resolveAlias(resourceType) ?? "");
+  }
+
   /** Get a resource definition by type, or throw. */
   getResource(resourceType: string): ResourceDefinition {
-    const def = this.resourceMap.get(resourceType) ?? this.resourceMap.get(this.resolveAlias(resourceType) ?? "");
+    const def = this.findResource(resourceType);
     if (!def) {
       const closest = this.suggestResourceTypes(resourceType);
       const hint = closest.length > 0 ? ` Did you mean: ${closest.join(", ")}?` : "";
@@ -417,16 +422,14 @@ export class Registry {
     return this.toolsets;
   }
 
-  /** Check if a resource type supports an operation. */
+  /** Check if a resource type supports an operation. Near-miss names resolve the same way as getResource. */
   supportsOperation(resourceType: string, operation: OperationName): boolean {
-    const def = this.resourceMap.get(resourceType);
-    return def?.operations[operation] !== undefined;
+    return this.findResource(resourceType)?.operations[operation] !== undefined;
   }
 
-  /** Check if a resource type has execute actions. */
+  /** Check if a resource type has execute actions. Near-miss names resolve the same way as getResource. */
   getExecuteActions(resourceType: string): Record<string, EndpointSpec & { actionDescription: string }> | undefined {
-    const def = this.resourceMap.get(resourceType);
-    return def?.executeActions;
+    return this.findResource(resourceType)?.executeActions;
   }
 
   private static readonly READ_OPERATIONS: Set<OperationName> = new Set(["list", "get"]);
@@ -448,6 +451,7 @@ export class Registry {
     }
 
     const def = this.getResource(resourceType);
+    resourceType = def.resourceType;
     const spec = def.operations[operation];
     if (!spec) {
       const supported = Object.keys(def.operations).join(", ");
@@ -496,6 +500,7 @@ export class Registry {
     const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
 
     const def = this.getResource(resourceType);
+    resourceType = def.resourceType;
     const actionSpec = def.executeActions?.[action];
     if (!actionSpec) {
       const available = def.executeActions ? Object.keys(def.executeActions).join(", ") : "none";

@@ -110,3 +110,8 @@ export function resourceTypeHint(compact: boolean): string {
     ? " Examples: pipeline, service, environment, connector, secret, template, trigger, input_set, execution, repository, pull_request. Call harness_describe(search_term) to find other types."
     : "";
 }
+
+/** Field description plus the compact-mode examples. `.describe()` must stay the last Zod call. */
+export function resourceTypeDescription(description: string, compact: boolean): string {
+  return description + resourceTypeHint(compact);
+}

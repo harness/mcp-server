@@ -9,7 +9,7 @@ import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import type { ResourceScope } from "../registry/types.js";
-import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeDescription, resourceTypeSchema } from "./input-schemas.js";
 import { searchOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import type { SearchManager } from "../search/index.js";
 import type { SearchResult } from "../search/types.js";
@@ -108,7 +108,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
       description: "Search across multiple Harness resource types. Returns results ranked by relevance. Accepts a Harness URL for scope.",
       inputSchema: {
         query: z.string().describe("Search term"),
-        resource_types: z.array(resourceTypeSchema(listableTypes, registry.compactSchemas)).optional().describe("Types to search (defaults to all listable)"),
+        resource_types: z.array(resourceTypeSchema(listableTypes, registry.compactSchemas)).optional().describe(resourceTypeDescription("Types to search (defaults to all listable)", registry.compactSchemas)),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org and project"),
         resource_scope: resourceScopeField(registry.compactSchemas),
         org_id: orgIdField(registry.orgId, registry.compactSchemas),
@@ -204,7 +204,8 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           const batchResults = await Promise.all(
             batch.map(async (rt) => {
               try {
-                const result = await registry.dispatch(client, rt, "list", {
+                const resolved = registry.getResource(rt).resourceType || rt;
+                const result = await registry.dispatch(client, resolved, "list", {
                   ...mergedArgs,
                   search_term: args.query,
                   name: args.query,
@@ -214,7 +215,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
                   limit: args.max_per_type ?? 5,
                   page: 0,
                 }, { tool: "harness_search" }, signal);
-                return { rt, result, error: null };
+                return { rt: resolved, result, error: null };
               } catch (err) {
                 log.debug(`Search failed for ${rt}`, { error: String(err) });
                 return { rt, result: null, error: String(err) };
