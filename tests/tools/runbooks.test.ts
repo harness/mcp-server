@@ -137,6 +137,69 @@ describe("runbook — harness_list", () => {
     const result = await server.call("harness_list", { resource_type: "runbook" });
     expect(result.isError).toBe(true);
   });
+
+  it("wraps ActivityLookup failures when incident_id cannot be resolved", async () => {
+    mockRequest.mockImplementation(async (opts: { body: { operationName: string } }) => {
+      if (opts.body.operationName === "ActivityLookup") {
+        return { errors: [{ message: "not found" }] };
+      }
+      return gql({ scriptedActions: { actions: [] } });
+    });
+    const result = await server.call("harness_list", {
+      resource_type: "runbook",
+      filters: { incident_id: "INC-bad" },
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content[0]!.type === "text" ? result.content[0]!.text : "";
+    expect(text).toMatch(/Could not resolve incident_id/);
+    expect(mockRequest.mock.calls.some((c) => bodyOf(c).operationName === "ListRunbooks")).toBe(false);
+  });
+});
+
+describe("runbook — harness_get", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer();
+    const registry = new Registry(makeConfig());
+    mockRequest = vi.fn().mockResolvedValue(
+      gql({
+        scriptedAction: {
+          action: {
+            serviceId: "rb",
+            displayName: "RB",
+            exposeToAi: true,
+            inputs: [{ name: "host", type: "STRING", required: true }],
+            outputs: [],
+          },
+        },
+      }),
+    );
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, makeClient(mockRequest));
+  });
+
+  it("returns runbook inputs when exposeToAi is true", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "runbook",
+      resource_id: "rb",
+    });
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ serviceId: "rb", exposeToAi: true });
+    expect(bodyOf(mockRequest.mock.calls[0]!).operationName).toBe("GetRunbook");
+  });
+
+  it("errors when the runbook is not exposed to AI", async () => {
+    mockRequest.mockResolvedValue(
+      gql({ scriptedAction: { action: { serviceId: "rb", exposeToAi: false, inputs: [] } } }),
+    );
+    const result = await server.call("harness_get", {
+      resource_type: "runbook",
+      resource_id: "rb",
+    });
+    expect(result.isError).toBe(true);
+  });
 });
 
 describe("runbook — harness_execute run", () => {
@@ -214,6 +277,30 @@ describe("runbook — harness_execute run", () => {
     expect(mockRequest.mock.calls.some((c) => bodyOf(c).operationName === "ExecuteRunbook")).toBe(false);
   });
 
+  it("rejects when GetRunbook returns no action", async () => {
+    mockRequest.mockImplementation(async (opts: { body: { operationName: string } }) => {
+      if (opts.body.operationName === "GetRunbook") {
+        return gql({ scriptedAction: { action: null } });
+      }
+      return executeResponse;
+    });
+    const result = await run({ service_id: "missing", inputs: {} });
+    expect(result.isError).toBe(true);
+    expect(mockRequest.mock.calls.some((c) => bodyOf(c).operationName === "ExecuteRunbook")).toBe(false);
+  });
+
+  it("accepts service_id via resource_id on harness_execute", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "runbook",
+      action: "run",
+      resource_id: "rb",
+      body: { inputs: { host: "h1" } },
+    });
+    expect(result.isError).toBeUndefined();
+    const exec = bodyOf(mockRequest.mock.calls.at(-1)!);
+    expect(exec.variables.serviceId).toBe("rb");
+  });
+
   it("maps success:false to an error", async () => {
     executeResponse = gql({ executeScriptedAction: { scriptRunId: null, success: false, errors: [{ message: "nope" }] } });
     const result = await run({ service_id: "rb", inputs: { host: "h1" } });
@@ -270,5 +357,46 @@ describe("runbook_execution — harness_get", () => {
       params: { service_id: "rb" },
     });
     expect(result.isError).toBe(true);
+  });
+});
+
+describe("runbook_execution — harness_list", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer();
+    const registry = new Registry(makeConfig());
+    mockRequest = vi.fn().mockResolvedValue(
+      gql({
+        runbookExecutions: {
+          executions: [{ scriptRunId: "run-new", status: "RUNNING" }],
+          hasMore: true,
+          paginationToken: "page-2",
+        },
+      }),
+    );
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(server, registry, makeClient(mockRequest));
+  });
+
+  it("requires service_id and forwards pagination cursor", async () => {
+    const result = await server.call("harness_list", {
+      resource_type: "runbook_execution",
+      filters: { service_id: "rb", cursor: "page-1" },
+    });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      items: unknown[];
+      pagination: { has_more: boolean; next_cursor: string };
+    };
+    expect(data.items).toHaveLength(1);
+    expect(data.pagination).toEqual({ has_more: true, next_cursor: "page-2" });
+    const listBody = bodyOf(mockRequest.mock.calls[0]!);
+    expect(listBody.operationName).toBe("RunbookExecutions");
+    expect(listBody.variables).toMatchObject({
+      scriptedActionId: "rb",
+      paginationToken: "page-1",
+    });
   });
 });
