@@ -912,3 +912,15 @@ Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, t
 - [x] Retry transient transport failures only for explicitly safe requests.
 - [x] Diagnose nginx HTML route failures without exposing raw HTML.
 - [x] Add focused regression coverage, then run full verification.
+
+## Tool schema cost vs. model accuracy (2026-10-21)
+
+Question: does the registry pattern (11 generic tools / 262 resource types) cost tokens or accuracy?
+Measured so far: tools/list 57 KB (full) vs 29 KB (compact); ~61k vs ~30k input tokens per task; 2.1-2.8 calls per task.
+
+- [x] HARNESS_SCHEMA_MODE=compact + field-copy catalog (full mode pinned by hash test).
+- [x] Fix harness_search outputSchema rejecting the `errors` field (strict clients).
+- [ ] Evals v2 (evals/schema-profile): outcome-based scoring (reads before the target call are fine), ~70 goldens with categories, repeats, prompt caching, multiple models, compare report.
+- [ ] Reduce discovery cost: resource_type examples in compact field copy; measure calls/task + unknown-type errors vs. compact baseline.
+- [ ] Reduce describe-before-act: required-params hints; measure.
+- [ ] Decide default (full vs compact) from eval data; document.

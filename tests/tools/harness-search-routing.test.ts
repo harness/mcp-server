@@ -394,6 +394,7 @@ describe("live resource indexing guards", () => {
       total: 2,
     });
     const registry = {
+      canonicalResourceType: (t: string) => t,
       getAllFilterFields: () => [],
       getTypesForOperation: () => ["pipeline"],
       getResource: () => ({ scope: "project" }),
@@ -426,6 +427,7 @@ describe("live resource indexing guards", () => {
       total: 1,
     });
     const registry = {
+      canonicalResourceType: (t: string) => t,
       getAllFilterFields: () => [],
       getTypesForOperation: () => ["pipeline"],
       getResource: () => ({ scope: "project" }),
@@ -463,6 +465,7 @@ describe("live resource indexing guards", () => {
     const server = makeMcpServer();
     const dispatch = vi.fn().mockResolvedValue({ name: "No Id" });
     const registry = {
+      canonicalResourceType: (t: string) => t,
       getTypesForOperation: () => ["pipeline"],
       getResource: () => ({ identifierFields: ["identifier"] }),
       dispatch,

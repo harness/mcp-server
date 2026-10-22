@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
+import { fieldCopy } from "./field-copy.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
@@ -13,7 +14,8 @@ import { connectorHandler } from "./diagnose/connector.js";
 import { delegateHandler } from "./diagnose/delegate.js";
 import { gitopsApplicationHandler } from "./diagnose/gitops-application.js";
 import { orgIdField, projectIdField } from "./input-schemas.js";
-import { diagnoseOutputSchema } from "./output-schemas.js";
+import { diagnoseOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 const ALIASES: Record<string, string> = { execution: "pipeline", gitops_app: "gitops_application" };
 
@@ -38,11 +40,11 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         resource_type: z.enum(DIAGNOSE_TYPES).optional().describe("Resource type to diagnose. Auto-detected from url if provided. Defaults to pipeline."),
         resource_id: z.string().optional().describe("Primary identifier of the resource (connector ID, delegate name). Auto-detected from url if provided."),
         url: z.string().optional().describe("A Harness URL — resource type, org, project, and ID are extracted automatically"),
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
-        options: z.record(z.string(), z.unknown()).optional().describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, include_all_step_logs (boolean, fetch logs for ALL steps not just failed/deepest — logs are fetched in batches of 3 for memory safety, capped at max_all_step_logs, use for pipeline summarization), max_all_step_logs (number, default 25, max steps to include in all_step_logs — prevents OOM on large matrix/loop pipelines), return_download_url (boolean, return signed logs.zip URLs instead of inline log text), log_snippet_lines, max_failed_steps. Pipeline diagnosis requires a completed execution. When a Harness URL contains ?step=<nodeExecutionId>, setting include_logs:true fetches that specific step's log regardless of pass/fail status and returns it as requested_step_log alongside any failed_step_logs. GitOps: agent_id. Call harness_describe for details."),
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
+        options: z.record(z.string(), z.unknown()).optional().describe(fieldCopy("diagnose.options", registry.schemaProfile)),
       },
-      outputSchema: diagnoseOutputSchema,
+      outputSchema: compactOutputSchema(diagnoseOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Diagnose Harness Resource",
         readOnlyHint: true,
@@ -50,7 +52,8 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
+    async (rawArgs, extra) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { options, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
