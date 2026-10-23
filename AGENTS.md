@@ -86,7 +86,7 @@ When adding **writes** (create/update/delete), also check the agent user flow an
 
 ### Tool schema size is budgeted
 
-`tools/list` is paid on every request by eager-loading clients. `HARNESS_SCHEMA_MODE=compact` keeps it small; `tests/tools/schema-profile.test.ts` enforces a byte budget and pins full mode. Put long field copy in `src/tools/field-copy.ts`, never inline the resource-type list, and read `docs/schema-budget.md` before touching schema descriptions.
+`tools/list` is paid on every request by eager-loading clients. The default is `HARNESS_SCHEMA_MODE=compact`; set `full` to inline every resource type. `tests/tools/schema-profile.test.ts` enforces a compact byte budget and pins full mode. Put long field copy in `src/tools/field-copy.ts`, never inline the resource-type list, and read `docs/schema-budget.md` before touching schema descriptions.
 
 ### docs:generate requires a fresh build
 

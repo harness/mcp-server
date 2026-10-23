@@ -923,7 +923,7 @@ Measured so far: tools/list 57 KB (full) vs 29 KB (compact); ~61k vs ~30k input 
 - [ ] Evals v2 (evals/schema-profile): outcome-based scoring (reads before the target call are fine), ~70 goldens with categories, repeats, prompt caching, multiple models, compare report.
 - [ ] Reduce discovery cost: resource_type examples in compact field copy; measure calls/task + unknown-type errors vs. compact baseline.
 - [ ] Reduce describe-before-act: required-params hints; measure.
-- [ ] Decide default (full vs compact) from eval data; document.
+- [x] Default `HARNESS_SCHEMA_MODE` to compact. `full` remains available. Compact eval kept task success while cutting input tokens about in half.
 
 ## Describe catalog operation filter (2026-10-23)
 

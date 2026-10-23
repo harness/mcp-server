@@ -5,7 +5,7 @@ Code defers them). Its size is a per-request tax, so it is treated as a budgeted
 
 ## Modes
 
-`HARNESS_SCHEMA_MODE` controls the payload:
+`HARNESS_SCHEMA_MODE` controls the payload. Unset, it is `compact`. Set `full` to inline every resource type.
 
 | | `full` | `compact` |
 |---|---|---|
