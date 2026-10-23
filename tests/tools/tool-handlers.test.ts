@@ -36,6 +36,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 3,
     LOG_LEVEL: "info",
+    HARNESS_SCHEMA_MODE: "full",
     ...overrides,
   };
 }

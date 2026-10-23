@@ -327,7 +327,7 @@ export class Registry {
   get orgId(): string | undefined { return this.config.HARNESS_ORG; }
   get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
   /** True when tool schemas should not inline the resource_type enum. */
-  get compactSchemas(): boolean { return this.config.HARNESS_SCHEMA_MODE === "compact"; }
+  get compactSchemas(): boolean { return this.config.HARNESS_SCHEMA_MODE !== "full"; }
   get schemaProfile(): "full" | "compact" { return this.compactSchemas ? "compact" : "full"; }
 
   /** Get a resource definition by type, or throw. */
