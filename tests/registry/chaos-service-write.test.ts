@@ -370,6 +370,41 @@ describe("custom_service", () => {
     expect(listed.items[0].openInHarness).toBe(link);
   });
 
+  it("compact list keeps repoURL and module and drops the rest of spec", () => {
+    const compactFn = registry.getResource("custom_service").compactItem;
+    expect(compactFn).toBeDefined();
+
+    const [slim] = compactItems(
+      [
+        {
+          id: "mongo-id",
+          identity: "payments-api",
+          name: "payments api",
+          type: "CodeRepository",
+          tags: ["code-scan"],
+          spec: {
+            codeRepository: {
+              repoURL: "github.com/acme/payments",
+              module: "services/api",
+              branch: "feature/old",
+            },
+          },
+          raw: { token: "SECRET" },
+        },
+      ],
+      compactFn,
+    ) as Record<string, unknown>[];
+
+    expect(slim.id).toBe("mongo-id");
+    expect(slim.identity).toBe("payments-api");
+    expect(slim.type).toBe("CodeRepository");
+    expect(slim.repoURL).toBe("github.com/acme/payments");
+    expect(slim.module).toBe("services/api");
+    expect(slim.spec).toBeUndefined();
+    expect(slim.raw).toBeUndefined();
+    expect(slim.branch).toBeUndefined();
+  });
+
   it("list returns an empty page when the response has no items or pagination", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ correlationID: "corr-1" });
     const client = makeClient(mockRequest);

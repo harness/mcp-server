@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
+import { compactItems } from "../../src/utils/compact.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -264,6 +265,19 @@ describe("chaos_risk_rule list/get", () => {
     expect(result.total).toBe(1);
   });
 
+  it("list: maps harness_list size onto limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "list", {
+      org_id: "default",
+      project_id: "chaos-proj",
+      size: 100,
+    });
+
+    expect(mockRequest.mock.calls[0][0].params.limit).toBe(100);
+  });
+
   it("list: maps all filter fields to correct query param names", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
     const client = makeClient(mockRequest);
@@ -348,6 +362,59 @@ describe("chaos_risk_scan list/get", () => {
     });
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(1);
+  });
+
+  it("list: maps harness_list size onto limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_scan", "list", {
+      org_id: "default",
+      project_id: "chaos-proj",
+      size: 50,
+    });
+
+    expect(mockRequest.mock.calls[0][0].params.limit).toBe(50);
+  });
+
+  it("list: compact items keep the code-repository baseline fields", () => {
+    const compactFn = registry.getResource("chaos_risk_scan").compactItem;
+    expect(compactFn).toBeDefined();
+
+    const [slim] = compactItems(
+      [
+        {
+          identity: "code-scan-1",
+          name: "Code scan payments",
+          status: "COMPLETED",
+          scanType: "CodeRepository",
+          detectionMethod: "External",
+          source: {
+            codeRepository: {
+              repoURL: "github.com/acme/payments",
+              branch: "main",
+              commitSHA: "abc123",
+              provider: "github",
+              linkedServices: [{ module: "services/api", chaosServiceIdentity: "payments-api" }],
+            },
+          },
+          report: { findings: [{ evidence: "verbose" }] },
+        },
+      ],
+      compactFn,
+    ) as Record<string, unknown>[];
+
+    expect(slim.scanType).toBe("CodeRepository");
+    expect(slim.source).toEqual({
+      codeRepository: {
+        repoURL: "github.com/acme/payments",
+        branch: "main",
+        commitSHA: "abc123",
+        provider: "github",
+      },
+    });
+    expect(slim.report).toBeUndefined();
+    expect(JSON.stringify(slim)).not.toContain("linkedServices");
   });
 
   it("list: maps all filter fields to correct query param names", async () => {

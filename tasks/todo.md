@@ -1,5 +1,14 @@
 # Harness MCP Server — Task Tracking
 
+## Code-repository chaos risk scan list contract (2026-10-23)
+
+### Plan
+
+- [x] Keep CodeRepository repoURL and module on compact custom_service lists.
+- [x] Keep scanType and source.codeRepository repoURL, branch, and commitSHA on compact chaos_risk_scan lists.
+- [x] Map harness_list size to limit for chaos_risk_rule and chaos_risk_scan.
+- [x] Cover both with registry tests.
+
 ## AI Evals MCP exposure boundary (2026-10-14)
 
 ### Plan
