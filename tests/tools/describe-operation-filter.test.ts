@@ -83,9 +83,21 @@ describe("harness_describe operation filter", () => {
     const missed = parse(await server.call("harness_describe", { operation: "list", search_term: "banana" }));
     expect(missed.resource_types).toEqual([]);
     expect(missed.hint).toMatch(/No matches found/);
+    expect(missed.hint).toMatch(/operation='list'/);
 
     const unknown = parse(await server.call("harness_describe", { operation: "list", toolset: "not-a-toolset" }));
     expect(unknown.error).toMatch(/Unknown toolset/);
+  });
+
+  it("keeps an unknown resource_type inside the requested operation catalog", async () => {
+    const data = parse(await server.call("harness_describe", { resource_type: "not-a-type", operation: "list" }));
+    const types = data.resource_types as Entry[];
+    expect(data.error).toMatch(/Unknown resource_type "not-a-type"/);
+    expect(data.error).toMatch(/operation/);
+    expect(data.operation).toBe("list");
+    expect(data.total_toolsets).toBeUndefined();
+    expect(types.map((entry) => entry.type).sort()).toEqual(registry.getTypesForOperation("list"));
+    expect(types.every((entry) => entry.ops === undefined)).toBe(true);
   });
 
   it("keeps a resource_type lookup detailed when operation is also set", async () => {

@@ -337,7 +337,7 @@ export class Registry {
       const closest = this.suggestResourceTypes(resourceType);
       const hint = closest.length > 0 ? ` Did you mean: ${closest.join(", ")}?` : "";
       throw new Error(
-        `Unknown resource_type "${resourceType}".${hint} Call harness_describe(search_term="...") to find valid resource types.`,
+        `Unknown resource_type "${resourceType}".${hint} Call harness_describe with an operation (list, get, create, update, delete, or execute) or a search_term to find valid resource types.`,
       );
     }
     return def;
@@ -1338,16 +1338,19 @@ export class Registry {
     }
     for (const entry of resource_types) delete entry._rank;
 
-    const emptySearch = Boolean(filter.searchTerm) && resource_types.length === 0;
+    const where = filter.toolset ? ` in toolset "${filter.toolset}"` : "";
+    const hint = resource_types.length > 0
+      ? "Call harness_describe(resource_type='<type>') for full details including fields, scopes, and action schemas."
+      : filter.searchTerm
+        ? `No matches found. Try a broader term, or call harness_describe(operation='${filter.operation}') without a search_term.`
+        : `No resource types support ${filter.operation}${where}.`;
     return {
       operation: filter.operation,
       ...(filter.toolset ? { toolset: filter.toolset } : {}),
       ...(filter.searchTerm ? { search_term: filter.searchTerm, total_results: resource_types.length } : {}),
       total_resource_types: resource_types.length,
       resource_types,
-      hint: emptySearch
-        ? "No matches found. Try a broader term, or call harness_describe with no arguments to see all resource types."
-        : "Call harness_describe(resource_type='<type>') for full details including fields, scopes, and action schemas.",
+      hint,
     };
   }
 
