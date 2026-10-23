@@ -24,6 +24,8 @@ worktrees/
 
 # Python
 __pycache__/
+.venv/
+.venv311/
 .venv-stub/
 
 # Generated pipeline files

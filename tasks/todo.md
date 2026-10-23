@@ -924,3 +924,11 @@ Measured so far: tools/list 57 KB (full) vs 29 KB (compact); ~61k vs ~30k input 
 - [ ] Reduce discovery cost: resource_type examples in compact field copy; measure calls/task + unknown-type errors vs. compact baseline.
 - [ ] Reduce describe-before-act: required-params hints; measure.
 - [ ] Decide default (full vs compact) from eval data; document.
+
+## Describe catalog operation filter (2026-10-23)
+
+Question: can `harness_describe` return only the resource types a model needs for one consolidated tool?
+
+- [x] Add `operation` (`list|get|create|update|delete|execute`) and a lean filtered catalog. `execute` includes action names.
+- [x] Keep the no-argument catalog and per-resource detail response unchanged.
+- [x] Score filter adoption and describe response size in `evals/schema-profile`, then compare a pre-change build with the changed build. Compact describe bytes/task fell 35–49%; task success held. The new-build gate passed.

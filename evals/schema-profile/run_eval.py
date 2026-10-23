@@ -31,6 +31,7 @@ HERE = Path(__file__).parent
 REPO = HERE.parent.parent
 SCOPED_TOOLS = {"harness_list", "harness_get", "harness_create", "harness_update", "harness_delete", "harness_execute", "harness_diagnose"}
 MAX_TURNS = 5
+DEFAULT_TOOL_RESULT_CHARS = 120_000
 SYSTEM = "You are an assistant that operates a Harness account through the provided tools. Use the tools to complete the task. Be concise."
 
 
@@ -103,6 +104,17 @@ def score_case(golden: dict, calls: list[dict]) -> dict:
         for c in calls
         for k in ("org_id", "project_id", "resource_scope")
     )
+    describe = [c for c in calls if c["name"] == "harness_describe"]
+    expected_operation = golden.get("expected_operation")
+    # A direct correct call needs no catalog. Otherwise the describe call should ask for that operation.
+    if not expected_operation:
+        operation_filter_hit = None
+    elif any(c["args"].get("operation") == expected_operation for c in describe):
+        operation_filter_hit = True
+    elif not describe and any(matches(c) for c in calls):
+        operation_filter_hit = True
+    else:
+        operation_filter_hit = False
     return {
         "id": golden["id"],
         "first_call_correct": bool(first and matches(first)),
@@ -115,6 +127,11 @@ def score_case(golden: dict, calls: list[dict]) -> dict:
         "wrong_scope": wrong_scope,
         "confirm_on_read_only": golden["read_only"] and any(c["args"].get("confirm") is True for c in calls),
         "write_first_call_confirm": (not golden["read_only"]) and bool(first and first["args"].get("confirm") is True),
+        "describe_calls": len(describe),
+        "describe_with_operation": sum(1 for c in describe if c["args"].get("operation")),
+        "describe_response_bytes": sum(len(c["output"]) for c in describe),
+        "expected_operation": expected_operation,
+        "operation_filter_hit": operation_filter_hit,
         "tool_calls": calls,
     }
 
@@ -123,7 +140,7 @@ def system_blocks(system: str) -> list[dict]:
     return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
 
 
-async def run_case(client: AsyncAnthropic, session: ClientSession, model: str, tools: list[dict], system: str, golden: dict) -> tuple[dict, dict]:
+async def run_case(client: AsyncAnthropic, session: ClientSession, model: str, tools: list[dict], system: str, golden: dict, tool_result_chars: int) -> tuple[dict, dict]:
     messages: list[dict] = [{"role": "user", "content": golden["prompt"]}]
     calls: list[dict] = []
     usage = {"input": 0, "output": 0}
@@ -141,7 +158,7 @@ async def run_case(client: AsyncAnthropic, session: ClientSession, model: str, t
             args = tu.input if isinstance(tu.input, dict) else {}
             try:
                 result = await session.call_tool(tu.name, args)
-                text = "".join(getattr(p, "text", "") for p in result.content)[:1500]
+                text = "".join(getattr(p, "text", "") for p in result.content)[:tool_result_chars]
                 is_error = bool(result.is_error)
             except Exception as exc:  # e.g. client-side outputSchema validation failure
                 text, is_error = f"client error: {type(exc).__name__}: {str(exc)[:300]}", True
@@ -162,6 +179,7 @@ async def main() -> None:
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--build", default=str(REPO / "build" / "index.js"))
     ap.add_argument("--tag", default="")
+    ap.add_argument("--tool-result-chars", type=int, default=DEFAULT_TOOL_RESULT_CHARS, help="Max characters of a tool result returned to the model. High enough to fit a full harness_describe catalog.")
     args = ap.parse_args()
 
     goldens = [json.loads(line) for line in (HERE / "goldens.jsonl").read_text().splitlines() if line.strip()]
@@ -196,7 +214,7 @@ async def main() -> None:
 
         async def one(g: dict) -> tuple[dict, dict]:
             async with sem:
-                return await run_case(client, session, args.model, tools, system, g)
+                return await run_case(client, session, args.model, tools, system, g, args.tool_result_chars)
 
         results = await asyncio.gather(*(one(g) for g in goldens))
 
@@ -223,6 +241,19 @@ async def main() -> None:
         "input_tokens": tin,
         "output_tokens": tout,
         "input_tokens_per_task": round(tin / n),
+        "describe_calls_per_task": statistics.mean(s["describe_calls"] for s in scored),
+        "describe_response_bytes_per_task": round(statistics.mean(s["describe_response_bytes"] for s in scored)),
+        "describe_operation_filter_rate": (
+            sum(s["describe_with_operation"] for s in scored) / sum(s["describe_calls"] for s in scored)
+            if sum(s["describe_calls"] for s in scored)
+            else 0
+        ),
+        "operation_filter_hit_rate": (
+            sum(s["operation_filter_hit"] for s in scored if s["expected_operation"]) / sum(1 for s in scored if s["expected_operation"])
+            if any(s["expected_operation"] for s in scored)
+            else None
+        ),
+        "tool_result_chars": args.tool_result_chars,
         "elapsed_s": round(time.time() - started, 1),
     }
     print(json.dumps(summary, indent=2))

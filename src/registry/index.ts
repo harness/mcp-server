@@ -1292,6 +1292,65 @@ export class Registry {
       .map(({ score, ...rest }) => rest);
   }
 
+  /**
+   * Catalog limited to one consolidated-tool operation. CRUD entries omit operation lists
+   * (support is implied). `execute` includes each type's action names. `searchTerm` and
+   * `toolset` intersect with that set; the unfiltered summary stays on `describeSummary`.
+   */
+  describeByOperation(filter: {
+    operation: OperationName | "execute";
+    toolset?: string;
+    searchTerm?: string;
+  }): Record<string, unknown> {
+    if (filter.toolset && !this.toolsets.some((ts) => ts.name === filter.toolset)) {
+      const available = this.toolsets.map((ts) => ts.name);
+      return {
+        error: `Unknown toolset "${filter.toolset}". Available: ${available.join(", ")}`,
+        available_toolsets: available,
+      };
+    }
+
+    const ranked = filter.searchTerm
+      ? new Map(this.searchResources(filter.searchTerm).map((result, index) => [result.type, index]))
+      : undefined;
+    const resource_types = [];
+    for (const ts of this.toolsets) {
+      if (filter.toolset && ts.name !== filter.toolset) continue;
+      for (const resource of ts.resources) {
+        if (ranked && !ranked.has(resource.resourceType)) continue;
+        const actions = resource.executeActions ? Object.keys(resource.executeActions) : [];
+        const supports = filter.operation === "execute"
+          ? actions.length > 0
+          : resource.operations[filter.operation] !== undefined;
+        if (!supports) continue;
+        resource_types.push({
+          type: resource.resourceType,
+          name: resource.displayName,
+          toolset: ts.name,
+          ...(resource.searchAliases?.length ? { aliases: resource.searchAliases } : {}),
+          ...(filter.operation === "execute" ? { actions } : {}),
+          _rank: ranked?.get(resource.resourceType),
+        });
+      }
+    }
+    if (ranked) {
+      resource_types.sort((a, b) => (a._rank ?? 0) - (b._rank ?? 0) || a.type.localeCompare(b.type));
+    }
+    for (const entry of resource_types) delete entry._rank;
+
+    const emptySearch = Boolean(filter.searchTerm) && resource_types.length === 0;
+    return {
+      operation: filter.operation,
+      ...(filter.toolset ? { toolset: filter.toolset } : {}),
+      ...(filter.searchTerm ? { search_term: filter.searchTerm, total_results: resource_types.length } : {}),
+      total_resource_types: resource_types.length,
+      resource_types,
+      hint: emptySearch
+        ? "No matches found. Try a broader term, or call harness_describe with no arguments to see all resource types."
+        : "Call harness_describe(resource_type='<type>') for full details including fields, scopes, and action schemas.",
+    };
+  }
+
   /** Get compact summary — one line per resource type, ~15 tokens each. */
   describeSummary(): Record<string, unknown> {
     const resource_types = [];
