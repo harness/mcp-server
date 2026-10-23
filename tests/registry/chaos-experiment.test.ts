@@ -123,6 +123,7 @@ describe("chaos_experiment list/get", () => {
 
     const result = (await registry.dispatch(client, "chaos_experiment_run", "get", {
       experiment_id: "exp-1",
+      notify_id: "notify-1",
       project_id: "templatescopetest",
       org_id: "templatescopetest",
     })) as Record<string, unknown>;
@@ -130,6 +131,18 @@ describe("chaos_experiment list/get", () => {
     expect(result.openInHarness).toBe(
       "https://app.harness.io/ng/account/test-account/module/chaos/orgs/templatescopetest/projects/templatescopetest/experiments/exp-1/runs",
     );
+  });
+
+  it("chaos_experiment_run get: rejects a call that omits run_id and notify_id", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_experiment_run", "get", {
+      experiment_id: "exp-1",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    })).rejects.toThrow(/run_id or notify_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("chaos_input_set list: per-item openInHarness uses the parent experiment id (not the item name)", async () => {
@@ -481,6 +494,7 @@ describe("chaos_k8s_infrastructure list", () => {
     const result = (await registry.dispatch(client, "chaos_k8s_infrastructure", "list", {
       project_id: "PM_Signoff",
       org_id: "default",
+      environment_id: "demoash",
     })) as { items: unknown[]; total: number };
 
     expect(mockRequest).toHaveBeenCalledOnce();
@@ -531,11 +545,24 @@ describe("chaos_k8s_infrastructure list", () => {
     await registry.dispatch(client, "chaos_k8s_infrastructure", "list", {
       project_id: "ChaosDev1",
       org_id: "default",
+      environment_id: "demoash",
     });
 
     const call = mockRequest.mock.calls[0][0];
+    expect(call.params.environmentIdentifier).toBe("demoash");
     expect(call.body.filter).toBeUndefined();
     expect(call.params?.status).toBeUndefined();
+  });
+
+  it("list: rejects a call that omits environment_id", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_k8s_infrastructure", "list", {
+      project_id: "ChaosDev1",
+      org_id: "default",
+    })).rejects.toThrow(/environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("list: maps size to limit and search_term to search query params", async () => {
@@ -548,6 +575,7 @@ describe("chaos_k8s_infrastructure list", () => {
     await registry.dispatch(client, "chaos_k8s_infrastructure", "list", {
       project_id: "ChaosDev1",
       org_id: "default",
+      environment_id: "demoash",
       size: 10,
       search_term: "staging",
     });
@@ -555,6 +583,35 @@ describe("chaos_k8s_infrastructure list", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.params.limit).toBe(10);
     expect(call.params.search).toBe("staging");
+  });
+
+  it("get: calls v2 infrastructure with environmentIdentifier", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "infra-abc", status: "ACTIVE" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_k8s_infrastructure", "get", {
+      infra_id: "infra-abc",
+      environment_id: "demoash",
+      project_id: "ChaosDev1",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/infrastructure/infra-abc");
+    expect(call.params.environmentIdentifier).toBe("demoash");
+  });
+
+  it("get: rejects a call that omits environment_id", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_k8s_infrastructure", "get", {
+      infra_id: "infra-abc",
+      project_id: "ChaosDev1",
+      org_id: "default",
+    })).rejects.toThrow(/environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("check_health: uses correct path with infraId before /health", async () => {
@@ -748,6 +805,72 @@ describe("chaos_experiment_template create_from_template", () => {
     expect(call.params.hubIdentity).toBe("my-hub");
     expect(call.body.hubIdentity).toBeUndefined();
     expect(call.body.hub_identity).toBeUndefined();
+    expect(call.body.accountIdentifier).toBe("test-account");
+  });
+
+  it("create_from_template: fills org and project from config when omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "new-exp" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment_template", "create_from_template", {
+      template_id: "tmpl1",
+      hub_identity: "my-hub",
+      name: "exp1",
+      identity: "exp1",
+      infra_ref: "env1/infra1",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.organizationIdentifier).toBe("default");
+    expect(call.body.projectIdentifier).toBe("test-project");
+    expect(call.params.organizationIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+  });
+
+  it("create_from_template: rejects a launch that omits hub_identity or infra", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatchExecute(client, "chaos_experiment_template", "create_from_template", {
+      template_id: "tmpl1",
+      name: "exp1",
+      identity: "exp1",
+      infra_ref: "env1/infra1",
+      project_id: "proj1",
+      org_id: "default",
+    })).rejects.toThrow(/hub_identity/);
+
+    await expect(registry.dispatchExecute(client, "chaos_experiment_template", "create_from_template", {
+      template_id: "tmpl1",
+      hub_identity: "my-hub",
+      name: "exp1",
+      identity: "exp1",
+      project_id: "proj1",
+      org_id: "default",
+    })).rejects.toThrow(/infra/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: sends hubIdentity and rejects a call that omits it", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "tmpl1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment_template", "get", {
+      template_id: "tmpl1",
+      hub_identity: "my-hub",
+      project_id: "proj1",
+      org_id: "default",
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toBe("/chaos/manager/api/rest/experimenttemplates/tmpl1");
+    expect(call.params.hubIdentity).toBe("my-hub");
+
+    await expect(registry.dispatch(client, "chaos_experiment_template", "get", {
+      template_id: "tmpl1",
+      project_id: "proj1",
+      org_id: "default",
+    })).rejects.toThrow(/hub_identity/);
+    expect(mockRequest).toHaveBeenCalledOnce();
   });
 });
 
