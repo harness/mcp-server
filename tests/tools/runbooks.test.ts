@@ -206,6 +206,43 @@ describe("runbook — harness_execute run", () => {
     expect(optsOf(mockRequest.mock.calls[0]!).body).toEqual({ inputs: {}, incidentId: "INC-2" });
   });
 
+  it("omits whitespace-only incident identifiers from the POST body", async () => {
+    await server.call("harness_execute", {
+      resource_type: "runbook",
+      action: "run",
+      resource_id: RUNBOOK_ID,
+      body: { inputs: { host: "h1" }, incidentId: "   " },
+    });
+    expect(optsOf(mockRequest.mock.calls[0]!).body).toEqual({ inputs: { host: "h1" } });
+  });
+
+  it("uses body service_id when resource_id is an empty string (preflight)", async () => {
+    await server.call("harness_execute", {
+      resource_type: "runbook",
+      action: "run",
+      resource_id: "",
+      body: { service_id: RUNBOOK_ID, inputs: {} },
+    });
+    expect(optsOf(mockRequest.mock.calls[0]!).path).toBe(
+      `${RUNBOOKS_PATH}/${ENCODED_RUNBOOK_ID}/executions`,
+    );
+  });
+
+  it("fails when the API response omits scriptRunId", async () => {
+    mockRequest.mockResolvedValue({ status: "PENDING" });
+    const result = await server.call("harness_execute", {
+      resource_type: "runbook",
+      action: "run",
+      resource_id: RUNBOOK_ID,
+      body: { inputs: {} },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.type).toBe("text");
+    if (result.content[0]?.type === "text") {
+      expect(result.content[0].text).toContain("scriptRunId");
+    }
+  });
+
   it("surfaces a server-side validation error", async () => {
     mockRequest.mockRejectedValue(new Error("Missing required inputs: host"));
     const result = await server.call("harness_execute", {
