@@ -75,3 +75,16 @@ describe("cost_perspective create preflight", () => {
     expect(request).not.toHaveBeenCalled();
   });
 });
+
+describe("cost_perspective operation policies (#1124)", () => {
+  const perspective = ccmToolset.resources.find((r) => r.resourceType === "cost_perspective");
+
+  it("requires medium_write for create/update and destructive for delete", () => {
+    expect(perspective).toBeDefined();
+    expect(perspective!.operations.create!.operationPolicy.risk).toBe("medium_write");
+    expect(perspective!.operations.update!.operationPolicy.risk).toBe("medium_write");
+    expect(perspective!.operations.delete!.operationPolicy.risk).toBe("destructive");
+    expect(perspective!.operations.list!.operationPolicy.risk).toBe("read");
+    expect(perspective!.operations.get!.operationPolicy.risk).toBe("read");
+  });
+});

@@ -256,3 +256,15 @@ describe("cost category normalizer without EQUALS — bodies unchanged", () => {
     expect(spec!.bodyBuilder).toBeUndefined();
   });
 });
+
+describe("cost_category operation policies (#1124)", () => {
+  it("requires medium_write for create/update and destructive for delete", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    const def = registry.getResource("cost_category");
+    expect(def.operations.create!.operationPolicy.risk).toBe("medium_write");
+    expect(def.operations.update!.operationPolicy.risk).toBe("medium_write");
+    expect(def.operations.delete!.operationPolicy.risk).toBe("destructive");
+    expect(def.operations.list!.operationPolicy.risk).toBe("read");
+    expect(def.operations.get!.operationPolicy.risk).toBe("read");
+  });
+});
