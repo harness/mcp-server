@@ -153,7 +153,9 @@ Same models as the table above, 60 tasks × 2 repeats (120 runs per cell). "Befo
 
 Compact describe payloads fell about 35–49% per task. Input tokens fell only a little, because most
 tasks never load the catalog and the tool schemas still dominate. Models used `operation` on
-20–56% of describe calls. Task success stayed at or above the before run. A couple of points is
+20–56% of describe calls. Those runs followed the previous discovery instruction, which told
+models to call `harness_describe()` with no arguments. The instruction now tells them to pass
+`operation`. Task success stayed at or above the before run. A couple of points is
 noise at this sample size.
 
 ## Not done / ideas

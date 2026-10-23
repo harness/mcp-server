@@ -220,6 +220,7 @@ describe("Registry", () => {
     it("throws for unknown resource type and points to harness_describe", () => {
       expect(() => registry.getResource("nonexistent")).toThrow(/Unknown resource_type "nonexistent"/);
       expect(() => registry.getResource("nonexistent")).toThrow(/harness_describe/);
+      expect(() => registry.getResource("nonexistent")).toThrow(/operation \(list, get, create, update, delete, or execute\)/);
     });
 
     it("suggests close matches for a misspelled resource type", () => {

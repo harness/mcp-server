@@ -932,3 +932,4 @@ Question: can `harness_describe` return only the resource types a model needs fo
 - [x] Add `operation` (`list|get|create|update|delete|execute`) and a lean filtered catalog. `execute` includes action names.
 - [x] Keep the no-argument catalog and per-resource detail response unchanged.
 - [x] Score filter adoption and describe response size in `evals/schema-profile`, then compare a pre-change build with the changed build. Compact describe bytes/task fell 35–49%; task success held. The new-build gate passed.
+- [x] Point server discovery at `operation`, keep an unknown `resource_type` inside that catalog, and score GitOps sync with `agent_id` (`resource_id`) plus `app_name`.

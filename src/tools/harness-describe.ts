@@ -85,11 +85,18 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             })(),
           });
         } catch (err) {
-          // Resource type not found — return the compact summary with an error hint
-          const summary = registry.describeSummary();
+          // Unknown type. Keep an operation filter so the recovery payload stays the
+          // requested catalog instead of the full resource list.
+          const summary = args.operation
+            ? registry.describeByOperation({
+                operation: args.operation,
+                toolset: args.toolset,
+                searchTerm: args.search_term,
+              })
+            : registry.describeSummary();
           return jsonResult({
-            error: err instanceof Error ? err.message : String(err),
             ...summary,
+            error: err instanceof Error ? err.message : String(err),
           });
         }
       }
