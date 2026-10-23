@@ -2,6 +2,11 @@ import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec
 import type { PathBuilderConfig } from "../types.js";
 import { parseCustomWindow, parseTimeInput } from "../../utils/ccm-time.js";
 import {
+  COST_CATEGORY_RULES_NOTE,
+  COST_CATEGORY_RULES_ITEM_TYPE,
+  normalizeCostCategoryBody,
+} from "./ccm-cost-category.js";
+import {
   ngExtract,
   passthrough,
   gqlExtract,
@@ -955,7 +960,7 @@ export const ccmToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ccm/api/perspective",
           preflight: perspectiveCreatePreflight,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective definition. viewPreferences defaults are auto-fetched from account settings and merged — agent-provided values override.",
@@ -983,7 +988,7 @@ export const ccmToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ccm/api/perspective",
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
@@ -1720,22 +1725,22 @@ For cost time-series data, use harness_get with start_time and end_time.`,
         create: {
           method: "POST",
           path: "/ccm/api/business-mapping",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => normalizeCostCategoryBody(input.body),
           bodySchema: {
             description: "Cost category (business mapping) definition. costTargets are cost buckets — each bucket has a name and rules that determine which costs fall into it. Rules use the same ViewIdCondition structure as perspectives.",
             fields: [
               { name: "name", type: "string", required: true, description: "Cost category name" },
               {
                 name: "costTargets", type: "array", required: true,
-                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
-                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+                description: `Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE} }`,
               },
               {
                 name: "sharedCosts", type: "array", required: false,
-                description: "Shared cost buckets with allocation strategy. Each has a name, rules, strategy (PROPORTIONAL or FIXED), and optional splits for FIXED strategy.",
-                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+                description: `Shared cost buckets with allocation strategy. Each has a name, rules, strategy (PROPORTIONAL or FIXED), and optional splits for FIXED strategy. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE}, strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }`,
               },
               {
                 name: "unallocatedCost", type: "object", required: false,
@@ -1753,9 +1758,9 @@ For cost time-series data, use harness_get with start_time and end_time.`,
         update: {
           method: "PUT",
           path: "/ccm/api/business-mapping",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => normalizeCostCategoryBody(input.body),
           bodySchema: {
             description: "Cost category update (full replacement). Fetch the existing category via harness_get first, modify the fields, and send the full object back.",
             fields: [
@@ -1763,13 +1768,13 @@ For cost time-series data, use harness_get with start_time and end_time.`,
               { name: "name", type: "string", required: true, description: "Cost category name" },
               {
                 name: "costTargets", type: "array", required: true,
-                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
-                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+                description: `Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE} }`,
               },
               {
                 name: "sharedCosts", type: "array", required: false,
-                description: "Shared cost buckets with allocation strategy",
-                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+                description: `Shared cost buckets with allocation strategy. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE}, strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }`,
               },
               {
                 name: "unallocatedCost", type: "object", required: false,

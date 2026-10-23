@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "harness-mcp-server",
   "display_name": "Harness",
-  "version": "3.2.33",
+  "version": "3.2.34",
   "description": "Connect AI agents to Harness for CI/CD, code repositories, pull requests, services, environments, and feature flags.",
   "long_description": "The Harness MCP Server gives MCP-compatible clients access to Harness platform workflows through consolidated tools, resources, and prompts. It supports local stdio usage and can be bundled as a Node-based MCPB extension.",
   "author": {
@@ -50,6 +50,7 @@
         "HARNESS_ORG": "${user_config.HARNESS_ORG}",
         "HARNESS_PROJECT": "${user_config.HARNESS_PROJECT}",
         "HARNESS_BASE_URL": "${user_config.HARNESS_BASE_URL}",
+        "HARNESS_SCHEMA_MODE": "${user_config.HARNESS_SCHEMA_MODE}",
         "MCP_SESSION_TTL_MS": "${user_config.MCP_SESSION_TTL_MS}"
       }
     }
@@ -120,6 +121,13 @@
       "type": "string",
       "title": "Default Harness Project",
       "description": "Default Harness project identifier for project-scoped operations.",
+      "required": false,
+      "sensitive": false
+    },
+    "HARNESS_SCHEMA_MODE": {
+      "type": "string",
+      "title": "Tool Schema Mode",
+      "description": "full (default) or compact. Compact shrinks the tool list sent to the model by about half; resource types are discovered via harness_describe.",
       "required": false,
       "sensitive": false
     },

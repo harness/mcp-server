@@ -1,5 +1,63 @@
 # Harness MCP Server — Task Tracking
 
+## AI Evals MCP exposure boundary (2026-10-14)
+
+### Plan
+
+- [x] Keep project-scoped Prompt Registry in the default AI Evals toolset.
+- [x] Remove the generic eval_registry_item resource from MCP.
+- [x] Keep trace annotations and on-demand trace evaluation in the default toolset.
+- [x] Redact credential-shaped fields and bound large trace response fields.
+- [x] Add scope and response-shaping regressions; verify and update PR #1102.
+
+## AI Evals reads return 404 (2026-10-08)
+
+Base: `main@upstream` `bf89204b` (v3.2.33). Reproduced with a local build against QA
+(`AI_Evals/AI_Evals_QA`), harness0, and event-store-team.
+
+### Findings
+
+1. **Get-by-non-UUID is the 404.** Every AI Evals get/update/delete path takes the UUID
+   (`dataset/{dataset_id}`, `evals/{eval_id}`, ...). Passing the slug (`identifier`) or display
+   name reaches the backend unchanged and returns `404 Dataset not found` / `404 Eval not found`.
+   Get by UUID returns 200 for dataset, evaluation, metric, metric set, and target.
+2. **Older installs hide the UUID.** Compact list mode (the default) dropped `id`/`uuid` before
+   #1030 (v3.2.31). The globally installed `harness-mcp-v2@3.2.16` returns only
+   `name`/`identifier`/`description`, so agents can only pass a slug and every get 404s. Upstream
+   main keeps `id` and `uuid`. Datasets return their key as `uuid`; the other resources use `id`.
+3. **The 404 hint misleads.** `harness_get`/`harness_list` append `diagnosticHint` only on 404,
+   but the AI Evals hints describe create-body shape ("Dataset items require 'input'...") and
+   never say "pass the UUID from `harness_list`".
+4. **Path IDs are not encoded.** The `pathBuilder`s interpolate `input.<id>` raw, so a display
+   name with spaces or parentheses is sent unescaped.
+5. **event-store-team has no AI Evals route (infra, not MCP).** nginx returns an HTML 404 for
+   `/gateway/ai-evals/api/v1/runner-config` and `/ai-evals/api/v1/runner-config` (no auth),
+   while `/ng/api/health` is 200. QA and harness0 return 200 for both prefixes, so the
+   `/gateway/ai-evals/api/v1` base in `ai-evals.ts` is correct.
+
+### Plan
+
+- [ ] Ops: upgrade the installed `harness-mcp-v2` from 3.2.16 to >= 3.2.33 (fixes finding 2 with no code change).
+- [x] Verify which AI Evals path IDs are UUIDs against `ai-evals` contracts on `main@origin`
+      (`dataset_id`, `item_id`, `eval_id`, `run_id`, `metric_id`, `set_id`, `suite_id`,
+      `suite_run_id`, `target_id`, `annotation_id`). `trace_id` is not a UUID; leave it free-form.
+- [x] Add one `idSegment(input, field)` helper in `ai-evals.ts` that runs `requireUuid` and
+      `encodeURIComponent`. Use it in every get/update/delete/execute `pathBuilder` for UUID IDs.
+      Error text: "`<field>` must be the `id`/`uuid` from `harness_list(resource_type=...)`, not the identifier or name."
+- [x] `eval_dataset` get: when `dataset_id` is not a UUID, route to
+      `dataset/by-identifier/{identifier}` instead of failing (the backend supports slug lookup).
+- [x] Rewrite AI Evals `diagnosticHint`s for 404 recovery: IDs are UUIDs from list `id`
+      (`uuid` for datasets); check `org_id`/`project_id`; an HTML nginx 404 means AI Evals is not
+      deployed at this base URL. Move the body-shape guidance into `bodySchema`/descriptions.
+- [x] Apply the same UUID guard to `observability-evaluations.ts` reads (it already guards writes).
+- [x] Tests in `tests/registry/ai-evals.test.ts`: slug/name rejected locally with no request sent;
+      UUID path encoded; dataset slug routes to `by-identifier`; 404 hint text; compact list
+      keeps `id`/`uuid` for every AI Evals list resource.
+- [ ] Infra follow-up (owner: ai-evals deploy): enable the AI Evals ingress/VirtualService on
+      event-store-team, or document it as unsupported there.
+- [x] `pnpm typecheck && pnpm test`, then `pnpm build && pnpm docs:check`. Rerun the QA repro.
+- [x] Append the lesson to `tasks/lessons.md`.
+
 ## Version Bump 3.2.28 (2026-09-16)
 
 - [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
@@ -838,3 +896,31 @@ Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, b
 - [x] Confirm main's lockfile already pins ip-address 10.7.2 and CI is green.
 - [x] Reproduce a stale `node_modules/.pnpm/ip-address@10.4.0` directory surviving `pnpm install --frozen-lockfile`.
 - [x] Count only linked installs in the NAT64 security check, and load the express-rate-limit copy for classification tests.
+
+## Version 3.2.34
+
+- [x] Create chore/version-3.2.34 from current origin/main.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.34` and open a PR against `main`.
+
+Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
+
+## AI Evals List Identity and Network Diagnostics (2026-10-13)
+
+- [x] Normalize list responses with resource-declared primary identifiers.
+- [x] Retry transient transport failures only for explicitly safe requests.
+- [x] Diagnose nginx HTML route failures without exposing raw HTML.
+- [x] Add focused regression coverage, then run full verification.
+
+## Tool schema cost vs. model accuracy (2026-10-21)
+
+Question: does the registry pattern (11 generic tools / 262 resource types) cost tokens or accuracy?
+Measured so far: tools/list 57 KB (full) vs 29 KB (compact); ~61k vs ~30k input tokens per task; 2.1-2.8 calls per task.
+
+- [x] HARNESS_SCHEMA_MODE=compact + field-copy catalog (full mode pinned by hash test).
+- [x] Fix harness_search outputSchema rejecting the `errors` field (strict clients).
+- [ ] Evals v2 (evals/schema-profile): outcome-based scoring (reads before the target call are fine), ~70 goldens with categories, repeats, prompt caching, multiple models, compare report.
+- [ ] Reduce discovery cost: resource_type examples in compact field copy; measure calls/task + unknown-type errors vs. compact baseline.
+- [ ] Reduce describe-before-act: required-params hints; measure.
+- [ ] Decide default (full vs compact) from eval data; document.

@@ -186,3 +186,10 @@
 ## Targeted pnpm Transitive Updates
 - `pnpm update ip-address --depth 20` also rewrote unrelated direct dependency ranges to match existing overrides. Restore those incidental manifest changes before validating shrinkwrap consistency; review the full diff even for targeted updates.
 - `pnpm install --frozen-lockfile` does not delete an unlinked `node_modules/.pnpm/ip-address@<old>` directory once the lockfile already matches. Security scans of that virtual store must follow dependency symlinks; otherwise a leftover 10.4.0 fails NAT64 tests even when express-rate-limit links the patched release.
+
+## AI Evals Read Identifiers and Route Availability
+- **Issue**: AI Evals list responses expose both a display name/identifier and an opaque entity UUID. Sending the former to UUID detail routes produces a backend 404; old MCP compact results hid the UUID entirely. Dataset reads are the exception: the service exposes a dedicated `by-identifier` route.
+- **Fix**: Validate UUID-only path IDs before making a request, encode every path segment, and route non-UUID dataset reads to `dataset/by-identifier`. Keep trace and registry-item IDs free-form but encode them. Make 404 hints tell callers to use `id`/`uuid`, verify scope, and distinguish an API response from an HTML nginx 404 caused by an undeployed route.
+- **Rule**: Before modeling an identifier as UUID-only, verify its owning route contract. Cover the list → get flow with compact output, local invalid-ID rejection, and the supported identifier lookup when one exists.
+- **Correction**: UUID-vs-name 404s affect every operation that puts an entity or parent ID in the URL, not only reads. CRUD regression coverage must include nested create/list parent IDs as well as update/delete IDs.
+- **Correction**: `diagnosticHint` serves both error recovery and workflow guidance. Add new 404 instructions before existing resource-specific guidance; never replace discovery, schema, connector, or setup advice unless the same information is preserved elsewhere and covered by tests.

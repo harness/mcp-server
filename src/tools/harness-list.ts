@@ -10,8 +10,9 @@ import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
-import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
-import { listOutputSchema } from "./output-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { listOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
   const filtersDesc =
@@ -25,11 +26,11 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     {
       description: "List Harness resources with filtering and pagination. Accepts a Harness URL to auto-extract scope. For project-scoped types, pass org_id and project_id on the first call unless the field descriptions name a configured default.",
       inputSchema: {
-        resource_type: resourceTypeSchema(listableTypes).optional().describe("Resource type to list. Auto-detected from url."),
+        resource_type: resourceTypeSchema(listableTypes, registry.compactSchemas).optional().describe("Resource type to list. Auto-detected from url."),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, and type"),
-        resource_scope: resourceScopeSchema,
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
+        resource_scope: resourceScopeField(registry.compactSchemas),
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
         page: z.number().default(0).optional().describe("Page number, 0-indexed"),
         size: z.number().min(1).max(100).default(20).optional().describe("Page size (1–100). Some resource types enforce a lower max (e.g. security_exemption max 50) — call harness_describe for per-resource limits."),
         search_term: z.string().optional().describe("Filter results by name or keyword"),
@@ -37,7 +38,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. repo_id for pull requests). Call harness_describe for fields per resource_type."),
         filters: z.record(z.string(), z.unknown()).optional().describe(filtersDesc),
       },
-      outputSchema: listOutputSchema,
+      outputSchema: compactOutputSchema(listOutputSchema, registry.compactSchemas),
       annotations: {
         title: "List Harness Resources",
         readOnlyHint: true,
@@ -45,7 +46,8 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (rawArgs) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, filters, ...rest } = args;
         // Use coerceRecord to handle LLMs that serialize objects as JSON strings

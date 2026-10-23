@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 260 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 262 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,7 +10,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 260 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 262 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 42 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -123,8 +123,13 @@ When running in HTTP mode, the server exposes:
 | `/mcp`    | `DELETE`  | Terminate an active MCP session                                  |
 | `/mcp`    | `OPTIONS` | CORS preflight                                                   |
 | `/health` | `GET`     | Health check — returns `{ "status": "ok", "sessions": <count> }` |
-| `/.well-known/oauth-protected-resource` | `GET` | RFC 9728 metadata when `HARNESS_MCP_MODE=oauth` |
+| `/.well-known/oauth-protected-resource` | `GET` | RFC 9728 metadata in `oauth` and `oauth-proxy` modes |
 | `/.well-known/oauth-protected-resource/mcp` | `GET` | Path-aware RFC 9728 metadata for the default `/mcp` resource |
+| `/.well-known/oauth-authorization-server` | `GET` | Embedded broker RFC 8414 metadata in `oauth-proxy` mode |
+| `/oauth/authorize` | `GET` | Start MCP client login through the upstream provider and HarnessID |
+| `/oauth/upstream/callback` | `GET` | Upstream identity-provider callback |
+| `/oauth/harnessid/callback` | `GET` | HarnessID login callback |
+| `/oauth/token` | `POST` | Return or refresh upstream tokens for the MCP client; never returns HarnessID tokens |
 
 
 The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.
@@ -133,6 +138,7 @@ Operational constraints in HTTP mode:
 
 - Set `HARNESS_MCP_AUTH_TOKEN` for shared or remotely reachable single-user and multi-user deployments. When set, every `POST`, `GET`, and `DELETE` request to `/mcp` must include `Authorization: Bearer <token>`.
 - OAuth mode accepts HarnessID access tokens instead of `HARNESS_MCP_AUTH_TOKEN` and can bind to a non-loopback address without the unauthenticated opt-out.
+- OAuth proxy mode accepts an upstream identity-provider token, exchanges it internally for a per-user HarnessID token, and requires the upstream token on every request.
 - Non-loopback single-user and multi-user binds require `HARNESS_MCP_AUTH_TOKEN` by default. To run unauthenticated on a non-loopback interface anyway, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` explicitly.
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
@@ -181,6 +187,16 @@ Clients normally need only the MCP resource URL:
 The client reads the protected-resource metadata, discovers `HARNESS_MCP_OAUTH_ISSUER`, and then uses that authorization server's RFC 8414 metadata. If the client does not support dynamic client registration, use the pre-registered `mcp-client` client ID.
 
 See [HarnessID OAuth for a self-hosted MCP server](docs/harnessid-oauth.md) for the QA Keycloak checklist and validation commands.
+
+#### Upstream Identity Provider OAuth Proxy Mode
+
+OAuth proxy mode needs a confidential HarnessID client. The Harness ID team creates that client and provides the client ID and client secret. Reach out to the Harness ID team before enabling this mode.
+
+Set `HARNESS_MCP_MODE=oauth-proxy` when an MCP client must hold only an upstream identity-provider token. The public client name can be anything. Set `HARNESS_MCP_BROKER_CLIENT_ID` to the same name the MCP client uses. The integrated OAuth broker starts the upstream browser login, completes the HarnessID login in the same flow, and returns only the upstream access and refresh tokens to the MCP client. On every `/mcp` request, the server validates the upstream token and uses a cached per-user HarnessID access token, renewing it with the refresh token before expiry. A missing upstream-to-HarnessID mapping returns 401 so the client signs in again. HarnessID tokens stay on the server. Refresh tokens, cached access tokens, and transient OAuth state are encrypted at rest.
+
+This mode is HTTP-only. It also needs the upstream issuer and audience, and a stable 32-byte vault key. See
+[Upstream identity provider OAuth proxy mode](docs/oauth-proxy.md) for configuration and
+end-to-end MCP test commands.
 
 #### Multi-User Mode
 
@@ -577,17 +593,39 @@ The server automatically loads environment variables from a `.env` file in the p
 
 | Variable                    | Required | Default                     | Description                                                                                                                                                                                                                                           |
 | --------------------------- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user` (shared API key), `multi-user` (HTTP with per-session API keys), or `oauth` (HTTP with HarnessID access-token validation)                                                                                              |
-| `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` or `oauth` mode, where each session brings its own credential                                                                 |
+| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user`, `multi-user`, `oauth` (direct HarnessID token), or `oauth-proxy` (upstream identity-provider token exchanged for a per-user HarnessID token) |
+| `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user`, `oauth`, or `oauth-proxy` mode, where each session brings its own credential                                                                 |
 | `HARNESS_ACCOUNT_ID`        | No       | *(from PAT/SAT)*            | Harness account identifier. Auto-extracted from PAT/SAT tokens in single-user mode; multi-user sessions can provide their own via `x-harness-account-id` when the API key does not embed one                                                          |
-| `HARNESS_BASE_URL`          | No       | `https://app.harness.io` (`https://mcp.harness.io/cli` in OAuth mode) | Harness API/UI base URL. OAuth mode routes through the hosted MCP `/cli` proxy by default; other modes use the Harness SaaS API directly |
+| `HARNESS_BASE_URL`          | No       | `https://app.harness.io` (`https://mcp.harness.io/cli` in `oauth` and `oauth-proxy`) | Harness API/UI base URL. `oauth` and `oauth-proxy` route through the hosted MCP `/cli` proxy by default; other modes use the Harness SaaS API directly |
 | `HARNESS_MCP_OAUTH_ISSUER`  | No       | `https://id.harness.io/idp/realms/HarnessIDP` | HarnessID issuer matched exactly against the access token `iss` claim                                                                                                                                                  |
 | `HARNESS_MCP_OAUTH_RESOURCE` | No      | `https://mcp.harness.io/mcp` | Public canonical MCP URL published as the RFC 9728 resource identifier                                                                                                     |
 | `HARNESS_MCP_OAUTH_JWKS_URI` | No      | `<issuer>/protocol/openid-connect/certs` | HarnessID JWKS endpoint used to validate RS256 access-token signatures                                                                                                                                                  |
 | `HARNESS_MCP_OAUTH_CLIENT_ID` | No     | `mcp-client`                | HarnessID client the access token must be issued to, checked against the token's `azp` claim                                                                                                                                                        |
 | `HARNESS_MCP_OAUTH_ACCOUNT_CLAIM` | No | `account_id`                | Access-token claim carrying the Harness account ID, populated by the HarnessID `organization` scope                                                                                                                                                 |
 | `HARNESS_MCP_OAUTH_SCOPES`  | No       | `openid profile email organization` | Space-separated scopes advertised in RFC 9728 protected-resource metadata                                                                                                                                                    |
-| `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. Legacy FME is unavailable in OAuth mode so HarnessID tokens are never sent to `api.split.io`; use Harness-native `org_id`+`project_id` scope instead. Must not be set in `multi-user` or `oauth` mode |
+| `HARNESS_MCP_OAUTH_CLIENT_SECRET` | Yes* | -- | Confidential HarnessID client secret issued by the Harness ID team; required only in `oauth-proxy` mode |
+| `HARNESS_MCP_OAUTH_EXTERNAL_SUB_CLAIM` | No | `external_sub` | HarnessID token claim matched to the upstream subject or upstream email during linking |
+| `HARNESS_MCP_OAUTH_PROXY_GRANT` | No | `refresh` | Later-request grant in `oauth-proxy` mode: `refresh` or `jwt-bearer` |
+| `HARNESS_MCP_OAUTH_PROXY_PUBLIC_URL` | Yes* | -- | Public origin of the OAuth broker. Required in `oauth-proxy` mode and must share an origin with `HARNESS_MCP_OAUTH_RESOURCE` |
+| `HARNESS_MCP_OAUTH_PROXY_VAULT_MODE` | No | `file` | `file` stores the encrypted vault on local disk for one pod. `redis` shares refresh tokens and login state across pods |
+| `HARNESS_MCP_OAUTH_PROXY_VAULT_PATH` | No | `.harness-mcp/oauth-proxy-vault.enc` | Encrypted HarnessID token and login-state file used when vault mode is `file` |
+| `HARNESS_MCP_OAUTH_PROXY_VAULT_KEY` | Yes* | -- | Base64-encoded 32-byte AES key required in `oauth-proxy` mode |
+| `HARNESS_MCP_OAUTH_PROXY_REDIS_URL` | Yes* | -- | `rediss://` URL required when vault mode is `redis`. `redis://` requires `HARNESS_ALLOW_HTTP=true`. Redis 6.2 or newer |
+| `HARNESS_MCP_OAUTH_PROXY_REDIS_KEY_PREFIX` | No | `harness-mcp:oauth` | Prefix for OAuth vault keys in Redis |
+| `HARNESS_MCP_UPSTREAM_ISSUER` | Yes* | -- | Exact upstream token issuer required in `oauth-proxy` mode |
+| `HARNESS_MCP_UPSTREAM_AUDIENCE` | Yes* | -- | Exact upstream token audience required in `oauth-proxy` mode |
+| `HARNESS_MCP_UPSTREAM_JWKS_URI` | No | `<upstream issuer>/v1/keys` | Upstream RS256 JWKS endpoint |
+| `HARNESS_MCP_UPSTREAM_SCOPES` | No | `openid profile email offline_access` | Scopes requested by the embedded broker and published to the MCP client |
+| `HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_ID` | Yes* | -- | Confidential upstream OAuth client used by the embedded broker |
+| `HARNESS_MCP_UPSTREAM_OAUTH_CLIENT_SECRET` | Yes* | -- | Upstream OAuth client secret used only by the server |
+| `HARNESS_MCP_UPSTREAM_DISCOVERY_URI` | No | `<upstream issuer>/.well-known/openid-configuration` | Upstream OIDC discovery endpoint |
+| `HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS` | No | -- | Comma-separated domains. Email linking requires `email_verified=true` and a domain on this list. An empty list does not link by email |
+| `HARNESS_MCP_BROKER_ISSUER` | No | OAuth proxy public URL | Authorization-server issuer the MCP client discovers |
+| `HARNESS_MCP_BROKER_CLIENT_ID` | No | `cursor-harness-mcp` | Public OAuth client ID. Any name works when the MCP client is configured with the same value |
+| `HARNESS_MCP_BROKER_REDIRECT_URIS` | No | *(empty)* | Comma-separated redirect URIs. Empty rejects every callback. `*` allows only loopback `http`/`https`. Custom schemes must be listed exactly |
+| `HARNESS_MCP_BROKER_CODE_TTL_MS` | No | `60000` | Lifetime of one-time authorization codes issued to the MCP client |
+| `HARNESS_MCP_BROKER_TRANSACTION_TTL_MS` | No | `600000` | Maximum lifetime of the chained browser authorization transaction |
+| `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. Legacy FME is unavailable in OAuth mode so HarnessID tokens are never sent to `api.split.io`; use Harness-native `org_id`+`project_id` scope instead. Must not be set in `multi-user`, `oauth`, or `oauth-proxy` mode |
 | `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources in **legacy (`workspace_id`) mode only**. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development. Harness-native (`org_id`+`project_id`) mode ignores this and uses the standard `HARNESS_API_KEY`/`HARNESS_BASE_URL` instead |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
@@ -598,6 +636,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `LOG_LEVEL`                 | No       | `info`                      | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                                       |
 | `HARNESS_TOOLSETS`          | No       | *(defaults)*                | Comma-separated toolset list. Empty loads default toolsets. Supports `+name` to explicitly include opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering))                                                       |
 | `HARNESS_READ_ONLY`         | No       | `false`                     | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments                                                                                                                   |
+| `HARNESS_SCHEMA_MODE`       | No       | `full`                      | `full` or `compact`. Compact replaces the per-tool resource-type enum with a plain string and shortens field copy, cutting the tool list sent to the model by about half (see `docs/schema-budget.md`). Types are discovered via `harness_describe` |
 | `HARNESS_AUTO_APPROVE_RISK` | No       | `none`                      | Risk-based auto-approve threshold for autonomous workflows. Operations at or below this risk proceed without confirmation. Values: `none`, `low_write`, `medium_write`, `high_write`, `all`. See [Elicitation](#elicitation)                          |
 | `HARNESS_SKIP_ELICITATION`  | No       | `false`                     | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility                                                                                                                                                         |
 | `HARNESS_ALLOW_HTTP`        | No       | `false`                     | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                                   |
@@ -1261,7 +1300,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-260 resource types organized across 42 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+262 resource types organized across 42 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1325,6 +1364,7 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 | --------------------- | ---- | --- | ------ | ------ | ------ | ----------------- |
 | `connector`           | x    | x   | x      | x      | x      | `test_connection` |
 | `connector_catalogue` | x    |     |        |        |        |                   |
+| `llm_model`           | x    |     |        |        |        |                   |
 
 
 ### Infrastructure
@@ -1735,6 +1775,7 @@ In single-user/self-hosted mode, legacy-mode auth uses a Bearer token from `HARN
 | `chaos_action_template`          | x    | x   |        |        | x      | `list_revisions`, `get_variables`, `compare_revisions`                       |
 | `chaos_loadtest`                 | x    | x   | x      | x      | x      | `run`, `stop`                                                                |
 | `chaos_service`                  | x    | x   | x      | x      | x      | `list_experiment_runs`, `list_load_tests`                                    |
+| `custom_service`                 | x    | x   | x      | x      |        |                                                                              |
 | `chaos_application_map`          | x    | x   |        |        |        |                                                                              |
 | `discovered_agent`               | x    |     |        |        |        |                                                                              |
 | `discovered_namespace`           | x    |     |        |        |        |                                                                              |
@@ -1746,8 +1787,8 @@ In single-user/self-hosted mode, legacy-mode auth uses a Bearer token from `HARN
 | `chaos_risk`                     | x    | x   |        |        |        |                                                                              |
 | `chaos_dr_test`                  | x    |     | x      |        |        |                                                                              |
 | `scanned_risk`                   | x    | x   |        |        |        | `occurrences`, `summary_by_service`                                          |
-| `chaos_risk_rule`                | x    | x   |        |        |        |                                                                              |
-| `chaos_risk_scan`                | x    | x   | x      | x      | x      | `retry`, `abort`, `report`, `report_download`, `heatmap`                     |
+| `chaos_risk_rule`                | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_risk_scan`                | x    | x   | x      | x      | x      | `retry`, `abort`, `report`, `report_download`, `heatmap`, `submit_findings` |
 
 ### Cloud Cost Management (CCM)
 
@@ -2017,7 +2058,7 @@ Available toolset names:
 | `agents`                | agent, agent_run                                                                                                                                                                                                                                                                                |
 | `services`              | service                                                                                                                                                                                                                                                                                         |
 | `environments`          | environment                                                                                                                                                                                                                                                                                     |
-| `connectors`            | connector, connector_catalogue                                                                                                                                                                                                                                                                  |
+| `connectors`            | connector, connector_catalogue, llm_model                                                                                                                                                                                                                                                       |
 | `infrastructure`        | infrastructure                                                                                                                                                                                                                                                                                  |
 | `secrets`               | secret                                                                                                                                                                                                                                                                                          |
 | `logs`                  | execution_log                                                                                                                                                                                                                                                                                   |
@@ -2032,7 +2073,7 @@ Available toolset names:
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
 | `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition, fme_metric, fme_event_type, fme_experiment, fme_experiment_settings, fme_experiment_alerting, fme_experiment_result                       |
 | `gitops`                | gitops_agent, gitops_argo_project, gitops_app_project_mapping, gitops_autocreate_log, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree, gitops_cluster_link |
-| `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan |
+| `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, custom_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
@@ -2047,7 +2088,7 @@ Available toolset names:
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
-| `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
+| `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_git_registration, eval_prompt, online_eval |
 | `observability-evaluations` *(opt-in)* | observability_eval                                                                                                                                                                                                                                                               |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
@@ -2073,7 +2114,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 | 46 Toolsets (42 default) |
-                |  260 Resource Types|
+                |  262 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

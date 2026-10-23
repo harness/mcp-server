@@ -217,9 +217,13 @@ describe("Registry", () => {
       expect(def.displayName).toBe("Pipeline");
     });
 
-    it("throws for unknown resource type with available list", () => {
+    it("throws for unknown resource type and points to harness_describe", () => {
       expect(() => registry.getResource("nonexistent")).toThrow(/Unknown resource_type "nonexistent"/);
-      expect(() => registry.getResource("nonexistent")).toThrow(/Available:/);
+      expect(() => registry.getResource("nonexistent")).toThrow(/harness_describe/);
+    });
+
+    it("suggests close matches for a misspelled resource type", () => {
+      expect(() => registry.getResource("pipeline_runs")).toThrow(/Did you mean: .*pipeline/);
     });
   });
 
@@ -707,7 +711,7 @@ describe("Registry", () => {
         body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
       });
 
-      const call = mockRequest.mock.calls[0][0];
+      const call = mockRequest.mock.calls.find((c) => c[0].method === "PUT")![0];
       expect(call.path).toBe("/template/api/templates/update/my-template/v2");
     });
 
@@ -727,7 +731,7 @@ describe("Registry", () => {
         body: { template_yaml: "template:\n  name: My Template\n  type: Step\n" },
       });
 
-      const call = mockRequest.mock.calls[0][0];
+      const call = mockRequest.mock.calls.find((c) => c[0].method === "PUT")![0];
       expect(call.path).toBe("/template/api/templates/update/my-template/v2");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
@@ -843,7 +847,7 @@ describe("Registry", () => {
         },
       });
 
-      const call = mockRequest.mock.calls[0][0];
+      const call = mockRequest.mock.calls.find((c) => c[0].method === "PUT")![0];
       expect(call.path).toBe("/v1/templates/acc_explicit/versions/1.0.0");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
@@ -888,7 +892,7 @@ describe("Registry", () => {
         },
       });
 
-      const call = mockRequest.mock.calls[0][0];
+      const call = mockRequest.mock.calls.find((c) => c[0].method === "PUT")![0];
       expect(call.path).toBe("/v1/templates/testsj/versions/v2");
       expect(call.params.orgIdentifier).toBeUndefined();
       expect(call.params.projectIdentifier).toBeUndefined();
@@ -1949,6 +1953,118 @@ describe("Registry", () => {
     });
   });
 
+  describe("firewall_exception_v3 update/delete/approve/reject", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    });
+
+    it("update sends PUT to /har/api/v3/scans/exceptions/{id}", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ exceptionId: "exc-1", status: "PENDING" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "update", {
+        exception_id: "exc-1",
+        body: { businessJustification: "updated justification" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/har/api/v3/scans/exceptions/exc-1");
+    });
+
+    it("update does not leak org/project scope into body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "update", {
+        exception_id: "exc-1",
+        body: { businessJustification: "updated justification" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("update risk is medium_write with safe retry (PUT is idempotent)", () => {
+      const def = reg.getResource("firewall_exception_v3");
+      expect(def.operations.update?.operationPolicy?.risk).toBe("medium_write");
+      expect(def.operations.update?.operationPolicy?.retryPolicy).toBe("safe");
+    });
+
+    it("delete sends DELETE to /har/api/v3/scans/exceptions/{id}", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "delete", {
+        exception_id: "exc-1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("DELETE");
+      expect(call.path).toBe("/har/api/v3/scans/exceptions/exc-1");
+    });
+
+    it("delete risk is destructive (per structural validation rule for all deletes)", () => {
+      const def = reg.getResource("firewall_exception_v3");
+      expect(def.operations.delete?.operationPolicy?.risk).toBe("destructive");
+    });
+
+    it("approve sends PUT to /har/api/v3/scans/exceptions/{id}/status with status=APPROVED", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ exceptionId: "exc-1", status: "APPROVED" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatchExecute(client, "firewall_exception_v3", "approve", {
+        exception_id: "exc-1",
+        notes: "looks safe",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/har/api/v3/scans/exceptions/exc-1/status");
+      expect(call.body.status).toBe("APPROVED");
+      expect(call.body.notes).toBe("looks safe");
+    });
+
+    it("reject sends PUT to /har/api/v3/scans/exceptions/{id}/status with status=REJECTED", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ exceptionId: "exc-1", status: "REJECTED" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatchExecute(client, "firewall_exception_v3", "reject", {
+        exception_id: "exc-1",
+        notes: "insufficient justification",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/har/api/v3/scans/exceptions/exc-1/status");
+      expect(call.body.status).toBe("REJECTED");
+      expect(call.body.notes).toBe("insufficient justification");
+    });
+
+    it("approve/reject do not leak org/project scope into body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await reg.dispatchExecute(client, "firewall_exception_v3", "approve", {
+        exception_id: "exc-1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("approve/reject risk is high_write with do_not_retry (per approval_instance convention)", () => {
+      const def = reg.getResource("firewall_exception_v3");
+      expect(def.executeActions?.approve?.operationPolicy?.risk).toBe("high_write");
+      expect(def.executeActions?.approve?.operationPolicy?.retryPolicy).toBe("do_not_retry");
+      expect(def.executeActions?.reject?.operationPolicy?.risk).toBe("high_write");
+      expect(def.executeActions?.reject?.operationPolicy?.retryPolicy).toBe("do_not_retry");
+    });
+  });
+
   describe("ELK→Mongo fallback", () => {
     let registry: Registry;
     beforeEach(() => {
@@ -2627,4 +2743,21 @@ describe("Registry", () => {
     });
   });
 
+});
+
+describe("Registry resource_type near-miss resolution", () => {
+  const registry = new Registry({ HARNESS_API_KEY: "pat.a.b.c", HARNESS_BASE_URL: "https://app.harness.io" } as never);
+  it.each([
+    ["repo", "repository"],
+    ["Repos", "repository"],
+    ["pipelines", "pipeline"],
+    ["input-set", "input_set"],
+    ["PR", "pull_request"],
+    ["services", "service"],
+  ])("resolves %s to %s", (input, expected) => {
+    expect(registry.getResource(input)).toBe(registry.getResource(expected));
+  });
+  it("still rejects unrelated names", () => {
+    expect(() => registry.getResource("banana")).toThrow(/Unknown resource_type/);
+  });
 });

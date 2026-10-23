@@ -2,6 +2,7 @@ import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } fr
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputV1Extract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
 import { asRecord, asString } from "../../utils/type-guards.js";
 import { buildV1RuntimeInputsBody } from "../../utils/pipeline-v1-runtime-inputs.js";
+import { collectV1GitDetails, firstGitString, remoteGitUpdatePreflight } from "../remote-git-preflight.js";
 import YAML from "yaml";
 
 function coerceTriggerBodyRecord(body: unknown): Record<string, unknown> {
@@ -193,78 +194,6 @@ const PIPELINE_V0_UPDATE_PARAMS: ParamsSchema = {
     { name: "last_commit_id", required: false, description: "Git commit id from GET gitDetails.commitId. Pass via params." },
   ],
 };
-
-function firstGitString(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === "string" && value !== "") return value;
-  }
-  return undefined;
-}
-
-function firstGitBoolean(...values: unknown[]): boolean | undefined {
-  for (const value of values) {
-    if (typeof value === "boolean") return value;
-    // `params` values are untyped JSON and agents routinely quote booleans.
-    // v0 forwards the string as a query param; v1 must not drop it.
-    if (typeof value === "string") {
-      const normalized = value.trim().toLowerCase();
-      if (normalized === "true") return true;
-      if (normalized === "false") return false;
-    }
-  }
-  return undefined;
-}
-
-function inputGitDetails(input: Record<string, unknown>): Record<string, unknown> {
-  return asRecord(asRecord(input.body)?.git_details) ?? {};
-}
-
-/**
- * V1 create/update send Git Experience fields in JSON `git_details`, not query params.
- * Accept params used by v0 agents (branch, commit_msg, last_object_id) and GET response
- * names (object_id, commit_id) so agents can copy git_details forward.
- */
-function collectV1GitDetails(input: Record<string, unknown>): Record<string, string | boolean> | undefined {
-  const git = inputGitDetails(input);
-  const details: Record<string, string | boolean> = {};
-  const assign = (key: string, value: string | undefined) => {
-    if (value) details[key] = value;
-  };
-
-  assign("branch_name", firstGitString(input.branch_name, input.branch, git.branch_name));
-  assign("file_path", firstGitString(input.file_path, git.file_path));
-  assign("commit_message", firstGitString(input.commit_message, input.commit_msg, git.commit_message));
-  assign("base_branch", firstGitString(input.base_branch, git.base_branch));
-  assign("connector_ref", firstGitString(input.connector_ref, git.connector_ref));
-  assign("store_type", firstGitString(input.store_type, git.store_type));
-  assign("repo_name", firstGitString(input.repo_name, git.repo_name));
-  const isHarnessCodeRepo = firstGitBoolean(input.is_harness_code_repo, git.is_harness_code_repo);
-  if (isHarnessCodeRepo !== undefined) details.is_harness_code_repo = isHarnessCodeRepo;
-  assign("last_object_id", firstGitString(input.last_object_id, git.last_object_id, git.object_id));
-  assign("last_commit_id", firstGitString(input.last_commit_id, git.last_commit_id, git.commit_id));
-
-  return Object.keys(details).length > 0 ? details : undefined;
-}
-
-function hasRemoteUpdateLockContext(input: Record<string, unknown>): boolean {
-  const git = inputGitDetails(input);
-  return !!firstGitString(input.branch_name, input.branch, git.branch_name)
-    && !!firstGitString(input.repo_name, git.repo_name)
-    && !!firstGitString(input.file_path, git.file_path)
-    && !!firstGitString(input.last_object_id, git.last_object_id, git.object_id)
-    && !!firstGitString(input.last_commit_id, git.last_commit_id, git.commit_id);
-}
-
-function isExplicitlyInline(input: Record<string, unknown>): boolean {
-  const storeType = firstGitString(input.store_type, inputGitDetails(input).store_type);
-  return storeType?.toUpperCase() === "INLINE";
-}
-
-function setIfMissing(input: Record<string, unknown>, key: string, value: unknown): void {
-  if ((input[key] === undefined || input[key] === "") && value !== undefined && value !== "") {
-    input[key] = value;
-  }
-}
 
 function hoistBodyFields(input: Record<string, unknown>, keys: readonly string[]): void {
   const body = asRecord(input.body);
@@ -473,84 +402,18 @@ async function preparePipelineRetry({ client, input, registry, signal }: Preflig
   }
 }
 
-/**
- * Remote updates require Git location plus optimistic-lock SHAs. Agents commonly
- * send only the updated YAML, so hydrate missing Git context from the current
- * pipeline before the body/query builders run.
- */
-function remotePipelineUpdatePreflight(resourceType: "pipeline" | "pipeline_v1") {
-  return async ({ client, input, registry, signal }: PreflightContext): Promise<void> => {
-    if (isExplicitlyInline(input) || hasRemoteUpdateLockContext(input)) return;
+const pipelineGitUpdatePreflight = remoteGitUpdatePreflight({
+  resourceType: "pipeline",
+  idKeys: ["pipeline_id"],
+  copyNameTo: "pipeline_name",
+});
 
-    const currentGit = inputGitDetails(input);
-    const getInput: Record<string, unknown> = {
-      pipeline_id: input.pipeline_id,
-    };
-    // store_type is deliberately not forwarded: the v0 GET echoes it back onto
-    // the response when the API omits one, which would let the caller's own
-    // assertion masquerade as the stored store type we read below.
-    for (const key of ["org_id", "project_id", "branch", "branch_name", "repo_name", "connector_ref"]) {
-      if (input[key] !== undefined) getInput[key] = input[key];
-    }
-    setIfMissing(getInput, "branch", firstGitString(currentGit.branch_name));
-    setIfMissing(getInput, "repo_name", firstGitString(currentGit.repo_name));
-    setIfMissing(getInput, "connector_ref", firstGitString(currentGit.connector_ref));
-    if (resourceType === "pipeline_v1") getInput.load_from_fallback_branch = true;
-
-    // Hydration is best-effort. Aborting on a failed lookup would break inline
-    // updates, which need no Git context at all and previously never read the
-    // pipeline first. A genuinely remote pipeline still fails loudly on the PUT
-    // with the GitX branch/SHA error. Toolsets may not log (pure data), so the
-    // swallow is silent by design.
-    let current: Record<string, unknown> | undefined;
-    try {
-      current = asRecord(await registry.dispatch(client, resourceType, "get", getInput, signal));
-    } catch {
-      return;
-    }
-    const git = asRecord(current?.git_details ?? current?.gitDetails);
-    const currentStoreType = firstGitString(
-      current?.store_type,
-      current?.storeType,
-      git?.store_type,
-      git?.storeType,
-    );
-    const hasRemoteMetadata = !!git && Object.keys(git).length > 0;
-    if (currentStoreType?.toUpperCase() === "INLINE") return;
-    if (currentStoreType?.toUpperCase() !== "REMOTE" && !hasRemoteMetadata) return;
-
-    setIfMissing(input, "store_type", currentStoreType ?? "REMOTE");
-    setIfMissing(input, "branch", firstGitString(git?.branch_name, git?.branchName, git?.branch));
-    setIfMissing(input, "repo_name", firstGitString(git?.repo_name, git?.repoName));
-    setIfMissing(input, "file_path", firstGitString(git?.file_path, git?.filePath));
-    setIfMissing(input, "connector_ref", firstGitString(git?.connector_ref, git?.connectorRef));
-    setIfMissing(input, "last_object_id", firstGitString(
-      git?.last_object_id,
-      git?.object_id,
-      git?.lastObjectId,
-      git?.objectId,
-    ));
-    setIfMissing(input, "last_commit_id", firstGitString(
-      git?.last_commit_id,
-      git?.commit_id,
-      git?.lastCommitId,
-      git?.commitId,
-    ));
-    setIfMissing(input, "is_harness_code_repo", firstGitBoolean(
-      git?.is_harness_code_repo,
-      git?.isHarnessCodeRepo,
-    ));
-    // v1 requires `name` in the body; YAML-only updates often omit it.
-    setIfMissing(input, "pipeline_name", firstGitString(current?.name));
-
-    if (!hasRemoteUpdateLockContext(input)) {
-      throw new Error(
-        `Unable to resolve Git branch and current object/commit IDs for remote ${resourceType} update. `
-        + "Call harness_get with the repository/branch context and pass branch, last_object_id, and last_commit_id via params.",
-      );
-    }
-  };
-}
+const pipelineV1GitUpdatePreflight = remoteGitUpdatePreflight({
+  resourceType: "pipeline_v1",
+  idKeys: ["pipeline_id"],
+  getDefaults: { load_from_fallback_branch: true },
+  copyNameTo: "pipeline_name",
+});
 
 /**
  * Build the v1 JSON body for pipeline create/update.
@@ -761,7 +624,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipelines/v2/{pipelineIdentifier}",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          preflight: remotePipelineUpdatePreflight("pipeline"),
+          preflight: pipelineGitUpdatePreflight,
           headers: { "Content-Type": "application/yaml" },
           queryParams: {
             store_type: "storeType",
@@ -1008,7 +871,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
-          preflight: remotePipelineUpdatePreflight("pipeline_v1"),
+          preflight: pipelineV1GitUpdatePreflight,
           bodyBuilder: buildV1PipelineBody,
           responseExtractor: passthrough,
           paramsSchema: PIPELINE_V1_UPDATE_PARAMS,

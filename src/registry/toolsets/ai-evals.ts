@@ -4,14 +4,29 @@
  * Uses Harness-Account header; no accountIdentifier query param (headerBasedScoping).
  */
 import type { BodySchema, PathBuilderConfig, PreflightContext, ToolsetDefinition } from "../types.js";
-import { aiEvalsArrayExtract, aiEvalsListExtract, passthrough } from "../extractors.js";
+import {
+  aiEvalsArrayExtract,
+  aiEvalsDataArrayExtract,
+  aiEvalsListExtract,
+  aiEvalsListExtractWithId,
+  aiEvalsRedactedExtract,
+  aiEvalsTraceExtract,
+  aiEvalsTraceListExtract,
+  passthrough,
+} from "../extractors.js";
 
 const AI = "/gateway/ai-evals/api/v1";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LLM_CONNECTOR_TYPES = new Set(["OpenAi", "OpenAI", "Anthropic", "AzureOpenAI", "AzureOpenAi", "GoogleAI", "GoogleAi"]);
 const JUDGE_BACKED_METRIC_TYPES = new Set(["llm", "ai_judge"]);
 const TARGET_TYPES = new Set(["prompt", "agent", "precomputed"]);
-const AGENT_METHODS = new Set(["GET", "POST", "PUT"]);
+const PROMPT_VARIABLE_TYPES = new Set(["string", "number", "boolean", "array", "object"]);
+const PROMPT_IDENTIFIER_PATTERN = /^[a-z][a-z0-9_-]{0,127}$/;
+const WHOLE_TEMPLATE_PLACEHOLDER_PATTERN = /^\s*\{\{\s*[^{}]+\s*\}\}\s*$/;
+const INPUT_TEMPLATE_REFERENCE_PATTERN = /\{\{\s*input(?:\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*\s*\}\}/;
+const UUID_404_HINT =
+  "Use the id from harness_list for get, update, delete, and execute actions; identifiers and display names are not accepted. " +
+  "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL.";
 
 function scopeOrThrow(input: Record<string, unknown>, config: PathBuilderConfig): { org: string; project: string } {
   const org = (input.org_id as string) ?? config.HARNESS_ORG ?? "";
@@ -55,10 +70,43 @@ function requireUuid(value: unknown, field: string): string {
   const id = nonEmptyString(value);
   if (!id || !UUID_PATTERN.test(id)) {
     throw new Error(
-      `${field} must be a UUID returned by the matching AI Evals list/create call; do not invent an identifier.`,
+      `${field} must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.`,
     );
   }
   return id;
+}
+
+function pathSegment(value: unknown, field: string): string {
+  const id = nonEmptyString(value);
+  if (!id) throw new Error(`${field} must be a non-empty path identifier.`);
+  return encodeURIComponent(id);
+}
+
+function promptVersionSegment(value: unknown, field: string): string {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 1) {
+    return String(value);
+  }
+  return pathSegment(value, field);
+}
+
+function normalizePromptVersion(value: unknown): string | undefined {
+  if (typeof value === "number") {
+    return Number.isInteger(value) && value >= 1 ? String(value) : undefined;
+  }
+  return nonEmptyString(value);
+}
+
+function uuidPathSegment(input: JsonRecord, field: string): string {
+  return encodeURIComponent(requireUuid(input[field], field));
+}
+
+function datasetPath(input: JsonRecord, config: PathBuilderConfig): string {
+  const datasetId = nonEmptyString(input.dataset_id);
+  if (!datasetId) throw new Error("dataset_id must be a non-empty UUID or dataset identifier.");
+  const root = `${base(input, config)}/dataset`;
+  return UUID_PATTERN.test(datasetId)
+    ? `${root}/${encodeURIComponent(datasetId)}`
+    : `${root}/by-identifier/${encodeURIComponent(datasetId)}`;
 }
 
 function preflightScope({ input, registry }: PreflightContext): { org_id: string; project_id: string } {
@@ -91,6 +139,15 @@ function listItems(value: unknown): { items: JsonRecord[]; total: number } {
   };
 }
 
+function normalizedTargetType(value: unknown): string | undefined {
+  const type = nonEmptyString(value);
+  return type === "app" ? "agent" : type === "static" ? "precomputed" : type;
+}
+
+function isPrecomputedTarget(target: JsonRecord | undefined): boolean {
+  return normalizedTargetType(target?.type) === "precomputed";
+}
+
 async function getScopedResource(
   ctx: PreflightContext,
   resourceType: string,
@@ -107,11 +164,10 @@ async function getScopedResource(
       ctx.signal,
     );
     return unwrapRecord(result);
-  } catch (error) {
+  } catch {
     throw new Error(
       `${idField}=${id} is not a readable ${resourceType} in this org/project. ` +
-      `List valid choices with harness_list(resource_type="${resourceType}"). ` +
-      `Details: ${(error as Error).message}`,
+      `List valid choices with harness_list(resource_type="${resourceType}").`,
     );
   }
 }
@@ -135,11 +191,10 @@ export async function getConnector(ctx: PreflightContext, connectorRef: string):
     });
     const record = unwrapRecord(result);
     return asRecord(record.connector) ?? record;
-  } catch (error) {
+  } catch {
     throw new Error(
       `connector_ref=${connectorRef} is not a readable Harness connector in this eval scope. ` +
-      "Ask the user to select an existing connector and provide its scoped identifier (for example, account.my-connector). " +
-      `Details: ${(error as Error).message}`,
+      "Ask the user to select an existing connector and provide its scoped identifier (for example, account.my-connector).",
     );
   }
 }
@@ -217,30 +272,119 @@ async function validateHttpConnector(ctx: PreflightContext, connectorRef: string
 }
 
 function validateAgentConfig(config: JsonRecord): void {
-  const endpoint = nonEmptyString(config.endpoint_url);
+  const endpoint = nonEmptyString(config.endpoint) ?? nonEmptyString(config.endpoint_url);
   if (!endpoint || !/^https?:\/\//i.test(endpoint)) {
-    throw new Error("target.config.endpoint_url is required and must be an HTTP(S) URL.");
+    throw new Error(
+      "target.config.endpoint is required and must be an HTTP(S) URL (endpoint_url is accepted as a legacy alias).",
+    );
   }
-  const method = nonEmptyString(config.method) ?? "POST";
-  if (!AGENT_METHODS.has(method)) {
-    throw new Error(`target.config.method must be one of ${[...AGENT_METHODS].join(", ")}.`);
-  }
-  if (!nonEmptyString(config.response_path)) {
-    throw new Error("target.config.response_path is required (for example, choices.0.message.content).");
+  const method = (nonEmptyString(config.method) ?? "POST").toUpperCase();
+  if (!/^[A-Z]+$/.test(method)) {
+    throw new Error("target.config.method must be a valid HTTP method token (for example, POST).");
   }
   if (config.request_template !== undefined) {
     const requestTemplate = asRecord(config.request_template);
-    if (!requestTemplate) {
-      throw new Error("target.config.request_template must be a JSON object, such as { input: '{{input}}' }.");
+    if (!requestTemplate &&
+      (typeof config.request_template !== "string" || !WHOLE_TEMPLATE_PLACEHOLDER_PATTERN.test(config.request_template))) {
+      throw new Error(
+        "target.config.request_template must be a JSON object, or exactly one placeholder string such as '{{input}}' or '{{ input.text }}'.",
+      );
     }
   }
 }
 
+function validatePromptConfig(value: unknown, field: string): void {
+  const config = asRecord(value);
+  if (!config || !nonEmptyString(config.system_message)) {
+    throw new Error(
+      `${field} must be a prompt config object with a non-empty system_message Jinja2 template.`,
+    );
+  }
+  if (config.user_message_template !== undefined && config.user_message_template !== null &&
+    !nonEmptyString(config.user_message_template)) {
+    throw new Error(`${field}.user_message_template must be a non-empty Jinja2 template when supplied.`);
+  }
+  if (config.variables !== undefined && config.variables !== null) {
+    const variables = asArray(config.variables);
+    if (!Array.isArray(config.variables)) {
+      throw new Error(`${field}.variables must be an array of variable definitions.`);
+    }
+    for (const variable of variables) {
+      const definition = asRecord(variable);
+      const name = nonEmptyString(definition?.name);
+      if (!definition || !name || name.length > 64 || name === "input") {
+        throw new Error(
+          `${field}.variables entries need a 1–64 character name other than reserved "input".`,
+        );
+      }
+      if (definition.type !== undefined && !PROMPT_VARIABLE_TYPES.has(String(definition.type))) {
+        throw new Error(
+          `${field}.variables[].type must be one of ${[...PROMPT_VARIABLE_TYPES].join(", ")}.`,
+        );
+      }
+    }
+  }
+  if (config.default_params !== undefined && config.default_params !== null) {
+    const params = asRecord(config.default_params);
+    if (!params) throw new Error(`${field}.default_params must be an object when supplied.`);
+    const bounded = [
+      ["temperature", 0, 2],
+      ["top_p", 0, 1],
+      ["frequency_penalty", -2, 2],
+      ["presence_penalty", -2, 2],
+    ] as const;
+    for (const [name, min, max] of bounded) {
+      const value = params[name];
+      if (value !== undefined && (typeof value !== "number" || value < min || value > max)) {
+        throw new Error(`${field}.default_params.${name} must be a number from ${min} to ${max}.`);
+      }
+    }
+    if (params.max_tokens !== undefined &&
+      (!Number.isInteger(params.max_tokens) || (params.max_tokens as number) < 1)) {
+      throw new Error(`${field}.default_params.max_tokens must be a positive integer.`);
+    }
+  }
+}
+
+async function validatePromptReference(
+  ctx: PreflightContext,
+  rawPromptId: unknown,
+  rawPromptVersion: unknown,
+): Promise<void> {
+  const promptId = requireUuid(rawPromptId, "prompt_id");
+  const version = rawPromptVersion === undefined || rawPromptVersion === null
+    ? undefined
+    : normalizePromptVersion(rawPromptVersion);
+  if (rawPromptVersion !== undefined && rawPromptVersion !== null && !version) {
+    throw new Error("prompt_version must be a non-empty version (for example, v3) or tag (for example, production).");
+  }
+  const { org_id, project_id } = preflightScope(ctx);
+  const path = `${AI}/orgs/${encodeURIComponent(org_id)}/projects/${encodeURIComponent(project_id)}` +
+    `/registry/prompts/${encodeURIComponent(promptId)}` +
+    (version ? `/versions/${pathSegment(version, "prompt_version")}` : "");
+  try {
+    await ctx.client.request({
+      method: "GET",
+      path,
+      retryPolicy: "safe",
+      headerBasedScoping: true,
+      signal: ctx.signal,
+    });
+  } catch {
+    throw new Error(
+      `prompt_id=${promptId}${version ? ` at prompt_version=${version}` : ""} is not a readable Prompt Registry entry in this org/project. ` +
+      "Use harness_list(resource_type=\"eval_prompt\") to find a prompt, then use its id and optional version or tag.",
+    );
+  }
+}
+
 async function validateTarget(ctx: PreflightContext, target: JsonRecord): Promise<void> {
-  const type = nonEmptyString(target.type);
+  const type = normalizedTargetType(target.type);
   const config = asRecord(target.config);
   if (!type || !TARGET_TYPES.has(type) || !config) {
-    throw new Error("A managed target requires type ('prompt', 'agent', or 'precomputed') and a JSON config object.");
+    throw new Error(
+      "A managed target requires type ('prompt', 'agent', or 'precomputed'; legacy 'app'/'static' are accepted) and a JSON config object.",
+    );
   }
   if (type === "prompt") {
     await validateLlmConfig(ctx, "target.config.llm_config", {
@@ -248,15 +392,13 @@ async function validateTarget(ctx: PreflightContext, target: JsonRecord): Promis
       model: config.model,
     });
     if (config.prompt_source === "registry") {
-      if (!nonEmptyString(config.prompt_id) || !nonEmptyString(config.prompt_version)) {
-        throw new Error(
-          "Registry prompt targets require target.config.prompt_id and target.config.prompt_version from the Prompt Registry.",
-        );
-      }
+      await validatePromptReference(ctx, config.prompt_id, config.prompt_version);
     } else if (!nonEmptyString(config.system_message) || !nonEmptyString(config.user_message_template)) {
       throw new Error("Inline prompt targets require non-empty system_message and user_message_template.");
-    } else if (!String(config.user_message_template).includes("{{input}}")) {
-      throw new Error("target.config.user_message_template must include the {{input}} placeholder.");
+    } else if (!INPUT_TEMPLATE_REFERENCE_PATTERN.test(String(config.user_message_template))) {
+      throw new Error(
+        "target.config.user_message_template must reference {{input}} or a dotted input path such as {{input.text}}.",
+      );
     }
     return;
   }
@@ -285,9 +427,28 @@ async function validateTargetWrite(ctx: PreflightContext, isUpdate: boolean): Pr
   });
 }
 
+async function validatePromptWrite(ctx: PreflightContext, isCreate: boolean): Promise<void> {
+  const body = requireBody(ctx.input, "Prompt write");
+  if (isCreate) {
+    if (!nonEmptyString(body.name)) throw new Error("Prompt create requires a non-empty name.");
+    const identifier = nonEmptyString(body.identifier);
+    if (!identifier || !PROMPT_IDENTIFIER_PATTERN.test(identifier)) {
+      throw new Error(
+        "Prompt identifier must match ^[a-z][a-z0-9_-]{0,127}$ (lowercase slug, starting with a letter).",
+      );
+    }
+    if (body.config === undefined) {
+      throw new Error("Prompt create requires body.config with a non-empty system_message template.");
+    }
+  } else if (body.name !== undefined && !nonEmptyString(body.name)) {
+    throw new Error("Prompt name must be a non-empty string when supplied.");
+  }
+  if (body.config !== undefined) validatePromptConfig(body.config, "body.config");
+}
+
 async function validateOutputUpload(ctx: PreflightContext): Promise<void> {
   const target = await getScopedResource(ctx, "eval_target", "target_id", ctx.input.target_id);
-  if (target.type !== "precomputed") {
+  if (!isPrecomputedTarget(target)) {
     throw new Error("Static outputs can only be uploaded to a precomputed target.");
   }
   const body = requireBody(ctx.input, "Output upload");
@@ -498,7 +659,7 @@ async function validateManagedEvalComposition(ctx: PreflightContext, input: Json
 
   if (target) await validateTarget(ctx, target);
   if (metricSet) await validateMetricSet(ctx, metricSet, requireAll);
-  if (dataset && target?.type === "precomputed") await validatePrecomputedData(ctx, datasetId!, target);
+  if (dataset && isPrecomputedTarget(target)) await validatePrecomputedData(ctx, datasetId!, target);
 }
 
 async function validateEvalRun(ctx: PreflightContext): Promise<void> {
@@ -519,7 +680,7 @@ async function validateEvalRun(ctx: PreflightContext): Promise<void> {
   const target = targetId ? await getScopedResource(ctx, "eval_target", "target_id", targetId) : undefined;
   if (target) await validateTarget(ctx, target);
   await validateMetricSet(ctx, metricSet, true);
-  if (target?.type === "precomputed" || !target) await validatePrecomputedData(ctx, datasetId, target);
+  if (isPrecomputedTarget(target) || !target) await validatePrecomputedData(ctx, datasetId, target);
   if (runInputs.llm_config !== undefined) await validateLlmConfig(ctx, "run_inputs.llm_config", runInputs.llm_config);
 }
 
@@ -701,7 +862,7 @@ const datasetItemHistorySchema: BodySchema = {
       name: "item_identifiers",
       type: "array",
       required: true,
-      description: "1–100 unique dataset business IDs (item_identifier values), not internal item UUIDs",
+      description: "1–100 unique dataset business IDs (item_identifier values), not resource UUIDs",
       itemType: "string",
     },
     { name: "limit", type: "number", required: false, description: "Completed runs per item (1–20; default 5)" },
@@ -934,7 +1095,7 @@ const createTargetSchema: BodySchema = {
   description: "Create target. For managed: type + config are required. For git-backed: omit type/config and provide storage_type='git' + git_source.",
   fields: [
     { name: "name", type: "string", required: true, description: "Name" },
-    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (required when storage_type='managed', omit for git)" },
+    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (required when storage_type='managed', omit for git; legacy app→agent and static→precomputed are normalized)" },
     {
       name: "config",
       type: "object",
@@ -942,10 +1103,12 @@ const createTargetSchema: BodySchema = {
       description:
         "Target config (required when storage_type='managed', omit for git). " +
         "For type='prompt': { llm_connector_ref: '<existing Harness LLM connector identifier>', " +
-        "model?: string, prompt_source?: 'inline'|'registry', prompt_id?: string, prompt_version?: string, " +
-        "system_message?: string, user_message_template?: '...{{input}}...', temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
+        "model?: string, prompt_source?: 'inline'|'registry', prompt_id?: '<Prompt Registry UUID>', " +
+        "prompt_version?: 'vN'|'N'|'<tag>' (optional; omit for latest), " +
+        "system_message?: string, user_message_template?: '...{{input}}...' or '...{{input.text}}...', temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
         "frequency_penalty?: -2 to 2, presence_penalty?: -2 to 2 }. " +
-        "For type='agent': { endpoint_url: '<agent HTTP URL>', method: 'GET'|'POST'|'PUT', response_path: '<response JSON path>', request_template?: object }. " +
+        "For type='agent': { endpoint: '<agent HTTP URL>' (endpoint_url is a legacy alias), method?: '<HTTP method>' (default POST), " +
+        "response_path?: '<response JSON path>' (default output), request_template?: object | '{{ input.field }}' }. " +
         "For type='precomputed': { dataset_id?: string, model_name?: string, model_version?: string }.",
     },
     { name: "description", type: "string", required: false, description: "Description" },
@@ -963,14 +1126,18 @@ const updateTargetSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
-    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed" },
+    { name: "type", type: "string", required: false, description: "prompt | agent | precomputed (legacy app→agent and static→precomputed accepted)" },
     {
       name: "config",
       type: "object",
       required: false,
       description:
-        "Target config. For type='prompt': { llm_connector_ref, prompt_source?, prompt_id?, prompt_version?, system_message?, user_message_template?, model? }. " +
-        "For type='agent': { endpoint_url, method, response_path, request_template? }. For type='precomputed': { dataset_id?, model_name?, model_version? }.",
+        "Target config. For type='prompt': { llm_connector_ref, prompt_source?: 'inline'|'registry', " +
+        "prompt_id?: '<Prompt Registry UUID>', prompt_version?: 'vN'|'N'|'<tag>' (omit for latest), " +
+        "system_message?, user_message_template? (must reference {{input}} or {{input.field}}), model? }. " +
+        "For type='agent': { endpoint (or legacy endpoint_url), method?: '<HTTP method>' (default POST), " +
+        "response_path?: '<response JSON path>' (default output), request_template?: object | '{{ input.field }}' }. " +
+        "For type='precomputed': { dataset_id?, model_name?, model_version? }.",
     },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
     { name: "is_active", type: "boolean", required: false, description: "Active" },
@@ -984,7 +1151,14 @@ const updateTargetSchema: BodySchema = {
 const testTargetSchema: BodySchema = {
   description: "Test target invocation",
   fields: [
-    { name: "input", type: "object", required: true, description: "Sample input: string or JSON object matching a dataset item input" },
+    {
+      name: "input",
+      type: "object",
+      required: true,
+      description:
+        "Required sample input. The API accepts either a string (resolves {{input}}) or a JSON object " +
+        "(so templates can resolve paths such as {{input.text}}). The object type is advisory; pass a string directly when appropriate.",
+    },
     { name: "item_identifier", type: "string", required: false, description: "Dataset item identifier (used by precomputed targets to look up output)" },
   ],
 };
@@ -1003,13 +1177,13 @@ const uploadOutputsSchema: BodySchema = {
 };
 
 const bulkDeleteDatasetItemsSchema: BodySchema = {
-  description: "Bulk-delete dataset items by internal UUID or stable business item ID",
+  description: "Bulk-delete dataset items by resource UUID or stable business item ID",
   fields: [
     {
       name: "item_ids",
       type: "array",
       required: true,
-      description: "One or more internal item UUIDs or item_identifier values. Unknown IDs are returned as not_found.",
+      description: "One or more resource UUIDs or item_identifier values. Unknown IDs are returned as not_found.",
       itemType: "string",
     },
   ],
@@ -1055,28 +1229,52 @@ const upsertGitSettingsSchema: BodySchema = {
   ],
 };
 
-const createRegistryItemSchema: BodySchema = {
-  description: "Create registry item",
+const promptConfigDescription =
+  "Versioned prompt content: { system_message: string (required Jinja2 template), " +
+  "user_message_template?: string, variables?: [{ name, type?: 'string'|'number'|'boolean'|'array'|'object', " +
+  "description?, required?, default? }], default_params?: { temperature?: 0-2, max_tokens?: positive integer, " +
+  "top_p?: 0-1, frequency_penalty?: -2 to 2, presence_penalty?: -2 to 2 } }. " +
+  "Variable name 'input' is reserved; use {{input}} only when the dataset input itself should be interpolated.";
+
+const createPromptSchema: BodySchema = {
+  description: "Create a versioned Prompt Registry prompt",
   fields: [
-    { name: "name", type: "string", required: true, description: "Name" },
-    { name: "identifier", type: "string", required: true, description: "Unique id" },
-    { name: "type", type: "string", required: true, description: "prompt | agent | mcp_tool | skill" },
-    { name: "config", type: "object", required: true, description: "Item config payload" },
-    { name: "description", type: "string", required: false, description: "Description" },
-    { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "labels", type: "object", required: false, description: "Key-value labels" },
+    { name: "name", type: "string", required: true, description: "Display name (1-256 characters)" },
+    {
+      name: "identifier",
+      type: "string",
+      required: true,
+      description: "Stable lowercase slug, unique per project: ^[a-z][a-z0-9_-]{0,127}$",
+    },
+    { name: "config", type: "object", required: true, description: promptConfigDescription },
+    { name: "description", type: "string", required: false, description: "Prompt-level description (not versioned)" },
+    { name: "category", type: "string", required: false, description: "Prompt-level category (not versioned)" },
+    { name: "labels", type: "array", required: false, description: "Prompt-level labels (not versioned)", itemType: "string" },
   ],
 };
 
-const updateRegistryItemSchema: BodySchema = {
-  description: "Update registry item",
+const updatePromptSchema: BodySchema = {
+  description: "Update a Prompt Registry prompt. Supplying config creates a new version.",
   fields: [
-    { name: "name", type: "string", required: false, description: "Name" },
-    { name: "description", type: "string", required: false, description: "Description" },
-    { name: "config", type: "object", required: false, description: "Item config payload" },
-    { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "labels", type: "object", required: false, description: "Key-value labels" },
-    { name: "enabled", type: "boolean", required: false, description: "Enabled" },
+    { name: "name", type: "string", required: false, description: "New display name (1-256 characters)" },
+    { name: "config", type: "object", required: false, description: promptConfigDescription },
+    { name: "description", type: "string", required: false, description: "Prompt-level description (not versioned)" },
+    { name: "category", type: "string", required: false, description: "Prompt-level category (not versioned)" },
+    { name: "labels", type: "array", required: false, description: "Replace prompt-level labels (not version labels)", itemType: "string" },
+  ],
+};
+
+const replacePromptVersionLabelsSchema: BodySchema = {
+  description: "Replace labels on one prompt version",
+  fields: [
+    { name: "labels", type: "array", required: true, description: "Full replacement list of labels for this version", itemType: "string" },
+  ],
+};
+
+const setPromptTagSchema: BodySchema = {
+  description: "Create or move a named prompt tag",
+  fields: [
+    { name: "version", type: "number", required: true, description: "Positive integer version to point the tag at (for example, 3)" },
   ],
 };
 
@@ -1227,7 +1425,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
   name: "ai-evals",
   displayName: "AI Evals",
   description:
-    "Harness AI Evals control plane: datasets, evaluations, runs, metrics, metric sets, suites, targets, models, annotations, analytics, registry, git settings.",
+    "Harness AI Evals control plane: datasets, evaluations, runs, metrics, metric sets, suites, targets, prompt registry, analytics, and git settings.",
   optIn: false,
   resources: [
     // --- Datasets ---
@@ -1241,6 +1439,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
       headerBasedScoping: true,
       identifierFields: ["dataset_id"],
       diagnosticHint:
+        "For get/update/delete, use the uuid from harness_list (or use a dataset identifier only for get). " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "Dataset items require 'input' as a JSON object (e.g. { messages: [{role:'user', content:'...'}] } or { prompt: '...' }). " +
         "Optional fields depend on metric type: 'expected_output' for correctness metrics, 'context' (string array) for RAG/groundedness metrics, " +
         "'expected_tools' for agent tool-use metrics. Items can be added inline on create or managed separately via eval_dataset_item.",
@@ -1259,16 +1459,16 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/dataset`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { ...listQ, search: "search", target_id: "target_id" },
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("uuid"),
           description: "List datasets",
         },
         get: {
           method: "GET",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/dataset/${input.dataset_id as string}`,
+          pathBuilder: datasetPath,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "Get dataset by UUID",
+          description: "Get dataset by UUID or identifier",
         },
         create: {
           method: "POST",
@@ -1283,7 +1483,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/dataset/${input.dataset_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateDatasetSchema,
@@ -1293,7 +1493,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/dataset/${input.dataset_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete dataset",
@@ -1304,7 +1504,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/by-identifier/${encodeURIComponent(input.identifier as string)}`,
+            `${base(input, config)}/dataset/by-identifier/${pathSegment(input.identifier, "identifier")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           actionDescription:
@@ -1315,7 +1515,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/generate`,
+            `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/generate`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           preflight: validateDatasetGeneration,
           bodyBuilder: bodyFromInput,
@@ -1343,17 +1543,17 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/items`,
+            `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/items`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("uuid"),
           description: "List items (filters.dataset_id required)",
         },
         get: {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/items/${input.item_id as string}`,
+            `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/items/${uuidPathSegment(input, "item_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get item by UUID",
@@ -1362,7 +1562,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/items`,
+            `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/items`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createDatasetItemSchema,
@@ -1373,7 +1573,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "PUT",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/items/${input.item_id as string}`,
+            `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/items/${uuidPathSegment(input, "item_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateDatasetItemSchema,
@@ -1384,7 +1584,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "DELETE",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/items/${input.item_id as string}`,
+            `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/items/${uuidPathSegment(input, "item_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete item",
@@ -1395,7 +1595,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "PATCH",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/items/bulk`,
+            `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/items/bulk`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: bulkUpsertDatasetItemsSchema,
@@ -1406,7 +1606,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/items/bulk-delete`,
+            `${base(input, config)}/dataset/${uuidPathSegment(input, "dataset_id")}/items/bulk-delete`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           preflight: async (ctx) => {
             await getScopedResource(ctx, "eval_dataset", "dataset_id", ctx.input.dataset_id);
@@ -1433,6 +1633,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
       headerBasedScoping: true,
       identifierFields: ["eval_id"],
       diagnosticHint:
+        "Use the id from harness_list for get, update, delete, and execute actions; identifiers and display names are not accepted. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "An eval requires three components: dataset_id, target_id, and metric_set_id. " +
         "Before creating an eval, list existing resources with harness_list for eval_dataset, eval_target, and eval_metric_set. " +
         "Create any missing components first. Managed evaluations cannot be created until all three are set. " +
@@ -1467,7 +1669,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/evals/${input.eval_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get eval",
@@ -1486,7 +1688,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/evals/${input.eval_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           preflight: async (ctx) => validateManagedEvalComposition(ctx, ctx.input, false),
           bodyBuilder: (input) => input.body ?? {},
@@ -1497,7 +1699,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/evals/${input.eval_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Hard-delete eval and its runs (409 if referenced by a suite)",
@@ -1508,7 +1710,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/evals/${input.eval_id as string}/run`,
+            `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}/run`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           preflight: validateEvalRun,
           bodyBuilder: bodyFromInput,
@@ -1520,7 +1722,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/evals/${input.eval_id as string}/clone`,
+            `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}/clone`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           preflight: async (ctx) => {
             const evaluation = await getScopedResource(ctx, "evaluation", "eval_id", ctx.input.eval_id);
@@ -1537,7 +1739,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/evals/${input.eval_id as string}/items/history`,
+            `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}/items/history`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           preflight: async (ctx) => {
             await getScopedResource(ctx, "evaluation", "eval_id", ctx.input.eval_id);
@@ -1567,7 +1769,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/evals/${input.eval_id as string}/export-yaml`,
+            `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}/export-yaml`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           actionDescription: "Export an eval and all referenced entities as a denormalized YAML document.",
@@ -1585,6 +1787,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["run_id"],
+      diagnosticHint: UUID_404_HINT,
       listFilterFields: [
         { name: "target_id", description: "Filter runs by target UUID" },
       ],
@@ -1600,13 +1803,13 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { ...listQ, target_id: "target_id" },
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("run_id"),
           description: "List runs in project. Use eval_run_by_eval resource to filter by eval_id.",
         },
         get: {
           method: "GET",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/runs/${input.run_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/runs/${uuidPathSegment(input, "run_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get run",
@@ -1627,7 +1830,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         rescore: {
           method: "POST",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/runs/${input.run_id as string}/rescore`,
+          pathBuilder: (input, config) => `${base(input, config)}/runs/${uuidPathSegment(input, "run_id")}/rescore`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           preflight: async (ctx) => {
             await validateRunReference(ctx);
@@ -1644,7 +1847,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/runs/${input.run_id as string}/recommendations`,
+            `${base(input, config)}/runs/${uuidPathSegment(input, "run_id")}/recommendations`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           preflight: validateRunReference,
           bodyBuilder: bodyFromInput,
@@ -1669,7 +1872,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/runs/${input.run_id as string}/items`,
+            `${base(input, config)}/runs/${uuidPathSegment(input, "run_id")}/items`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
           responseExtractor: aiEvalsListExtract,
@@ -1692,10 +1895,10 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/evals/${input.eval_id as string}/runs`,
+            `${base(input, config)}/evals/${uuidPathSegment(input, "eval_id")}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("run_id"),
           description: "List runs for an eval",
         },
       },
@@ -1711,6 +1914,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
       headerBasedScoping: true,
       identifierFields: ["metric_id"],
       diagnosticHint:
+        "Use the id from harness_list for get, update, and delete; metric names are not accepted. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "Use the 'suggestions' execute action to discover appropriate metrics for a given target type and dataset shape. " +
         "Metrics are added to metric sets (eval_metric_set) via eval_metric_set_entry, then referenced by evaluations. " +
         "Each metric response includes a 'config_schema' field (JSON Schema) describing available config options for that metric kind — " +
@@ -1736,7 +1941,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/metrics/${input.metric_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/metrics/${uuidPathSegment(input, "metric_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get metric",
@@ -1754,7 +1959,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/metrics/${input.metric_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/metrics/${uuidPathSegment(input, "metric_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateMetricSchema,
@@ -1764,7 +1969,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/metrics/${input.metric_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/metrics/${uuidPathSegment(input, "metric_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete metric",
@@ -1800,6 +2005,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
       headerBasedScoping: true,
       identifierFields: ["set_id"],
       diagnosticHint:
+        "Use the id from harness_list for get, update, delete, and execute actions; metric-set names are not accepted. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "Before creating a metric set, list available metrics with harness_list(resource_type='eval_metric'). " +
         "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover metrics appropriate for a target type. " +
         "If using LLM metrics (llm-as-judge), set judge_llm_config to a structured provider configuration. " +
@@ -1826,7 +2033,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/metric-sets/${input.set_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get metric set",
@@ -1845,7 +2052,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/metric-sets/${input.set_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           preflight: async (ctx) => validateMetricSetWrite(ctx, ctx.input, true),
           bodyBuilder: (input) => input.body ?? {},
@@ -1856,7 +2063,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/metric-sets/${input.set_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete metric set",
@@ -1867,7 +2074,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/metric-sets/${input.set_id as string}/calibrate`,
+            `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}/calibrate`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: calibrateSchema,
@@ -1878,7 +2085,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "PUT",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/metric-sets/${input.set_id as string}/metrics`,
+            `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}/metrics`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           preflight: validateMetricSetReplacement,
           bodyBuilder: (input) => {
@@ -1918,7 +2125,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/metric-sets/${input.set_id as string}/metrics`,
+            `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}/metrics`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: aiEvalsArrayExtract,
           description: "List entries in a metric set",
@@ -1927,7 +2134,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/metric-sets/${input.set_id as string}/metrics`,
+            `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}/metrics`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           preflight: async (ctx) => validateMetricSetEntryWrite(ctx, false),
           bodyBuilder: (input) => input.body ?? {},
@@ -1939,7 +2146,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "PATCH",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/metric-sets/${input.set_id as string}/metrics/${input.metric_id as string}`,
+            `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}/metrics/${uuidPathSegment(input, "metric_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           preflight: async (ctx) => validateMetricSetEntryWrite(ctx, true),
           bodyBuilder: (input) => input.body ?? {},
@@ -1951,7 +2158,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "DELETE",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/metric-sets/${input.set_id as string}/metrics/${input.metric_id as string}`,
+            `${base(input, config)}/metric-sets/${uuidPathSegment(input, "set_id")}/metrics/${uuidPathSegment(input, "metric_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Remove metric from set",
@@ -1969,6 +2176,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
       headerBasedScoping: true,
       identifierFields: ["suite_id"],
       diagnosticHint:
+        "Use the id from harness_list for get, update, delete, and execute actions; suite names are not accepted. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "A suite groups evaluations together. First create evaluations (each with dataset + target + metric set), " +
         "then create the suite and add evaluations via eval_suite_evaluation or the replace_evaluations execute action. " +
         "List existing evaluations with harness_list(resource_type='evaluation').",
@@ -1984,13 +2193,13 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/suites`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("suite_id"),
           description: "List suites",
         },
         get: {
           method: "GET",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/suites/${input.suite_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get suite",
@@ -2008,7 +2217,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/suites/${input.suite_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateSuiteSchema,
@@ -2018,7 +2227,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/suites/${input.suite_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete suite",
@@ -2029,7 +2238,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/suites/${input.suite_id as string}/run`,
+            `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}/run`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           preflight: validateSuiteReference,
           bodyBuilder: bodyFromInput,
@@ -2041,7 +2250,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "PUT",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/suites/${input.suite_id as string}/evaluations`,
+            `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}/evaluations`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: replaceSuiteEntriesSchema,
@@ -2063,7 +2272,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/suites/${input.suite_id as string}/export-yaml`,
+            `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}/export-yaml`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           actionDescription: "Export a suite and its member evaluations as a denormalized YAML document.",
@@ -2090,7 +2299,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/suites/${input.suite_id as string}/evaluations`,
+            `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}/evaluations`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: aiEvalsArrayExtract,
           description: "List suite members",
@@ -2099,7 +2308,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/suites/${input.suite_id as string}/evaluations`,
+            `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}/evaluations`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: addSuiteEntrySchema,
@@ -2110,7 +2319,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "DELETE",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/suites/${input.suite_id as string}/evaluations/${input.evaluation_id as string}`,
+            `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}/evaluations/${uuidPathSegment(input, "evaluation_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Remove evaluation from suite",
@@ -2126,6 +2335,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["suite_run_id"],
+      diagnosticHint: UUID_404_HINT,
       relatedResources: [
         { resourceType: "eval_suite", relationship: "belongs_to", description: "Suite run belongs to a suite" },
         { resourceType: "eval_run", relationship: "contains", description: "Suite run spawns child eval runs (filter via suite_run_id on eval_run)" },
@@ -2136,17 +2346,17 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/suites/${input.suite_id as string}/runs`,
+            `${base(input, config)}/suites/${uuidPathSegment(input, "suite_id")}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsListExtractWithId("suite_run_id"),
           description: "List suite runs for a suite",
         },
         get: {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/suite-runs/${input.suite_run_id as string}`,
+            `${base(input, config)}/suite-runs/${uuidPathSegment(input, "suite_run_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get suite run status",
@@ -2164,6 +2374,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
       headerBasedScoping: true,
       identifierFields: ["target_id"],
       diagnosticHint:
+        "Use the id from harness_list for get, update, delete, and execute actions; target names are not accepted. " +
+        "Verify org_id and project_id. An HTML 404 means the requested AI Evals API route is unavailable at this Harness base URL. " +
         "When creating a prompt target, use an LLM connector reference (config.llm_connector_ref) " +
         "to specify the model credentials. List connectors via harness_list(resource_type='connector', filters={type:'OpenAI'}) (also type:'Anthropic').",
       relatedResources: [
@@ -2186,7 +2398,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/targets/${input.target_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/targets/${uuidPathSegment(input, "target_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get target",
@@ -2205,7 +2417,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/targets/${input.target_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/targets/${uuidPathSegment(input, "target_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           preflight: async (ctx) => validateTargetWrite(ctx, true),
           bodyBuilder: (input) => input.body ?? {},
@@ -2216,7 +2428,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/targets/${input.target_id as string}`,
+          pathBuilder: (input, config) => `${base(input, config)}/targets/${uuidPathSegment(input, "target_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete target",
@@ -2227,7 +2439,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/targets/${input.target_id as string}/test`,
+            `${base(input, config)}/targets/${uuidPathSegment(input, "target_id")}/test`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           preflight: validateTargetTest,
           bodyBuilder: bodyFromInput,
@@ -2239,7 +2451,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/targets/${input.target_id as string}/outputs`,
+            `${base(input, config)}/targets/${uuidPathSegment(input, "target_id")}/outputs`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           preflight: validateOutputUpload,
           bodyBuilder: bodyFromInput,
@@ -2251,7 +2463,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/targets/${input.target_id as string}/outputs`,
+            `${base(input, config)}/targets/${uuidPathSegment(input, "target_id")}/outputs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: listQ,
           responseExtractor: aiEvalsListExtract,
@@ -2262,7 +2474,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/targets/${input.target_id as string}/export-yaml`,
+            `${base(input, config)}/targets/${uuidPathSegment(input, "target_id")}/export-yaml`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           actionDescription: "Export target config as a standalone YAML document.",
@@ -2272,7 +2484,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/targets/${input.target_id as string}/overview`,
+            `${base(input, config)}/targets/${uuidPathSegment(input, "target_id")}/overview`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           actionDescription: "Summary metrics and per-eval health trend (total_evals, total_runs, last_run_at, overall_pass_rate, per-eval pass rates).",
@@ -2290,6 +2502,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["annotation_id"],
+      diagnosticHint: UUID_404_HINT,
       listFilterFields: [
         { name: "trace_id", description: "Filter by trace id" },
         { name: "label", description: "Filter by label" },
@@ -2307,16 +2520,16 @@ export const aiEvalsToolset: ToolsetDefinition = {
             label: "label",
             annotator_type: "annotator_type",
           },
-          responseExtractor: aiEvalsListExtract,
+          responseExtractor: aiEvalsTraceListExtract,
           description: "List annotations",
         },
         get: {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/observe/annotations/${input.annotation_id as string}`,
+            `${base(input, config)}/observe/annotations/${uuidPathSegment(input, "annotation_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           description: "Get annotation",
         },
         create: {
@@ -2326,25 +2539,25 @@ export const aiEvalsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createAnnotationSchema,
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           description: "Create annotation",
         },
         update: {
           method: "PATCH",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/observe/annotations/${input.annotation_id as string}`,
+            `${base(input, config)}/observe/annotations/${uuidPathSegment(input, "annotation_id")}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateAnnotationSchema,
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           description: "Update annotation",
         },
         delete: {
           method: "DELETE",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/observe/annotations/${input.annotation_id as string}`,
+            `${base(input, config)}/observe/annotations/${uuidPathSegment(input, "annotation_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete annotation",
@@ -2361,7 +2574,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
             end: "end",
             granularity: "granularity",
           },
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           actionDescription: "Annotation counts over time (optional start/end ISO, granularity auto|hour|day)",
           bodySchema: { description: "No body", fields: [] },
         },
@@ -2390,11 +2603,11 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/traces/${input.trace_id as string}/evaluate`,
+            `${base(input, config)}/traces/${pathSegment(input.trace_id, "trace_id")}/evaluate`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: evaluateTraceSchema,
-          responseExtractor: passthrough,
+          responseExtractor: aiEvalsTraceExtract,
           actionDescription:
             "Evaluate a production trace with metrics. Returns scores, summary (pass_rate), and trace metadata. " +
             "Provide at least one of metric_set_id or inline metrics.",
@@ -2499,65 +2712,185 @@ export const aiEvalsToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "eval_registry_item",
-      displayName: "AI Evals Registry Item",
-      description: "GenAI registry proxy (prompts, agents, tools). Pass type as query param for get/delete when needed.",
+      resourceType: "eval_prompt",
+      displayName: "AI Evals Prompt Registry",
+      description:
+        "Versioned project Prompt Registry prompts used by prompt targets. Use this resource to create, " +
+        "update, version, tag, or resolve prompts. List returns UUID id plus identifier; use id for mutations and targets. " +
+        "Harness-library entries are browse-only with the current API and cannot be fetched or used as prompt targets.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
-      identifierFields: ["item_id"],
-      listFilterFields: [{ name: "type", description: "prompt | agent | mcp_tool | skill" }],
+      identifierFields: ["prompt_id"],
+      diagnosticHint:
+        "Prompt IDs are UUIDs from harness_list(resource_type='eval_prompt'); identifiers are lowercase slugs used only " +
+        "with the get_by_identifier action. Prompt versions accept vN, N, or a named tag such as production. " +
+        "Use the default library='custom' for prompts that can be fetched and used by targets. Harness-library prompts " +
+        "(library='harness' or 'all') are currently browse-only: they can be listed but cannot be fetched or resolved.",
+      relatedResources: [
+        { resourceType: "eval_target", relationship: "used_by", description: "Prompt targets reference prompt_id and optional prompt_version" },
+      ],
+      listFilterFields: [
+        { name: "search", description: "Search prompt name, identifier, or description" },
+        { name: "labels", description: "Comma-separated prompt-level labels (OR matching)" },
+        { name: "category", description: "Prompt category" },
+        { name: "sort", description: "name | created_at | identifier" },
+        { name: "order", description: "asc | desc" },
+        { name: "library", description: "custom (default, usable project prompts) | harness (browse-only) | all (includes browse-only library prompts)" },
+      ],
       operations: {
         list: {
           method: "GET",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/registry`,
+          pathBuilder: (input, config) => `${base(input, config)}/registry/prompts`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, type: "type" },
+          queryParams: {
+            ...listQ,
+            search: "search",
+            labels: "labels",
+            category: "category",
+            sort: "sort",
+            order: "order",
+            library: "library",
+          },
           responseExtractor: aiEvalsListExtract,
-          description: "List registry items",
+          description: "List versioned prompts",
         },
         get: {
           method: "GET",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/registry/${input.item_id as string}`,
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { type: "type" },
-          responseExtractor: passthrough,
-          description: "Get registry item (optional type query)",
+          responseExtractor: aiEvalsRedactedExtract,
+          description: "Get a prompt's latest version by UUID",
         },
         create: {
           method: "POST",
           path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/registry`,
+          pathBuilder: (input, config) => `${base(input, config)}/registry/prompts`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => validatePromptWrite(ctx, true),
           bodyBuilder: (input) => input.body ?? {},
-          bodySchema: createRegistryItemSchema,
-          responseExtractor: passthrough,
-          description: "Create registry item",
+          bodySchema: createPromptSchema,
+          responseExtractor: aiEvalsRedactedExtract,
+          description: "Create a versioned prompt",
         },
         update: {
           method: "PATCH",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/registry/${input.item_id as string}`,
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => validatePromptWrite(ctx, false),
           bodyBuilder: (input) => input.body ?? {},
-          bodySchema: updateRegistryItemSchema,
-          responseExtractor: passthrough,
-          description: "Update registry item",
+          bodySchema: updatePromptSchema,
+          responseExtractor: aiEvalsRedactedExtract,
+          description: "Update a prompt; config changes create a new version",
         },
         delete: {
           method: "DELETE",
           path: "",
           pathBuilder: (input, config) =>
-            `${base(input, config)}/registry/${input.item_id as string}`,
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          queryParams: { type: "type" },
           responseExtractor: passthrough,
-          description: "Delete registry item",
+          description: "Soft-delete a custom prompt and its version metadata",
+        },
+      },
+      executeActions: {
+        get_by_identifier: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/by-identifier/${pathSegment(input.identifier, "identifier")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { version: "version" },
+          responseExtractor: aiEvalsRedactedExtract,
+          actionDescription:
+            "Resolve a prompt from params.identifier (slug), optionally at params.version (vN, N, or a tag such as production).",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        list_versions: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}/versions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page_size: "page_size" },
+          responseExtractor: aiEvalsListExtract,
+          actionDescription: "List prompt version history. Pass optional params.page_size (1-100).",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        get_version: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/versions/${promptVersionSegment(input.version, "version")}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: aiEvalsRedactedExtract,
+          actionDescription: "Get params.version, which may be vN, N, or a named tag such as production.",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        replace_version_labels: {
+          method: "PATCH",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/versions/${promptVersionSegment(input.version, "version")}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          bodyBuilder: bodyFromInput,
+          bodySchema: replacePromptVersionLabelsSchema,
+          responseExtractor: passthrough,
+          actionDescription: "Replace every label on params.version.",
+        },
+        restore_version: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/versions/${promptVersionSegment(input.version, "version")}/restore`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: bodyFromInput,
+          bodySchema: { description: "No body", fields: [] },
+          responseExtractor: passthrough,
+          actionDescription: "Restore params.version into a new latest prompt version.",
+        },
+        list_tags: {
+          method: "GET",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}/tags`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: aiEvalsDataArrayExtract,
+          actionDescription: "List named tag pointers for a prompt.",
+          bodySchema: { description: "No body", fields: [] },
+        },
+        set_tag: {
+          method: "PUT",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/tags/${pathSegment(input.tag_name, "tag_name")}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          bodyBuilder: bodyFromInput,
+          bodySchema: setPromptTagSchema,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Create or move params.tag_name to body.version. Tag names must be descriptive, not numeric or vN.",
+        },
+        delete_tag: {
+          method: "DELETE",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/registry/prompts/${uuidPathSegment(input, "prompt_id")}` +
+            `/tags/${pathSegment(input.tag_name, "tag_name")}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          actionDescription: "Delete params.tag_name; the prompt version remains available.",
+          bodySchema: { description: "No body", fields: [] },
         },
       },
     },

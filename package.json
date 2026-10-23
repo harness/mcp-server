@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "3.2.33",
+  "version": "3.2.34",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -63,6 +63,7 @@
     "express": "^5.2.1",
     "hono": "^4.13.5",
     "jsonwebtoken": "^9.0.3",
+    "redis": "^6.3.0",
     "yaml": "^2.8.3",
     "zod": "^4.0.0"
   },

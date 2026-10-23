@@ -11,9 +11,16 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
 import { aiEvalsToolset } from "../../src/registry/toolsets/ai-evals.js";
-import { aiEvalsListExtract, aiEvalsArrayExtract } from "../../src/registry/extractors.js";
+import { aiEvalsDataArrayExtract, aiEvalsListExtract, aiEvalsArrayExtract } from "../../src/registry/extractors.js";
 import type { ResourceDefinition } from "../../src/registry/types.js";
+import { compactItems } from "../../src/utils/compact.js";
 
+const DATASET_ID = "11111111-1111-4111-8111-111111111111";
+const EVAL_ID = "22222222-2222-4222-8222-222222222222";
+const METRIC_ID = "33333333-3333-4333-8333-333333333333";
+const ANNOTATION_ID = "44444444-4444-4444-8444-444444444444";
+const RUN_ID = "55555555-5555-4555-8555-555555555555";
+const SUITE_RUN_ID = "66666666-6666-4666-8666-666666666666";
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     HARNESS_MCP_MODE: "single-user",
@@ -85,10 +92,15 @@ describe("AI Evals pagination mapping", () => {
 // ─── Path-scoped writes ─────────────────────────────────────────────────────
 
 describe("AI Evals path-scoped write bodies", () => {
-  it("uses resource-level header scoping instead of redundant endpoint-level body injection flags", () => {
+  it("keeps project-owned AI Evals resources project-scoped and avoids redundant body scope injection flags", () => {
     const redundant: string[] = [];
 
+    // This toolset owns project resources: configuration, scores, failures, and
+    // the ad-hoc trace-evaluation write. Prompt Registry stays project-scoped.
+    // Account-only trace viewing/querying must be a separate resource/toolset.
     for (const resource of aiEvalsToolset.resources) {
+      expect(resource.scope).toBe("project");
+      expect(resource.scopeOptional).toBe(true);
       expect(resource.headerBasedScoping).toBe(true);
       for (const [operation, spec] of Object.entries(resource.operations)) {
         if (spec?.skipScopeBodyInjection) {
@@ -103,6 +115,34 @@ describe("AI Evals path-scoped write bodies", () => {
     }
 
     expect(redundant).toEqual([]);
+  });
+
+  it.each([
+    { HARNESS_ORG: undefined },
+    { HARNESS_PROJECT: undefined },
+  ])("fails before requesting a project resource when either scope component is unavailable", async overrides => {
+    const registry = new Registry(makeConfig(overrides));
+    const request = vi.fn();
+
+    await expect(registry.dispatch(makeClient(request), "eval_prompt", "list", {})).rejects.toThrow(
+      "AI Evals requires org and project",
+    );
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("uses only the explicit project scope in Prompt Registry routes", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({ data: [], total_elements: 0 });
+
+    await registry.dispatch(makeClient(request), "eval_prompt", "list", {
+      org_id: "isolated-org",
+      project_id: "isolated-project",
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/isolated-org/projects/isolated-project/registry/prompts",
+      headerBasedScoping: true,
+    }));
   });
 
   it("dataset create does not inject NG scope fields into the API body", async () => {
@@ -224,6 +264,44 @@ describe("AI Evals online_eval resource", () => {
     expect(metadataText).not.toContain("metric_ids");
   });
 
+  it("redacts credentials and bounds large trace values", () => {
+    const extract = findResource("online_eval").executeActions!.evaluate.responseExtractor!;
+    const result = extract({
+      trace_metadata: {
+        authorization: "Bearer credential",
+        trajectory: "x".repeat(4_001),
+        spans: Array.from({ length: 101 }, (_, index) => ({ index })),
+        deep: {
+          nested: {
+            nested: {
+              nested: {
+                nested: {
+                  nested: {
+                    nested: { payload: "y".repeat(4_001) },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }) as {
+      trace_metadata: {
+        authorization: string;
+        trajectory: string;
+        spans: Array<{ index: number } | { mcp_truncated: boolean; mcp_original_count: number }>;
+        deep: { nested: { nested: { nested: { nested: { nested: { nested: { payload: string } } } } } } };
+      };
+    };
+
+    expect(result.trace_metadata.authorization).toBe("[REDACTED]");
+    expect(result.trace_metadata.trajectory).toHaveLength(4_000);
+    expect(result.trace_metadata.trajectory.endsWith("… [TRUNCATED]")).toBe(true);
+    expect(result.trace_metadata.spans.at(-1)).toEqual({ mcp_truncated: true, mcp_original_count: 101 });
+    expect(result.trace_metadata.deep.nested.nested.nested.nested.nested.nested.payload
+      .endsWith("… [TRUNCATED]")).toBe(true);
+  });
+
   it("evaluate dispatch sends metric_set_id and judge_llm_connector_ref in the API body", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({ id: "annotation-1" });
@@ -285,6 +363,9 @@ describe("AI Evals diagnosticHint on key entities", () => {
     "eval_metric",
     "eval_metric_set",
     "eval_suite",
+    "eval_run",
+    "eval_suite_run",
+    "eval_annotation",
     "online_eval",
   ];
 
@@ -295,6 +376,186 @@ describe("AI Evals diagnosticHint on key entities", () => {
       expect(res.diagnosticHint!.length).toBeGreaterThan(20);
     });
   }
+
+  it("explains UUID recovery and undeployed routes", () => {
+    for (const type of [
+      "eval_dataset",
+      "evaluation",
+      "eval_target",
+      "eval_metric",
+      "eval_metric_set",
+      "eval_suite",
+      "eval_run",
+      "eval_suite_run",
+      "eval_annotation",
+    ]) {
+      const hint = findResource(type).diagnosticHint!;
+      expect(hint).toContain("harness_list");
+      expect(hint).toContain("HTML 404");
+      expect(hint).not.toContain("nginx");
+    }
+  });
+
+  it.each([
+    ["eval_dataset", [
+      "Dataset items require 'input' as a JSON object",
+      "'expected_output' for correctness metrics",
+      "'context' (string array) for RAG/groundedness metrics",
+      "'expected_tools' for agent tool-use metrics",
+      "Items can be added inline on create or managed separately via eval_dataset_item.",
+    ]],
+    ["evaluation", [
+      "An eval requires three components: dataset_id, target_id, and metric_set_id.",
+      "Before creating an eval, list existing resources with harness_list for eval_dataset, eval_target, and eval_metric_set.",
+      "Managed evaluations cannot be created until all three are set.",
+      "When storage_type='git', omit dataset_id/target_id/metric_set_id",
+    ]],
+    ["eval_metric", [
+      "Use the 'suggestions' execute action to discover appropriate metrics for a given target type and dataset shape.",
+      "Metrics are added to metric sets (eval_metric_set) via eval_metric_set_entry",
+      "Each metric response includes a 'config_schema' field",
+    ]],
+    ["eval_metric_set", [
+      "Before creating a metric set, list available metrics with harness_list(resource_type='eval_metric').",
+      "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover metrics appropriate for a target type.",
+      "If using LLM metrics (llm-as-judge), set judge_llm_config to a structured provider configuration.",
+      "judge_llm_connector_ref remains accepted but is DEPRECATED.",
+    ]],
+    ["eval_suite", [
+      "A suite groups evaluations together. First create evaluations (each with dataset + target + metric set),",
+      "then create the suite and add evaluations via eval_suite_evaluation or the replace_evaluations execute action.",
+      "List existing evaluations with harness_list(resource_type='evaluation').",
+    ]],
+    ["eval_target", [
+      "When creating a prompt target, use an LLM connector reference (config.llm_connector_ref)",
+      "List connectors via harness_list(resource_type='connector', filters={type:'OpenAI'}) (also type:'Anthropic').",
+    ]],
+  ])("preserves all existing %s workflow guidance", (resourceType, guidance) => {
+    const hint = findResource(resourceType).diagnosticHint!;
+    for (const fragment of guidance) {
+      expect(hint).toContain(fragment);
+    }
+  });
+});
+
+// ─── UUID path identifiers ──────────────────────────────────────────────────
+
+describe("AI Evals UUID path identifiers", () => {
+  it("gets a dataset by its identifier through the backend's dedicated endpoint", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatch(makeClient(request), "eval_dataset", "get", {
+      dataset_id: "golden-dataset",
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/dataset/by-identifier/golden-dataset",
+    }));
+  });
+
+  it("encodes a dataset identifier before using its dedicated endpoint", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatch(makeClient(request), "eval_dataset", "get", {
+      dataset_id: "golden/dataset ?version=1",
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/dataset/by-identifier/golden%2Fdataset%20%3Fversion%3D1",
+    }));
+  });
+
+  it.each([
+    ["evaluation", "eval_id"],
+    ["eval_dataset_item", "dataset_id"],
+    ["eval_run", "run_id"],
+    ["eval_metric", "metric_id"],
+    ["eval_metric_set", "set_id"],
+    ["eval_suite", "suite_id"],
+    ["eval_suite_run", "suite_run_id"],
+    ["eval_target", "target_id"],
+    ["eval_annotation", "annotation_id"],
+  ])("rejects a non-UUID %s path identifier before a request", async (resourceType, field) => {
+    const request = vi.fn();
+    const registry = new Registry(makeConfig());
+
+    await expect(registry.dispatch(makeClient(request), resourceType, "get", {
+      [field]: "display-name",
+      ...(resourceType === "eval_dataset_item" ? { item_id: METRIC_ID } : {}),
+    })).rejects.toThrow(
+      `${field} must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.`,
+    );
+
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["eval_dataset", "update", { dataset_id: "display-name" }, "dataset_id"],
+    ["eval_dataset", "delete", { dataset_id: "display-name" }, "dataset_id"],
+    ["eval_dataset_item", "list", { dataset_id: "display-name" }, "dataset_id"],
+    ["eval_dataset_item", "get", { dataset_id: DATASET_ID, item_id: "display-name" }, "item_id"],
+    ["eval_dataset_item", "create", { dataset_id: "display-name" }, "dataset_id"],
+    ["eval_dataset_item", "update", { dataset_id: "display-name", item_id: METRIC_ID }, "dataset_id"],
+    ["eval_dataset_item", "delete", { dataset_id: DATASET_ID, item_id: "display-name" }, "item_id"],
+    ["evaluation", "update", { eval_id: "display-name" }, "eval_id"],
+    ["evaluation", "delete", { eval_id: "display-name" }, "eval_id"],
+    ["eval_metric", "update", { metric_id: "display-name" }, "metric_id"],
+    ["eval_metric", "delete", { metric_id: "display-name" }, "metric_id"],
+    ["eval_metric_set", "update", { set_id: "display-name" }, "set_id"],
+    ["eval_metric_set", "delete", { set_id: "display-name" }, "set_id"],
+    ["eval_metric_set_entry", "list", { set_id: "display-name" }, "set_id"],
+    ["eval_metric_set_entry", "create", { set_id: "display-name" }, "set_id"],
+    ["eval_metric_set_entry", "update", { set_id: "display-name", metric_id: METRIC_ID }, "set_id"],
+    ["eval_metric_set_entry", "delete", { set_id: METRIC_ID, metric_id: "display-name" }, "metric_id"],
+    ["eval_suite", "update", { suite_id: "display-name" }, "suite_id"],
+    ["eval_suite", "delete", { suite_id: "display-name" }, "suite_id"],
+    ["eval_suite_evaluation", "list", { suite_id: "display-name" }, "suite_id"],
+    ["eval_suite_evaluation", "create", { suite_id: "display-name" }, "suite_id"],
+    ["eval_suite_evaluation", "delete", { suite_id: DATASET_ID, evaluation_id: "display-name" }, "evaluation_id"],
+    ["eval_target", "update", { target_id: "display-name" }, "target_id"],
+    ["eval_target", "delete", { target_id: "display-name" }, "target_id"],
+    ["eval_annotation", "update", { annotation_id: "display-name" }, "annotation_id"],
+    ["eval_annotation", "delete", { annotation_id: "display-name" }, "annotation_id"],
+  ] as const)(
+    "rejects invalid UUIDs while constructing %s.%s",
+    (resourceType, operation, input, field) => {
+      const pathBuilder = findResource(resourceType).operations[operation]!.pathBuilder!;
+
+      expect(() => pathBuilder(input, { HARNESS_ORG: "org", HARNESS_PROJECT: "project" })).toThrow(
+        `${field} must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.`,
+      );
+    },
+  );
+
+  it("uses UUIDs returned by list results for detail paths", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatch(makeClient(request), "evaluation", "get", { eval_id: EVAL_ID });
+    await registry.dispatch(makeClient(request), "eval_metric", "get", { metric_id: METRIC_ID });
+
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/evals/${EVAL_ID}`,
+    }));
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/metrics/${METRIC_ID}`,
+    }));
+  });
+
+  it("encodes opaque trace path segments", async () => {
+    const request = vi.fn().mockResolvedValue({});
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatchExecute(makeClient(request), "online_eval", "evaluate", {
+      trace_id: "trace/a?version=1",
+      body: {},
+    });
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/traces/trace%2Fa%3Fversion%3D1/evaluate",
+    }));
+  });
 });
 
 // ─── eval_model removed ────────────────────────────────────────────────────
@@ -354,6 +615,322 @@ describe("AI Evals eval_target test action", () => {
     const res = findResource("eval_target");
     const action = res.executeActions!.test;
     expect(action.operationPolicy?.retryPolicy).toBe("do_not_retry");
+  });
+
+  it("accepts the deployed agent target shape and a whole-placeholder request template", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({ id: "agent-target" });
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Agent target",
+        type: "agent",
+        config: {
+          endpoint: "https://agent.example.com/v1/chat",
+          method: "post",
+          response_path: "choices.0.message.content",
+          request_template: "{{ input.input }}",
+        },
+      },
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets",
+    }));
+  });
+
+  it.each([
+    ["root input", "Answer: {{input}}"],
+    ["nested input", "Answer: {{ input.text }}"],
+  ])("accepts %s references in an inline prompt target", async (_name, userMessageTemplate) => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ id: "prompt-target" });
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Inline prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: userMessageTemplate,
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "POST",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets",
+      body: expect.objectContaining({
+        config: expect.objectContaining({ user_message_template: userMessageTemplate }),
+      }),
+    }));
+  });
+
+  it("rejects inline prompt templates that do not reference input", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValueOnce({ type: "OpenAI" });
+
+    await expect(registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Invalid inline prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: "Answer from the context.",
+        },
+      },
+    })).rejects.toThrow(/must reference \{\{input\}\} or a dotted input path/);
+
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not expose downstream connector errors in target validation", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockRejectedValue(new Error("private connector endpoint failed"));
+
+    const error = await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          system_message: "Answer only from the provided input.",
+          user_message_template: "{{input}}",
+        },
+      },
+    }).catch(error => error as Error);
+
+    const message = (error as Error).message;
+    expect(message).toContain("not a readable Harness connector");
+    expect(message).not.toContain("private connector endpoint failed");
+  });
+
+  it("does not invent a response_path requirement for legacy app targets", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({ id: "legacy-agent-target" });
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Legacy app target",
+        type: "app",
+        config: { endpoint: "https://agent.example.com/v1/chat" },
+      },
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      body: {
+        name: "Legacy app target",
+        type: "app",
+        config: { endpoint: "https://agent.example.com/v1/chat" },
+      },
+    }));
+  });
+});
+
+// ─── Prompt Registry ─────────────────────────────────────────────────────────
+
+describe("AI Evals Prompt Registry", () => {
+  it("exposes the versioned Prompt Registry without eval_registry_item", () => {
+    const prompt = findResource("eval_prompt");
+
+    expect(prompt.operations).toMatchObject({
+      list: { method: "GET" },
+      get: { method: "GET" },
+      create: { method: "POST", operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" } },
+      update: { method: "PATCH", operationPolicy: { retryPolicy: "do_not_retry" } },
+      delete: { method: "DELETE", operationPolicy: { risk: "destructive" } },
+    });
+    expect(prompt.executeActions).toMatchObject({
+      get_by_identifier: { method: "GET" },
+      list_versions: { method: "GET" },
+      get_version: { method: "GET" },
+      replace_version_labels: { method: "PATCH" },
+      restore_version: { method: "POST" },
+      list_tags: { method: "GET" },
+      set_tag: { method: "PUT" },
+      delete_tag: { method: "DELETE" },
+    });
+    expect(aiEvalsToolset.resources.find(resource => resource.resourceType === "eval_registry_item")).toBeUndefined();
+    expect(prompt.description).toContain("browse-only");
+    expect(prompt.diagnosticHint).toContain("default library='custom'");
+  });
+
+  it("maps Prompt Registry list filters to its real API query keys", () => {
+    const filters = findResource("eval_prompt").operations.list!.queryParams!;
+
+    expect(filters).toMatchObject({
+      page: "page",
+      size: "limit",
+      search: "search",
+      labels: "labels",
+      category: "category",
+      sort: "sort",
+      order: "order",
+      library: "library",
+    });
+  });
+
+  it("reports the tag count from the API's unpaginated data wrapper", () => {
+    expect(aiEvalsDataArrayExtract({
+      data: [{ tag_name: "production", version: 3 }, { tag_name: "staging", version: 2 }],
+    })).toEqual({
+      items: [{ tag_name: "production", version: 3 }, { tag_name: "staging", version: 2 }],
+      total: 2,
+    });
+    expect(findResource("eval_prompt").executeActions!.list_tags.responseExtractor).toBe(aiEvalsDataArrayExtract);
+  });
+
+  it("routes prompt identifier, version, and tag reads without treating the identifier as a UUID", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({});
+    const client = makeClient(request);
+
+    await registry.dispatchExecute(client, "eval_prompt", "get_by_identifier", {
+      identifier: "claude-bugrepro-003",
+      version: "production",
+    });
+    await registry.dispatchExecute(client, "eval_prompt", "get_version", {
+      prompt_id: DATASET_ID,
+      version: 3,
+    });
+    await registry.dispatchExecute(client, "eval_prompt", "set_tag", {
+      prompt_id: DATASET_ID,
+      tag_name: "production",
+      body: { version: 3 },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      method: "GET",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/by-identifier/claude-bugrepro-003",
+      params: expect.objectContaining({ version: "production" }),
+    }));
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "GET",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${DATASET_ID}/versions/3`,
+    }));
+    expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      method: "PUT",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${DATASET_ID}/tags/production`,
+      body: { version: 3 },
+    }));
+  });
+
+  it("rejects invalid prompt config and identifiers before issuing a write", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn();
+    const client = makeClient(request);
+
+    await expect(registry.dispatch(client, "eval_prompt", "create", {
+      body: {
+        name: "Bad prompt",
+        identifier: "Not A Slug",
+        config: { system_message: "Hello" },
+      },
+    })).rejects.toThrow(/lowercase slug/);
+    await expect(registry.dispatch(client, "eval_prompt", "create", {
+      body: {
+        name: "Bad variable",
+        identifier: "bad-variable",
+        config: { system_message: "Hello", variables: [{ name: "input" }] },
+      },
+    })).rejects.toThrow(/reserved "input"/);
+
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("resolves a registry prompt in scope and permits omitting prompt_version for latest", async () => {
+    const registry = new Registry(makeConfig());
+    const targetId = "77777777-7777-4777-8777-777777777777";
+    const promptId = "88888888-8888-4888-8888-888888888888";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ id: promptId, version: "v3" })
+      .mockResolvedValueOnce({ id: targetId });
+    const client = makeClient(request);
+
+    await registry.dispatch(client, "eval_target", "create", {
+      body: {
+        name: "Registry prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          prompt_source: "registry",
+          prompt_id: promptId,
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "GET",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${promptId}`,
+    }));
+    expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      method: "POST",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets",
+    }));
+  });
+
+  it("checks a named registry prompt tag before creating a target", async () => {
+    const registry = new Registry(makeConfig());
+    const promptId = "99999999-9999-4999-8999-999999999999";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ version: "v3" })
+      .mockResolvedValueOnce({});
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Tagged registry prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          prompt_source: "registry",
+          prompt_id: promptId,
+          prompt_version: "production",
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${promptId}/versions/production`,
+      headerBasedScoping: true,
+    }));
+  });
+
+  it("checks a numeric registry prompt version before creating a target", async () => {
+    const registry = new Registry(makeConfig());
+    const promptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ version: 3 })
+      .mockResolvedValueOnce({});
+
+    await registry.dispatch(makeClient(request), "eval_target", "create", {
+      body: {
+        name: "Versioned registry prompt target",
+        type: "prompt",
+        config: {
+          llm_connector_ref: "account.openai",
+          prompt_source: "registry",
+          prompt_id: promptId,
+          prompt_version: 3,
+        },
+      },
+    });
+
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/registry/prompts/${promptId}/versions/3`,
+      headerBasedScoping: true,
+    }));
   });
 });
 
@@ -453,7 +1030,29 @@ describe("managed offline evaluation safety", () => {
     expect(findResource("evaluation").executeActions?.import_yaml.operationPolicy.risk).toBe("medium_write");
   });
 
-  it("checks the existing dataset when an eval is updated to a precomputed target", async () => {
+  it("accepts legacy static targets for output uploads", async () => {
+    const registry = new Registry(makeConfig());
+    const targetId = "55555555-5555-4555-8555-555555555555";
+    const datasetId = "66666666-6666-4666-8666-666666666666";
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ uuid: targetId, type: "static", config: { dataset_id: datasetId } })
+      .mockResolvedValueOnce({ uuid: datasetId })
+      .mockResolvedValueOnce({ data: [{ item_identifier: "real-case" }], total_elements: 1 })
+      .mockResolvedValueOnce({});
+
+    await registry.dispatchExecute(makeClient(request), "eval_target", "upload_outputs", {
+      target_id: targetId,
+      body: { items: [{ item_identifier: "real-case", output: { answer: "42" } }] },
+    });
+
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
+      method: "POST",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/targets/${targetId}/outputs`,
+    }));
+  });
+
+  it("checks the existing dataset when an eval is updated to a legacy static target", async () => {
     const registry = new Registry(makeConfig());
     const request = vi
       .fn()
@@ -467,7 +1066,7 @@ describe("managed offline evaluation safety", () => {
       .mockResolvedValueOnce({ uuid: "22222222-2222-4222-8222-222222222222" })
       .mockResolvedValueOnce({
         uuid: "55555555-5555-4555-8555-555555555555",
-        type: "precomputed",
+        type: "static",
         config: { dataset_id: "66666666-6666-4666-8666-666666666666" },
       })
       .mockResolvedValueOnce({ uuid: "66666666-6666-4666-8666-666666666666" })
@@ -675,13 +1274,13 @@ describe("AI Evals control-plane API drift", () => {
     await registry.dispatch(client, "eval_metric", "update", {
       org_id: "myorg",
       project_id: "myproj",
-      metric_id: "metric-1",
+      metric_id: METRIC_ID,
       body: { dimension: "safety" },
     });
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("PATCH");
-    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/metrics/metric-1");
+    expect(call.path).toBe(`/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/metrics/${METRIC_ID}`);
     expect(call.body).toEqual({ dimension: "safety" });
   });
 
@@ -756,7 +1355,7 @@ describe("AI Evals control-plane API drift", () => {
     await registry.dispatch(client, "eval_annotation", "update", {
       org_id: "myorg",
       project_id: "myproj",
-      annotation_id: "annotation-1",
+      annotation_id: ANNOTATION_ID,
       body: {
         thumbs_up: true,
         comment: "Resolved after review",
@@ -765,7 +1364,7 @@ describe("AI Evals control-plane API drift", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("PATCH");
-    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/observe/annotations/annotation-1");
+    expect(call.path).toBe(`/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/observe/annotations/${ANNOTATION_ID}`);
     expect(call.body).toEqual({
       thumbs_up: true,
       comment: "Resolved after review",
@@ -785,9 +1384,64 @@ describe("AI Evals dataset export removed", () => {
 // ─── Extractors ─────────────────────────────────────────────────────────────
 
 describe("AI Evals extractors", () => {
+  it("returns a run list whose generic id is usable for the next get call", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: [{ run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" }],
+        total_elements: 1,
+      })
+      .mockResolvedValueOnce({ run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" });
+
+    const result = await registry.dispatch(makeClient(mockRequest), "eval_run", "list", {}) as {
+      items: Array<Record<string, unknown>>;
+      total: number;
+    };
+
+    expect(result).toEqual({
+      items: [{ id: RUN_ID, run_id: RUN_ID, eval_id: EVAL_ID, name: "Run" }],
+      total: 1,
+    });
+    await registry.dispatch(makeClient(mockRequest), "eval_run", "get", { run_id: result.items[0]!.id });
+    expect(mockRequest.mock.calls[1][0].path).toMatch(new RegExp(`/runs/${RUN_ID}$`));
+  });
+
   it("aiEvalsListExtract handles standard paginated response", () => {
     const result = aiEvalsListExtract({ data: [{ id: "1" }, { id: "2" }], total_elements: 5 });
     expect(result).toEqual({ items: [{ id: "1" }, { id: "2" }], total: 5 });
+  });
+
+  it("preserves id and uuid fields through compact list results", () => {
+    const extracted = aiEvalsListExtract({
+      data: [{ id: EVAL_ID, name: "Eval" }, { uuid: DATASET_ID, name: "Dataset" }],
+      total_elements: 2,
+    });
+
+    expect(compactItems(extracted.items)).toEqual([
+      { id: EVAL_ID, name: "Eval" },
+      { uuid: DATASET_ID, name: "Dataset" },
+    ]);
+  });
+
+  it.each([
+    ["eval_dataset", { uuid: DATASET_ID, name: "Dataset" }, DATASET_ID],
+    ["eval_dataset_item", { uuid: DATASET_ID, item_identifier: "row-1" }, DATASET_ID],
+    ["eval_run", { run_id: RUN_ID, suite_run_id: SUITE_RUN_ID, eval_id: EVAL_ID }, RUN_ID],
+    ["eval_run_by_eval", { run_id: RUN_ID, eval_id: EVAL_ID }, RUN_ID],
+    ["eval_suite", { suite_id: EVAL_ID, name: "Suite" }, EVAL_ID],
+    ["eval_suite_run", { suite_run_id: SUITE_RUN_ID, suite_id: EVAL_ID }, SUITE_RUN_ID],
+  ])("%s list mirrors its declared primary key into id", (resourceType, row, expectedId) => {
+    const extract = findResource(resourceType).operations.list!.responseExtractor!;
+    const extracted = extract({ data: [row], total_elements: 1 }) as { items: unknown[] };
+
+    expect(extracted.items).toEqual([{ id: expectedId, ...row }]);
+  });
+
+  it("keeps an existing id instead of overwriting it with a foreign key", () => {
+    const extract = findResource("eval_run_item").operations.list!.responseExtractor!;
+    const row = { id: METRIC_ID, run_id: RUN_ID, dataset_item_id: "row-1" };
+
+    expect((extract({ data: [row], total_elements: 1 }) as { items: unknown[] }).items).toEqual([row]);
   });
 
   it("aiEvalsListExtract handles empty response", () => {

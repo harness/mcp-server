@@ -53,6 +53,7 @@ const ALLOWED_HARNESS_HANDLER_FILES = new Set([
 
 /** Toolset helper modules — not required to export a ToolsetDefinition. */
 const TOOLSET_HELPER_FILES = new Set([
+  "src/registry/toolsets/ccm-cost-category.ts",
   "src/registry/toolsets/chaos-descriptions.ts",
   "src/registry/toolsets/related-activities.ts",
   "src/registry/toolsets/scopes.ts",
@@ -103,6 +104,8 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/client/harness-client.ts",
   "src/utils/log-resolver.ts",
   "src/utils/oauth-auth.ts",
+  "src/utils/oauth-proxy.ts",
+  "src/utils/oauth-broker.ts",
   "src/audit/sinks/webhook.ts",
   "src/search/remote-provider.ts",
   "src/client/typesafe-client.ts",
@@ -117,7 +120,7 @@ function zodV4RequiredFiles(): string[] {
 }
 
 /** Global fetch API calls — not method names like `async fetch(` or interface `fetch(...)`. */
-const GLOBAL_FETCH_PATTERN = /\bawait fetch\s*\(|\breturn fetch\s*\(|[^.\w]fetch\s*\(\s*["'`]|^fetch\s*\(|\bthis\.fetchImpl\s*\(/m;
+const GLOBAL_FETCH_PATTERN = /\bawait fetch\s*\(|\breturn fetch\s*\(|[^.\w]fetch\s*\(\s*["'`]|^fetch\s*\(|\.fetchImpl\s*\(/m;
 
 function walkTsFiles(dir: string): string[] {
   const results: string[] = [];
