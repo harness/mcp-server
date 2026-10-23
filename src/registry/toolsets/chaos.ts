@@ -291,7 +291,8 @@ function compactK8sInfra(item: Record<string, unknown>): Record<string, unknown>
     if (item[key] !== undefined) slim[key] = item[key];
   }
   return slim;
-=======
+}
+
 function optionalText(value: unknown): string | undefined {
   if (value == null) return undefined;
   const text = String(value).trim();
