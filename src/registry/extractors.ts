@@ -773,6 +773,62 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
   return r.data?.[field] ?? raw;
 };
 
+/** Same cap the in-product investigator applies when it offers runbooks to the model. */
+const MAX_LISTED_RUNBOOKS = 10;
+
+export function runbookListExtract(raw: unknown): unknown {
+  const { items: all, total } = offsetListExtract(raw);
+  const items = all
+    .slice(0, MAX_LISTED_RUNBOOKS)
+    .map((r) => {
+      const { runbookId, displayName, description } = r as Record<string, unknown>;
+      return { serviceId: runbookId, displayName, description };
+    });
+  return { items, total, truncated: total > items.length };
+}
+
+export function runbookGetExtract(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  const { runbookId, inputs, ...rest } = raw;
+  return {
+    serviceId: runbookId,
+    ...rest,
+    inputs: Array.isArray(inputs)
+      ? inputs.map((i) => {
+        const { defaultValue, ...input } = i as Record<string, unknown>;
+        return defaultValue === undefined || defaultValue === null ? input : { ...input, default: defaultValue };
+      })
+      : inputs,
+  };
+}
+
+export function runbookRunExtract(raw: unknown): unknown {
+  if (!isRecord(raw) || typeof raw.scriptRunId !== "string") {
+    throw new Error("Runbook execution did not return a scriptRunId");
+  }
+  return { scriptRunId: raw.scriptRunId, status: raw.status ?? "PENDING" };
+}
+
+export function runbookExecutionListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  if (!isRecord(raw)) return raw;
+  const items = Array.isArray(raw.results) ? raw.results : [];
+  const hasMore = raw.hasMoreResults === true;
+  return {
+    items,
+    total: items.length,
+    pagination: {
+      cursor: typeof input?.cursor === "string" ? input.cursor : undefined,
+      // Only emit a cursor that has a page behind it, so an agent's `while (next_cursor)` loop terminates.
+      next_cursor: hasMore && typeof raw.nextPageCursor === "string" ? raw.nextPageCursor : undefined,
+      has_more: hasMore,
+    },
+  };
+}
+
+export function runbookExecutionGetExtract(raw: unknown): unknown {
+  return raw;
+}
+
 function pipelineDefinitionGetParams(input: Record<string, unknown>, registry: PreflightContext["registry"]): Record<string, string> {
   const params: Record<string, string> = {};
   const orgId = input.org_id ?? registry.orgId;
