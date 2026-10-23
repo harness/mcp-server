@@ -1,7 +1,7 @@
 /**
  * Tests for the `runbook` and `runbook_execution` resources (runbooks toolset).
  *
- * All GraphQL calls go through a mocked client.request; no real API is hit.
+ * All REST calls go through a mocked client.request; no real API is hit.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Config } from "../../src/config.js";
@@ -57,14 +57,19 @@ function parseResult(result: ToolResult): unknown {
   return JSON.parse(item.text);
 }
 
-const GRAPHQL_PATH = "/gateway/ir/tp/api/v1/mc/graphql/harness/query";
+const RUNBOOKS_PATH = "/gateway/ir/tp/api/v1/mc/runbooks";
+const RUNBOOK_ID = "tp::test-project/scripted_restart:latest";
+const ENCODED_RUNBOOK_ID = encodeURIComponent(RUNBOOK_ID);
 
-function gql(data: unknown) {
-  return { data };
-}
+type RequestOpts = {
+  method: string;
+  path: string;
+  params: Record<string, unknown>;
+  body?: Record<string, unknown>;
+};
 
-function bodyOf(call: unknown[]): { operationName: string; variables: Record<string, any> } {
-  return (call[0] as { body: any }).body;
+function optsOf(call: unknown[]): RequestOpts {
+  return call[0] as RequestOpts;
 }
 
 describe("runbook — harness_list", () => {
@@ -74,24 +79,27 @@ describe("runbook — harness_list", () => {
   beforeEach(async () => {
     server = makeMcpServer();
     const registry = new Registry(makeConfig());
-    mockRequest = vi.fn().mockImplementation(async (opts: { body: { operationName: string } }) => {
-      if (opts.body.operationName === "ActivityLookup") {
-        return gql({ activity: { id: "act-global", publicId: "INC-1", templateGlobalId: "tpl-global" } });
-      }
-      return gql({
-        scriptedActions: {
-          actions: [
-            { serviceId: "a", displayName: "A", description: "d", exposeToAi: true },
-            { serviceId: "b", displayName: "B", description: "d", exposeToAi: false },
-          ],
-        },
-      });
+    mockRequest = vi.fn().mockResolvedValue({
+      entities: [{ runbookId: "a", displayName: "A", description: "d", exposeToAi: true }],
+      totalCount: 1,
     });
     const { registerListTool } = await import("../../src/tools/harness-list.js");
     registerListTool(server, registry, makeClient(mockRequest));
   });
 
-  it("returns only exposeToAi runbooks with a compact shape", async () => {
+  it("GETs the runbooks route with MC scope params and exposedToAi=true", async () => {
+    await server.call("harness_list", { resource_type: "runbook" });
+    const opts = optsOf(mockRequest.mock.calls[0]!);
+    expect(opts.method).toBe("GET");
+    expect(opts.path).toBe(RUNBOOKS_PATH);
+    expect(opts.params.accountId).toBe("test-account");
+    expect(opts.params.orgId).toBe("default");
+    expect(opts.params.projectId).toBe("test-project");
+    expect(opts.params.exposedToAi).toBe("true");
+    expect(opts.params.incidentId).toBeUndefined();
+  });
+
+  it("projects each runbook to serviceId, displayName and description", async () => {
     const result = await server.call("harness_list", { resource_type: "runbook" });
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { items: Array<Record<string, unknown>>; total: number };
@@ -100,10 +108,10 @@ describe("runbook — harness_list", () => {
   });
 
   it("caps the list at 10 runbooks and flags truncation", async () => {
-    const actions = Array.from({ length: 12 }, (_, i) => ({
-      serviceId: `rb-${i}`, displayName: `R${i}`, description: "d", exposeToAi: true,
+    const entities = Array.from({ length: 12 }, (_, i) => ({
+      runbookId: `rb-${i}`, displayName: `R${i}`, description: "d", exposeToAi: true,
     }));
-    mockRequest.mockResolvedValue(gql({ scriptedActions: { actions } }));
+    mockRequest.mockResolvedValue({ entities, totalCount: 12 });
     const result = await server.call("harness_list", { resource_type: "runbook" });
     const data = parseResult(result) as { items: unknown[]; total: number; truncated: boolean };
     expect(data.items).toHaveLength(10);
@@ -111,112 +119,101 @@ describe("runbook — harness_list", () => {
     expect(data.truncated).toBe(true);
   });
 
-  it("posts ListRunbooks to the graphql route with MC scope params and no template filter", async () => {
-    await server.call("harness_list", { resource_type: "runbook" });
-    const call = mockRequest.mock.calls[0]!;
-    const opts = call[0] as { path: string; method: string; params: Record<string, unknown> };
-    expect(opts.path).toBe(GRAPHQL_PATH);
-    expect(opts.method).toBe("POST");
-    expect(opts.params.accountId).toBe("test-account");
-    expect(opts.params.orgId).toBe("default");
-    expect(opts.params.projectId).toBe("test-project");
-    expect(bodyOf(call).operationName).toBe("ListRunbooks");
-    expect(bodyOf(call).variables.activityTemplateGlobalId).toBeNull();
-  });
-
-  it("narrows by the incident's template when incident_id is given", async () => {
+  it("passes incident_id through as the incidentId query param", async () => {
     await server.call("harness_list", { resource_type: "runbook", filters: { incident_id: "INC-1" } });
-    expect(bodyOf(mockRequest.mock.calls[0]!).operationName).toBe("ActivityLookup");
-    const listCall = mockRequest.mock.calls[1]!;
-    expect(bodyOf(listCall).operationName).toBe("ListRunbooks");
-    expect(bodyOf(listCall).variables.activityTemplateGlobalId).toBe("tpl-global");
+    expect(optsOf(mockRequest.mock.calls[0]!).params.incidentId).toBe("INC-1");
   });
 
-  it("surfaces GraphQL errors returned with HTTP 200", async () => {
-    mockRequest.mockResolvedValue({ errors: [{ message: "boom" }] });
+  it("surfaces REST errors", async () => {
+    mockRequest.mockRejectedValue(new Error("boom"));
     const result = await server.call("harness_list", { resource_type: "runbook" });
     expect(result.isError).toBe(true);
+  });
+});
+
+describe("runbook — harness_get", () => {
+  it("GETs the percent-encoded runbook id path and maps inputs", async () => {
+    const server = makeMcpServer();
+    const mockRequest = vi.fn().mockResolvedValue({
+      runbookId: RUNBOOK_ID,
+      displayName: "Restart",
+      exposeToAi: true,
+      inputs: [
+        { name: "host", type: "STRING", required: true },
+        { name: "count", type: "INTEGER", required: false, defaultValue: "3" },
+      ],
+      outputs: [],
+    });
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, new Registry(makeConfig()), makeClient(mockRequest));
+
+    const result = await server.call("harness_get", { resource_type: "runbook", resource_id: RUNBOOK_ID });
+
+    expect(result.isError).toBeUndefined();
+    expect(optsOf(mockRequest.mock.calls[0]!).path).toBe(`${RUNBOOKS_PATH}/${ENCODED_RUNBOOK_ID}`);
+    const data = parseResult(result) as { serviceId: string; inputs: Array<Record<string, unknown>> };
+    expect(data.serviceId).toBe(RUNBOOK_ID);
+    expect(data.inputs[0]).toEqual({ name: "host", type: "STRING", required: true });
+    expect(data.inputs[1]).toEqual({ name: "count", type: "INTEGER", required: false, default: "3" });
   });
 });
 
 describe("runbook — harness_execute run", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let mockRequest: ReturnType<typeof vi.fn>;
-  let executeResponse: unknown;
 
   beforeEach(async () => {
     server = makeMcpServer();
-    const registry = new Registry(makeConfig());
-    executeResponse = gql({ executeScriptedAction: { scriptRunId: "run-1", success: true, errors: [] } });
-    mockRequest = vi.fn().mockImplementation(async (opts: { body: { operationName: string } }) => {
-      switch (opts.body.operationName) {
-        case "GetRunbook":
-          return gql({
-            scriptedAction: {
-              action: {
-                serviceId: "rb",
-                exposeToAi: true,
-                inputs: [
-                  { name: "host", type: "STRING", required: true },
-                  { name: "count", type: "INTEGER", required: false },
-                ],
-              },
-            },
-          });
-        case "ActivityLookup":
-          return gql({ activity: { id: "act-global", publicId: "INC-1", templateGlobalId: "tpl" } });
-        default:
-          return executeResponse;
-      }
-    });
+    mockRequest = vi.fn().mockResolvedValue({ scriptRunId: "run-1", status: "PENDING" });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, makeClient(mockRequest), makeConfig());
+    registerExecuteTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
   });
 
-  const run = (body: Record<string, unknown>) =>
-    server.call("harness_execute", { resource_type: "runbook", action: "run", body });
-
-  it("sends typed parameters, isTest:false, empty keys and the resolved activity", async () => {
-    const result = await run({ service_id: "rb", inputs: { host: "h1", count: 3 }, incident_id: "INC-1" });
-    expect(result.isError).toBeUndefined();
-    expect(parseResult(result)).toMatchObject({ scriptRunId: "run-1" });
-    const exec = bodyOf(mockRequest.mock.calls.at(-1)!);
-    expect(exec.operationName).toBe("ExecuteRunbook");
-    expect(exec.variables).toMatchObject({
-      serviceId: "rb",
-      parameters: [
-        { name: "host", type: "STRING", value: "h1" },
-        { name: "count", type: "INTEGER", value: "3" },
-      ],
-      keys: [],
-      isTest: false,
-      activityGlobalId: "act-global",
+  it("POSTs inputs and incidentId to the executions path built from resource_id", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "runbook",
+      action: "run",
+      resource_id: RUNBOOK_ID,
+      body: { inputs: { host: "h1", count: 3 }, incidentId: "INC-1" },
     });
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ scriptRunId: "run-1", status: "PENDING" });
+    const opts = optsOf(mockRequest.mock.calls[0]!);
+    expect(opts.method).toBe("POST");
+    expect(opts.path).toBe(`${RUNBOOKS_PATH}/${ENCODED_RUNBOOK_ID}/executions`);
+    expect(opts.params.projectId).toBe("test-project");
+    expect(opts.body).toEqual({ inputs: { host: "h1", count: 3 }, incidentId: "INC-1" });
   });
 
-  it("runs standalone without incident_id", async () => {
-    await run({ service_id: "rb", inputs: { host: "h1" } });
-    const exec = bodyOf(mockRequest.mock.calls.at(-1)!);
-    expect(exec.variables.activityGlobalId).toBeNull();
-    expect(exec.variables.isTest).toBe(false);
-    expect(mockRequest.mock.calls.some((c) => bodyOf(c).operationName === "ActivityLookup")).toBe(false);
+  it("takes service_id from the body and omits it, and an absent incident, from the request body", async () => {
+    await server.call("harness_execute", {
+      resource_type: "runbook",
+      action: "run",
+      body: { service_id: RUNBOOK_ID, inputs: { host: "h1" } },
+    });
+    const opts = optsOf(mockRequest.mock.calls[0]!);
+    expect(opts.path).toBe(`${RUNBOOKS_PATH}/${ENCODED_RUNBOOK_ID}/executions`);
+    expect(opts.body).toEqual({ inputs: { host: "h1" } });
   });
 
-  it("rejects undeclared inputs without executing", async () => {
-    const result = await run({ service_id: "rb", inputs: { host: "h1", bogus: "x" } });
-    expect(result.isError).toBe(true);
-    expect(mockRequest.mock.calls.some((c) => bodyOf(c).operationName === "ExecuteRunbook")).toBe(false);
+  it("accepts the legacy incident_id spelling", async () => {
+    await server.call("harness_execute", {
+      resource_type: "runbook",
+      action: "run",
+      resource_id: RUNBOOK_ID,
+      body: { inputs: {}, incident_id: "INC-2" },
+    });
+    expect(optsOf(mockRequest.mock.calls[0]!).body).toEqual({ inputs: {}, incidentId: "INC-2" });
   });
 
-  it("rejects a missing required input without executing", async () => {
-    const result = await run({ service_id: "rb", inputs: {} });
-    expect(result.isError).toBe(true);
-    expect(mockRequest.mock.calls.some((c) => bodyOf(c).operationName === "ExecuteRunbook")).toBe(false);
-  });
-
-  it("maps success:false to an error", async () => {
-    executeResponse = gql({ executeScriptedAction: { scriptRunId: null, success: false, errors: [{ message: "nope" }] } });
-    const result = await run({ service_id: "rb", inputs: { host: "h1" } });
+  it("surfaces a server-side validation error", async () => {
+    mockRequest.mockRejectedValue(new Error("Missing required inputs: host"));
+    const result = await server.call("harness_execute", {
+      resource_type: "runbook",
+      action: "run",
+      resource_id: RUNBOOK_ID,
+      body: { inputs: {} },
+    });
     expect(result.isError).toBe(true);
   });
 
@@ -226,49 +223,67 @@ describe("runbook — harness_execute run", () => {
   });
 });
 
-describe("runbook_execution — harness_get", () => {
+describe("runbook_execution", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let mockRequest: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     server = makeMcpServer();
+    mockRequest = vi.fn();
     const registry = new Registry(makeConfig());
-    mockRequest = vi.fn().mockResolvedValue(
-      gql({
-        runbookExecutions: {
-          executions: [
-            { scriptRunId: "run-2", status: "RUNNING" },
-            { scriptRunId: "run-1", status: "SUCCESS" },
-          ],
-          hasMore: false,
-          paginationToken: null,
-        },
-      }),
-    );
+    const client = makeClient(mockRequest);
     const { registerGetTool } = await import("../../src/tools/harness-get.js");
-    registerGetTool(server, registry, makeClient(mockRequest));
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerGetTool(server, registry, client);
+    registerListTool(server, registry, client);
   });
 
-  it("returns the matching run for service_id + script_run_id", async () => {
+  it("gets one run by service_id + script_run_id with parsed outputs", async () => {
+    mockRequest.mockResolvedValue({
+      scriptRunId: "run-1",
+      status: "SUCCESS",
+      startedAt: 1000,
+      triggeredByAiAgent: true,
+      outputs: { echo: "hi" },
+    });
     const result = await server.call("harness_get", {
       resource_type: "runbook_execution",
       resource_id: "run-1",
-      params: { service_id: "rb" },
+      params: { service_id: RUNBOOK_ID },
     });
     expect(result.isError).toBeUndefined();
-    expect(parseResult(result)).toMatchObject({ scriptRunId: "run-1", status: "SUCCESS" });
-    const call = mockRequest.mock.calls[0]!;
-    expect(bodyOf(call).operationName).toBe("RunbookExecutions");
-    expect(bodyOf(call).variables.scriptedActionId).toBe("rb");
-    expect(bodyOf(call).query).toContain("errorMessage outputsJson");
+    expect(optsOf(mockRequest.mock.calls[0]!).path).toBe(
+      `${RUNBOOKS_PATH}/${ENCODED_RUNBOOK_ID}/executions/run-1`,
+    );
+    expect(parseResult(result)).toMatchObject({ scriptRunId: "run-1", status: "SUCCESS", outputs: { echo: "hi" } });
   });
 
-  it("errors when the run is not among the recent runs", async () => {
-    const result = await server.call("harness_get", {
-      resource_type: "runbook_execution",
-      resource_id: "missing",
-      params: { service_id: "rb" },
+  it("lists runs with cursor pagination and hides the cursor on the last page", async () => {
+    mockRequest.mockResolvedValue({
+      results: [{ scriptRunId: "run-2", status: "RUNNING" }],
+      nextPageCursor: "stale",
+      hasMoreResults: false,
     });
-    expect(result.isError).toBe(true);
+    const result = await server.call("harness_list", {
+      resource_type: "runbook_execution",
+      filters: { service_id: RUNBOOK_ID, cursor: "cur" },
+    });
+    const opts = optsOf(mockRequest.mock.calls[0]!);
+    expect(opts.path).toBe(`${RUNBOOKS_PATH}/${ENCODED_RUNBOOK_ID}/executions`);
+    expect(opts.params.cursor).toBe("cur");
+    const data = parseResult(result) as { items: unknown[]; pagination: Record<string, unknown> };
+    expect(data.items).toHaveLength(1);
+    expect(data.pagination.has_more).toBe(false);
+    expect(data.pagination.next_cursor).toBeUndefined();
+  });
+
+  it("returns next_cursor when more results remain", async () => {
+    mockRequest.mockResolvedValue({ results: [], nextPageCursor: "next", hasMoreResults: true });
+    const result = await server.call("harness_list", {
+      resource_type: "runbook_execution",
+      filters: { service_id: RUNBOOK_ID },
+    });
+    const data = parseResult(result) as { pagination: Record<string, unknown> };
+    expect(data.pagination).toMatchObject({ has_more: true, next_cursor: "next" });
   });
 });
