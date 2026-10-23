@@ -773,80 +773,60 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
   return r.data?.[field] ?? raw;
 };
 
-/**
- * Like {@link gqlExtract} but throws when the response carries a GraphQL `errors` array
- * (returned with HTTP 200) or lacks the field, so failures are not mistaken for empty results.
- */
-export const gqlStrictExtract = (field: string) => (raw: unknown): unknown => {
-  const r = raw as { data?: Record<string, unknown> | null; errors?: Array<{ message?: string }> };
-  if (r.errors?.length) {
-    throw new Error(r.errors.map((e) => e.message ?? "unknown GraphQL error").join("; "));
-  }
-  const value = r.data?.[field];
-  if (value === undefined || value === null) {
-    throw new Error(`GraphQL response is missing "${field}"`);
-  }
-  return value;
-};
-
 /** Same cap the in-product investigator applies when it offers runbooks to the model. */
 const MAX_LISTED_RUNBOOKS = 10;
 
 export function runbookListExtract(raw: unknown): unknown {
-  const field = gqlStrictExtract("scriptedActions")(raw) as {
-    actions: Array<{ serviceId: string; displayName?: string; description?: string; exposeToAi: boolean }>;
-  };
-  const exposed = field.actions.filter((a) => a.exposeToAi);
-  const items = exposed
+  const { items: all, total } = offsetListExtract(raw);
+  const items = all
     .slice(0, MAX_LISTED_RUNBOOKS)
-    .map(({ serviceId, displayName, description }) => ({ serviceId, displayName, description }));
-  return { items, total: exposed.length, truncated: exposed.length > items.length };
+    .map((r) => {
+      const { runbookId, displayName, description } = r as Record<string, unknown>;
+      return { serviceId: runbookId, displayName, description };
+    });
+  return { items, total, truncated: total > items.length };
 }
 
 export function runbookGetExtract(raw: unknown): unknown {
-  const field = gqlStrictExtract("scriptedAction")(raw) as { action: { exposeToAi: boolean } | null };
-  if (!field.action || !field.action.exposeToAi) {
-    throw new Error("Runbook not found or not exposed to AI");
-  }
-  return field.action;
+  if (!isRecord(raw)) return raw;
+  const { runbookId, inputs, ...rest } = raw;
+  return {
+    serviceId: runbookId,
+    ...rest,
+    inputs: Array.isArray(inputs)
+      ? inputs.map((i) => {
+        const { defaultValue, ...input } = i as Record<string, unknown>;
+        return defaultValue === undefined || defaultValue === null ? input : { ...input, default: defaultValue };
+      })
+      : inputs,
+  };
 }
 
 export function runbookRunExtract(raw: unknown): unknown {
-  const result = gqlStrictExtract("executeScriptedAction")(raw) as {
-    scriptRunId?: string;
-    success: boolean;
-    errors?: Array<{ message: string }>;
-  };
-  if (!result.success) {
-    throw new Error(result.errors?.map((e) => e.message).join("; ") || "Runbook execution was rejected");
+  if (!isRecord(raw) || typeof raw.scriptRunId !== "string") {
+    throw new Error("Runbook execution did not return a scriptRunId");
   }
-  return { scriptRunId: result.scriptRunId, status: "PENDING" };
+  return { scriptRunId: raw.scriptRunId, status: raw.status ?? "PENDING" };
 }
 
-export function runbookExecutionListExtract(raw: unknown): unknown {
-  const field = gqlStrictExtract("runbookExecutions")(raw) as {
-    executions: unknown[];
-    paginationToken?: string | null;
-    hasMore: boolean;
-  };
+export function runbookExecutionListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  if (!isRecord(raw)) return raw;
+  const items = Array.isArray(raw.results) ? raw.results : [];
+  const hasMore = raw.hasMoreResults === true;
   return {
-    items: field.executions,
-    total: field.executions.length,
-    pagination: { has_more: field.hasMore, next_cursor: field.paginationToken ?? undefined },
+    items,
+    total: items.length,
+    pagination: {
+      cursor: typeof input?.cursor === "string" ? input.cursor : undefined,
+      // Only emit a cursor that has a page behind it, so an agent's `while (next_cursor)` loop terminates.
+      next_cursor: hasMore && typeof raw.nextPageCursor === "string" ? raw.nextPageCursor : undefined,
+      has_more: hasMore,
+    },
   };
 }
 
-export function runbookExecutionGetExtract(raw: unknown, input?: Record<string, unknown>): unknown {
-  const scriptRunId = String(input?.script_run_id ?? "");
-  const field = gqlStrictExtract("runbookExecutions")(raw) as { executions: Array<{ scriptRunId: string }> };
-  const run = field.executions.find((e) => e.scriptRunId === scriptRunId);
-  if (!run) {
-    throw new Error(
-      `Run "${scriptRunId}" not found among the ${field.executions.length} most recent runs of this runbook. `
-      + "Check script_run_id and service_id.",
-    );
-  }
-  return run;
+export function runbookExecutionGetExtract(raw: unknown): unknown {
+  return raw;
 }
 
 function pipelineDefinitionGetParams(input: Record<string, unknown>, registry: PreflightContext["registry"]): Record<string, string> {
