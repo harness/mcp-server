@@ -106,15 +106,13 @@ def score_case(golden: dict, calls: list[dict]) -> dict:
     )
     describe = [c for c in calls if c["name"] == "harness_describe"]
     expected_operation = golden.get("expected_operation")
-    # A direct correct call needs no catalog. Otherwise the describe call should ask for that operation.
+    # Hit = a describe call asked for the expected operation. A correct call made without any describe is tracked separately (catalog skipped), not counted as a hit.
     if not expected_operation:
         operation_filter_hit = None
-    elif any(c["args"].get("operation") == expected_operation for c in describe):
-        operation_filter_hit = True
-    elif not describe and any(matches(c) for c in calls):
-        operation_filter_hit = True
+        catalog_skipped = None
     else:
-        operation_filter_hit = False
+        operation_filter_hit = any(c["args"].get("operation") == expected_operation for c in describe)
+        catalog_skipped = not describe and any(matches(c) for c in calls)
     return {
         "id": golden["id"],
         "first_call_correct": bool(first and matches(first)),
@@ -132,6 +130,7 @@ def score_case(golden: dict, calls: list[dict]) -> dict:
         "describe_response_bytes": sum(len(c["output"]) for c in describe),
         "expected_operation": expected_operation,
         "operation_filter_hit": operation_filter_hit,
+        "catalog_skipped": catalog_skipped,
         "tool_calls": calls,
     }
 
@@ -219,6 +218,7 @@ async def main() -> None:
         results = await asyncio.gather(*(one(g) for g in goldens))
 
     scored = [s for s, _ in results]
+    op_scored = [s for s in scored if s["expected_operation"]]
     n = len(scored)
     tin = sum(u["input"] for _, u in results)
     tout = sum(u["output"] for _, u in results)
@@ -249,9 +249,10 @@ async def main() -> None:
             else 0
         ),
         "operation_filter_hit_rate": (
-            sum(s["operation_filter_hit"] for s in scored if s["expected_operation"]) / sum(1 for s in scored if s["expected_operation"])
-            if any(s["expected_operation"] for s in scored)
-            else None
+            sum(s["operation_filter_hit"] for s in op_scored) / len(op_scored) if op_scored else None
+        ),
+        "catalog_skipped_rate": (
+            sum(s["catalog_skipped"] for s in op_scored) / len(op_scored) if op_scored else None
         ),
         "tool_result_chars": args.tool_result_chars,
         "elapsed_s": round(time.time() - started, 1),

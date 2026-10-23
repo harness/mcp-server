@@ -1313,7 +1313,7 @@ export class Registry {
     const ranked = filter.searchTerm
       ? new Map(this.searchResources(filter.searchTerm).map((result, index) => [result.type, index]))
       : undefined;
-    const resource_types = [];
+    const matches: Array<{ entry: Record<string, unknown> & { type: string }; rank: number }> = [];
     for (const ts of this.toolsets) {
       if (filter.toolset && ts.name !== filter.toolset) continue;
       for (const resource of ts.resources) {
@@ -1323,20 +1323,22 @@ export class Registry {
           ? actions.length > 0
           : resource.operations[filter.operation] !== undefined;
         if (!supports) continue;
-        resource_types.push({
-          type: resource.resourceType,
-          name: resource.displayName,
-          toolset: ts.name,
-          ...(resource.searchAliases?.length ? { aliases: resource.searchAliases } : {}),
-          ...(filter.operation === "execute" ? { actions } : {}),
-          _rank: ranked?.get(resource.resourceType),
+        matches.push({
+          entry: {
+            type: resource.resourceType,
+            name: resource.displayName,
+            toolset: ts.name,
+            ...(resource.searchAliases?.length ? { aliases: resource.searchAliases } : {}),
+            ...(filter.operation === "execute" ? { actions } : {}),
+          },
+          rank: ranked?.get(resource.resourceType) ?? 0,
         });
       }
     }
     if (ranked) {
-      resource_types.sort((a, b) => (a._rank ?? 0) - (b._rank ?? 0) || a.type.localeCompare(b.type));
+      matches.sort((a, b) => a.rank - b.rank || a.entry.type.localeCompare(b.entry.type));
     }
-    for (const entry of resource_types) delete entry._rank;
+    const resource_types = matches.map((m) => m.entry);
 
     const emptySearch = Boolean(filter.searchTerm) && resource_types.length === 0;
     return {
