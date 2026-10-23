@@ -5,7 +5,12 @@ function hasConfiguredDefault(value: string | undefined): value is string {
 }
 
 /** Field copy for org_id. Mentions a default only when one is actually configured. */
-export function orgIdDescription(defaultOrg?: string): string {
+export function orgIdDescription(defaultOrg?: string, compact = false): string {
+  if (compact) {
+    return hasConfiguredDefault(defaultOrg)
+      ? `Org identifier. Optional; overrides configured default '${defaultOrg.trim()}'.`
+      : "Org identifier. Required unless a Harness URL is passed (no configured default).";
+  }
   if (hasConfiguredDefault(defaultOrg)) {
     return (
       `Organization identifier. Optional; overrides configured default '${defaultOrg.trim()}'. ` +
@@ -19,7 +24,12 @@ export function orgIdDescription(defaultOrg?: string): string {
 }
 
 /** Field copy for project_id. Mentions a default only when one is actually configured. */
-export function projectIdDescription(defaultProject?: string): string {
+export function projectIdDescription(defaultProject?: string, compact = false): string {
+  if (compact) {
+    return hasConfiguredDefault(defaultProject)
+      ? `Project identifier. Optional; overrides configured default '${defaultProject.trim()}'.`
+      : "Project identifier. Required for project-scoped resources unless a Harness URL is passed (no configured default).";
+  }
   if (hasConfiguredDefault(defaultProject)) {
     return (
       `Project identifier. Optional; overrides configured default '${defaultProject.trim()}'. ` +
@@ -32,12 +42,12 @@ export function projectIdDescription(defaultProject?: string): string {
   );
 }
 
-export function orgIdField(defaultOrg?: string) {
-  return z.string().optional().describe(orgIdDescription(defaultOrg));
+export function orgIdField(defaultOrg?: string, compact = false) {
+  return z.string().optional().describe(orgIdDescription(defaultOrg, compact));
 }
 
-export function projectIdField(defaultProject?: string) {
-  return z.string().optional().describe(projectIdDescription(defaultProject));
+export function projectIdField(defaultProject?: string, compact = false) {
+  return z.string().optional().describe(projectIdDescription(defaultProject, compact));
 }
 
 /** Shared copy for resource_scope. Do not tell the model that `account` skips known org/project. */
@@ -45,13 +55,21 @@ export const RESOURCE_SCOPE_DESCRIPTION =
   "Scope for the operation. account: account-level resources only — do not use account to skip a known org/project. " +
   "org: org-level (org_id). project: org+project. Omit to use the resource's default scope. Auto-detected from url when present.";
 
+/** Compact resource_scope copy; the full scope rules live in the server instructions. */
+export const RESOURCE_SCOPE_DESCRIPTION_COMPACT =
+  "account|org|project. Omit for the resource's default scope. Never use account to skip a known org/project. Auto-detected from url.";
+
 /**
  * Shared scope selector for create/update/delete/list/get/search tools.
  */
-export const resourceScopeSchema = z
-  .enum(["account", "org", "project"])
-  .optional()
-  .describe(RESOURCE_SCOPE_DESCRIPTION);
+export function resourceScopeField(compact = false) {
+  return z
+    .enum(["account", "org", "project"])
+    .optional()
+    .describe(compact ? RESOURCE_SCOPE_DESCRIPTION_COMPACT : RESOURCE_SCOPE_DESCRIPTION);
+}
+
+export const resourceScopeSchema = resourceScopeField();
 
 /** harness_describe scopeHint for multi-scope resources. */
 export function describeScopeHint(opts: {
@@ -73,10 +91,16 @@ export function describeScopeHint(opts: {
   );
 }
 
-export function resourceTypeSchema(resourceTypes: string[]) {
+/**
+ * resource_type input. `full` inlines every supported type as an enum; `compact` emits a plain string
+ * (validated at dispatch) so the type catalog is not repeated across every tool schema.
+ */
+export function resourceTypeSchema(resourceTypes: string[], compact = false) {
   if (resourceTypes.length === 0) {
     return z.string().refine(() => false, { error: "No enabled resource types support this operation" });
   }
 
+  if (compact) return z.string().min(1);
   return z.enum(resourceTypes as [string, ...string[]]);
 }
+

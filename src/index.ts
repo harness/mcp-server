@@ -87,7 +87,7 @@ function createHarnessServer(
         "",
         "URL SHORTCUT: All harness_ tools accept a `url` parameter. Paste any Harness UI URL and identifiers (org, project, resource type, ID) are auto-extracted. This works for nested resources too — a PR URL auto-extracts repo_id and pr_number.",
         "",
-        "SCOPE: Project-scoped tools need org_id and project_id (or a Harness project URL) on the first call. Do not omit them expecting a default unless the field description names a configured default. Do not switch to resource_scope='account' just because a project-scoped lookup failed.",
+        "SCOPE: Project-scoped tools need org_id and project_id (or a Harness project URL) on the first call. Do not omit them expecting a default unless the field description names a configured default. resource_scope: account = account-level only, org = org_id, project = org_id+project; omit for the resource's default, and never use 'account' to skip a known org/project. Do not switch to resource_scope='account' just because a project-scoped lookup failed.",
         "",
         "COMMON PATTERNS:",
         "• Get PR details: harness_get(url='<Harness PR URL>')",

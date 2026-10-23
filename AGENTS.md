@@ -84,6 +84,10 @@ When adding **writes** (create/update/delete), also check the agent user flow an
 4. **User flow** — an agent that creates at org/project scope must be able to list/get/update at that same scope. Document visibility scope vs body fields that mean something else (e.g. connector location).
 5. **Regressions** — assert shared scope params across ops; for `scopeOptional`, assert config-only org/project produces no scope query params.
 
+### Tool schema size is budgeted
+
+`tools/list` is paid on every request by eager-loading clients. `HARNESS_SCHEMA_MODE=compact` keeps it small; `tests/tools/schema-profile.test.ts` enforces a byte budget and pins full mode. Put long field copy in `src/tools/field-copy.ts`, never inline the resource-type list, and read `docs/schema-budget.md` before touching schema descriptions.
+
 ### docs:generate requires a fresh build
 
 `pnpm docs:generate` reads from `build/`. Running it against a stale build produces wrong resource counts and fails `docs:check` in CI.

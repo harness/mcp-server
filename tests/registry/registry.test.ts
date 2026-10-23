@@ -217,9 +217,13 @@ describe("Registry", () => {
       expect(def.displayName).toBe("Pipeline");
     });
 
-    it("throws for unknown resource type with available list", () => {
+    it("throws for unknown resource type and points to harness_describe", () => {
       expect(() => registry.getResource("nonexistent")).toThrow(/Unknown resource_type "nonexistent"/);
-      expect(() => registry.getResource("nonexistent")).toThrow(/Available:/);
+      expect(() => registry.getResource("nonexistent")).toThrow(/harness_describe/);
+    });
+
+    it("suggests close matches for a misspelled resource type", () => {
+      expect(() => registry.getResource("pipeline_runs")).toThrow(/Did you mean: .*pipeline/);
     });
   });
 
@@ -2739,4 +2743,21 @@ describe("Registry", () => {
     });
   });
 
+});
+
+describe("Registry resource_type near-miss resolution", () => {
+  const registry = new Registry({ HARNESS_API_KEY: "pat.a.b.c", HARNESS_BASE_URL: "https://app.harness.io" } as never);
+  it.each([
+    ["repo", "repository"],
+    ["Repos", "repository"],
+    ["pipelines", "pipeline"],
+    ["input-set", "input_set"],
+    ["PR", "pull_request"],
+    ["services", "service"],
+  ])("resolves %s to %s", (input, expected) => {
+    expect(registry.getResource(input)).toBe(registry.getResource(expected));
+  });
+  it("still rejects unrelated names", () => {
+    expect(() => registry.getResource("banana")).toThrow(/Unknown resource_type/);
+  });
 });

@@ -208,6 +208,18 @@ export interface RegistryOptions {
 /**
  * The enabled registry — filtered by HARNESS_TOOLSETS config.
  */
+/** Common abbreviations/synonyms models use for resource types. */
+const RESOURCE_TYPE_ALIASES: Record<string, string> = {
+  repo: "repository",
+  git_repo: "repository",
+  pr: "pull_request",
+  exec: "execution",
+  pipeline_execution: "execution",
+  env: "environment",
+  svc: "service",
+  inputset: "input_set",
+};
+
 export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
   private toolsets: ToolsetDefinition[] = [];
@@ -316,15 +328,61 @@ export class Registry {
 
   get orgId(): string | undefined { return this.config.HARNESS_ORG; }
   get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
+  /** True when tool schemas should not inline the resource_type enum. */
+  get compactSchemas(): boolean { return this.config.HARNESS_SCHEMA_MODE === "compact"; }
+  get schemaProfile(): "full" | "compact" { return this.compactSchemas ? "compact" : "full"; }
 
   /** Get a resource definition by type, or throw. */
   getResource(resourceType: string): ResourceDefinition {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     if (!def) {
-      const available = Array.from(this.resourceMap.keys()).sort().join(", ");
-      throw new Error(`Unknown resource_type "${resourceType}". Available: ${available}`);
+      const closest = this.suggestResourceTypes(resourceType);
+      const hint = closest.length > 0 ? ` Did you mean: ${closest.join(", ")}?` : "";
+      throw new Error(
+        `Unknown resource_type "${resourceType}".${hint} Call harness_describe(search_term="...") to find valid resource types.`,
+      );
     }
     return def;
+  }
+
+  private findDefinition(resourceType: string): ResourceDefinition | undefined {
+    return this.resourceMap.get(resourceType) ?? this.resourceMap.get(this.resolveAlias(resourceType) ?? "");
+  }
+
+  /** Canonical name for a resource_type (resolving near-misses); unknown input is returned unchanged. */
+  canonicalResourceType(resourceType: string): string {
+    return this.findDefinition(resourceType)?.resourceType ?? resourceType;
+  }
+
+  /**
+   * Map a near-miss resource_type (case, hyphens, plurals, common abbreviations) to the one
+   * enabled type it unambiguously means, so callers never pay a retry for a trivial guess.
+   */
+  private resolveAlias(input: string): string | undefined {
+    const norm = input.trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const stems = [norm];
+    if (norm.endsWith("ies")) stems.push(`${norm.slice(0, -3)}y`);
+    if (norm.endsWith("es")) stems.push(norm.slice(0, -2));
+    if (norm.endsWith("s")) stems.push(norm.slice(0, -1));
+    const candidates = stems.flatMap((t) => [t, RESOURCE_TYPE_ALIASES[t]]);
+    return candidates.find((c): c is string => !!c && this.resourceMap.has(c));
+  }
+
+  /** Closest enabled resource types to an unknown input (substring / shared-token match). */
+  private suggestResourceTypes(input: string, limit = 5): string[] {
+    const needle = input.toLowerCase();
+    const tokens = needle.split(/[^a-z0-9]+/).filter((t) => t.length > 1);
+    return this.getAllResourceTypes()
+      .map((rt) => {
+        const lower = rt.toLowerCase();
+        let score = lower.includes(needle) || needle.includes(lower) ? 10 : 0;
+        for (const t of tokens) if (lower.includes(t)) score += 1;
+        return { rt, score };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || a.rt.localeCompare(b.rt))
+      .slice(0, limit)
+      .map((x) => x.rt);
   }
 
   /** Get all enabled resource types. */
@@ -372,13 +430,13 @@ export class Registry {
 
   /** Check if a resource type supports an operation. */
   supportsOperation(resourceType: string, operation: OperationName): boolean {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     return def?.operations[operation] !== undefined;
   }
 
   /** Check if a resource type has execute actions. */
   getExecuteActions(resourceType: string): Record<string, EndpointSpec & { actionDescription: string }> | undefined {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     return def?.executeActions;
   }
 
@@ -538,7 +596,7 @@ export class Registry {
     blockReason: string,
   ): void {
     if (!this.auditManager) return;
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     if (!def) return;
     let spec: EndpointSpec | undefined;
     if (operation === "execute") {
