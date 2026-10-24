@@ -7,6 +7,7 @@ import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType, appendAgentTypeQuery } from "../utils/deep-links.js";
+import { applyCodeRepoSlug, codeRepoSlugFromRecord, isNumericRepoRef, lookupCodeRepoSlug, repoRefString } from "../utils/code-repo-link.js";
 import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
 import { assertListScopeResolved } from "./list-filter-utils.js";
@@ -1071,12 +1072,40 @@ export class Registry {
         }
       }
 
+      // Code list endpoints return a raw JSON array. Treat that as the item
+      // list so each row gets its own link. Other resources keep the previous
+      // wrapper-key detection.
+      let listArray: unknown[] | undefined;
+      if (Array.isArray(result) && def.deepLinkTemplate.includes("{repoIdentifier}")) {
+        listArray = result;
+      } else {
+        const r = result as Record<string, unknown>;
+        for (const key of LIST_ARRAY_KEYS) {
+          const arr = r[key];
+          if (Array.isArray(arr)) {
+            listArray = arr;
+            break;
+          }
+        }
+      }
+      const isList = listArray !== undefined;
+
+      // The Code UI rejects numeric repository ids in /repos/{slug}. Prefer the
+      // identifier on the payload; if the caller addressed the API by numeric id
+      // and the payload has no slug, resolve it once.
+      let sharedCodeRepoSlug: string | undefined;
+      const primaryRecord = !isList && isRecord(result) ? result : undefined;
+      if (def.deepLinkTemplate.includes("{repoIdentifier}")) {
+        sharedCodeRepoSlug = primaryRecord ? codeRepoSlugFromRecord(primaryRecord) : undefined;
+        const repoRef = repoRefString(input.repo_id) ?? repoRefString(baseLinkParams.repoIdentifier);
+        if (!sharedCodeRepoSlug && repoRef && isNumericRepoRef(repoRef)) {
+          sharedCodeRepoSlug = await lookupCodeRepoSlug(client, repoRef, params, signal);
+        }
+        applyCodeRepoSlug(baseLinkParams, primaryRecord, sharedCodeRepoSlug);
+      }
+
       // Only attach top-level openInHarness for single-item results (get/create/update),
       // not for list results where there's no single entity to link to.
-      const r = result as Record<string, unknown>;
-      const isList = LIST_ARRAY_KEYS.some(
-        (key) => Array.isArray(r[key])
-      );
       if (!isList) {
         // For single-item results, apply config defaults for {org}/{project} if still unset
         if (!baseLinkParams.org && this.config.HARNESS_ORG) {
@@ -1099,15 +1128,6 @@ export class Registry {
           resultRecord.openInHarness = link;
         } catch {
           // Deep link construction failed — non-critical
-        }
-      }
-      // Handle various list array keys used by different APIs
-      let listArray: unknown[] | undefined;
-      for (const key of LIST_ARRAY_KEYS) {
-        const arr = (result as Record<string, unknown>)[key];
-        if (Array.isArray(arr)) {
-          listArray = arr;
-          break;
         }
       }
       if (listArray) {
@@ -1182,6 +1202,10 @@ export class Registry {
             if (itemOrg && typeof itemOrg === "string") itemLinkParams.org = itemOrg;
             const itemProj = itemRecord.projectIdentifier ?? itemRecord.project ?? itemRecord.identifier;
             if (itemProj && typeof itemProj === "string") itemLinkParams.project = itemProj;
+
+            if (def.deepLinkTemplate.includes("{repoIdentifier}")) {
+              applyCodeRepoSlug(itemLinkParams, itemRecord, sharedCodeRepoSlug);
+            }
 
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
