@@ -114,17 +114,26 @@ class JwtVerifier {
   }
 
   private async key(kid: string): Promise<KeyObject> {
-    const cached = this.keys.get(kid);
-    if (cached && Date.now() < this.expiresAt) return cached;
-    const cacheFresh = Date.now() < this.expiresAt;
-    if (cacheFresh && this.missRefreshedAt > 0) {
-      throw new Error(`No signing key found for kid "${kid}".`);
+    // Refreshing the cache also fills it, so that load must not consume the
+    // one miss refresh. Otherwise a signing key rotated during the TTL is
+    // rejected, and a HarnessID refresh-token rotation is discarded before
+    // the new token can be stored.
+    if (Date.now() >= this.expiresAt) {
+      await this.refresh();
+      this.missRefreshedAt = 0;
     }
-    await this.refresh();
-    this.missRefreshedAt = Date.now();
-    const key = this.keys.get(kid);
-    if (!key) throw new Error(`No signing key found for kid "${kid}".`);
-    return key;
+
+    const cached = this.keys.get(kid);
+    if (cached) return cached;
+
+    if (this.missRefreshedAt === 0) {
+      await this.refresh();
+      this.missRefreshedAt = Date.now();
+      const refreshed = this.keys.get(kid);
+      if (refreshed) return refreshed;
+    }
+
+    throw new Error(`No signing key found for kid "${kid}".`);
   }
 
   private async refresh(): Promise<void> {

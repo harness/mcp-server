@@ -108,7 +108,7 @@ function upstreamToken(subject = "upstream-user"): string {
   );
 }
 
-function harnessToken(subject = "harness-user"): string {
+function harnessToken(subject = "harness-user", expiresIn: jwt.SignOptions["expiresIn"] = "5m"): string {
   return jwt.sign(
     {
       azp: "harness-mcp-proxy",
@@ -123,7 +123,7 @@ function harnessToken(subject = "harness-user"): string {
       keyid: "harness-key",
       issuer: harnessIssuer,
       subject,
-      expiresIn: "5m",
+      expiresIn,
     },
   );
 }
@@ -226,6 +226,172 @@ describe("OAuth proxy mode", () => {
         "HarnessID authentication is required for this identity.",
       );
       expect(JSON.stringify(body)).not.toContain("/oauth/link");
+    });
+  });
+
+  it("refreshes a warm upstream JWKS cache once when a token uses a rotated kid", async () => {
+    directory = await mkdtemp(join(tmpdir(), "oauth-proxy-jwks-"));
+    const rotated = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const rotatedJwk = {
+      ...rotated.publicKey.export({ format: "jwk" }),
+      kid: "rotated-upstream-key",
+      alg: "RS256",
+      use: "sig",
+    };
+    let upstreamFetches = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === `${upstreamIssuer}/v1/keys`) {
+        upstreamFetches += 1;
+        const keys = upstreamFetches === 1 ? [upstreamJwk] : [upstreamJwk, rotatedJwk];
+        return Response.json({ keys });
+      }
+      return new Response("not found", { status: 404 });
+    }) as unknown as typeof fetch;
+    const runtime = createOAuthProxyRuntime(
+      proxyConfig(join(directory, "vault.enc")),
+      fetchImpl,
+    );
+    const app = express();
+    app.use(createOAuthProxyHttpAuthMiddleware(runtime));
+    app.post("/mcp", (_req, res) => res.json({ ok: true }));
+    const rotatedToken = jwt.sign(
+      { aud: "harness-mcp", scope: "openid profile email" },
+      rotated.privateKey,
+      {
+        algorithm: "RS256",
+        keyid: "rotated-upstream-key",
+        issuer: upstreamIssuer,
+        subject: "rotated-user",
+        expiresIn: "5m",
+      },
+    );
+    const unknown = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const unknownToken = jwt.sign(
+      { aud: "harness-mcp", scope: "openid profile email" },
+      unknown.privateKey,
+      {
+        algorithm: "RS256",
+        keyid: "unknown-upstream-key",
+        issuer: upstreamIssuer,
+        subject: "unknown-user",
+        expiresIn: "5m",
+      },
+    );
+
+    await withListeningApp(app, async (baseUrl) => {
+      const warmed = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${upstreamToken()}` },
+      });
+      expect((await warmed.json() as { error: { message: string } }).error.message).toBe(
+        "HarnessID authentication is required for this identity.",
+      );
+
+      const rotatedResponse = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${rotatedToken}` },
+      });
+      expect(rotatedResponse.status).toBe(401);
+      expect((await rotatedResponse.json() as { error: { message: string } }).error.message).toBe(
+        "HarnessID authentication is required for this identity.",
+      );
+      expect(upstreamFetches).toBe(2);
+
+      const unknownResponse = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${unknownToken}` },
+      });
+      expect(unknownResponse.status).toBe(401);
+      expect((await unknownResponse.json() as { error: { message: string } }).error.message).toBe(
+        "Invalid upstream access token",
+      );
+      expect(upstreamFetches).toBe(2);
+    });
+  });
+
+  it("keeps a rotated HarnessID refresh token when the new access token uses a new kid", async () => {
+    directory = await mkdtemp(join(tmpdir(), "oauth-proxy-harness-jwks-"));
+    const rotated = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const rotatedJwk = {
+      ...rotated.publicKey.export({ format: "jwk" }),
+      kid: "rotated-harness-key",
+      alg: "RS256",
+      use: "sig",
+    };
+    let harnessFetches = 0;
+    let grants = 0;
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === `${upstreamIssuer}/v1/keys`) {
+        return Response.json({ keys: [upstreamJwk] });
+      }
+      if (url === `${harnessIssuer}/protocol/openid-connect/certs`) {
+        harnessFetches += 1;
+        const keys = harnessFetches === 1 ? [harnessJwk] : [harnessJwk, rotatedJwk];
+        return Response.json({ keys });
+      }
+      if (url === `${harnessIssuer}/protocol/openid-connect/token`) {
+        grants += 1;
+        const accessToken = grants === 1
+          ? harnessToken("harness-user", 30)
+          : jwt.sign(
+            {
+              azp: "harness-mcp-proxy",
+              account_id: "account-1",
+              external_sub: "upstream-user",
+              scope: "openid profile email organization:account-1",
+              jti: randomBytes(8).toString("hex"),
+            },
+            rotated.privateKey,
+            {
+              algorithm: "RS256",
+              keyid: "rotated-harness-key",
+              issuer: harnessIssuer,
+              subject: "harness-user",
+              expiresIn: "5m",
+            },
+          );
+        return Response.json({
+          access_token: accessToken,
+          refresh_token: `rotated-refresh-${grants}`,
+          expires_in: 300,
+        });
+      }
+      return new Response("not found", { status: 404 });
+    }) as unknown as typeof fetch;
+    const runtime = createOAuthProxyRuntime(
+      proxyConfig(join(directory, "vault.enc")),
+      fetchImpl,
+    );
+    await runtime.vault.putRecord(upstreamIssuer, "upstream-user", {
+      linked: true,
+      refreshToken: "initial-refresh-token",
+      updatedAt: "2026-10-02T00:00:00Z",
+    });
+    const app = express();
+    app.use(createOAuthProxyHttpAuthMiddleware(runtime));
+    app.post("/mcp", (_req, res) => res.json({ ok: true }));
+
+    await withListeningApp(app, async (baseUrl) => {
+      const first = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${upstreamToken()}` },
+      });
+      expect(first.status).toBe(200);
+      expect(await runtime.vault.getRecord(upstreamIssuer, "upstream-user")).toMatchObject({
+        refreshToken: "rotated-refresh-1",
+      });
+
+      const second = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${upstreamToken()}` },
+      });
+      expect(second.status).toBe(200);
+      expect(harnessFetches).toBe(2);
+      expect(await runtime.vault.getRecord(upstreamIssuer, "upstream-user")).toMatchObject({
+        refreshToken: "rotated-refresh-2",
+      });
     });
   });
 
