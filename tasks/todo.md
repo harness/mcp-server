@@ -932,3 +932,11 @@ Question: can `harness_describe` return only the resource types a model needs fo
 - [x] Add `operation` (`list|get|create|update|delete|execute`) and a lean filtered catalog. `execute` includes action names.
 - [x] Keep the no-argument catalog and per-resource detail response unchanged.
 - [x] Score filter adoption and describe response size in `evals/schema-profile`, then compare a pre-change build with the changed build. Compact describe bytes/task fell 35–49%; task success held. The new-build gate passed.
+
+## Dependabot Vite and Hono fixes (2026-10-23)
+
+- [x] Create a branch from latest origin/main and verify alerts #98–101 and patched versions.
+- [x] Raise Vite and Hono minimum versions and update both lockfiles.
+- [x] Validate audit, tests, types, build, docs, and shrinkwrap consistency.
+
+Validation: 184 test files / 4,228 tests passed with `--maxWorkers=2 --testTimeout=20000` after the default run hit the schema-registration timeout. Typecheck, build, docs check, shrinkwrap check, and diff check passed. pnpm resolves Vite 7.3.7 and Hono 4.13.13; npm shrinkwrap already resolved Hono 4.13.13. The four requested advisories are absent from pnpm audit. Nine other advisories remain: @vitest/mocker (2 moderate), ip-address (1 moderate), zod (1 high), body-parser (1 high), fast-uri (2 moderate, 2 low).

@@ -193,3 +193,6 @@
 - **Rule**: Before modeling an identifier as UUID-only, verify its owning route contract. Cover the list → get flow with compact output, local invalid-ID rejection, and the supported identifier lookup when one exists.
 - **Correction**: UUID-vs-name 404s affect every operation that puts an entity or parent ID in the URL, not only reads. CRUD regression coverage must include nested create/list parent IDs as well as update/delete IDs.
 - **Correction**: `diagnosticHint` serves both error recovery and workflow guidance. Add new 404 instructions before existing resource-specific guidance; never replace discovery, schema, connector, or setup advice unless the same information is preserved elsewhere and covered by tests.
+
+## Targeted Shrinkwrap Security Updates
+- Full shrinkwrap regeneration can refresh unrelated dependencies and remove platform metadata. Compare the generated diff against the requested fix; when the existing tree already contains the patched package, update only its root dependency minimum and verify consistency.
