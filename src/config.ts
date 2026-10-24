@@ -202,8 +202,8 @@ const RawConfigSchema = z.object({
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: booleanFromEnv.default(false),
-  // compact: resource_type is a plain string in tool schemas (discover via harness_describe) — far smaller tools/list payload.
-  HARNESS_SCHEMA_MODE: z.preprocess(emptyStringAsUndefined, z.enum(["full", "compact"]).default("full")),
+  // compact (default): resource_type is a plain string in tool schemas (discover via harness_describe) — far smaller tools/list payload. Set "full" to inline every resource type.
+  HARNESS_SCHEMA_MODE: z.preprocess(emptyStringAsUndefined, z.enum(["full", "compact"]).default("compact")),
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
   HARNESS_AUTO_APPROVE_RISK: z.preprocess(
     emptyStringAsUndefined,

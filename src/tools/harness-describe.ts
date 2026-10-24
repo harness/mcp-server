@@ -14,9 +14,10 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
   server.registerTool(
     "harness_describe",
     {
-      description: "Describe available Harness resource types, their supported operations, and fields. No API call — returns local metadata only. Use this to discover what resource_types you can use with other harness_ tools.",
+      description: "Describe available Harness resource types, their supported operations, and fields. No API call — returns local metadata only. Use this to discover what resource_types you can use with other harness_ tools. Pass operation to return only types that support list, get, create, update, delete, or execute.",
       inputSchema: {
         resource_type: resourceTypeSchema(allTypes, registry.compactSchemas).optional().describe("Get details for a specific resource type"),
+        operation: z.enum(["list", "get", "create", "update", "delete", "execute"]).optional().describe("Return only resource types that support this operation. execute includes each type's action names. Combine with search_term or toolset. Omit for the full catalog."),
         toolset: (registry.compactSchemas ? z.string() : z.enum(allToolsets)).optional().describe("Filter to a specific toolset"),
         search_term: z.string().optional().describe("Search for resource types by keyword (matches type name, display name, toolset, description)"),
       },
@@ -91,6 +92,14 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             ...summary,
           });
         }
+      }
+
+      if (args.operation) {
+        return jsonResult(registry.describeByOperation({
+          operation: args.operation,
+          toolset: args.toolset,
+          searchTerm: args.search_term,
+        }));
       }
 
       // Search by keyword

@@ -127,7 +127,7 @@
     "HARNESS_SCHEMA_MODE": {
       "type": "string",
       "title": "Tool Schema Mode",
-      "description": "full (default) or compact. Compact shrinks the tool list sent to the model by about half; resource types are discovered via harness_describe.",
+      "description": "compact (default) or full. Compact shrinks the tool list sent to the model by about half; resource types are discovered via harness_describe. Set full to inline every resource type.",
       "required": false,
       "sensitive": false
     },

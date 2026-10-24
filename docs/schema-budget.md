@@ -5,7 +5,7 @@ Code defers them). Its size is a per-request tax, so it is treated as a budgeted
 
 ## Modes
 
-`HARNESS_SCHEMA_MODE` controls the payload:
+`HARNESS_SCHEMA_MODE` controls the payload. Unset, it is `compact`. Set `full` to inline every resource type.
 
 | | `full` | `compact` |
 |---|---|---|
@@ -60,9 +60,12 @@ points are within noise. Non-Anthropic models are untested.
    contain the expected values. Reads before the target call are fine; they show up in
    `calls_per_task` and `wasted_calls_per_task`. Argument matching accepts the same
    `resource_type` aliases the server accepts.
-5. Also track: unknown-type errors, wrong scope, `confirm` set on a read-only task, and
-   `confirm` set on the first call of a write task.
-6. Report input tokens as uncached-equivalent (input + cache read + cache creation); prompt
+5. Also track: unknown-type errors, wrong scope, `confirm` set on a read-only task,
+   `confirm` set on the first call of a write task, whether a `harness_describe` call passed
+   `operation`, and the bytes of describe results returned to the model.
+6. Tool results are capped at 120,000 characters (`--tool-result-chars`) so a full catalog and a
+   filtered catalog both reach the model. The previous 1,500-character cap hid that difference.
+7. Report input tokens as uncached-equivalent (input + cache read + cache creation); prompt
    caching is used only to reduce cost.
 
 Goldens must not depend on the stub having data: a task that says "update service X" against a
@@ -102,6 +105,56 @@ Results are written to `evals/schema-profile/results/` (git-ignored).
   into extra conversation turns, which is usually the worse trade.
 - **Safety copy stays.** Compact `confirm` copy must keep "only with user intent" and "never
   overrides a user's decline" (asserted by test).
+
+## Describe by operation
+
+`harness_describe(operation=...)` returns only the resource types that support that consolidated-tool
+operation. CRUD entries are `type`, `name`, `toolset`, and aliases. `execute` also includes each
+type's action names. `search_term` and `toolset` intersect with the filter. Calling
+`harness_describe` with no arguments still returns the full catalog, and
+`harness_describe(resource_type=...)` still returns the detailed resource.
+
+Measured JSON size of the default catalog (262 types):
+
+| query | types | bytes | vs full catalog |
+|---|---|---|---|
+| no arguments | 262 | 35,791 | |
+| `operation=list` | 200 | 19,533 | −45% |
+| `operation=get` | 176 | 17,444 | −51% |
+| `operation=create` | 94 | 8,553 | −76% |
+| `operation=update` | 80 | 7,195 | −80% |
+| `operation=delete` | 85 | 7,538 | −79% |
+| `operation=execute` | 67 | 9,201 | −74% |
+
+The model-in-the-loop comparison below records the describe bytes actually returned during tasks.
+`operation_filter_hit_rate` is reported separately from task success: a model can still finish a
+task after loading the full catalog, so that rate is not part of the correctness gate.
+
+Same models as the table above, 60 tasks × 2 repeats (120 runs per cell). "Before" is the server without `operation`. "After" is this change. The new-build gate passed. Describe bytes are the average returned to the model per task, including tasks that never called `harness_describe`. No read-only task set `confirm`.
+
+| model | mode | instructions | build | any call | first call | calls/task | input tokens/task | describe bytes/task | describe calls using operation | filter hit |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Haiku 5.5 | compact | off | before | 98% | 88% | 2.79 | 31.4k | 6,468 | 0% | 17% |
+| Haiku 5.5 | compact | off | after | 98% | 93% | 2.80 | 30.8k | 4,171 | 20% | 72% |
+| Haiku 5.5 | compact | on | before | 98% | 93% | 2.71 | 34.7k | 6,161 | 0% | 0% |
+| Haiku 5.5 | compact | on | after | 98% | 91% | 2.57 | 33.3k | 3,766 | 26% | 72% |
+| Haiku 5.5 | full | off | before | 88% | 87% | 2.51 | 64.2k | 1,372 | 0% | 22% |
+| Haiku 5.5 | full | off | after | 95% | 92% | 2.57 | 64.9k | 2,170 | 33% | 78% |
+| Haiku 5.5 | full | on | before | 89% | 87% | 2.42 | 65.2k | 1,786 | 0% | 28% |
+| Haiku 5.5 | full | on | after | 92% | 86% | 2.67 | 68.4k | 1,963 | 24% | 56% |
+| Sonnet 5.5 | compact | off | before | 97% | 91% | 2.35 | 26.6k | 4,929 | 0% | 11% |
+| Sonnet 5.5 | compact | off | after | 97% | 88% | 2.33 | 26.4k | 2,804 | 33% | 78% |
+| Sonnet 5.5 | compact | on | before | 94% | 88% | 1.83 | 28.1k | 5,026 | 0% | 0% |
+| Sonnet 5.5 | compact | on | after | 97% | 88% | 1.89 | 27.7k | 2,571 | 35% | 78% |
+| Sonnet 5.5 | full | off | before | 90% | 90% | 2.11 | 55.5k | 1,488 | 0% | 33% |
+| Sonnet 5.5 | full | off | after | 97% | 97% | 2.03 | 55.3k | 1,723 | 53% | 89% |
+| Sonnet 5.5 | full | on | before | 90% | 90% | 1.84 | 56.0k | 1,391 | 0% | 33% |
+| Sonnet 5.5 | full | on | after | 97% | 97% | 1.73 | 54.6k | 1,626 | 56% | 89% |
+
+Compact describe payloads fell about 35–49% per task. Input tokens fell only a little, because most
+tasks never load the catalog and the tool schemas still dominate. Models used `operation` on
+20–56% of describe calls. Task success stayed at or above the before run. A couple of points is
+noise at this sample size.
 
 ## Not done / ideas
 
