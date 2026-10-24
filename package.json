@@ -61,7 +61,7 @@
     "adm-zip": "^0.6.1",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "hono": "^4.13.5",
+    "hono": "^4.13.11",
     "jsonwebtoken": "^9.0.3",
     "redis": "^6.3.0",
     "yaml": "^2.8.3",
@@ -96,7 +96,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
     "typescript": "^5.7.3",
-    "vite": "^7.3.5",
+    "vite": "^7.3.7",
     "vitest": "^4.1.11"
   },
   "overrides": {
@@ -107,12 +107,12 @@
   "pnpm": {
     "overrides": {
       "picomatch": ">=4.0.4",
-      "hono": ">=4.13.5",
+      "hono": ">=4.13.11",
       "path-to-regexp": ">=8.4.0",
       "@hono/node-server": ">=2.0.10",
       "express-rate-limit": ">=8.2.2",
       "ip-address": ">=10.5.1",
-      "vite": "^7.3.5",
+      "vite": "^7.3.7",
       "nanoid": "^3.3.18",
       "esbuild": ">=0.28.1",
       "postcss": ">=8.5.18",
