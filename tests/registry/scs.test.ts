@@ -2400,3 +2400,47 @@ describe("scs_sbom download dispatch", () => {
     ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
+
+// ─── SCS artifact deep links (#1030) ─────────────────────────────────────────
+
+describe("SCS artifact deep links (#1030)", () => {
+  const ARTIFACT_ID = "art-uuid-123";
+
+  it("artifact_security deep link template matches get pathParams artifact mapping", () => {
+    const res = findResource("artifact_security");
+    expect(res.deepLinkTemplate).toContain("/supply-chain/artifacts/{artifact}");
+    expect(res.deepLinkTemplate).not.toContain("{artifactId}");
+    expect(res.operations.get?.pathParams?.artifact_id).toBe("artifact");
+  });
+
+  it("scs_chain_of_custody get resolves artifact deep link placeholder", async () => {
+    const request = vi.fn().mockResolvedValue({ events: [] });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+
+    const result = (await registry.dispatch(makeClient(request), "scs_chain_of_custody", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      artifact_id: ARTIFACT_ID,
+    })) as Record<string, unknown>;
+
+    const link = String(result.openInHarness);
+    expect(link).toContain(`/supply-chain/artifacts/${ARTIFACT_ID}`);
+    expect(link).not.toMatch(/\{artifact/);
+  });
+
+  it("scs_artifact_remediation get resolves artifact deep link placeholder", async () => {
+    const request = vi.fn().mockResolvedValue({ advice: "upgrade lodash" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+
+    const result = (await registry.dispatch(makeClient(request), "scs_artifact_remediation", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      artifact_id: ARTIFACT_ID,
+      purl: "pkg:npm/lodash@4.17.20",
+    })) as Record<string, unknown>;
+
+    const link = String(result.openInHarness);
+    expect(link).toContain(`/supply-chain/artifacts/${ARTIFACT_ID}`);
+    expect(link).not.toMatch(/\{artifact/);
+  });
+});

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { chaosActionExtract, chaosDRTestListExtract, chaosExperimentListExtract, chaosInputSetListExtract } from "../../src/registry/extractors.js";
+import {
+  chaosActionExtract,
+  chaosDRTestListExtract,
+  chaosExperimentListExtract,
+  chaosInputSetListExtract,
+  sdV2PageExtract,
+} from "../../src/registry/extractors.js";
 
 describe("chaosInputSetListExtract", () => {
   it("injects experimentId from input into each item", () => {
@@ -100,6 +106,28 @@ describe("chaosDRTestListExtract", () => {
       items: [{ id: "dr-1" }, { id: "dr-2" }],
       total: 50,
     });
+  });
+});
+
+describe("sdV2PageExtract", () => {
+  it("uses pagination.total when present (#1111 custom_service list)", () => {
+    expect(
+      sdV2PageExtract({
+        items: [{ identity: "payments" }],
+        pagination: { total: 12, pageSize: 10, pageNumber: 0 },
+      }),
+    ).toEqual({ items: [{ identity: "payments" }], total: 12 });
+  });
+
+  it("falls back to items.length when pagination.total is missing", () => {
+    expect(sdV2PageExtract({ items: [{ identity: "a" }, { identity: "b" }] })).toEqual({
+      items: [{ identity: "a" }, { identity: "b" }],
+      total: 2,
+    });
+  });
+
+  it("returns an empty page for a missing envelope", () => {
+    expect(sdV2PageExtract({})).toEqual({ items: [], total: 0 });
   });
 });
 
