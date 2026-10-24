@@ -5,6 +5,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { normalizeCostCategoryBody } from "../../src/registry/toolsets/ccm-cost-category.js";
+import { ccmToolset } from "../../src/registry/toolsets/ccm.js";
+
+const costCategory = ccmToolset.resources.find((r) => r.resourceType === "cost_category");
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -34,6 +37,17 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
     account: "test-account",
   } as unknown as HarnessClient;
 }
+
+describe("cost_category operationPolicy", () => {
+  it("classifies create/update as medium_write and delete as destructive", () => {
+    expect(costCategory).toBeDefined();
+    expect(costCategory!.operations.create!.operationPolicy.risk).toBe("medium_write");
+    expect(costCategory!.operations.update!.operationPolicy.risk).toBe("medium_write");
+    expect(costCategory!.operations.delete!.operationPolicy.risk).toBe("destructive");
+    expect(costCategory!.operations.list!.operationPolicy.risk).toBe("read");
+    expect(costCategory!.operations.get!.operationPolicy.risk).toBe("read");
+  });
+});
 
 describe("cost category rules — EQUALS is sent as IN", () => {
   const viewField = { fieldId: "labels.value", fieldName: "env", identifier: "LABEL_V2", identifierName: "Label V2" };

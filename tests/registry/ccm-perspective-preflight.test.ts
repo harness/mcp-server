@@ -6,6 +6,19 @@ import { describe, it, expect, vi } from "vitest";
 import { ccmToolset } from "../../src/registry/toolsets/ccm.js";
 import type { PreflightContext } from "../../src/registry/types.js";
 
+const costPerspective = ccmToolset.resources.find((r) => r.resourceType === "cost_perspective");
+
+describe("cost_perspective operationPolicy", () => {
+  it("classifies create/update as medium_write and delete as destructive", () => {
+    expect(costPerspective).toBeDefined();
+    expect(costPerspective!.operations.create!.operationPolicy.risk).toBe("medium_write");
+    expect(costPerspective!.operations.update!.operationPolicy.risk).toBe("medium_write");
+    expect(costPerspective!.operations.delete!.operationPolicy.risk).toBe("destructive");
+    expect(costPerspective!.operations.list!.operationPolicy.risk).toBe("read");
+    expect(costPerspective!.operations.get!.operationPolicy.risk).toBe("read");
+  });
+});
+
 function getPreflight() {
   const spec = ccmToolset.resources.find((r) => r.resourceType === "cost_perspective")
     ?.operations.create;
