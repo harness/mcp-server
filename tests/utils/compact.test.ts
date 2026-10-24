@@ -104,6 +104,18 @@ describe("compactItems", () => {
     expect(result[0].openInHarness).toBe("https://app.harness.io/ng/pipelines/p1");
   });
 
+  it("keeps SCS list marker fields (_summary, _message, _result)", () => {
+    const items = [
+      { _summary: { total: 3 }, noise: "dropped" },
+      { _message: "partial results", extra: true },
+      { _result: "ok", yaml: "big" },
+    ];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toEqual({ _summary: { total: 3 } });
+    expect(result[1]).toEqual({ _message: "partial results" });
+    expect(result[2]).toEqual({ _result: "ok" });
+  });
+
   it("passes through non-object items unchanged", () => {
     const items = ["string", 42, null];
     expect(compactItems(items)).toEqual(["string", 42, null]);
