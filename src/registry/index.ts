@@ -1122,6 +1122,11 @@ export class Registry {
               // Use get spec's path param name when present so deep link template placeholder matches (e.g. templateIdentifier)
               const getPathParam = def.operations.get?.pathParams?.[field];
               const pathParamName = spec.pathParams?.[field] ?? getPathParam ?? field;
+              // List calls often pass parent identifiers via input (e.g. registry_id on artifact
+              // list). Those are seeded into baseLinkParams — do not let item.name clobber them.
+              if (itemLinkParams[pathParamName]) {
+                continue;
+              }
               // Look for the API param name directly in the item (e.g., pipelineIdentifier, identifier)
               const rawValue = itemRecord[pathParamName];
               if (rawValue !== undefined && typeof rawValue !== "object") {

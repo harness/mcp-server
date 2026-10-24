@@ -149,4 +149,24 @@ describe("compactItems", () => {
     expect(result[0].name).toBe("[Incident 1](https://app.harness.io/inc/1)");
     expect(result[0]).not.toHaveProperty("openInHarness");
   });
+
+  it("preserves _summary, _message, and _result markers through compaction", () => {
+    const items = [{
+      identifier: "p1",
+      name: "Pipeline",
+      yaml: "pipeline:\n  stages: []",
+      _summary: "3 stages failed",
+      _message: "See execution logs",
+      _result: { ok: false },
+    }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toMatchObject({
+      identifier: "p1",
+      name: "Pipeline",
+      _summary: "3 stages failed",
+      _message: "See execution logs",
+      _result: { ok: false },
+    });
+    expect(result[0]).not.toHaveProperty("yaml");
+  });
 });

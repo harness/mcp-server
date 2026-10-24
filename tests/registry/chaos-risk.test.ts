@@ -933,6 +933,35 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("create: rejects prompt lists over 10 entries or entries longer than 500 characters", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const longEntry = "x".repeat(501);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: {
+          ...ruleBody,
+          spec: {
+            faults: ["pod-delete"],
+            prompt: { do: Array.from({ length: 11 }, (_, i) => `signal-${i}`), outcome: ["hypothesis"] },
+          },
+        },
+      }),
+    ).rejects.toThrow(/at most 10 entries/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: {
+          ...ruleBody,
+          spec: { faults: ["pod-delete"], prompt: { do: [longEntry], outcome: ["hypothesis"] } },
+        },
+      }),
+    ).rejects.toThrow(/500 characters/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("create: rejects a dataSource other than SourceCode and a prompt missing do or outcome", async () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
