@@ -417,6 +417,11 @@ const FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES = new Set([
   "fme_segment_definition",
   "fme_metric",
   "fme_event_type",
+  "fme_feature_flag",
+  "fme_feature_flag_definition",
+  "fme_environment",
+  "fme_rollout_status",
+  "fme_traffic_type",
 ]);
 
 /**
@@ -448,8 +453,8 @@ export function applyUrlDefaults(
     merged.resource_scope = parsed.resource_scope;
   }
   // A legacy workspace_id (FME's Split.io identifier) takes precedence over
-  // org/project incidentally present in a UI URL — the two are mutually
-  // exclusive scoping modes for FME resources (see resolveFmeDualMode).
+  // org/project incidentally present in a UI URL, for the remaining fme_*
+  // resources that still accept workspace_id as a real scoping mode.
   // Use the caller's declared resource_type when present — the URL's own parsed
   // type may be absent or non-FME even when the call itself targets an FME resource.
   // Harness-native-only resources (fme_segment/fme_segment_definition/fme_metric/
