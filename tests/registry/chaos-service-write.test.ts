@@ -222,6 +222,22 @@ describe("custom_service", () => {
     expect((mockRequest.mock.calls[0][0].body as { spec: { codeRepository: { module: string } } }).spec.codeRepository)
       .toMatchObject({ module: "graphql/server" });
 
+    mockRequest.mockClear();
+    await registry.dispatch(client, "custom_service", "create", {
+      org_id: "o",
+      project_id: "p",
+      identity: "payments-legacy-branch",
+      name: "payments",
+      type: "CodeRepository",
+      repo_url: "git0.harness.io/acme/payments",
+      branch: "main",
+      spec: { codeRepository: { repoURL: "ignored", module: ".", branch: "develop" } },
+    });
+    const codeRepo = (mockRequest.mock.calls[0][0].body as { spec: { codeRepository: Record<string, unknown> } })
+      .spec.codeRepository;
+    expect(codeRepo).toEqual({ repoURL: "git0.harness.io/acme/payments", module: "." });
+    expect(codeRepo).not.toHaveProperty("branch");
+
     await expect(registry.dispatch(client, "custom_service", "create", {
       org_id: "o",
       project_id: "p",
