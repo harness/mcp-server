@@ -261,6 +261,79 @@ function compactDiscoveredAgent(item: Record<string, unknown>): Record<string, u
   return slim;
 }
 
+/** Compact projection for custom_service list items. Generic compactItems()
+ * keeps id/type/tags but drops spec, so a CodeRepository row loses the
+ * repoURL and module a caller needs to reuse the service. */
+function compactCustomService(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "id", "identity", "name", "description", "tags", "type", "category",
+    "createdAt", "updatedAt", "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  const spec = item.spec;
+  if (spec && typeof spec === "object" && !Array.isArray(spec)) {
+    const nested = (spec as Record<string, unknown>).codeRepository;
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      const repo = nested as Record<string, unknown>;
+      if (repo.repoURL !== undefined) slim.repoURL = repo.repoURL;
+      if (repo.module !== undefined) slim.module = repo.module;
+    }
+  }
+  return slim;
+}
+
+function copyDefined(
+  source: Record<string, unknown>,
+  keys: readonly string[],
+): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function nestedRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
+/** Compact projection for chaos_risk_scan list items. Generic compactItems()
+ * drops scanType and source, so a code scan cannot be matched to a repository
+ * branch and commit without a follow-up get. */
+function compactRiskScan(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "identity", "name", "description", "tags", "status", "scanType",
+    "detectionMethod", "createdAt", "updatedAt", "lastUpdated", "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  const source = nestedRecord(item.source);
+  if (source) {
+    const projected: Record<string, unknown> = {};
+    const codeRepository = nestedRecord(source.codeRepository);
+    const pipeline = nestedRecord(source.pipeline);
+    const discoveryAgent = nestedRecord(source.discoveryAgent);
+    const code = codeRepository
+      ? copyDefined(codeRepository, ["repoURL", "branch", "commitSHA", "provider"])
+      : undefined;
+    const pipe = pipeline
+      ? copyDefined(pipeline, ["pipelineIdentity", "pipelineExecutionID"])
+      : undefined;
+    const agent = discoveryAgent
+      ? copyDefined(discoveryAgent, ["agentIdentity", "environmentIdentity"])
+      : undefined;
+    if (code) projected.codeRepository = code;
+    if (pipe) projected.pipeline = pipe;
+    if (agent) projected.discoveryAgent = agent;
+    if (Object.keys(projected).length > 0) slim.source = projected;
+  }
+  return slim;
+}
+
 function optionalText(value: unknown): string | undefined {
   if (value == null) return undefined;
   const text = String(value).trim();
@@ -4264,6 +4337,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
+      compactItem: compactCustomService,
       deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/discovery/custom-discovery-agent/custom-service/{identity}",
       searchAliases: [
         "custom service", "custom discovery service", "code repository service",
@@ -4728,6 +4802,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             limit: "limit",
+            size: "limit",
             search: "search",
             sort_field: "sortField",
             sort_ascending: "sortAscending",
@@ -4808,6 +4883,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
+      compactItem: compactRiskScan,
       searchAliases: ["risk scan", "resilience risk scan", "manifest scan", "code scan", "code repository risk scan"],
       listFilterFields: [
         { name: "search", description: descRiskSearch },
@@ -4835,6 +4911,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             limit: "limit",
+            size: "limit",
             search: "search",
             sort_field: "sortField",
             sort_ascending: "sortAscending",
