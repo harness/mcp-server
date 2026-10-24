@@ -1035,6 +1035,26 @@ describe("iacm_workspace create/update via MCP tools", () => {
     expect(result.isError).toBe(true);
     expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it("harness_create declines medium_write cost_category without calling the API (#1124)", async () => {
+    const ccmRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const declineServer = makeMcpServer("decline");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(declineServer, ccmRegistry, client, makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+
+    const result = await declineServer.call("harness_create", {
+      resource_type: "cost_category",
+      body: {
+        name: "Teams",
+        costTargets: [{ name: "Platform", rules: [] }],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("iacm_variable_set create/update via MCP tools", () => {
