@@ -940,3 +940,12 @@ Question: can `harness_describe` return only the resource types a model needs fo
 - [x] Validate audit, tests, types, build, docs, and shrinkwrap consistency.
 
 Validation: 184 test files / 4,228 tests passed with `--maxWorkers=2 --testTimeout=20000` after the default run hit the schema-registration timeout. Typecheck, build, docs check, shrinkwrap check, and diff check passed. pnpm resolves Vite 7.3.7 and Hono 4.13.13; npm shrinkwrap already resolved Hono 4.13.13. The four requested advisories are absent from pnpm audit. Nine other advisories remain: @vitest/mocker (2 moderate), ip-address (1 moderate), zod (1 high), body-parser (1 high), fast-uri (2 moderate, 2 low).
+
+## Version 3.2.35
+
+- [x] Update main from origin/main and create chore/version-3.2.35.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.35` and open a PR against `main`.
+
+Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
