@@ -614,7 +614,7 @@ describe("chaos_k8s_infrastructure list", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("check_health: uses correct path with infraId before /health", async () => {
+  it("check_health: puts infraId after /health", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ connected: true });
     const client = makeClient(mockRequest);
 
@@ -626,7 +626,7 @@ describe("chaos_k8s_infrastructure list", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/chaos/manager/api/rest/kubernetes/infra/infra-abc/health");
+    expect(call.path).toBe("/chaos/manager/api/rest/kubernetes/infra/health/infra-abc");
   });
 });
 

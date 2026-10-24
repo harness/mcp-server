@@ -2975,7 +2975,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: { environment_id: "environmentIdentifier" },
           paramsSchema: {
             fields: [
-              { name: "infra_id", required: true, description: "identity from the list row. Pass as resource_id or params.infra_id." },
+              { name: "infra_id", required: true, description: "identity from the list row, not infraID. Pass as resource_id or params.infra_id." },
               { name: "environment_id", required: true, description: "environmentID from the same list row. Pass as params.environment_id." },
             ],
           } satisfies ParamsSchema,
@@ -3051,7 +3051,7 @@ export const chaosToolset: ToolsetDefinition = {
       executeActions: {
         check_health: {
           method: "GET",
-          path: `${CHAOS}/rest/kubernetes/infra/{infraId}/health`,
+          path: `${CHAOS}/rest/kubernetes/infra/health/{infraId}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { infra_id: "infraId" },
           responseExtractor: passthrough,
