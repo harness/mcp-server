@@ -6,6 +6,21 @@ import { projectRelatedActivity } from "./related-activities.js";
 import { isRecord } from "../../utils/type-guards.js";
 
 /**
+ * Project a single piece of evidence cited by a root-cause theory (a deploy,
+ * PR, or incident). This is a different, simpler shape than the generic
+ * `relatedActivities` edges projected by `projectRelatedActivity` below — the
+ * backend DTOs are unrelated even though the field name collides.
+ */
+function projectTheoryRelatedActivity(a: unknown): unknown {
+  if (!isRecord(a)) return a;
+  const out: Record<string, unknown> = {};
+  if (typeof a.type === "string") out.type = a.type;
+  if (typeof a.displayId === "string") out.displayId = a.displayId;
+  if (typeof a.url === "string") out.url = a.url;
+  return out;
+}
+
+/**
  * Project a single root-cause theory to its stable, agent-relevant fields,
  * dropping any backend-internal keys the API may add.
  */
@@ -17,6 +32,9 @@ function projectRootCauseTheory(t: unknown): unknown {
   if (typeof t.status === "string") out.status = t.status;
   if (typeof t.confidence === "number") out.confidence = t.confidence;
   if (typeof t.aiGenerated === "boolean") out.aiGenerated = t.aiGenerated;
+  if (Array.isArray(t.relatedActivities) && t.relatedActivities.length > 0) {
+    out.relatedActivities = t.relatedActivities.map(projectTheoryRelatedActivity);
+  }
   return out;
 }
 
@@ -173,14 +191,32 @@ const incidentUpdateSchema: BodySchema = {
 };
 
 const addRootCauseTheorySchema: BodySchema = {
-  description: "Human-authored root-cause theory to add (AddRootCauseTheoryRequest)",
+  description: "Root-cause theory to add (AddRootCauseTheoryRequest)",
   fields: [
     { name: "message", type: "string", required: true, description: "The root-cause theory text" },
     {
       name: "status",
       type: "string",
       required: false,
-      description: "Initial theory status: INVESTIGATING (default) or CONFIRMED",
+      description: "Initial theory status: INVESTIGATING (default), CONFIRMED, or RULED_OUT",
+    },
+    {
+      name: "confidence",
+      type: "number",
+      required: false,
+      description: "Confidence level (0-100); defaults based on status when omitted",
+    },
+    {
+      name: "relatedActivities",
+      type: "array",
+      required: false,
+      description: "Evidence cited for this theory, e.g. deploys, PRs, or incidents",
+      itemType: "object",
+      fields: [
+        { name: "type", type: "string", required: true, description: "Related activity type, e.g. DEPLOY, PR, or INCIDENT" },
+        { name: "displayId", type: "string", required: true, description: "Display id of the related activity" },
+        { name: "url", type: "string", required: false, description: "URL to the related activity, if available" },
+      ],
     },
   ],
 };
@@ -338,11 +374,13 @@ export const incidentsToolset: ToolsetDefinition = {
           bodySchema: addRootCauseTheorySchema,
           responseExtractor: addRootCauseTheoryExtract,
           actionDescription:
-            "Add a human-authored root-cause theory to an incident. If a theory with the same message already "
-            + "exists, no duplicate is created: the existing theory is returned with created=false and its status "
-            + "is left unchanged. The response's theory.id identifies the theory for later status changes. The "
-            + "response does not include rootCauseTheoriesSha, and a successful add (created=true) changes it, so "
-            + "call harness_get before confirming, ruling out, or undoing a theory.",
+            "Add a root-cause theory to an incident. Calls authenticated as the project's configured Agent "
+            + "Account are recorded as AI-generated; other callers are recorded as human-authored. If a theory "
+            + "with the same message already exists, no duplicate is created: the existing theory is returned "
+            + "with created=false and its status is left unchanged. The response's theory.id identifies the "
+            + "theory for later status changes. The response does not include rootCauseTheoriesSha, and a "
+            + "successful add (created=true) changes it, so call harness_get before confirming, ruling out, or "
+            + "undoing a theory.",
         },
         confirm_root_cause_theory: rootCauseTheoryStatusAction(
           "confirm",
