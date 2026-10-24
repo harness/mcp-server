@@ -1,6 +1,7 @@
 import type { ToolsetDefinition, BodySchema, PreflightContext } from "../types.js";
 import { MC_SCOPE } from "./scopes.js";
 import {
+  MAX_LISTED_RUNBOOKS,
   runbookListExtract,
   runbookGetExtract,
   runbookRunExtract,
@@ -12,6 +13,23 @@ const RUNBOOKS_PATH = "/gateway/ir/tp/api/v1/mc/runbooks";
 /** The runbook id contains `::` and `/`; the registry percent-encodes it into this one segment. */
 const RUNBOOK_PATH = `${RUNBOOKS_PATH}/{runbookId}`;
 const EXECUTIONS_PATH = `${RUNBOOK_PATH}/executions`;
+
+/**
+ * harness_list defaults to page size 20. The extractor keeps at most 10 of whatever
+ * the API returns, so a larger page drops items 11-20 and the next page starts at 21.
+ * Ask for at most one cap-sized page; a smaller explicit size is left alone.
+ */
+async function capRunbookListPage({ input }: PreflightContext): Promise<void> {
+  const raw = input.size;
+  const size = typeof raw === "number"
+    ? raw
+    : typeof raw === "string" && raw.trim() !== ""
+      ? Number(raw)
+      : Number.NaN;
+  if (!Number.isFinite(size) || size > MAX_LISTED_RUNBOOKS) {
+    input.size = MAX_LISTED_RUNBOOKS;
+  }
+}
 
 /** Execute arguments arrive under `body`; resource_id may also have filled service_id. */
 async function runPreflight({ input }: PreflightContext): Promise<void> {
@@ -101,8 +119,9 @@ export const runbooksToolset: ToolsetDefinition = {
           queryParams: { incident_id: "incidentId", page: "page", size: "pageSize" },
           // Agents only discover runbooks the owner enabled Expose to AI on.
           defaultQueryParams: { exposedToAi: "true" },
+          preflight: capRunbookListPage,
           responseExtractor: runbookListExtract,
-          description: "List AI-exposed runbooks, optionally narrowed to an incident (filters.incident_id)",
+          description: "List AI-exposed runbooks, at most 10 per page, optionally narrowed to an incident (filters.incident_id)",
         },
         get: {
           method: "GET",
@@ -147,7 +166,7 @@ export const runbooksToolset: ToolsetDefinition = {
         + "harness_list with filters={service_id} lists recent runs of a runbook, newest first.",
       listFilterFields: [
         { name: "service_id", required: true, description: "Runbook serviceId" },
-        { name: "cursor", description: "paginationToken from the previous page" },
+        { name: "cursor", description: "pagination.next_cursor from the previous page" },
       ],
       operations: {
         list: {
