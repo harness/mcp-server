@@ -306,6 +306,33 @@ describe("T11-v2: ID retention hints in descriptions", () => {
   });
 });
 
+describe("SCS artifact deep links (#1030)", () => {
+  it("scs_chain_of_custody get resolves {artifact} in openInHarness via pathParams", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ orchestration: { id: "orch-1" }, type: "SBOM" }),
+    );
+
+    const result = (await registry.dispatch(client, "scs_chain_of_custody", "get", {
+      org_id: "myOrg",
+      project_id: "myProj",
+      artifact_id: "art-uuid-9",
+    })) as Record<string, unknown>;
+
+    const link = String(result.openInHarness ?? "");
+    expect(link).toContain("/supply-chain/artifacts/art-uuid-9");
+    expect(link).not.toMatch(/\{artifact(Id)?\}/);
+  });
+
+  it("deep link templates use {artifact} placeholder aligned with pathParams", () => {
+    for (const type of ["artifact_security", "scs_artifact_remediation", "scs_chain_of_custody"]) {
+      const res = findResource(type);
+      expect(res.deepLinkTemplate).toContain("{artifact}");
+      expect(res.deepLinkTemplate).not.toContain("{artifactId}");
+    }
+  });
+});
+
 // ─── T13-v2: all SCS resources use scsCleanExtract ────────────────────────
 
 describe("T13-v2: all SCS resources use scsCleanExtract", () => {
