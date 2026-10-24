@@ -220,4 +220,25 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream Ansible forks on IACMAnsiblePluginInfo in v0 pipeline and template", () => {
+    type AnsibleForks = {
+      description: string;
+      oneOf: Array<{ minimum?: number; maximum?: number; type?: string }>;
+    };
+
+    for (const key of ["pipeline", "template"] as const) {
+      const iacm = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline
+        .steps.iacm as Record<string, unknown>;
+      const ansible = iacm.IACMAnsiblePluginInfo as {
+        allOf: Array<{ properties?: Record<string, AnsibleForks> }>;
+        properties: Record<string, AnsibleForks>;
+      };
+
+      for (const forks of [ansible.allOf[1]!.properties!.forks, ansible.properties.forks]) {
+        expect(forks.description).toContain("ANSIBLE_FORKS");
+        expect(forks.oneOf[0]).toMatchObject({ type: "integer", minimum: 1, maximum: 100 });
+      }
+    }
+  });
 });
