@@ -2114,7 +2114,7 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 46 Toolsets (42 default) |
+                | 47 Toolsets (43 default) |
                 |  264 Resource Types|
                  +--------+---------+
                           |

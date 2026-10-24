@@ -113,10 +113,44 @@ describe("runbook — harness_list", () => {
     }));
     mockRequest.mockResolvedValue({ entities, totalCount: 12 });
     const result = await server.call("harness_list", { resource_type: "runbook" });
-    const data = parseResult(result) as { items: unknown[]; total: number; truncated: boolean };
+    const data = parseResult(result) as { items: Array<{ serviceId: string }>; total: number; truncated: boolean };
     expect(data.items).toHaveLength(10);
+    expect(data.items[0]?.serviceId).toBe("rb-0");
+    expect(data.items[9]?.serviceId).toBe("rb-9");
     expect(data.total).toBe(12);
     expect(data.truncated).toBe(true);
+  });
+
+  it("requests at most 10 runbooks per page so the next page is contiguous", async () => {
+    await server.call("harness_list", { resource_type: "runbook" });
+    await server.call("harness_list", { resource_type: "runbook", size: 20, page: 0 });
+    await server.call("harness_list", { resource_type: "runbook", size: "50", page: 1 });
+    await server.call("harness_list", { resource_type: "runbook", size: 5, page: 2 });
+    expect(optsOf(mockRequest.mock.calls[0]!).params.pageSize).toBe(10);
+    expect(optsOf(mockRequest.mock.calls[0]!).params.page).toBeUndefined();
+    expect(optsOf(mockRequest.mock.calls[1]!).params).toMatchObject({ pageSize: 10, page: 0 });
+    expect(optsOf(mockRequest.mock.calls[2]!).params).toMatchObject({ pageSize: 10, page: 1 });
+    expect(optsOf(mockRequest.mock.calls[3]!).params).toMatchObject({ pageSize: 5, page: 2 });
+  });
+
+  it("does not mark a full or final page truncated when the payload itself was not cut", async () => {
+    const page = Array.from({ length: 10 }, (_, i) => ({
+      runbookId: `rb-${i}`, displayName: `R${i}`, description: "d",
+    }));
+    mockRequest.mockResolvedValue({ entities: page, totalCount: 25 });
+    const full = parseResult(await server.call("harness_list", { resource_type: "runbook", page: 0 })) as {
+      truncated: boolean; total: number; items: unknown[];
+    };
+    expect(full.items).toHaveLength(10);
+    expect(full.total).toBe(25);
+    expect(full.truncated).toBe(false);
+
+    mockRequest.mockResolvedValue({ entities: page.slice(0, 2), totalCount: 12 });
+    const last = parseResult(await server.call("harness_list", { resource_type: "runbook", page: 1 })) as {
+      truncated: boolean; items: unknown[];
+    };
+    expect(last.items).toHaveLength(2);
+    expect(last.truncated).toBe(false);
   });
 
   it("passes incident_id through as the incidentId query param", async () => {

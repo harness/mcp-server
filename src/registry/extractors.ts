@@ -774,7 +774,7 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
 };
 
 /** Same cap the in-product investigator applies when it offers runbooks to the model. */
-const MAX_LISTED_RUNBOOKS = 10;
+export const MAX_LISTED_RUNBOOKS = 10;
 
 export function runbookListExtract(raw: unknown): unknown {
   const { items: all, total } = offsetListExtract(raw);
@@ -784,7 +784,9 @@ export function runbookListExtract(raw: unknown): unknown {
       const { runbookId, displayName, description } = r as Record<string, unknown>;
       return { serviceId: runbookId, displayName, description };
     });
-  return { items, total, truncated: total > items.length };
+  // Flag only a payload that itself exceeded the cap. Comparing `total` to the
+  // page length stays true on every later page, so a while(truncated) loop never ends.
+  return { items, total, truncated: all.length > items.length };
 }
 
 export function runbookGetExtract(raw: unknown): unknown {
