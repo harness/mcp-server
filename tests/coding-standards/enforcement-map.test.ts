@@ -96,6 +96,42 @@ export const ENFORCEMENT_MAP: EnforcementEntry[] = [
   },
 ];
 
+/** October 2026 security hardening — not in coding-standards.md but must stay tested. */
+export const SECURITY_REGRESSION_MAP: EnforcementEntry[] = [
+  {
+    rule: "pnpm/npm CVE override floors and lockfile resolution",
+    docSection: "security-deps",
+    testFiles: [
+      "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/adm-zip-security-lib.test.ts",
+      "tests/scripts/ip-address-security-lib.test.ts",
+    ],
+  },
+  {
+    rule: "adm-zip npm consumer postinstall and published manifest",
+    docSection: "security-supply-chain",
+    testFiles: ["tests/scripts/adm-zip-supply-chain.test.ts"],
+  },
+  {
+    rule: "npm-shrinkwrap drift check",
+    docSection: "security-shrinkwrap",
+    testFiles: ["tests/scripts/npm-shrinkwrap-check.test.ts"],
+  },
+  {
+    rule: "Production Dockerfile OpenSSL and adm-zip install ordering",
+    docSection: "security-docker",
+    testFiles: ["tests/docker/production-dockerfile.test.ts"],
+  },
+  {
+    rule: "Service account aggregate list extractors",
+    docSection: "security-api",
+    testFiles: [
+      "tests/registry/extractors-service-account.test.ts",
+      "tests/registry/access-control-service-account.test.ts",
+    ],
+  },
+];
+
 /** Documented in coding-standards.md but not fully automatable. */
 export const MANUAL_ONLY_STANDARDS = [
   "Never expose secret values in tool responses — only metadata",
@@ -112,6 +148,25 @@ function fileHasTests(relativePath: string): boolean {
 describe("Coding standards — enforcement map", () => {
   it(`maps every major docs/coding-standards.md rule to at least one test file`, () => {
     expect(ENFORCEMENT_MAP.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("every security regression test file exists and contains vitest cases", () => {
+    const violations: string[] = [];
+
+    for (const entry of SECURITY_REGRESSION_MAP) {
+      for (const testFile of entry.testFiles) {
+        const full = join(REPO_ROOT, testFile);
+        if (!existsSync(full)) {
+          violations.push(`${entry.docSection} ${entry.rule}: missing ${testFile}`);
+          continue;
+        }
+        if (!fileHasTests(testFile)) {
+          violations.push(`${entry.docSection} ${entry.rule}: ${testFile} has no it()/describe()`);
+        }
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 
   it("every mapped test file exists and contains vitest cases", () => {

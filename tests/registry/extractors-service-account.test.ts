@@ -31,6 +31,11 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(nestedAggregate)).not.toHaveProperty("serviceAccount");
   });
 
+  it("passes through non-object items unchanged", () => {
+    expect(flattenServiceAccountAggregate(null)).toBe(null);
+    expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
+  });
+
   it("keeps already-flat DTO fields", () => {
     expect(
       flattenServiceAccountAggregate({
@@ -62,6 +67,14 @@ describe("serviceAccountListExtract", () => {
       ],
       total: 42,
     });
+  });
+
+  it("prefers totalItems over content.length on aggregate pages", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalItems: 99 },
+      }),
+    ).toEqual({ items: [], total: 99 });
   });
 
   it("unwraps raw data array responses at account scope", () => {
