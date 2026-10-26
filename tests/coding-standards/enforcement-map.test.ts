@@ -33,6 +33,15 @@ const RULE_ENFORCEMENT: Record<string, readonly string[]> = {
   "§11 file organization": ["file-organization.test.ts"],
   "Registry contract / operationPolicy": ["registry-contract.test.ts", "../registry/structural-validation.test.ts"],
   "Contributor doc alignment": ["docs-consistency.test.ts"],
+  "Dependency security pins (adm-zip / npm-shrinkwrap)": [
+    "../scripts/adm-zip-dependency-pins.test.ts",
+    "../scripts/adm-zip-security-lib.test.ts",
+    "../scripts/npm-shrinkwrap-guardrails.test.ts",
+    "../scripts/npm-shrinkwrap-security.test.ts",
+    "../scripts/cve-dependency-pins.test.ts",
+    "../scripts/http-framework-security-pins.test.ts",
+    "../docker/production-dockerfile.test.ts",
+  ],
 };
 
 const EXEMPT_TEST_FILES = new Set(["enforcement-map.test.ts", "consolidated-tools.ts"]);

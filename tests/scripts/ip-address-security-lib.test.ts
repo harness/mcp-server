@@ -93,6 +93,43 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion(shrinkwrapVersion, SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
+  it("parseNpmShrinkwrapIpAddressVersion supports legacy shrinkwrap shapes", () => {
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          packages: { "node_modules/ip-address": { version: "10.7.4" } },
+        }),
+      ),
+    ).toBe("10.7.4");
+
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          dependencies: { "ip-address": { version: "10.7.4" } },
+        }),
+      ),
+    ).toBe("10.7.4");
+
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          "node_modules/ip-address": { version: "10.7.4" },
+        }),
+      ),
+    ).toBe("10.7.4");
+  });
+
+  it("readIpAddressVersion returns null when package metadata is missing or incomplete", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-read-"));
+    tempDirs.push(packageRoot);
+    expect(readIpAddressVersion(join(packageRoot, "missing"))).toBeNull();
+
+    const noVersion = join(packageRoot, "no-version");
+    mkdirSync(noVersion, { recursive: true });
+    writeFileSync(join(noVersion, "package.json"), JSON.stringify({ name: "ip-address" }));
+    expect(readIpAddressVersion(noVersion)).toBeNull();
+  });
+
   it("flags vulnerable ip-address installs under node_modules", () => {
     expect(listInsecureIpAddressInstalls(root)).toEqual([]);
   });
