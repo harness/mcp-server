@@ -30,6 +30,17 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
 
+  it("keeps ONNX and Trivy-patched Debian runtime libraries in the production apt install", () => {
+    const stage = productionStage(dockerfile);
+    const installLine = stage.match(
+      /apt-get install -y --no-install-recommends ([^\n\\]+)/,
+    )?.[1];
+    expect(installLine, "expected production apt-get install package list").toBeTruthy();
+    for (const pkg of ["ca-certificates", "libgomp1", "libstdc++6", "libpcre2-8-0"]) {
+      expect(installLine).toContain(pkg);
+    }
+  });
+
   it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
     const stage = productionStage(dockerfile);
     const upgradeIndex = stage.indexOf("apt-get upgrade");
