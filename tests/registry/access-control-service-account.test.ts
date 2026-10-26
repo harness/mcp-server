@@ -127,11 +127,17 @@ describe("service_account resource", () => {
     const mockRequest = vi.fn().mockResolvedValue(aggregateListResponse);
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "service_account", "list", { resource_scope: "org", org_id: "platform" });
+    const result = (await registry.dispatch(client, "service_account", "list", {
+      resource_scope: "org",
+      org_id: "platform",
+    })) as { items: Record<string, unknown>[]; total: number };
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.params.orgIdentifier).toBe("platform");
     expect(call.params.projectIdentifier).toBeUndefined();
+    expect(result.items[0].email).toBe("ci-bot@service.harness.io");
+    expect(String(result.items[0].openInHarness)).toContain("/orgs/platform/");
+    expect(String(result.items[0].openInHarness)).not.toContain("/projects/");
   });
 
   it("list: aggregate totalItems is preserved when totalElements is absent", async () => {
@@ -178,6 +184,31 @@ describe("service_account resource", () => {
     });
   });
 
+  it("get: org scope sends org only and builds org deep link without project segment", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: {
+        identifier: "ci-bot",
+        name: "CI Bot",
+        email: "ci-bot@service.harness.io",
+        orgIdentifier: "platform",
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "service_account", "get", {
+      resource_scope: "org",
+      org_id: "platform",
+      service_account_id: "ci-bot",
+    })) as Record<string, unknown>;
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
+    expect(String(result.openInHarness)).toContain("/orgs/platform/");
+    expect(String(result.openInHarness)).not.toContain("/projects/");
+  });
+
   it("get: account scope omits org and project", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       status: "SUCCESS",
@@ -196,6 +227,28 @@ describe("service_account resource", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
     expect(String(result.openInHarness)).toContain("/all/settings/access-control/service-accounts/ci-bot");
     expect(String(result.openInHarness)).not.toContain("/projects/");
+  });
+
+  it("create: org scope injects orgIdentifier only", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "ci-bot" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service_account", "create", {
+      resource_scope: "org",
+      org_id: "platform",
+      body: { identifier: "ci-bot", name: "CI Bot", email: "ci-bot@service.harness.io" },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
+    expect(call.body).toEqual({
+      identifier: "ci-bot",
+      name: "CI Bot",
+      email: "ci-bot@service.harness.io",
+      accountIdentifier: "test-account",
+      orgIdentifier: "platform",
+    });
   });
 
   it("create: account scope injects account only", async () => {
@@ -218,6 +271,21 @@ describe("service_account resource", () => {
       email: "ci-bot@service.harness.io",
       accountIdentifier: "test-account",
     });
+  });
+
+  it("delete: org scope omits project", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service_account", "delete", {
+      resource_scope: "org",
+      org_id: "platform",
+      service_account_id: "ci-bot",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 
   it("delete: account scope omits org and project", async () => {

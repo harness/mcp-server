@@ -131,6 +131,22 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("prefers totalElements over totalItems when both are present", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: {
+          content: [nestedAggregate],
+          totalElements: 5,
+          totalItems: 99,
+        },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot" })],
+      total: 5,
+    });
+  });
+
   it("preserves totalItems when the aggregate API omits totalElements", () => {
     expect(
       serviceAccountListExtract({
