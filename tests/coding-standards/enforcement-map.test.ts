@@ -74,6 +74,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "confirmViaElicitation",
   },
   {
+    rule: "Sensitive fields redacted in errors and formatted responses",
+    tests: ["tests/utils/redact.test.ts", "tests/client/harness-client.test.ts"],
+    signal: "redactSensitiveFields",
+  },
+  {
     rule: "Tool input snake_case and harness_list pagination defaults",
     tests: ["tests/coding-standards/input-conventions.test.ts"],
     signal: "snake_case",
