@@ -65,6 +65,9 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("10.5.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("10.7.3", SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("10.7.4", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.8.0", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.4-beta.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.4+build", SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
   it("treats missing or invalid versions as insecure", () => {

@@ -1,3 +1,7 @@
+/**
+ * Guards production-image Dockerfile security gates introduced for Trivy/OpenSSL fixes.
+ * Fails CI if apt packages or dpkg version floors are removed without review.
+ */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -28,6 +32,12 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(dockerfile).toMatch(/apt-get update[\s\S]*apt-get upgrade -y --no-install-recommends/);
   });
 
+  it("scopes DEBIAN_SECURITY_REFRESH and dpkg gates to the production stage only", () => {
+    const beforeProduction = dockerfile.slice(0, dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"));
+    expect(beforeProduction).not.toContain("DEBIAN_SECURITY_REFRESH");
+    expect(beforeProduction).not.toContain("dpkg --compare-versions");
+  });
+
   it("installs OpenSSL runtime packages patched for recent Debian CVEs", () => {
     const stage = productionStage(dockerfile);
     expect(stage).toMatch(
@@ -55,8 +65,8 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
   it("fails the image build when Debian OpenSSL packages are below the patched bookworm floor", () => {
     const stage = productionStage(dockerfile);
     const opensslFloor = "3.0.22-1~deb12u2";
-    expect(stage).toContain("dpkg --compare-versions \"$(dpkg-query -W -f='${Version}' libssl3)\" ge");
-    expect(stage).toContain("dpkg --compare-versions \"$(dpkg-query -W -f='${Version}' openssl)\" ge");
+    expect(stage).toContain('dpkg --compare-versions "$(dpkg-query -W -f=\'${Version}\' libssl3)" ge');
+    expect(stage).toContain('dpkg --compare-versions "$(dpkg-query -W -f=\'${Version}\' openssl)" ge');
     expect(stage).toContain(opensslFloor);
   });
 

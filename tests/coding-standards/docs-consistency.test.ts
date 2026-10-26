@@ -61,19 +61,23 @@ describe("Coding standards — contributor docs alignment", () => {
     }
     expect(agents).toMatch(/Zod v4/);
     expect(agents).not.toMatch(/\b10 consolidated tools\b/);
+    expect(agents).toContain("pnpm standards:check");
   });
 
   it("CONTRIBUTING.md references standards guardrails and Zod v4 import path", () => {
     expect(contributing).toContain("pnpm standards:check");
     expect(contributing).toMatch(/11 generic MCP tools/);
     expect(contributing).toMatch(/import \* as z from "zod\/v4"/);
+    expect(contributing).toContain("docs/coding-standards.md");
   });
 
   it("README.md links coding standards and lists every consolidated MCP tool", () => {
     const readme = readFileSync(README_PATH, "utf8");
     expect(readme).toContain("docs/coding-standards.md");
+    expect(readme).toMatch(/11 consolidated tools/);
     for (const tool of CONSOLIDATED_MCP_TOOLS) {
       expect(readme, `missing ${tool} in README.md`).toContain(tool);
     }
+    expect(readme).not.toMatch(/10 consolidated tool/);
   });
 });
