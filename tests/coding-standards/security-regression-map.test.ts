@@ -13,6 +13,7 @@ export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/docker/production-dockerfile.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
+  "tests/scripts/express-stack-security-pins.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/pnpm-lock-package-versions.test.ts",
@@ -33,6 +34,9 @@ const REQUIRED_PNPM_OVERRIDE_KEYS = [
   "ip-address",
   "express-rate-limit",
   "adm-zip",
+  "qs",
+  "proxy-addr",
+  "path-to-regexp",
 ] as const;
 
 describe("Security regression — enforcement map", () => {
