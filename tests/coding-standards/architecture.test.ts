@@ -12,44 +12,20 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
+import {
+  CONSOLIDATED_MCP_TOOL_SET,
+  HARNESS_HANDLER_PATHS,
+  WRITE_HANDLER_PATHS,
+} from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
 
-/** The only MCP tools allowed in the server. */
-const ALLOWED_MCP_TOOLS = new Set([
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-]);
-
 /** Only these files may call server.registerTool(). */
-const ALLOWED_REGISTER_TOOL_FILES = new Set([
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-status.ts",
-  "src/tools/harness-schema.ts",
-]);
+const ALLOWED_REGISTER_TOOL_FILES = new Set(HARNESS_HANDLER_PATHS);
 
 /** Only these harness-*.ts handler files may exist under src/tools/. */
-const ALLOWED_HARNESS_HANDLER_FILES = new Set([
-  ...ALLOWED_REGISTER_TOOL_FILES,
-]);
+const ALLOWED_HARNESS_HANDLER_FILE_PATHS = new Set(HARNESS_HANDLER_PATHS);
 
 /** Toolset helper modules — not required to export a ToolsetDefinition. */
 const TOOLSET_HELPER_FILES = new Set([
@@ -71,12 +47,7 @@ const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
   "src/registry/toolsets/sto.ts": 3,
 };
 
-const WRITE_TOOL_FILES = [
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-] as const;
+const WRITE_TOOL_FILES = WRITE_HANDLER_PATHS;
 
 /** Forbidden import patterns in toolset definition files. */
 const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
@@ -204,7 +175,7 @@ describe("Coding standards — MCP tool handlers", () => {
       }
     }
 
-    expect([...registered].sort()).toEqual([...ALLOWED_MCP_TOOLS].sort());
+    expect([...registered].sort()).toEqual([...CONSOLIDATED_MCP_TOOL_SET].sort());
   });
 
   it("only allows registerTool() in the 11 harness handler files", () => {
@@ -231,7 +202,7 @@ describe("Coding standards — MCP tool handlers", () => {
       .filter((f) => f.startsWith("harness-") && f.endsWith(".ts"))
       .map((f) => `src/tools/${f}`);
 
-    const unexpected = harnessFiles.filter((f) => !ALLOWED_HARNESS_HANDLER_FILES.has(f));
+    const unexpected = harnessFiles.filter((f) => !ALLOWED_HARNESS_HANDLER_FILE_PATHS.has(f));
     expect(unexpected, `New harness handler files found: ${unexpected.join(", ")}`).toEqual([]);
   });
 });
