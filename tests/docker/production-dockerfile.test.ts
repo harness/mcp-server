@@ -4,6 +4,9 @@ import { describe, expect, it } from "vitest";
 
 const dockerfilePath = join(process.cwd(), "Dockerfile");
 
+/** Bump when Debian/OpenSSL CVE fixes require invalidating the production apt layer cache. */
+const MIN_DEBIAN_SECURITY_REFRESH = "2026-10-26";
+
 function productionStage(dockerfile: string): string {
   const marker = "FROM ${RUNTIME_IMAGE} AS production";
   const start = dockerfile.indexOf(marker);
@@ -20,6 +23,11 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
 
     expect(dockerfile).toContain('echo "debian-security-refresh=${DEBIAN_SECURITY_REFRESH}"');
     expect(dockerfile).toMatch(/apt-get update[\s\S]*apt-get upgrade -y --no-install-recommends/);
+
+    const refreshDate = argMatch![1];
+    expect(refreshDate >= MIN_DEBIAN_SECURITY_REFRESH, `DEBIAN_SECURITY_REFRESH ${refreshDate} is below ${MIN_DEBIAN_SECURITY_REFRESH}`).toBe(
+      true,
+    );
   });
 
   it("installs OpenSSL runtime packages patched for recent Debian CVEs", () => {
