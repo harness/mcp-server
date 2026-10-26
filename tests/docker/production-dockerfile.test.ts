@@ -23,6 +23,15 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(productionStage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
 
+  it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
+    const productionStage = dockerfile.slice(dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"));
+    const upgradeIndex = productionStage.indexOf("apt-get upgrade");
+    const opensslInstallIndex = productionStage.indexOf("libssl3");
+    expect(upgradeIndex, "production stage must apt-get upgrade").toBeGreaterThan(-1);
+    expect(opensslInstallIndex, "production stage must install libssl3").toBeGreaterThan(-1);
+    expect(upgradeIndex).toBeLessThan(opensslInstallIndex);
+  });
+
   it("uses the Debian bookworm-slim runtime image for the production stage", () => {
     expect(dockerfile).toMatch(/^ARG RUNTIME_IMAGE=debian:bookworm-slim/m);
     const productionStage = dockerfile.slice(dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"));
