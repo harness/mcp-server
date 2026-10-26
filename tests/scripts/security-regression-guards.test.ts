@@ -51,7 +51,11 @@ const SECURITY_REGRESSION_GUARDS: GuardRow[] = [
   },
   {
     artifact: "npm consumer adm-zip wiring (postinstall, shrinkwrap, packaged files)",
-    tests: ["tests/scripts/npm-adm-zip-consumer-wiring.test.ts"],
+    tests: [
+      "tests/scripts/npm-adm-zip-consumer-wiring.test.ts",
+      "tests/scripts/ensure-secure-adm-zip-postinstall.test.ts",
+      "tests/scripts/npm-shrinkwrap-check.test.ts",
+    ],
   },
 ];
 
