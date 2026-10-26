@@ -109,6 +109,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "SECURE_BODY_PARSER_VERSION",
   },
   {
+    rule: "ip-address NAT64 / semver security floor (linked install behavior)",
+    tests: ["tests/scripts/ip-address-security-lib.test.ts"],
+    signal: "SECURE_IP_ADDRESS_VERSION",
+  },
+  {
     rule: "HTTP framework security pins (hono, @hono/node-server, vite)",
     tests: ["tests/scripts/http-framework-security-pins.test.ts"],
     signal: "SECURE_HONO_VERSION",
@@ -135,6 +140,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
       "tests/registry/access-control-service-account.test.ts",
     ],
     signal: "serviceAccountListExtract",
+  },
+  {
+    rule: "CI runs shrinkwrap check, vitest, standards:check, and container build",
+    tests: ["tests/ci/workflow-guardrails.test.ts"],
+    signal: "pnpm npm-shrinkwrap:check",
   },
 ];
 

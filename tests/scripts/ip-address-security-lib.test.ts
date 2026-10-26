@@ -108,6 +108,9 @@ describe("ip-address-security-lib", () => {
       }),
     );
     expect(fromLegacyNodeModules).toBe("10.7.4");
+
+    expect(parseNpmShrinkwrapIpAddressVersion(JSON.stringify({ packages: {} }))).toBeNull();
+    expect(parseNpmShrinkwrapIpAddressVersion(JSON.stringify({ name: "other" }))).toBeNull();
   });
 
   it("keeps pnpm overrides and lockfile on a patched ip-address release", () => {
