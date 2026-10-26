@@ -19,6 +19,7 @@ const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
+  "tests/scripts/transitive-toolchain-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/utils/url-parser.test.ts",
 ] as const;
@@ -41,6 +42,10 @@ const SECURITY_REGRESSION_GUARDS: SecurityRegressionEntry[] = [
   {
     fix: "HTTP framework security pins (hono, @hono/node-server, vite)",
     tests: ["tests/scripts/http-framework-security-pins.test.ts"],
+  },
+  {
+    fix: "Transitive toolchain pins (picomatch, esbuild, postcss, Express stack, OTel core)",
+    tests: ["tests/scripts/transitive-toolchain-security-pins.test.ts"],
   },
   {
     fix: "adm-zip postinstall patch and onnxruntime nested override",
