@@ -11,6 +11,7 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
 const README_PATH = join(REPO_ROOT, "README.md");
 const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
+const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
 
 const OUTDATED_TEN_TOOLS = /10 consolidated tool handlers?/i;
 const OUTDATED_ZOD_V3_ROW = /\|\s*Schema validation\s*\|\s*Zod v3\s*\|/;
@@ -56,5 +57,18 @@ describe("Coding standards — documentation consistency", () => {
     assertElevenConsolidatedToolsDoc(agents, "AGENTS.md");
     expect(agents).toMatch(/Zod v4/);
     expect(agents).not.toMatch(OUTDATED_ZOD_V3_ROW);
+    expect(agents).toMatch(/Do NOT add per-endpoint tool handlers/);
+    expect(agents).toContain("src/registry/toolsets/");
+  });
+
+  it("CONTRIBUTING.md documents registry-driven onboarding (declarative toolsets, no new handlers)", () => {
+    const contributing = readFileSync(CONTRIBUTING_PATH, "utf8");
+    expect(contributing, "CONTRIBUTING.md: outdated 10-tool wording").not.toMatch(OUTDATED_TEN_TOOLS);
+    expect(contributing).toMatch(/11 generic MCP tools/);
+    expect(contributing).toContain("harness_schema");
+    expect(contributing).toContain("src/registry/toolsets/");
+    expect(contributing).toMatch(/declarative data/i);
+    expect(contributing).toContain("docs/coding-standards.md");
+    expect(contributing).toMatch(/no new tool handlers/i);
   });
 });

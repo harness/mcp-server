@@ -36,6 +36,14 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
 
+  it("installs ONNX runtime glibc dependencies on the production apt line", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\bca-certificates\b[\s\S]*\blibgomp1\b[\s\S]*\blibstdc\+\+6\b/,
+    );
+    expect(dockerfile).toMatch(/ONNX Runtime's Node binding needs glibc and libgomp/);
+  });
+
   it("keeps libpcre2 on the production apt install line for ONNX runtime bindings", () => {
     const stage = productionStage(dockerfile);
     expect(stage).toMatch(
