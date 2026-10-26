@@ -38,6 +38,13 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
 
+  it("installs libpcre2 alongside OpenSSL so Trivy high findings on the runtime image stay patched", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\blibpcre2-8-0\b[\s\S]*\blibssl3\b/,
+    );
+  });
+
   it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
     const stage = productionStage(dockerfile);
     const upgradeIndex = stage.indexOf("apt-get upgrade");
