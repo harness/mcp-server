@@ -45,7 +45,17 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
   },
   {
     checklist: "Response extractors from extractors.ts",
-    guardFiles: ["tests/coding-standards/architecture.test.ts"],
+    guardFiles: [
+      "tests/coding-standards/architecture.test.ts",
+      "tests/registry/extractors-service-account.test.ts",
+    ],
+  },
+  {
+    checklist: "Service account list/get at account and org scope",
+    guardFiles: [
+      "tests/registry/access-control-service-account.test.ts",
+      "tests/registry/extractors-service-account.test.ts",
+    ],
   },
   {
     checklist: "Scope and identifierFields on resources",
@@ -103,6 +113,10 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
   {
     checklist: "Production container image Debian/OpenSSL security baseline",
     guardFiles: ["tests/docker/production-dockerfile.test.ts"],
+  },
+  {
+    checklist: "Security regression guard inventory (CVE pins, Docker, service accounts)",
+    guardFiles: ["tests/scripts/security-regression-guards.test.ts"],
   },
 ];
 
