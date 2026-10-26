@@ -8,6 +8,14 @@ const root = process.cwd();
 const SECURE_EXPRESS_RATE_LIMIT_VERSION = "8.2.2";
 const SECURE_PROXY_ADDR_VERSION = "2.0.8";
 
+function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+  };
+  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
+  return typeof version === "string" ? version : null;
+}
+
 function parsePnpmLockPackageVersions(lockfileText: string, packageName: string): string[] {
   const versions = new Set<string>();
   const escaped = packageName.replace("/", "\\/");
@@ -41,6 +49,20 @@ describe("transitive HTTP stack security pins (express-rate-limit, proxy-addr)",
       for (const version of versions) {
         expect(isSecureIpAddressVersion(version, floor), `${name}@${version} below ${floor}`).toBe(true);
       }
+    }
+  });
+
+  it("documents patched express-rate-limit and proxy-addr in npm-shrinkwrap.json", () => {
+    const shrinkwrapText = readFileSync(join(root, "npm-shrinkwrap.json"), "utf8");
+    const shrinkwrapChecks: Array<{ name: string; floor: string }> = [
+      { name: "express-rate-limit", floor: SECURE_EXPRESS_RATE_LIMIT_VERSION },
+      { name: "proxy-addr", floor: SECURE_PROXY_ADDR_VERSION },
+    ];
+
+    for (const { name, floor } of shrinkwrapChecks) {
+      const version = parseNpmShrinkwrapPackageVersion(shrinkwrapText, name);
+      expect(version, `missing ${name} in npm-shrinkwrap.json`).not.toBeNull();
+      expect(isSecureIpAddressVersion(version, floor), `${name}@${version} below ${floor}`).toBe(true);
     }
   });
 });

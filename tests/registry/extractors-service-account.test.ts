@@ -116,6 +116,23 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("returns an empty list with totalItems 0 for an empty aggregate page", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalItems: 0 },
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
+  it("unwraps an empty account-scope array response", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: [],
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
   it("uses totalItems when the aggregate page omits totalElements", () => {
     expect(
       serviceAccountListExtract({
