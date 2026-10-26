@@ -74,6 +74,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "confirmViaElicitation",
   },
   {
+    rule: "No secret values in logs or error payloads (redaction utilities)",
+    tests: ["tests/utils/redact.test.ts", "tests/client/harness-client.test.ts"],
+    signal: "redactSensitiveFields",
+  },
+  {
     rule: "Tool input snake_case and harness_list pagination defaults",
     tests: ["tests/coding-standards/input-conventions.test.ts"],
     signal: "snake_case",
@@ -182,5 +187,59 @@ describe("Coding standards — enforcement map", () => {
     expect(pkg).toContain('"standards:check"');
     expect(pkg).toContain("tests/coding-standards");
     expect(pkg).toContain("tests/registry/structural-validation.test.ts");
+  });
+
+  it("commit checklist items in docs/coding-standards.md map to at least one enforcement rule", () => {
+    const standards = readFileSync(STANDARDS_PATH, "utf8");
+    const checklistLines = standards
+      .split("\n")
+      .filter((line) => line.startsWith("- [ ] **"))
+      .map((line) => {
+        const match = line.match(/- \[ \] \*\*(.+?)\*\*/);
+        return match?.[1] ?? "";
+      })
+      .filter(Boolean);
+
+    /** Checklist bullets verified only via CI scripts (not architecture guardrails). */
+    const manualOnly = new Set([
+      "`pnpm build` passes",
+      "`pnpm typecheck` passes",
+      "`pnpm test` passes",
+    ]);
+
+    const ruleMatchers: Array<{ needle: string; match: (rule: string) => boolean }> = [
+      { needle: "No new `server.registerTool()`", match: (r) => /registerTool/i.test(r) },
+      { needle: "No `console.log()`", match: (r) => /console\.log/i.test(r) },
+      { needle: "No direct `fetch()`", match: (r) => /fetch/i.test(r) },
+      { needle: "No new `harness-*.ts`", match: (r) => /harness-\*\.ts/i.test(r) },
+      { needle: "Toolset files are pure data", match: (r) => /Toolset purity/i.test(r) },
+      { needle: "All Zod params have `.describe()`", match: (r) => /Zod/i.test(r) },
+      { needle: "Response extractors are from `extractors.ts`", match: (r) => /extractor/i.test(r) },
+      { needle: "Scope is declared correctly", match: (r) => /scope/i.test(r) },
+      { needle: "`identifierFields` are declared", match: (r) => /identifierFields|Registry scope/i.test(r) },
+      { needle: "`operationPolicy` on every endpoint", match: (r) => /operationPolicy|Registry scope/i.test(r) },
+      { needle: "Write operations require confirmation", match: (r) => /confirm|elicitation/i.test(r) },
+      { needle: "No secrets exposed", match: (r) => /secret|redact/i.test(r) },
+      { needle: "`pnpm standards:check` passes", match: (r) => /Documentation drift|standards/i.test(r) },
+    ];
+
+    const unmapped: string[] = [];
+
+    for (const item of checklistLines) {
+      if (manualOnly.has(item)) continue;
+
+      const matcher = ruleMatchers.find((m) => item.startsWith(m.needle) || item.includes(m.needle));
+      if (!matcher) {
+        unmapped.push(`${item}: no ruleMatchers entry — add mapping in enforcement-map.test.ts`);
+        continue;
+      }
+
+      const covered = ENFORCEMENT_MAP.some((entry) => matcher.match(entry.rule));
+      if (!covered) {
+        unmapped.push(`${item}: no ENFORCEMENT_MAP rule matched`);
+      }
+    }
+
+    expect(unmapped, unmapped.join("\n")).toEqual([]);
   });
 });
