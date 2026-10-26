@@ -426,6 +426,37 @@ describe("applyUrlDefaults", () => {
     expect(result.resource_scope).toBe("account");
   });
 
+  it("injects resource_scope='account' for account-level service account URLs", () => {
+    const parsed = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc/settings/access-control/service-accounts/ci-bot",
+    );
+    expect(parsed.resource_type).toBe("service_account");
+    expect(parsed.resource_id).toBe("ci-bot");
+    expect(parsed.resource_scope).toBe("account");
+
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/access-control/service-accounts/ci-bot",
+      { includeResourceScope: true },
+    );
+    expect(result.resource_type).toBe("service_account");
+    expect(result.resource_id).toBe("ci-bot");
+    expect(result.resource_scope).toBe("account");
+    expect(result.org_id).toBeUndefined();
+    expect(result.project_id).toBeUndefined();
+  });
+
+  it("injects resource_scope='project' for project service account URLs", () => {
+    const parsed = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/settings/access-control/service-accounts/ci-bot",
+    );
+    expect(parsed.resource_type).toBe("service_account");
+    expect(parsed.resource_id).toBe("ci-bot");
+    expect(parsed.org_id).toBe("myOrg");
+    expect(parsed.project_id).toBe("myProject");
+    expect(parsed.resource_scope).toBe("project");
+  });
+
   it("injects resource_scope='account' for account-level user-group URLs", () => {
     const parsed = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc/settings/access-control/user-groups/all_account_users",
