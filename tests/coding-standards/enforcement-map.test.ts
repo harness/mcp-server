@@ -35,6 +35,7 @@ const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
     "consolidated-tools.test.ts",
   ],
   "§2 pure-data toolsets": ["architecture.test.ts"],
+  "§3 shared response extractors": ["architecture.test.ts"],
   "§4 scoping model": ["scope-params.test.ts", "toolset-scope.test.ts", "registry-contract.test.ts"],
   "§5 identifierFields / metadata": ["registry-contract.test.ts", "registry-metadata.test.ts"],
   "§6 error handling": ["error-handling.test.ts", "architecture.test.ts"],
@@ -46,6 +47,7 @@ const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
   ],
   "§9 write confirmation / elicitation": ["architecture.test.ts", "registry-metadata.test.ts"],
   "§11 singleton HTTP client / fetch exceptions": ["architecture.test.ts"],
+  "§12 file organization": ["file-organization.test.ts"],
   "docs drift (11 tools, Zod v4)": ["docs-consistency.test.ts"],
 };
 
