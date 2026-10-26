@@ -74,4 +74,14 @@ describe("Coding standards — enforcement map", () => {
     expect(CONSOLIDATED_MCP_TOOLS).toHaveLength(11);
     expect(CONSOLIDATED_MCP_TOOLS).toContain("harness_schema");
   });
+
+  it("consolidated tool list matches registerTool names in handler sources", () => {
+    const handlerDir = join(REPO_ROOT, "src/tools");
+    const fromHandlers = readdirSync(handlerDir)
+      .filter((name) => name.startsWith("harness-") && name.endsWith(".ts"))
+      .map((name) => name.replace(/^harness-/, "harness_").replace(/\.ts$/, ""))
+      .sort();
+
+    expect([...CONSOLIDATED_MCP_TOOLS].sort()).toEqual(fromHandlers);
+  });
 });
