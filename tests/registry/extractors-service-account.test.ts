@@ -98,6 +98,13 @@ describe("serviceAccountListExtract", () => {
       total: 1,
     });
   });
+
+  it("returns empty items and zero total for an empty raw-array list response", () => {
+    expect(serviceAccountListExtract({ status: "SUCCESS", data: [] })).toEqual({
+      items: [],
+      total: 0,
+    });
+  });
 });
 
 describe("compact vs nested service account DTO", () => {
