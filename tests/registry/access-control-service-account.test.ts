@@ -134,6 +134,56 @@ describe("service_account resource", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("list: resource_scope=org builds org-scoped openInHarness links without a project segment", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: {
+        content: [
+          {
+            serviceAccount: {
+              identifier: "org-bot",
+              name: "Org Bot",
+              email: "org-bot@service.harness.io",
+              accountIdentifier: "test-account",
+              orgIdentifier: "platform",
+            },
+            tokensCount: 1,
+          },
+        ],
+        totalItems: 1,
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "service_account", "list", {
+      resource_scope: "org",
+      org_id: "platform",
+    })) as { items: Record<string, unknown>[] };
+
+    expect(String(result.items[0].openInHarness)).toContain("/orgs/platform/settings/access-control/service-accounts/org-bot");
+    expect(String(result.items[0].openInHarness)).not.toContain("/projects/");
+  });
+
+  it("get: org scope sends org only and omits project", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: { identifier: "org-bot", name: "Org Bot", email: "org-bot@service.harness.io" },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "service_account", "get", {
+      resource_scope: "org",
+      org_id: "platform",
+      service_account_id: "org-bot",
+    })) as Record<string, unknown>;
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
+    expect(String(result.openInHarness)).toContain("/orgs/platform/settings/access-control/service-accounts/org-bot");
+    expect(String(result.openInHarness)).not.toContain("/projects/");
+  });
+
   it("list: aggregate totalItems is preserved when totalElements is absent", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       status: "SUCCESS",
