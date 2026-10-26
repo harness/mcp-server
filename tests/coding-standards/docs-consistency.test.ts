@@ -7,6 +7,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONSOLIDATED_MCP_TOOLS, CONSOLIDATED_MCP_TOOL_COUNT } from "./consolidated-tools.js";
 
+const SECURITY_REGRESSION_TEST_PATHS = [
+  "tests/docker/production-dockerfile.test.ts",
+  "tests/scripts/cve-dependency-pins.test.ts",
+];
+
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
 const README_PATH = join(REPO_ROOT, "README.md");
@@ -41,6 +46,16 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md documents pnpm standards:check guardrails", () => {
     expect(standardsContent).toContain("pnpm standards:check");
+  });
+
+  it("package.json standards:check runs Docker and CVE dependency regression guards", () => {
+    const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      scripts: { "standards:check": string };
+    };
+    const script = packageJson.scripts["standards:check"];
+    for (const path of SECURITY_REGRESSION_TEST_PATHS) {
+      expect(script, `standards:check must include ${path}`).toContain(path);
+    }
   });
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
