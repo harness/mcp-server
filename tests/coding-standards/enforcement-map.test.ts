@@ -32,7 +32,7 @@ const RULE_ENFORCEMENT: Record<string, readonly string[]> = {
   "§10 singleton HarnessClient": ["architecture.test.ts"],
   "§11 file organization": ["file-organization.test.ts"],
   "Registry contract / operationPolicy": ["registry-contract.test.ts", "../registry/structural-validation.test.ts"],
-  "Contributor doc alignment": ["docs-consistency.test.ts"],
+  "Contributor doc alignment": ["docs-consistency.test.ts", "commit-checklist-coverage.test.ts"],
   "Supply-chain / container security regression guards": [
     "../scripts/npm-publish-security-manifest.test.ts",
     "../scripts/npm-shrinkwrap-check.test.ts",
