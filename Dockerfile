@@ -42,9 +42,13 @@ RUN pnpm install --frozen-lockfile --prod
 FROM ${RUNTIME_IMAGE} AS production
 WORKDIR /app
 
-RUN apt-get update \
+# The GHA build cache replays this layer until a referenced ARG changes, so a
+# Debian security update never lands. Bump the date when a new apt CVE appears.
+ARG DEBIAN_SECURITY_REFRESH=2026-10-26
+RUN echo "debian-security-refresh=${DEBIAN_SECURITY_REFRESH}" \
+  && apt-get update \
   && apt-get upgrade -y --no-install-recommends \
-  && apt-get install -y --no-install-recommends ca-certificates libgomp1 libstdc++6 libpcre2-8-0 \
+  && apt-get install -y --no-install-recommends ca-certificates libgomp1 libssl3 libstdc++6 openssl libpcre2-8-0 \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 1000 node \
   && useradd --uid 1000 --gid node --shell /bin/bash --create-home node \
