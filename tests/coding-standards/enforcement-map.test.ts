@@ -124,6 +124,69 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
   },
 ];
 
+/**
+ * Maps each numbered rule under docs/coding-standards.md "## Rules for Every Commit"
+ * to vitest guardrails (prevents doc-only rules with no automated enforcement).
+ */
+const COMMIT_RULE_GUARDS: Array<{ heading: string; guardFiles: string[] }> = [
+  {
+    heading: "Never Add New MCP Tool Handlers",
+    guardFiles: [
+      "tests/coding-standards/architecture.test.ts",
+      "tests/coding-standards/consolidated-tools.test.ts",
+      "tests/coding-standards/file-organization.test.ts",
+    ],
+  },
+  {
+    heading: "Toolset Definitions Are Pure Data",
+    guardFiles: ["tests/coding-standards/architecture.test.ts"],
+  },
+  {
+    heading: "Use Shared Response Extractors",
+    guardFiles: ["tests/coding-standards/architecture.test.ts", "tests/registry/structural-validation.test.ts"],
+  },
+  {
+    heading: "Follow the Harness Scoping Model",
+    guardFiles: [
+      "tests/coding-standards/scope-params.test.ts",
+      "tests/coding-standards/toolset-scope.test.ts",
+      "tests/registry/structural-validation.test.ts",
+    ],
+  },
+  {
+    heading: "Identifier Fields and Deep Links",
+    guardFiles: ["tests/coding-standards/registry-metadata.test.ts", "tests/registry/structural-validation.test.ts"],
+  },
+  {
+    heading: "Error Handling Pattern",
+    guardFiles: ["tests/coding-standards/architecture.test.ts", "tests/coding-standards/error-handling.test.ts"],
+  },
+  {
+    heading: "Logging Rules",
+    guardFiles: ["tests/coding-standards/architecture.test.ts"],
+  },
+  {
+    heading: "Tool Input Schema Standards",
+    guardFiles: ["tests/coding-standards/architecture.test.ts", "tests/coding-standards/input-conventions.test.ts"],
+  },
+  {
+    heading: "Safety and Security Rules",
+    guardFiles: [
+      "tests/coding-standards/architecture.test.ts",
+      "tests/coding-standards/registry-metadata.test.ts",
+      "tests/utils/redact.test.ts",
+    ],
+  },
+  {
+    heading: "Error Handling Principles",
+    guardFiles: ["tests/coding-standards/error-handling.test.ts"],
+  },
+  {
+    heading: "HTTP Client Is Singleton",
+    guardFiles: ["tests/coding-standards/architecture.test.ts"],
+  },
+];
+
 describe("Coding standards — enforcement map", () => {
   it("every checklist guard file exists on disk", () => {
     const missing: string[] = [];
@@ -153,5 +216,44 @@ describe("Coding standards — enforcement map", () => {
     for (const entry of CHECKLIST_ENFORCEMENT) {
       expect(entry.guardFiles.length, entry.checklist).toBeGreaterThan(0);
     }
+  });
+
+  it("docs/coding-standards.md lists 11 numbered Rules for Every Commit sections", () => {
+    const content = readFileSync(STANDARDS_PATH, "utf8");
+    const start = content.indexOf("## Rules for Every Commit");
+    const end = content.indexOf("## Adding a New Harness Resource");
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const rulesSection = content.slice(start, end);
+
+    for (let n = 1; n <= 11; n++) {
+      expect(rulesSection, `missing ### ${n}.`).toMatch(new RegExp(`### ${n}\\.`));
+    }
+  });
+
+  it("each Rules for Every Commit section has automated guard tests", () => {
+    expect(COMMIT_RULE_GUARDS).toHaveLength(11);
+
+    const content = readFileSync(STANDARDS_PATH, "utf8");
+    const rulesStart = content.indexOf("## Rules for Every Commit");
+    const rulesEnd = content.indexOf("## Adding a New Harness Resource");
+    const rulesSection = content.slice(rulesStart, rulesEnd);
+
+    const missingGuards: string[] = [];
+    const missingHeadings: string[] = [];
+
+    for (const { heading, guardFiles } of COMMIT_RULE_GUARDS) {
+      if (!rulesSection.includes(heading)) {
+        missingHeadings.push(heading);
+      }
+      for (const rel of guardFiles) {
+        if (!existsSync(join(REPO_ROOT, rel))) {
+          missingGuards.push(`${heading}: ${rel}`);
+        }
+      }
+    }
+
+    expect(missingHeadings, `Headings not found in docs:\n${missingHeadings.join("\n")}`).toEqual([]);
+    expect(missingGuards, `Missing guard files:\n${missingGuards.join("\n")}`).toEqual([]);
   });
 });
