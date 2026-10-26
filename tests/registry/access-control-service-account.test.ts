@@ -134,6 +134,17 @@ describe("service_account resource", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("list: empty account-scope data array returns zero items", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: [] });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "service_account", "list", {
+      resource_scope: "account",
+    })) as { items: unknown[]; total: number };
+
+    expect(result).toEqual({ items: [], total: 0 });
+  });
+
   it("list: raw data array is not dropped", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       status: "SUCCESS",

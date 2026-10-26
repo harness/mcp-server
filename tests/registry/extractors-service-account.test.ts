@@ -60,6 +60,19 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
   });
 
+  it("ignores a non-object serviceAccount wrapper and reads identity from the top level", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: "corrupt",
+        identifier: "top-level-sa",
+        email: "top@service.harness.io",
+      }),
+    ).toEqual({
+      identifier: "top-level-sa",
+      email: "top@service.harness.io",
+    });
+  });
+
   it("omits governanceMetadata and other non-identity fields from nested aggregates", () => {
     expect(flattenServiceAccountAggregate(aggregateItem)).not.toHaveProperty("governanceMetadata");
     expect(flattenServiceAccountAggregate(aggregateItem)).not.toHaveProperty("serviceAccount");
