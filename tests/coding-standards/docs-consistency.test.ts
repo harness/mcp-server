@@ -5,30 +5,20 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { CONSOLIDATED_MCP_TOOLS, CONSOLIDATED_MCP_TOOL_COUNT } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
-
-const REQUIRED_TOOLS = [
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-];
+const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
 
   it("docs/coding-standards.md documents 11 consolidated MCP tools including harness_schema", () => {
+    expect(CONSOLIDATED_MCP_TOOL_COUNT).toBe(11);
     expect(content).toMatch(/11 consolidated tool handlers/);
-    for (const tool of REQUIRED_TOOLS) {
+    expect(content).not.toMatch(/10 consolidated tool handlers/);
+    for (const tool of CONSOLIDATED_MCP_TOOLS) {
       expect(content, `missing ${tool} in docs/coding-standards.md`).toContain(tool);
     }
   });
@@ -44,5 +34,16 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
+  });
+
+  it("docs/coding-standards.md uses registerTool (not legacy server.tool)", () => {
+    expect(content).toContain("registerTool");
+    expect(content).not.toMatch(/Do NOT create new `server\.tool\(\)` calls/);
+  });
+
+  it("AGENTS.md references pnpm standards:check", () => {
+    const agents = readFileSync(AGENTS_PATH, "utf8");
+    expect(agents).toContain("pnpm standards:check");
+    expect(agents).toMatch(/11 consolidated tools/);
   });
 });
