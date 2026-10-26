@@ -9,7 +9,10 @@ import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 
-/** Checklist rule → vitest files under tests/coding-standards/ (and related). */
+/**
+ * Checklist rule → vitest files under tests/coding-standards/ (and related).
+ * Manual review only (no automated guard): secret values must never appear in tool output.
+ */
 export const STANDARDS_ENFORCEMENT_MAP = [
   {
     rule: "Fixed consolidated MCP tools — no extra registerTool() or harness-*.ts handlers",
@@ -41,6 +44,10 @@ export const STANDARDS_ENFORCEMENT_MAP = [
       "tests/coding-standards/registry-metadata.test.ts",
       "tests/registry/structural-validation.test.ts",
     ],
+  },
+  {
+    rule: "operationPolicy on every endpoint — risk and retryPolicy",
+    testFiles: ["tests/registry/structural-validation.test.ts"],
   },
   {
     rule: "Error handling — toMcpError, errorResult, HarnessApiError mapping",
