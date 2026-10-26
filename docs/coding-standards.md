@@ -291,6 +291,10 @@ The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `
 
 ---
 
+## Automated Enforcement
+
+`pnpm standards:check` runs Vitest guardrails in `tests/coding-standards/` plus `tests/registry/structural-validation.test.ts` (CI runs this on every PR). Each architecture rule in this document maps to one or more test files — see `tests/coding-standards/enforcement-map.test.ts` so new guardrails stay documented. **Secret value exposure** in API responses is not automated; review write/read formatters manually.
+
 ## Commit Checklist
 
 Before every commit, verify:
