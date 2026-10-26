@@ -13,6 +13,7 @@ export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/adm-zip-dependency-pins.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
+  "tests/scripts/express-stack-security-pins.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/lockfile-parsers.test.ts",
@@ -28,6 +29,9 @@ const REQUIRED_PNPM_OVERRIDE_KEYS = [
   "hono",
   "@hono/node-server",
   "ip-address",
+  "path-to-regexp",
+  "proxy-addr",
+  "qs",
   "vite",
   "zod",
 ] as const;
