@@ -11,7 +11,8 @@ const OPENSSL_DEBIAN_FLOOR = "3.0.22-1~deb12u2";
 describe("Docker production image security", () => {
   const dockerfile = readFileSync(join(root, "Dockerfile"), "utf8");
 
-  it("installs libssl3 and openssl in the runtime stage", () => {
+  it("installs runtime TLS and regex deps required by Trivy-hardened production image", () => {
+    expect(dockerfile).toContain("libpcre2-8-0");
     expect(dockerfile).toContain("libssl3 openssl");
   });
 

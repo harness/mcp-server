@@ -76,4 +76,10 @@ describe("Coding standards — enforcement map", () => {
     expect(CONSOLIDATED_MCP_TOOLS).toHaveLength(11);
     expect(CONSOLIDATED_MCP_TOOLS).toContain("harness_schema");
   });
+
+  it("documents dedicated extractor unit tests for service account list shaping", () => {
+    expect(existsSync(join(REPO_ROOT, "tests/registry/extractors-service-account.test.ts"))).toBe(
+      true,
+    );
+  });
 });
