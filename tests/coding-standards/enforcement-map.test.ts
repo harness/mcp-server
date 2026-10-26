@@ -27,6 +27,8 @@ const RULE_TO_TEST_FILES: Record<string, readonly string[]> = {
   "§8 — tool input schema conventions": [
     "input-conventions.test.ts",
     "registry-metadata.test.ts",
+    "zod-input-schema-descriptions.test.ts",
+    "input-schema-scope-descriptions.test.ts",
   ],
   "§9 — write confirmation / safety": ["architecture.test.ts", "registry-metadata.test.ts"],
   "§10 — singleton HarnessClient": ["architecture.test.ts"],
@@ -37,6 +39,14 @@ const RULE_TO_TEST_FILES: Record<string, readonly string[]> = {
 
 const EXTRA_TEST_PATHS: Record<string, string> = {
   "structural-validation.test.ts": join(REPO_ROOT, "tests/registry/structural-validation.test.ts"),
+  "zod-input-schema-descriptions.test.ts": join(
+    REPO_ROOT,
+    "tests/tools/zod-input-schema-descriptions.test.ts",
+  ),
+  "input-schema-scope-descriptions.test.ts": join(
+    REPO_ROOT,
+    "tests/tools/input-schema-scope-descriptions.test.ts",
+  ),
 };
 
 describe("Coding standards — enforcement map", () => {

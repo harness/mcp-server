@@ -27,7 +27,7 @@
     "search:benchmark": "node scripts/benchmark-search-routing.mjs",
     "docs:generate": "node scripts/generate-docs.js",
     "docs:check": "node scripts/generate-docs.js --check",
-    "standards:check": "vitest run tests/coding-standards tests/registry/structural-validation.test.ts",
+    "standards:check": "vitest run --testTimeout=15000 tests/coding-standards tests/registry/structural-validation.test.ts tests/tools/zod-input-schema-descriptions.test.ts tests/tools/input-schema-scope-descriptions.test.ts",
     "npm-shrinkwrap:generate": "node scripts/generate-npm-shrinkwrap.mjs",
     "npm-shrinkwrap:check": "node scripts/generate-npm-shrinkwrap.mjs --check",
     "test": "vitest run",

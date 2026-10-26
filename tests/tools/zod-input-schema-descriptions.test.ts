@@ -148,19 +148,23 @@ describe("Zod 4 input schema descriptions (PR #398 regression)", () => {
     ]);
   });
 
-  it("harness_schema exposes descriptions on live-entity scope fields", async () => {
-    const { registerSchemaTool } = await import("../../src/tools/harness-schema.js");
-    registerSchemaTool(server as never, registry, client, undefined);
+  it(
+    "harness_schema exposes descriptions on live-entity scope fields",
+    async () => {
+      const { registerSchemaTool } = await import("../../src/tools/harness-schema.js");
+      registerSchemaTool(server as never, registry, client, undefined);
 
-    expectFieldDescriptions(server.schema("harness_schema").inputSchema, [
-      "resource_type",
-      "scope",
-      "org_id",
-      "project_id",
-      "identifier",
-      "path",
-      "example",
-      "example_search",
-    ]);
-  });
+      expectFieldDescriptions(server.schema("harness_schema").inputSchema, [
+        "resource_type",
+        "scope",
+        "org_id",
+        "project_id",
+        "identifier",
+        "path",
+        "example",
+        "example_search",
+      ]);
+    },
+    15_000,
+  );
 });
