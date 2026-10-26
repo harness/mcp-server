@@ -12,24 +12,10 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
+import { ALLOWED_MCP_TOOLS } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
-
-/** The only MCP tools allowed in the server. */
-const ALLOWED_MCP_TOOLS = new Set([
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-]);
 
 /** Only these files may call server.registerTool(). */
 const ALLOWED_REGISTER_TOOL_FILES = new Set([

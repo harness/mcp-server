@@ -187,6 +187,9 @@ export const aiBudgetOverrideRequestListExtract = (raw: unknown): unknown => {
 
 /** Extract paginated content from NG API responses: `{ data: { content, totalElements|totalItems } }` */
 export const pageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  if (!isRecord(raw)) {
+    return { items: [], total: 0 };
+  }
   const r = raw as { data?: { content?: unknown[]; totalElements?: number; totalItems?: number } };
   return {
     items: r.data?.content ?? [],

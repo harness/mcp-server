@@ -134,6 +134,24 @@ describe("service_account resource", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("list: preserves totalItems when aggregate response omits totalElements", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: {
+        content: aggregateListResponse.data.content,
+        totalItems: 99,
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "service_account", "list", {
+      resource_scope: "account",
+    })) as { items: Record<string, unknown>[]; total: number };
+
+    expect(result.total).toBe(99);
+    expect(result.items).toHaveLength(1);
+  });
+
   it("list: raw data array is not dropped", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       status: "SUCCESS",

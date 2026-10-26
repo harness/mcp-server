@@ -67,10 +67,50 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("10.7.4", SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
+  it("ignores pre-release and build metadata when comparing the security floor", () => {
+    expect(isSecureIpAddressVersion("10.7.4+build.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.3-rc.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+  });
+
   it("treats missing or invalid versions as insecure", () => {
     expect(isSecureIpAddressVersion(null, SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("", SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("not-a-version", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+  });
+
+  it("readIpAddressVersion returns null when package.json is missing or version is empty", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ip-address-read-"));
+    tempDirs.push(dir);
+    expect(readIpAddressVersion(dir)).toBeNull();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "ip-address", version: "" }));
+    expect(readIpAddressVersion(dir)).toBeNull();
+  });
+
+  it("parseNpmShrinkwrapIpAddressVersion reads legacy shrinkwrap dependency shapes", () => {
+    const fromPackages = parseNpmShrinkwrapIpAddressVersion(
+      JSON.stringify({
+        packages: { "node_modules/ip-address": { version: "10.7.4" } },
+      }),
+    );
+    expect(fromPackages).toBe("10.7.4");
+
+    const fromDependencies = parseNpmShrinkwrapIpAddressVersion(
+      JSON.stringify({
+        dependencies: { "ip-address": { version: "10.7.4" } },
+      }),
+    );
+    expect(fromDependencies).toBe("10.7.4");
+
+    const fromLegacyNodeModules = parseNpmShrinkwrapIpAddressVersion(
+      JSON.stringify({
+        "node_modules/ip-address": { version: "10.7.4" },
+      }),
+    );
+    expect(fromLegacyNodeModules).toBe("10.7.4");
+
+    expect(parseNpmShrinkwrapIpAddressVersion(JSON.stringify({ packages: {} }))).toBeNull();
+    expect(parseNpmShrinkwrapIpAddressVersion(JSON.stringify({ name: "other" }))).toBeNull();
   });
 
   it("keeps pnpm overrides and lockfile on a patched ip-address release", () => {
