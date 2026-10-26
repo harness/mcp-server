@@ -57,6 +57,41 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("plain")).toBe("plain");
   });
+
+  it("prefers nested serviceAccount identity over stale top-level duplicates", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "stale-wrapper-id",
+        serviceAccount: {
+          identifier: "ci-bot",
+          email: "ci-bot@service.harness.io",
+        },
+        tokensCount: 1,
+      }),
+    ).toMatchObject({
+      identifier: "ci-bot",
+      email: "ci-bot@service.harness.io",
+      tokensCount: 1,
+    });
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "flat-only",
+        email: "flat@service.harness.io",
+      }),
+    ).toMatchObject({
+      identifier: "flat-only",
+      email: "flat@service.harness.io",
+    });
+  });
+
+  it("does not copy aggregate metadata when the list item is already flat", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "flat-only",
+        tokensCount: 9,
+      }),
+    ).toEqual({ identifier: "flat-only" });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
