@@ -13,6 +13,7 @@ const GUARDRAILS_DIR = join(REPO_ROOT, "tests/coding-standards");
 /** Vitest files that implement automated checks for docs/coding-standards.md. */
 const ENFORCEMENT_TEST_FILES = [
   "architecture.test.ts",
+  "consolidated-tools-sync.test.ts",
   "consolidated-tools.ts",
   "docs-consistency.test.ts",
   "enforcement-map.test.ts",
@@ -27,7 +28,12 @@ const ENFORCEMENT_TEST_FILES = [
 
 /** Human-readable mapping from standards topics to guard files (documentation for contributors). */
 const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
-  "§1 fixed MCP tool surface": ["architecture.test.ts", "file-organization.test.ts", "consolidated-tools.ts"],
+  "§1 fixed MCP tool surface": [
+    "architecture.test.ts",
+    "consolidated-tools-sync.test.ts",
+    "file-organization.test.ts",
+    "consolidated-tools.ts",
+  ],
   "§2 pure-data toolsets": ["architecture.test.ts"],
   "§4 scoping model": ["scope-params.test.ts", "toolset-scope.test.ts", "registry-contract.test.ts"],
   "§5 identifierFields / metadata": ["registry-contract.test.ts", "registry-metadata.test.ts"],

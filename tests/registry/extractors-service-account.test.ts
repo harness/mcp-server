@@ -156,6 +156,21 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("unwraps paginated aggregate content when the API reports totalItems", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: {
+          content: [nestedAggregate],
+          totalItems: 7,
+        },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot" })],
+      total: 7,
+    });
+  });
+
   it("returns empty items when the envelope has no recognizable list shape", () => {
     expect(serviceAccountListExtract({ status: "SUCCESS" })).toEqual({
       items: [],
