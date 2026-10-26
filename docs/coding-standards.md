@@ -312,6 +312,10 @@ Before every commit, verify:
 - [ ] **`pnpm test` passes** — no regressions
 - [ ] **`pnpm standards:check` passes** — automated architecture guardrails
 
+`pnpm standards:check` runs `tests/coding-standards/` plus `tests/registry/structural-validation.test.ts`. The consolidated tool list lives in `tests/coding-standards/consolidated-tools.ts`; `enforcement-map.test.ts` ties this checklist to those test modules so rules cannot drift silently.
+
+> **Note:** Some external automation prompts still cite “10 tools” and Zod v3. The canonical contract is this document and `AGENTS.md`: **11** consolidated tools (including `harness_schema`), Zod v4 (`zod/v4`), and `registerTool()` (not legacy `server.tool()`).
+
 ---
 
 ## What NOT to Do

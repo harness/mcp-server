@@ -5,26 +5,9 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { Registry } from "../../src/registry/index.js";
+import { HANDLER_FILES, WRITE_TOOL_FILES } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
-
-const WRITE_HANDLER_FILES = [
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-];
-
-const HANDLER_FILES = [
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  ...WRITE_HANDLER_FILES,
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-status.ts",
-  "src/tools/harness-schema.ts",
-];
 
 const MINIMAL_CONFIG = {
   HARNESS_API_KEY: "pat.testaccount.testtoken.testsecret",
@@ -134,7 +117,7 @@ describe("Coding standards — write handler safety", () => {
   it("write/execute handlers use confirmViaElicitation before dispatch", () => {
     const violations: string[] = [];
 
-    for (const file of WRITE_HANDLER_FILES) {
+    for (const file of WRITE_TOOL_FILES) {
       const content = readFileSync(join(REPO_ROOT, file), "utf8");
       if (!content.includes("confirmViaElicitation")) {
         violations.push(`${file}: missing confirmViaElicitation`);
