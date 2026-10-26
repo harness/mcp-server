@@ -12,44 +12,17 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
+import {
+  ALLOWED_HARNESS_HANDLER_FILES,
+  ALLOWED_MCP_TOOLS,
+  ALLOWED_REGISTER_TOOL_FILES_SET as ALLOWED_REGISTER_TOOL_FILES,
+  CONSOLIDATED_MCP_TOOL_COUNT,
+  REGISTER_TOOL_INDEX_SUFFIXES,
+  WRITE_TOOL_FILES,
+} from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
-
-/** The only MCP tools allowed in the server. */
-const ALLOWED_MCP_TOOLS = new Set([
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-]);
-
-/** Only these files may call server.registerTool(). */
-const ALLOWED_REGISTER_TOOL_FILES = new Set([
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-status.ts",
-  "src/tools/harness-schema.ts",
-]);
-
-/** Only these harness-*.ts handler files may exist under src/tools/. */
-const ALLOWED_HARNESS_HANDLER_FILES = new Set([
-  ...ALLOWED_REGISTER_TOOL_FILES,
-]);
 
 /** Toolset helper modules — not required to export a ToolsetDefinition. */
 const TOOLSET_HELPER_FILES = new Set([
@@ -70,13 +43,6 @@ const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
   "src/registry/toolsets/knowledge-graph.ts": 1,
   "src/registry/toolsets/sto.ts": 3,
 };
-
-const WRITE_TOOL_FILES = [
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-] as const;
 
 /** Forbidden import patterns in toolset definition files. */
 const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
@@ -176,22 +142,10 @@ describe("Coding standards — MCP tool handlers", () => {
     const indexPath = join(SRC, "tools/index.ts");
     const content = readFileSync(indexPath, "utf8");
     const registerCalls = [...content.matchAll(/\bregister(\w+)Tool\s*\(/g)].map((m) => m[1]!);
-    const expected = [
-      "List",
-      "Get",
-      "Create",
-      "Update",
-      "Delete",
-      "Execute",
-      "Diagnose",
-      "Search",
-      "Describe",
-      "Status",
-      "Schema",
-    ];
+    const expected = [...REGISTER_TOOL_INDEX_SUFFIXES];
 
     expect([...registerCalls].sort()).toEqual([...expected].sort());
-    expect(registerCalls).toHaveLength(11);
+    expect(registerCalls).toHaveLength(CONSOLIDATED_MCP_TOOL_COUNT);
   });
 
   it("registers exactly the 11 allowed consolidated MCP tools", () => {
