@@ -308,8 +308,9 @@ Most commit-checklist items above are enforced in CI via `pnpm standards:check` 
 | `identifierFields`, deep links, `operationPolicy` | `registry-metadata.test.ts`, `structural-validation.test.ts` |
 | File organization (`src/tools/` vs toolsets) | `file-organization.test.ts` |
 | Documentation drift (11 tools, Zod v4) | `docs-consistency.test.ts` |
+| Commit checklist ↔ tests/CI mapping | `commit-checklist-coverage.test.ts` |
 
-The living index in `tests/coding-standards/enforcement-map.test.ts` lists every mapped standard and fails if a referenced test file is missing. Two items remain manual at PR review time: never returning secret values in tool output, and human review of destructive-operation flows beyond the `confirm` / elicitation guards.
+The living index in `tests/coding-standards/enforcement-map.test.ts` lists every mapped standard and fails if a referenced test file is missing. `commit-checklist-coverage.test.ts` ensures each bullet in the commit checklist below maps to automated tests, CI steps, or an explicit manual-only note. Two items remain manual at PR review time: never returning secret values in tool output, and human review of destructive-operation flows beyond the `confirm` / elicitation guards.
 
 ---
 

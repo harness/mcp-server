@@ -96,6 +96,10 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     tests: ["tests/coding-standards/docs-consistency.test.ts"],
   },
   {
+    standard: "Commit checklist mapped to tests, CI, or manual review",
+    tests: ["tests/coding-standards/commit-checklist-coverage.test.ts"],
+  },
+  {
     standard: "Production container image Debian/OpenSSL and adm-zip install prerequisites",
     tests: [
       "tests/docker/production-dockerfile.test.ts",
