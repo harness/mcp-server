@@ -31,6 +31,14 @@ function parsePnpmLockPackageVersions(lockfileText: string, packageName: string)
   return [...versions];
 }
 
+function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+  };
+  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
+  return typeof version === "string" ? version : null;
+}
+
 describe("express-rate-limit security pin", () => {
   it("declares a patched floor in pnpm overrides", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
@@ -53,6 +61,13 @@ describe("express-rate-limit security pin", () => {
 
   it("materializes a patched express-rate-limit copy in the pnpm virtual store after install", () => {
     const version = readPnpmExpressRateLimitVersion();
+    expect(isSecureIpAddressVersion(version, SECURE_EXPRESS_RATE_LIMIT_VERSION)).toBe(true);
+  });
+
+  it("documents a patched express-rate-limit release in npm-shrinkwrap.json for global npm installs", () => {
+    const shrinkwrapText = readFileSync(join(root, "npm-shrinkwrap.json"), "utf8");
+    const version = parseNpmShrinkwrapPackageVersion(shrinkwrapText, "express-rate-limit");
+    expect(version, "expected express-rate-limit in npm-shrinkwrap.json").not.toBeNull();
     expect(isSecureIpAddressVersion(version, SECURE_EXPRESS_RATE_LIMIT_VERSION)).toBe(true);
   });
 

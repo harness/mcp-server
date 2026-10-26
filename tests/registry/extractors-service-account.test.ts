@@ -98,6 +98,18 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("uses totalItems from aggregate pages when it exceeds the returned page size", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { content: [nestedAggregate], totalItems: 42 },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot" })],
+      total: 42,
+    });
+  });
+
   it("accepts raw data arrays used by account-scope list responses", () => {
     expect(
       serviceAccountListExtract({
