@@ -20,6 +20,7 @@ export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/docker/production-dockerfile.test.ts",
+  "tests/scripts/npm-adm-zip-consumer-wiring.test.ts",
 ] as const;
 
 const PNPM_OVERRIDE_FLOORS: Readonly<Record<string, string>> = {
@@ -31,6 +32,8 @@ const PNPM_OVERRIDE_FLOORS: Readonly<Record<string, string>> = {
   "@hono/node-server": ">=2.0.10",
   vite: "^7.3.7",
   "adm-zip": `>=${SECURE_ADM_ZIP_VERSION}`,
+  "proxy-addr": ">=2.0.8",
+  "path-to-regexp": ">=8.4.0",
 };
 
 describe("Security regression map", () => {
