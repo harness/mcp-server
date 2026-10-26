@@ -10,6 +10,7 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
 const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
+const README_PATH = join(REPO_ROOT, "README.md");
 
 const REQUIRED_TOOLS = [
   "harness_list",
@@ -61,5 +62,12 @@ describe("Coding standards — documentation consistency", () => {
     const contributing = readFileSync(CONTRIBUTING_PATH, "utf8");
     expect(contributing).toContain("pnpm standards:check");
     expect(contributing).toContain("docs/coding-standards.md");
+  });
+
+  it("README.md documents the 11-tool consolidated model (not legacy per-endpoint tools)", () => {
+    const readme = readFileSync(README_PATH, "utf8");
+    expect(readme).toMatch(/11 consolidated tools/);
+    expect(readme).toContain("harness_schema");
+    expect(readme).not.toMatch(/10 consolidated tool/);
   });
 });
