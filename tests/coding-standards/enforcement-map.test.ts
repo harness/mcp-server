@@ -102,6 +102,7 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
       "tests/docker/dockerfile-adm-zip-postinstall.test.ts",
       "tests/docker/production-dockerfile.test.ts",
       "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/express-stack-security-pins.test.ts",
       "tests/scripts/http-framework-security-pins.test.ts",
       "tests/scripts/ip-address-security-lib.test.ts",
       "tests/scripts/npm-shrinkwrap-security.test.ts",

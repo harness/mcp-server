@@ -14,6 +14,7 @@ const SECURITY_REGRESSION_TEST_FILES = [
   "tests/docker/production-dockerfile.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
+  "tests/scripts/express-stack-security-pins.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/npm-shrinkwrap-security.test.ts",
@@ -29,6 +30,9 @@ const REQUIRED_PNPM_OVERRIDE_FLOORS: Record<string, string> = {
   "@hono/node-server": "2.0.10",
   "adm-zip": "0.6.1",
   "express-rate-limit": "8.2.2",
+  "path-to-regexp": "8.4.0",
+  "proxy-addr": "2.0.8",
+  qs: "6.16.0",
 };
 
 describe("Security regression — enforcement map", () => {
