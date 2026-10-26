@@ -30,6 +30,7 @@ const SECURITY_REGRESSION_GUARDS: SecurityRegressionEntry[] = [
     tests: [
       "tests/scripts/cve-dependency-pins.test.ts",
       "tests/scripts/adm-zip-security-lib.test.ts",
+      "tests/scripts/npm-shrinkwrap-check.test.ts",
     ],
   },
   {

@@ -107,6 +107,17 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("uses totalItems when totalElements is absent (NG aggregate list)", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [aggregateItem], totalItems: 42 },
+      }),
+    ).toEqual({
+      items: [flattenServiceAccountAggregate(aggregateItem)],
+      total: 42,
+    });
+  });
+
   it("returns an empty list for a raw data array with no items", () => {
     expect(serviceAccountListExtract({ data: [] })).toEqual({ items: [], total: 0 });
   });
