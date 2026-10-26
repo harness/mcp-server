@@ -23,4 +23,24 @@ describe("Production Dockerfile — Debian OpenSSL refresh (#1154)", () => {
     expect(dockerfile).toContain("COPY --from=toolchain /usr/local/bin/node");
     expect(dockerfile).not.toMatch(/pnpm install.*production-dependencies/);
   });
+
+  it("copies adm-zip postinstall scripts before pnpm install in dependency stages", () => {
+    const stageSnippet = (marker: string) => {
+      const after = dockerfile.split(marker)[1];
+      expect(after, `missing Dockerfile stage ${marker}`).toBeTruthy();
+      return after!.split(/^FROM /m)[0]!;
+    };
+
+    for (const stage of [
+      stageSnippet("FROM toolchain AS build"),
+      stageSnippet("FROM toolchain AS production-dependencies"),
+    ]) {
+      const copyIdx = stage.indexOf(
+        "COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/",
+      );
+      const installIdx = stage.indexOf("RUN pnpm install");
+      expect(copyIdx).toBeGreaterThan(-1);
+      expect(installIdx).toBeGreaterThan(copyIdx);
+    }
+  });
 });
