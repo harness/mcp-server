@@ -66,4 +66,19 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
       /apt-get install -y --no-install-recommends[\s\S]*\bca-certificates\b[\s\S]*\blibgomp1\b[\s\S]*\blibstdc\+\+6\b/,
     );
   });
+
+  it("installs libpcre2 alongside OpenSSL in the production apt set", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\blibpcre2-8-0\b[\s\S]*\blibssl3\b/,
+    );
+  });
+
+  it("scopes DEBIAN_SECURITY_REFRESH to the production stage so build caches stay stable", () => {
+    const productionMarker = dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production");
+    expect(productionMarker, "expected production stage marker").toBeGreaterThan(-1);
+    const beforeProduction = dockerfile.slice(0, productionMarker);
+    expect(beforeProduction).not.toContain("DEBIAN_SECURITY_REFRESH");
+    expect(productionStage(dockerfile)).toMatch(/^ARG DEBIAN_SECURITY_REFRESH=/m);
+  });
 });
