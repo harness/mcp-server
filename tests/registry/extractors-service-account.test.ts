@@ -59,6 +59,11 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
   });
+
+  it("omits governanceMetadata and other non-identity fields from nested aggregates", () => {
+    expect(flattenServiceAccountAggregate(aggregateItem)).not.toHaveProperty("governanceMetadata");
+    expect(flattenServiceAccountAggregate(aggregateItem)).not.toHaveProperty("serviceAccount");
+  });
 });
 
 describe("serviceAccountListExtract", () => {
@@ -83,6 +88,15 @@ describe("serviceAccountListExtract", () => {
       items: [flattenServiceAccountAggregate(aggregateItem)],
       total: 1,
     });
+  });
+
+  it("returns an empty list when the account-scope API responds with data: []", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: [],
+      }),
+    ).toEqual({ items: [], total: 0 });
   });
 });
 
