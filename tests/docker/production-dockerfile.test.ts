@@ -36,6 +36,20 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
 
+  it("keeps libpcre2 on the production apt install line for ONNX runtime bindings", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\blibpcre2-8-0\b/,
+    );
+  });
+
+  it("scopes DEBIAN_SECURITY_REFRESH to the production stage so apt cache busting affects runtime layers", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(/^ARG DEBIAN_SECURITY_REFRESH=\d{4}-\d{2}-\d{2}/m);
+    const buildStages = dockerfile.split("FROM ${RUNTIME_IMAGE} AS production")[0];
+    expect(buildStages).not.toMatch(/DEBIAN_SECURITY_REFRESH/);
+  });
+
   it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
     const stage = productionStage(dockerfile);
     const upgradeIndex = stage.indexOf("apt-get upgrade");
