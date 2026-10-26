@@ -69,6 +69,11 @@ const ENFORCEMENT_TARGETS: EnforcementTarget[] = [
     describeSnippet: "Coding standards — write handler safety",
   },
   {
+    rule: "§9 Client-side rate limiting (RateLimiter in HarnessClient)",
+    testFile: "architecture.test.ts",
+    describeSnippet: "HarnessClient applies RateLimiter on API request paths",
+  },
+  {
     rule: "§11 Singleton HarnessClient and fetch exceptions",
     testFile: "architecture.test.ts",
     describeSnippet: "instantiates HarnessClient only in src/index.ts",
