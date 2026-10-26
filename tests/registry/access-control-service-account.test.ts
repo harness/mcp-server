@@ -134,6 +134,25 @@ describe("service_account resource", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("get: org scope sends org only and omits configured project", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: { identifier: "ci-bot", name: "CI Bot", email: "ci-bot@service.harness.io" },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service_account", "get", {
+      resource_scope: "org",
+      org_id: "platform",
+      service_account_id: "ci-bot",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toBe("/ng/api/serviceaccount/ci-bot");
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("list: raw data array is not dropped", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       status: "SUCCESS",

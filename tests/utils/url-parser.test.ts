@@ -446,6 +446,26 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBeUndefined();
   });
 
+  it("injects resource_scope='org' for org-level service account URLs", () => {
+    const parsed = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/settings/access-control/service-accounts/ci-bot",
+    );
+    expect(parsed.resource_type).toBe("service_account");
+    expect(parsed.resource_id).toBe("ci-bot");
+    expect(parsed.org_id).toBe("myOrg");
+    expect(parsed.project_id).toBeUndefined();
+    expect(parsed.resource_scope).toBe("org");
+
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/settings/access-control/service-accounts/ci-bot",
+      { includeResourceScope: true },
+    );
+    expect(result.resource_scope).toBe("org");
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBeUndefined();
+  });
+
   it("injects resource_scope='project' for project service account URLs", () => {
     const parsed = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/settings/access-control/service-accounts/ci-bot",

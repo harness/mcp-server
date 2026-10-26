@@ -135,6 +135,51 @@ describe("serviceAccountListExtract", () => {
       total: 1,
     });
   });
+
+  it("returns an empty list when account-scope API returns data: []", () => {
+    expect(serviceAccountListExtract({ status: "SUCCESS", data: [] })).toEqual({
+      items: [],
+      total: 0,
+    });
+  });
+
+  it("uses totalElements from paginated aggregate envelopes", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [nestedAggregate], totalElements: 42, totalItems: 1 },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot" })],
+      total: 42,
+    });
+  });
+
+  it("falls back to totalItems when totalElements is absent", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalItems: 7 },
+      }),
+    ).toEqual({ items: [], total: 7 });
+  });
+
+  it("returns empty items for non-object API payloads", () => {
+    expect(serviceAccountListExtract(null)).toEqual({ items: [], total: 0 });
+    expect(serviceAccountListExtract("unexpected")).toEqual({ items: [], total: 0 });
+  });
+
+  it("keeps aggregate metadata when nested serviceAccount is an empty object", () => {
+    expect(
+      serviceAccountListExtract({
+        data: {
+          content: [{ serviceAccount: {}, tokensCount: 3, createdAt: 1 }],
+          totalElements: 1,
+        },
+      }),
+    ).toEqual({
+      items: [{ tokensCount: 3, createdAt: 1 }],
+      total: 1,
+    });
+  });
 });
 
 describe("compact vs nested service account DTO", () => {
