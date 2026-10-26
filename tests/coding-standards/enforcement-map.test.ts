@@ -83,6 +83,10 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
     guardFiles: ["tests/coding-standards/architecture.test.ts"],
   },
   {
+    checklist: "Client-side rate limiting (RateLimiter on HarnessClient)",
+    guardFiles: ["tests/coding-standards/architecture.test.ts", "tests/utils/rate-limiter.test.ts"],
+  },
+  {
     checklist: "Error handling (toMcpError / errorResult)",
     guardFiles: ["tests/coding-standards/error-handling.test.ts"],
   },

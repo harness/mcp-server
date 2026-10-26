@@ -332,6 +332,15 @@ describe("Coding standards — logging and HTTP", () => {
     ).toEqual([]);
   });
 
+  it("HarnessClient enforces client-side rate limiting via RateLimiter", () => {
+    const clientPath = join(SRC, "client/harness-client.ts");
+    const content = readFileSync(clientPath, "utf8");
+    expect(content).toMatch(/import\s+\{\s*RateLimiter\s*\}\s+from/);
+    expect(content).toMatch(/private readonly rateLimiter:\s*RateLimiter/);
+    expect(content).toMatch(/this\.rateLimiter\s*=\s*new RateLimiter\(config\.HARNESS_RATE_LIMIT_RPS\)/);
+    expect(content).toMatch(/await this\.rateLimiter\.acquire\(\)/);
+  });
+
   it("client.request() is only used in documented handler exceptions", () => {
     const violations: string[] = [];
     const toolsDir = join(SRC, "tools");
