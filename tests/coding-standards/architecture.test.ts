@@ -312,6 +312,12 @@ describe("Coding standards — logging and HTTP", () => {
     ).toEqual([]);
   });
 
+  it("HarnessClient enforces client-side rate limiting via RateLimiter", () => {
+    const content = readFileSync(join(SRC, "client/harness-client.ts"), "utf8");
+    expect(content).toContain("new RateLimiter(");
+    expect(content).toMatch(/await this\.rateLimiter\.acquire\(\)/);
+  });
+
   it("instantiates HarnessClient only in src/index.ts", () => {
     const violations: string[] = [];
     const srcFiles = walkTsFiles(SRC);

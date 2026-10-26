@@ -42,6 +42,8 @@ const COMMIT_CHECKLIST_ENFORCEMENT: EnforcementRow[] = [
     tests: [
       "tests/coding-standards/architecture.test.ts",
       "tests/coding-standards/registry-metadata.test.ts",
+      "tests/coding-standards/input-conventions.test.ts",
+      "tests/tools/zod-input-schema-descriptions.test.ts",
     ],
   },
   {
@@ -50,7 +52,11 @@ const COMMIT_CHECKLIST_ENFORCEMENT: EnforcementRow[] = [
   },
   {
     checklistMarker: "Scope is declared correctly",
-    tests: ["tests/coding-standards/registry-contract.test.ts", "tests/coding-standards/toolset-scope.test.ts"],
+    tests: [
+      "tests/coding-standards/registry-contract.test.ts",
+      "tests/coding-standards/toolset-scope.test.ts",
+      "tests/coding-standards/scope-params.test.ts",
+    ],
   },
   {
     checklistMarker: "`identifierFields` are declared",
@@ -62,7 +68,11 @@ const COMMIT_CHECKLIST_ENFORCEMENT: EnforcementRow[] = [
   },
   {
     checklistMarker: "Write operations require confirmation",
-    tests: ["tests/coding-standards/architecture.test.ts", "tests/coding-standards/registry-metadata.test.ts"],
+    tests: [
+      "tests/coding-standards/architecture.test.ts",
+      "tests/coding-standards/registry-metadata.test.ts",
+      "tests/coding-standards/error-handling.test.ts",
+    ],
   },
   {
     checklistMarker: "No secrets exposed",
