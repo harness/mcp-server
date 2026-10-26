@@ -7,9 +7,26 @@ const dockerfilePath = join(process.cwd(), "Dockerfile");
 const OPENSSL_DEBIAN_FLOOR = "3.0.22-1~deb12u2";
 const MIN_DEBIAN_SECURITY_REFRESH = "2026-10-26";
 
+const ADM_ZIP_SCRIPT_COPY =
+  "COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/";
+
+function dockerStageSlice(dockerfile: string, stageName: string, endMarker: string): string {
+  const start = dockerfile.indexOf(`AS ${stageName}`);
+  expect(start, `expected Dockerfile stage ${stageName}`).toBeGreaterThan(-1);
+  const end = dockerfile.indexOf(endMarker, start);
+  expect(end, `expected end marker after ${stageName}`).toBeGreaterThan(start);
+  return dockerfile.slice(start, end);
+}
+
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
   const productionStage = dockerfile.slice(dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"));
+  const buildStage = dockerStageSlice(dockerfile, "build", "FROM toolchain AS production-dependencies");
+  const productionDependenciesStage = dockerStageSlice(
+    dockerfile,
+    "production-dependencies",
+    "FROM ${RUNTIME_IMAGE} AS production",
+  );
 
   it("bumps DEBIAN_SECURITY_REFRESH so GHA layer cache replays apt security upgrades", () => {
     const argMatch = dockerfile.match(/^ARG DEBIAN_SECURITY_REFRESH=(\d{4}-\d{2}-\d{2})/m);
@@ -51,5 +68,17 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
   it("uses debian:bookworm-slim for the production runtime stage", () => {
     expect(dockerfile).toMatch(/ARG RUNTIME_IMAGE=debian:bookworm-slim/);
     expect(productionStage).toMatch(/^FROM \$\{RUNTIME_IMAGE\} AS production/m);
+  });
+
+  it("copies adm-zip postinstall scripts before pnpm install in build and prod-deps stages", () => {
+    for (const stage of [buildStage, productionDependenciesStage]) {
+      const copyIdx = stage.indexOf(ADM_ZIP_SCRIPT_COPY);
+      const installIdx = stage.indexOf("RUN pnpm install");
+      expect(copyIdx, "expected adm-zip security scripts COPY in stage").toBeGreaterThan(-1);
+      expect(installIdx, "expected pnpm install in stage").toBeGreaterThan(-1);
+      expect(copyIdx, "postinstall scripts must exist before install (layer + CVE guard)").toBeLessThan(
+        installIdx,
+      );
+    }
   });
 });

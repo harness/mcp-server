@@ -75,6 +75,10 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("returns an empty list when the API sends data: []", () => {
+    expect(serviceAccountListExtract({ data: [] })).toEqual({ items: [], total: 0 });
+  });
+
   it("accepts raw data arrays (non-aggregate list) and still flattens items", () => {
     const flatItem = {
       identifier: "account-sa",
