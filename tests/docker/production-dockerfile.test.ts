@@ -14,6 +14,28 @@ function productionStage(dockerfile: string): string {
   return dockerfile.slice(start);
 }
 
+function namedStage(dockerfile: string, stageName: string): string {
+  const marker = `AS ${stageName}`;
+  const start = dockerfile.indexOf(marker);
+  expect(start, `expected ${stageName} stage in Dockerfile`).toBeGreaterThan(-1);
+  const nextFrom = dockerfile.indexOf("\nFROM ", start + marker.length);
+  return dockerfile.slice(start, nextFrom === -1 ? undefined : nextFrom);
+}
+
+const ADM_ZIP_SCRIPT_COPY =
+  "COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/";
+
+function expectAdmZipScriptsBeforePnpmInstall(stage: string, stageName: string): void {
+  expect(stage, stageName).toContain(ADM_ZIP_SCRIPT_COPY);
+  const scriptsCopyIndex = stage.indexOf(ADM_ZIP_SCRIPT_COPY);
+  const installIndex = stage.indexOf("RUN pnpm install");
+  expect(installIndex, `${stageName} must run pnpm install`).toBeGreaterThan(-1);
+  expect(scriptsCopyIndex, `${stageName} must copy adm-zip postinstall scripts before install`).toBeGreaterThan(
+    -1,
+  );
+  expect(scriptsCopyIndex).toBeLessThan(installIndex);
+}
+
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
 
@@ -60,5 +82,13 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     const stage = productionStage(dockerfile);
     expect(stage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
     expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
+  });
+
+  it("copies adm-zip postinstall scripts before pnpm install in dependency stages", () => {
+    expectAdmZipScriptsBeforePnpmInstall(namedStage(dockerfile, "build"), "build");
+    expectAdmZipScriptsBeforePnpmInstall(
+      namedStage(dockerfile, "production-dependencies"),
+      "production-dependencies",
+    );
   });
 });
