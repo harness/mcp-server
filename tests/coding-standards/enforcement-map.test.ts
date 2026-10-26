@@ -77,8 +77,10 @@ describe("Coding standards — enforcement map", () => {
     const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
       scripts: { "standards:check": string };
     };
-    expect(pkg.scripts["standards:check"]).toContain("tests/coding-standards");
-    expect(pkg.scripts["standards:check"]).toContain("structural-validation.test.ts");
+    const script = pkg.scripts["standards:check"];
+    expect(script).toContain("tests/coding-standards");
+    expect(script).toContain("structural-validation.test.ts");
+    expect(script).toContain("zod-input-schema-descriptions.test.ts");
   });
 
   it("docs/coding-standards.md is the canonical architecture reference", () => {
