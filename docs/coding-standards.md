@@ -291,6 +291,14 @@ The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `
 
 ---
 
+## Automated Enforcement
+
+`pnpm standards:check` runs the guardrails in `tests/coding-standards/` plus registry structural validation and security regression tests (Docker base image, CVE dependency floors). CI invokes the same script in `.github/workflows/ci.yml`.
+
+The commit checklist below is mirrored in code: see `tests/coding-standards/enforcement-map.test.ts` for which test file enforces each rule. Shared constants for the 11 consolidated MCP tools live in `tests/coding-standards/consolidated-tools.ts`.
+
+---
+
 ## Commit Checklist
 
 Before every commit, verify:

@@ -46,6 +46,8 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md documents pnpm standards:check guardrails", () => {
     expect(standardsContent).toContain("pnpm standards:check");
+    expect(standardsContent).toContain("tests/coding-standards/enforcement-map.test.ts");
+    expect(standardsContent).toMatch(/## Automated Enforcement/);
   });
 
   it("package.json standards:check runs Docker and CVE dependency regression guards", () => {
