@@ -112,6 +112,15 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("returns an empty list when account-scope data is an empty array", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: [],
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
   it("accepts raw data arrays from account-scope list responses", () => {
     expect(
       serviceAccountListExtract({

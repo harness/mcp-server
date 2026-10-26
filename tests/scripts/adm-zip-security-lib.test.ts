@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createRequire } from "node:module";
 import {
   existsSync,
@@ -36,6 +38,13 @@ function writeAdmZip(root: string, version: string) {
 
 describe("adm-zip-security-lib", () => {
   const tempDirs: string[] = [];
+
+  it("runs ensure-secure-adm-zip on postinstall so global npm installs patch transitive copies", () => {
+    const packageJson = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+      scripts: { postinstall?: string };
+    };
+    expect(packageJson.scripts.postinstall).toBe("node scripts/ensure-secure-adm-zip.mjs");
+  });
 
   afterEach(() => {
     for (const dir of tempDirs.splice(0)) {
