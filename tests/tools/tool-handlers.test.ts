@@ -3916,6 +3916,22 @@ describe("harness_describe", () => {
     const data = parseResult(result) as { total_results: number; resource_types: unknown[] };
     expect(data.total_results).toBeGreaterThan(0);
   });
+
+  it("filters the catalog when operation is set (execute includes action names)", async () => {
+    const result = await server.call("harness_describe", { operation: "execute" });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      operation: string;
+      resource_types: Array<{ type: string; actions?: string[]; ops?: unknown }>;
+    };
+    expect(data.operation).toBe("execute");
+    expect(data.resource_types.map((entry) => entry.type).sort()).toEqual(
+      registry.getTypesWithExecuteActions().sort(),
+    );
+    const pipeline = data.resource_types.find((entry) => entry.type === "pipeline");
+    expect(pipeline?.actions).toEqual(Object.keys(registry.getExecuteActions("pipeline") ?? {}));
+    expect(data.resource_types.every((entry) => entry.actions && entry.actions.length > 0)).toBe(true);
+  });
 });
 
 describe("harness_search", () => {
