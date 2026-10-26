@@ -27,6 +27,8 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md documents pnpm standards:check guardrails", () => {
     expect(content).toContain("pnpm standards:check");
+    expect(content).toContain("tests/coding-standards/consolidated-tools.ts");
+    expect(content).toContain("enforcement-map.test.ts");
   });
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {

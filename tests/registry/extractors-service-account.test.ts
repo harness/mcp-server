@@ -52,6 +52,11 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flat.governanceMetadata).toBeUndefined();
     expect(flat.serviceAccount).toBeUndefined();
   });
+
+  it("returns non-record inputs unchanged", () => {
+    expect(flattenServiceAccountAggregate(null)).toBe(null);
+    expect(flattenServiceAccountAggregate("plain")).toBe("plain");
+  });
 });
 
 describe("serviceAccountListExtract", () => {
