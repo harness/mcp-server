@@ -232,6 +232,56 @@ export const userAggregatePageExtract = (raw: unknown): { items: unknown[]; tota
   return { items: paged.items.map(flattenUserAggregate), total: paged.total };
 };
 
+const SERVICE_ACCOUNT_FIELDS = [
+  "identifier",
+  "name",
+  "email",
+  "description",
+  "tags",
+  "accountIdentifier",
+  "orgIdentifier",
+  "projectIdentifier",
+] as const;
+
+const SERVICE_ACCOUNT_AGGREGATE_META = ["createdAt", "lastModifiedAt", "tokensCount"] as const;
+
+/**
+ * Aggregate list items nest the account under `serviceAccount`. Flatten identity
+ * fields so compact mode and follow-up gets see identifier/email. Plain DTOs
+ * (non-aggregate list) pass through with the same fields.
+ */
+export function flattenServiceAccountAggregate(item: unknown): unknown {
+  if (!isRecord(item)) return item;
+  const nested = isRecord(item.serviceAccount) ? item.serviceAccount : undefined;
+  const source = nested ?? item;
+  const out: Record<string, unknown> = {};
+  for (const key of SERVICE_ACCOUNT_FIELDS) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  if (nested) {
+    for (const key of SERVICE_ACCOUNT_AGGREGATE_META) {
+      if (item[key] !== undefined) out[key] = item[key];
+    }
+  }
+  return out;
+}
+
+/**
+ * Service account list is paginated on `/serviceaccount/aggregate` (`data.content`)
+ * and a raw array on `/serviceaccount` (`data: []`). Accept both so account-scope
+ * lists are not dropped by the page extractor.
+ */
+export const serviceAccountListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  if (isRecord(raw) && Array.isArray(raw.data)) {
+    return {
+      items: raw.data.map(flattenServiceAccountAggregate),
+      total: raw.data.length,
+    };
+  }
+  const paged = pageExtract(raw);
+  return { items: paged.items.map(flattenServiceAccountAggregate), total: paged.total };
+};
+
 /**
  * Spring Data page at the response root (no NG `{ data }` envelope):
  * `{ content, totalElements }`. Used by Release Management (RMG) list APIs.

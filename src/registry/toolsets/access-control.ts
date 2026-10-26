@@ -1,5 +1,11 @@
 import type { ToolsetDefinition } from "../types.js";
-import { ngExtract, pageExtract, userAggregateExtract, userAggregatePageExtract } from "../extractors.js";
+import {
+  ngExtract,
+  pageExtract,
+  serviceAccountListExtract,
+  userAggregateExtract,
+  userAggregatePageExtract,
+} from "../extractors.js";
 
 function csvStrings(value: unknown): string[] | undefined {
   if (value == null || value === "") return undefined;
@@ -17,6 +23,28 @@ function asBoolean(value: unknown): boolean | undefined {
 }
 
 /** Keep email/uuid through harness_list compact mode (email is not in the global whitelist). */
+/** Keep email through harness_list compact mode (email is not in the global whitelist). */
+function compactServiceAccountListItem(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "identifier",
+    "name",
+    "email",
+    "description",
+    "tags",
+    "accountIdentifier",
+    "orgIdentifier",
+    "projectIdentifier",
+    "tokensCount",
+    "createdAt",
+    "lastModifiedAt",
+    "openInHarness",
+  ] as const) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
 function compactUserListItem(item: Record<string, unknown>): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
   for (const key of [
@@ -312,26 +340,42 @@ export const accessControlToolset: ToolsetDefinition = {
     {
       resourceType: "service_account",
       displayName: "Service Account",
-      description: "Service account for API access. Supports list, get, create, and delete.",
+      description:
+        "Service account for API access. Supports list, get, create, and delete. Default list/get/create/delete scope is project — pass org_id and project_id (or a project URL) on the first call. Use resource_scope='account' only when the user asked for account-level service accounts.",
       toolset: "access_control",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["service_account_id"],
+      compactItem: compactServiceAccountListItem,
       listFilterFields: [
-        { name: "search_term", description: "Filter service accounts by name or keyword" },
+        { name: "search_term", description: "Filter service accounts by name, identifier, or tag" },
+        {
+          name: "filter_type",
+          description: "Which service accounts to include at this scope",
+          enum: [
+            "EXCLUDE_INHERITED_SERVICE_ACCOUNTS",
+            "INCLUDE_INHERITED_SERVICE_ACCOUNTS",
+            "INCLUDE_CHILD_SCOPE_SERVICE_ACCOUNTS",
+          ],
+        },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/service-accounts/{serviceAccountIdentifier}",
+      diagnosticHint:
+        "If list is empty or get/delete returns 404, the service account may live at another scope — retry with resource_scope=account (no org/project) or resource_scope=org. Use filter_type=INCLUDE_CHILD_SCOPE_SERVICE_ACCOUNTS to include service accounts in child scopes.",
+      deepLinkTemplate:
+        "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/access-control/service-accounts/{serviceAccountIdentifier}",
       operations: {
         list: {
           method: "GET",
-          path: "/ng/api/serviceaccount",
+          path: "/ng/api/serviceaccount/aggregate",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
+            filter_type: "filterType",
             page: "pageIndex",
             size: "pageSize",
           },
-          responseExtractor: pageExtract,
-          description: "List service accounts",
+          responseExtractor: serviceAccountListExtract,
+          description: "List service accounts at account, org, or project scope",
         },
         get: {
           method: "GET",
