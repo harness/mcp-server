@@ -57,6 +57,16 @@ const SECURITY_GUARDS: SecurityGuard[] = [
     testPath: "tests/scripts/pnpm-transitive-security-overrides.test.ts",
     anchors: ["TRANSITIVE_SECURITY_OVERRIDES", "parsePnpmLockPackageVersions"],
   },
+  {
+    area: "Coding standards checklist enforcement map",
+    testPath: "tests/coding-standards/enforcement-map.test.ts",
+    anchors: ["ENFORCEMENT_MAP", "checklistPhrase", "security-output.test.ts"],
+  },
+  {
+    area: "HTTP/logging secret output boundaries (coding standards)",
+    testPath: "tests/coding-standards/security-output.test.ts",
+    anchors: ["redactJsonString", "redactValue", "harness-client.ts"],
+  },
 ];
 
 function parseOverrideFloor(specifier: string): string {
