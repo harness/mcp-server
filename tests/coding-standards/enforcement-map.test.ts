@@ -33,6 +33,15 @@ const RULE_ENFORCEMENT: Record<string, readonly string[]> = {
   "§11 file organization": ["file-organization.test.ts"],
   "Registry contract / operationPolicy": ["registry-contract.test.ts", "../registry/structural-validation.test.ts"],
   "Contributor doc alignment": ["docs-consistency.test.ts"],
+  "Supply-chain / container security regression guards": [
+    "../scripts/npm-publish-security-manifest.test.ts",
+    "../scripts/cve-dependency-pins.test.ts",
+    "../scripts/http-framework-security-pins.test.ts",
+    "../scripts/ip-address-security-lib.test.ts",
+    "../scripts/transitive-security-pins.test.ts",
+    "../scripts/adm-zip-security-lib.test.ts",
+    "../docker/production-dockerfile.test.ts",
+  ],
 };
 
 const EXEMPT_TEST_FILES = new Set(["enforcement-map.test.ts", "consolidated-tools.ts"]);
@@ -73,12 +82,15 @@ describe("Coding standards — enforcement map", () => {
     expect(missing, `Missing enforcement files: ${missing.join(", ")}`).toEqual([]);
   });
 
-  it("package.json standards:check runs coding-standards and structural-validation", () => {
+  it("package.json standards:check runs coding-standards, structural-validation, and security guards", () => {
     const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
       scripts: { "standards:check": string };
     };
-    expect(pkg.scripts["standards:check"]).toContain("tests/coding-standards");
-    expect(pkg.scripts["standards:check"]).toContain("structural-validation.test.ts");
+    const check = pkg.scripts["standards:check"];
+    expect(check).toContain("tests/coding-standards");
+    expect(check).toContain("structural-validation.test.ts");
+    expect(check).toContain("tests/scripts");
+    expect(check).toContain("tests/docker/production-dockerfile.test.ts");
   });
 
   it("docs/coding-standards.md is the canonical architecture reference", () => {
