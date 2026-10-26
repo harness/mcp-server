@@ -70,7 +70,19 @@ const COMMIT_CHECKLIST_ENFORCEMENT: EnforcementRow[] = [
   },
   {
     checklistMarker: "`pnpm standards:check` passes",
-    tests: ["tests/coding-standards/docs-consistency.test.ts"],
+    tests: ["tests/coding-standards/docs-consistency.test.ts", "tests/coding-standards/ci-enforcement.test.ts"],
+  },
+  {
+    checklistMarker: "`pnpm build` passes",
+    tests: ["tests/coding-standards/ci-enforcement.test.ts"],
+  },
+  {
+    checklistMarker: "`pnpm typecheck` passes",
+    tests: ["tests/coding-standards/ci-enforcement.test.ts"],
+  },
+  {
+    checklistMarker: "`pnpm test` passes",
+    tests: ["tests/coding-standards/ci-enforcement.test.ts"],
   },
 ];
 
