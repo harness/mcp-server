@@ -12,6 +12,7 @@ const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
 const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
 const README_PATH = join(REPO_ROOT, "README.md");
+const GEMINI_PATH = join(REPO_ROOT, "docs/gemini.md");
 
 const OUTDATED_ARCHITECTURE_PATTERNS = [
   /10 consolidated tool handlers/,
@@ -70,6 +71,14 @@ describe("Coding standards — documentation consistency", () => {
     const contributing = readFileSync(CONTRIBUTING_PATH, "utf8");
     expect(contributing).toContain("pnpm standards:check");
     expect(contributing).toContain("docs/coding-standards.md");
+  });
+
+  it(`docs/gemini.md stays aligned with the ${CONSOLIDATED_TOOL_COUNT}-tool registry model`, () => {
+    const gemini = readFileSync(GEMINI_PATH, "utf8");
+    expect(gemini).toMatch(new RegExp(`${CONSOLIDATED_TOOL_COUNT} consolidated MCP tools`));
+    for (const pattern of OUTDATED_ARCHITECTURE_PATTERNS) {
+      expect(gemini).not.toMatch(pattern);
+    }
   });
 
   it(`README.md stays aligned with the ${CONSOLIDATED_TOOL_COUNT}-tool registry model`, () => {

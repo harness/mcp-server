@@ -8,27 +8,18 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { HANDLER_FILES } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 
-/** Handlers that dispatch to the registry against the live Harness API. */
-const SCOPE_AWARE_HANDLERS = [
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-status.ts",
-];
-
 /** Local metadata tools — no org_id/project_id required. */
-const LOCAL_ONLY_HANDLERS = [
+const LOCAL_ONLY_HANDLERS = new Set([
   "src/tools/harness-describe.ts",
   "src/tools/harness-schema.ts",
-];
+]);
+
+/** Handlers that dispatch to the registry against the live Harness API. */
+const SCOPE_AWARE_HANDLERS = HANDLER_FILES.filter((file) => !LOCAL_ONLY_HANDLERS.has(file));
 
 function hasOptionalScopeParam(content: string, param: "org_id" | "project_id"): boolean {
   const inline = new RegExp(
@@ -41,6 +32,17 @@ function hasOptionalScopeParam(content: string, param: "org_id" | "project_id"):
 }
 
 describe("Coding standards — scope params on dispatch handlers", () => {
+  it("partitions every consolidated handler into scope-aware vs local-only", () => {
+    expect(SCOPE_AWARE_HANDLERS.length + LOCAL_ONLY_HANDLERS.size).toBe(HANDLER_FILES.length);
+    for (const file of HANDLER_FILES) {
+      const isLocal = LOCAL_ONLY_HANDLERS.has(file);
+      const isScopeAware = SCOPE_AWARE_HANDLERS.includes(file);
+      expect(isLocal !== isScopeAware, `${file} must be exactly one of local-only or scope-aware`).toBe(
+        true,
+      );
+    }
+  });
+
   it("API-dispatch handlers declare optional org_id and project_id", () => {
     const violations: string[] = [];
 
