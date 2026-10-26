@@ -14,7 +14,7 @@ const SECURITY_REGRESSION_GUARDS: ReadonlyArray<{
     testFile: "tests/scripts/cve-dependency-pins.test.ts",
   },
   {
-    artifact: "package.json pnpm.overrides (hono, @hono/node-server, vite)",
+    artifact: "package.json HTTP stack pins (hono, @hono/node-server, vite, vitest devDep)",
     testFile: "tests/scripts/http-framework-security-pins.test.ts",
   },
   {

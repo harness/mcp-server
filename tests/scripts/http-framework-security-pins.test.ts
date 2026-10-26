@@ -8,6 +8,8 @@ const root = process.cwd();
 const SECURE_HONO_VERSION = "4.13.11";
 const SECURE_HONO_NODE_SERVER_VERSION = "2.0.10";
 const SECURE_VITE_VERSION = "7.3.7";
+/** Oct 2026 security patch — vitest devDependency floor (not a pnpm override). */
+const SECURE_VITEST_VERSION = "4.1.12";
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -49,7 +51,7 @@ function expectAtLeastFloor(version: string, floor: string, label: string): void
   expect(isSecureIpAddressVersion(version, floor), `${label}: ${version} < ${floor}`).toBe(true);
 }
 
-describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
+describe("HTTP framework security pins (hono, @hono/node-server, vite, vitest)", () => {
   it("declares patched floors in package.json and pnpm overrides", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
@@ -60,6 +62,7 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
     expect(packageJson.dependencies.hono).toBe(`^${SECURE_HONO_VERSION}`);
     expect(packageJson.dependencies["@hono/node-server"]).toBe(`^${SECURE_HONO_NODE_SERVER_VERSION}`);
     expect(packageJson.devDependencies.vite).toBe(`^${SECURE_VITE_VERSION}`);
+    expect(packageJson.devDependencies.vitest).toBe(`^${SECURE_VITEST_VERSION}`);
 
     expect(packageJson.pnpm.overrides.hono).toBe(`>=${SECURE_HONO_VERSION}`);
     expect(packageJson.pnpm.overrides["@hono/node-server"]).toBe(`>=${SECURE_HONO_NODE_SERVER_VERSION}`);
@@ -88,11 +91,21 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
       { name: "hono", floor: SECURE_HONO_VERSION },
       { name: "@hono/node-server", floor: SECURE_HONO_NODE_SERVER_VERSION },
       { name: "vite", floor: SECURE_VITE_VERSION },
+      { name: "vitest", floor: SECURE_VITEST_VERSION },
     ];
 
     for (const { name, floor } of checks) {
       const version = readInstalledPackageVersion(name);
       expectAtLeastFloor(version, floor, name);
+    }
+  });
+
+  it("resolves patched vitest in pnpm-lock.yaml", () => {
+    const lockText = readFileSync(join(root, "pnpm-lock.yaml"), "utf8");
+    const versions = parsePnpmLockPackageVersions(lockText, "vitest");
+    expect(versions.length, "expected vitest entries in pnpm-lock.yaml").toBeGreaterThan(0);
+    for (const version of versions) {
+      expectAtLeastFloor(version, SECURE_VITEST_VERSION, "vitest");
     }
   });
 });
