@@ -2,6 +2,10 @@
 
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import {
+  parseNpmShrinkwrapPackageVersion,
+  parsePnpmLockPackageVersions,
+} from "./pnpm-lock-parse-lib.mjs";
 
 /** Minimum ip-address release covering NAT64 classification and zone-identifier ReDoS fixes. */
 export const SECURE_IP_ADDRESS_VERSION = "10.7.4";
@@ -278,11 +282,7 @@ export function listInsecureIpAddressInstalls(packageRoot) {
  * @returns {string[]}
  */
 export function parsePnpmLockIpAddressVersions(lockfileText) {
-  const versions = new Set();
-  for (const match of lockfileText.matchAll(/^\s+ip-address@([0-9]+\.[0-9]+\.[0-9]+):/gm)) {
-    versions.add(match[1]);
-  }
-  return [...versions];
+  return parsePnpmLockPackageVersions(lockfileText, "ip-address");
 }
 
 /**
@@ -290,9 +290,5 @@ export function parsePnpmLockIpAddressVersions(lockfileText) {
  * @returns {string | null}
  */
 export function parseNpmShrinkwrapIpAddressVersion(shrinkwrapText) {
-  const shrinkwrap = JSON.parse(shrinkwrapText);
-  const version = shrinkwrap?.packages?.["node_modules/ip-address"]?.version
-    ?? shrinkwrap?.dependencies?.["ip-address"]?.version
-    ?? shrinkwrap?.["node_modules/ip-address"]?.version;
-  return typeof version === "string" ? version : null;
+  return parseNpmShrinkwrapPackageVersion(shrinkwrapText, "ip-address");
 }

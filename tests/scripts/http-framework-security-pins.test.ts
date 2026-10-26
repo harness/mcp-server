@@ -2,39 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
+import { parsePnpmLockPackageVersions } from "../../scripts/pnpm-lock-parse-lib.mjs";
 
 const root = process.cwd();
 
 const SECURE_HONO_VERSION = "4.13.11";
 const SECURE_HONO_NODE_SERVER_VERSION = "2.0.10";
 const SECURE_VITE_VERSION = "7.3.7";
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function parsePnpmLockPackageVersions(lockfileText: string, packageName: string): string[] {
-  const versions = new Set<string>();
-
-  const unquoted = new RegExp(
-    `^\\s+${escapeRegExp(packageName)}@([0-9]+\\.[0-9]+\\.[0-9]+)(?:\\([^)]*\\))?:`,
-    "gm",
-  );
-  for (const match of lockfileText.matchAll(unquoted)) {
-    versions.add(match[1]);
-  }
-
-  // pnpm quotes scoped package keys: '@scope/pkg@1.2.3':
-  const quotedScoped = new RegExp(
-    `^\\s+'${escapeRegExp(packageName)}@([0-9]+\\.[0-9]+\\.[0-9]+)(?:\\([^)]*\\))?'?:`,
-    "gm",
-  );
-  for (const match of lockfileText.matchAll(quotedScoped)) {
-    versions.add(match[1]);
-  }
-
-  return [...versions];
-}
 
 function readInstalledPackageVersion(packageName: string): string {
   const packageJsonPath = join(root, "node_modules", packageName, "package.json");
@@ -94,5 +68,27 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
       const version = readInstalledPackageVersion(name);
       expectAtLeastFloor(version, floor, name);
     }
+  });
+
+  it("parses pnpm lock entries for scoped packages and peer-dependency suffixes", () => {
+    const sample = `
+  hono@4.13.10:
+    resolution: {integrity: old}
+  hono@4.13.11(peer):
+    resolution: {integrity: patched}
+  '@hono/node-server@2.0.9':
+    resolution: {integrity: old}
+  '@hono/node-server@2.0.10(typescript@5.7.3)':
+    resolution: {integrity: patched}
+  vite@7.3.6:
+    resolution: {integrity: old}
+  vite@7.3.7:
+    resolution: {integrity: patched}
+`;
+    expect(parsePnpmLockPackageVersions(sample, "hono").sort()).toEqual(["4.13.10", "4.13.11"]);
+    expect(parsePnpmLockPackageVersions(sample, "@hono/node-server").sort()).toEqual(
+      ["2.0.9", "2.0.10"].sort(),
+    );
+    expect(parsePnpmLockPackageVersions(sample, "vite").sort()).toEqual(["7.3.6", "7.3.7"]);
   });
 });

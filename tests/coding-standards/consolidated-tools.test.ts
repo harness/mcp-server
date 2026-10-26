@@ -86,4 +86,16 @@ describe("consolidated-tools — SSOT integrity", () => {
     }
     expect(importOrder).toEqual([...ALLOWED_REGISTER_TOOL_FILES]);
   });
+
+  it("invokes register*Tool from registerAllTools in consolidated-tool order", () => {
+    const indexContent = readFileSync(join(REPO_ROOT, "src/tools/index.ts"), "utf8");
+    const bodyMatch = indexContent.match(
+      /export function registerAllTools[\s\S]*?\{([\s\S]*?)\n\}/,
+    );
+    expect(bodyMatch, "registerAllTools body").toBeTruthy();
+    const registerOrder = [...bodyMatch![1]!.matchAll(/\bregister(\w+)Tool\s*\(/g)].map(
+      (match) => match[1]!,
+    );
+    expect(registerOrder).toEqual([...REGISTER_TOOL_SUFFIXES]);
+  });
 });
