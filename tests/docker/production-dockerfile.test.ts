@@ -11,6 +11,34 @@ function productionStage(dockerfile: string): string {
   return dockerfile.slice(start);
 }
 
+describe("Dockerfile build stages (postinstall / adm-zip)", () => {
+  const dockerfile = readFileSync(dockerfilePath, "utf8");
+
+  it("copies adm-zip security scripts before pnpm install in build and prod-deps stages", () => {
+    const buildStage = dockerfile.slice(
+      dockerfile.indexOf("FROM toolchain AS build"),
+      dockerfile.indexOf("FROM toolchain AS production-dependencies"),
+    );
+    const prodDepsStage = dockerfile.slice(
+      dockerfile.indexOf("FROM toolchain AS production-dependencies"),
+      dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"),
+    );
+
+    for (const [label, stage] of [
+      ["build", buildStage],
+      ["production-dependencies", prodDepsStage],
+    ] as const) {
+      const copyIndex = stage.indexOf(
+        "COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/",
+      );
+      const installIndex = stage.indexOf("pnpm install");
+      expect(copyIndex, `${label} stage must COPY adm-zip scripts`).toBeGreaterThan(-1);
+      expect(installIndex, `${label} stage must run pnpm install`).toBeGreaterThan(-1);
+      expect(copyIndex).toBeLessThan(installIndex);
+    }
+  });
+});
+
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
 

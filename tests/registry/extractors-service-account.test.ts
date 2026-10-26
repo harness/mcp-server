@@ -63,6 +63,22 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flat.serviceAccount).toBeUndefined();
   });
 
+  it("promotes tags from the nested serviceAccount object", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "tagged-bot",
+          tags: { team: "platform", env: "prod" },
+        },
+        tokensCount: 0,
+      }),
+    ).toEqual({
+      identifier: "tagged-bot",
+      tags: { team: "platform", env: "prod" },
+      tokensCount: 0,
+    });
+  });
+
   it("keeps already-flat DTO fields without aggregate metadata keys", () => {
     expect(
       flattenServiceAccountAggregate({
@@ -128,6 +144,22 @@ describe("serviceAccountListExtract", () => {
         }),
       ],
       total: 42,
+    });
+  });
+
+  it("prefers totalElements over totalItems when both are present", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: {
+          content: [nestedAggregate],
+          totalElements: 10,
+          totalItems: 99,
+        },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot" })],
+      total: 10,
     });
   });
 
