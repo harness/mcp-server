@@ -11,8 +11,8 @@ const OPENSSL_DEBIAN_FLOOR = "3.0.22-1~deb12u2";
 describe("Docker production image security", () => {
   const dockerfile = readFileSync(join(root, "Dockerfile"), "utf8");
 
-  it("installs libssl3 and openssl in the runtime stage", () => {
-    expect(dockerfile).toContain("libssl3 openssl");
+  it("installs runtime OpenSSL and PCRE2 packages in the production stage", () => {
+    expect(dockerfile).toContain("libpcre2-8-0 libssl3 openssl");
   });
 
   it("fails the build when libssl3 or openssl are below the Debian security floor", () => {
