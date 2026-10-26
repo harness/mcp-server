@@ -9,6 +9,7 @@ import { CONSOLIDATED_MCP_TOOLS } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
+const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
@@ -31,5 +32,13 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
+  });
+
+  it("AGENTS.md documents the same 11 consolidated tools as consolidated-tools.ts", () => {
+    const agents = readFileSync(AGENTS_PATH, "utf8");
+    expect(agents).toMatch(/11 consolidated tools/);
+    for (const tool of CONSOLIDATED_MCP_TOOLS) {
+      expect(agents, `missing ${tool} in AGENTS.md`).toContain(tool);
+    }
   });
 });
