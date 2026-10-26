@@ -130,6 +130,8 @@ All Zod schemas in tool handlers must:
 - Rate limit enforced client-side via `RateLimiter`
 - Every `EndpointSpec` must declare `operationPolicy` with appropriate `risk` and `retryPolicy`
 
+**Security regression guardrails:** dependency pins, Dockerfile hardening, and related CVE fixes are covered by dedicated Vitest files listed in `tests/security-regression-inventory.test.ts`. When you add, remove, or rename one of those tests, update the inventory map in that file. `pnpm standards:check` runs the inventory test so missing guardrail files fail CI early.
+
 ### 10. Error Handling Principles
 
 - **Fail loudly** — never swallow errors. Surface Harness API errors with full context (status code, message, correlationId). Use `toMcpError()` to convert `HarnessApiError` to a typed MCP error, and `enrichErrorWithHint()` to attach diagnostic context.
@@ -262,7 +264,7 @@ If your resource uses list filter params not already in `harness_list`'s Zod sch
 pnpm build          # Must compile without errors
 pnpm typecheck      # Must pass strict type checking
 pnpm test           # Must not break existing tests
-pnpm standards:check # Architecture/coding-standards guardrails (see tests/coding-standards/enforcement-map.test.ts)
+pnpm standards:check # Architecture guardrails + security regression inventory (see tests/coding-standards/enforcement-map.test.ts)
 ```
 
 Use the MCP Inspector to manually verify your new resource type:

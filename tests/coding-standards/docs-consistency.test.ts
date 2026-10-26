@@ -38,6 +38,10 @@ describe("Coding standards — documentation consistency", () => {
     expect(content).toContain("pnpm standards:check");
   });
 
+  it("docs/coding-standards.md documents the security regression test inventory", () => {
+    expect(content).toContain("tests/security-regression-inventory.test.ts");
+  });
+
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
