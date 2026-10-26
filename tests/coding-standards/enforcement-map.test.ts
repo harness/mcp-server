@@ -139,6 +139,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     ],
     signal: "SECURITY_REGRESSION_MAP",
   },
+  {
+    rule: "Commit checklist bullets mapped to guardrails (docs/coding-standards.md)",
+    tests: ["tests/coding-standards/commit-checklist-coverage.test.ts"],
+    signal: "CHECKLIST_COVERAGE",
+  },
 ];
 
 describe("Coding standards — enforcement map", () => {
