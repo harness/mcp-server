@@ -65,6 +65,14 @@ const CHECKLIST_GUARDS: ChecklistGuard[] = [
     testFiles: ["error-handling.test.ts", "architecture.test.ts"],
   },
   {
+    rule: "No secrets exposed in tool output (redact utilities and handler tests)",
+    testFiles: ["commit-checklist-coverage.test.ts", "../utils/redact.test.ts"],
+  },
+  {
+    rule: "Commit checklist bullets mapped to automated guards",
+    testFiles: ["commit-checklist-coverage.test.ts"],
+  },
+  {
     rule: "Tool input snake_case and harness_list pagination defaults",
     testFiles: ["input-conventions.test.ts"],
   },
