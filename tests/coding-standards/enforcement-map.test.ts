@@ -51,6 +51,18 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     testBasenames: ["registry-contract.test.ts", "toolset-scope.test.ts"],
   },
   {
+    checklistPhrase: "Dispatch handlers expose optional `org_id` / `project_id`",
+    testBasenames: ["scope-params.test.ts"],
+  },
+  {
+    checklistPhrase: "List pagination defaults",
+    testBasenames: ["input-conventions.test.ts"],
+  },
+  {
+    checklistPhrase: "Error handling uses `errorResult` and `toMcpError`",
+    testBasenames: ["error-handling.test.ts", "architecture.test.ts"],
+  },
+  {
     checklistPhrase: "`identifierFields` are declared",
     testBasenames: ["registry-contract.test.ts"],
   },

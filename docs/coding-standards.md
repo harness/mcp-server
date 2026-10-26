@@ -303,6 +303,9 @@ Before every commit, verify:
 - [ ] **All Zod params have `.describe()` after `.optional()`/`.default()`** — Zod 4 chaining order matters for MCP
 - [ ] **Response extractors are from `extractors.ts`** — reuse shared extractors
 - [ ] **Scope is declared correctly** — `"project"`, `"org"`, or `"account"`
+- [ ] **Dispatch handlers expose optional `org_id` / `project_id`** — config defaults apply when omitted
+- [ ] **List pagination defaults** — `page` default `0`, `size` default `20`, max `100`; snake_case param names
+- [ ] **Error handling uses `errorResult` and `toMcpError`** — never swallow failures
 - [ ] **`identifierFields` are declared** — required for `harness_get` dispatch
 - [ ] **`operationPolicy` on every endpoint** — risk + retryPolicy set correctly
 - [ ] **Write operations require confirmation** — via client elicitation or `confirm: true` when needed
