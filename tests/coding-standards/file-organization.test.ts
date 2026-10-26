@@ -6,7 +6,7 @@
  * src/registry/toolsets/, not as per-domain tool files.
  */
 import { describe, it, expect } from "vitest";
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
@@ -35,6 +35,23 @@ const ALLOWED_TOOLS_SUBDIRS = new Set(["diagnose", "entity-schema"]);
 function rel(path: string): string {
   return relative(REPO_ROOT, path).replace(/\\/g, "/");
 }
+
+/** Key layer entrypoints from docs/coding-standards.md Architecture Overview table. */
+const ARCHITECTURE_LAYER_PATHS = [
+  "src/registry/index.ts",
+  "src/registry/extractors.ts",
+  "src/client/harness-client.ts",
+  "src/utils/logger.ts",
+  "src/utils/errors.ts",
+  "src/tools/index.ts",
+] as const;
+
+describe("Coding standards — architecture layers", () => {
+  it("key registry-driven layer entrypoints exist on disk", () => {
+    const missing = ARCHITECTURE_LAYER_PATHS.filter((p) => !existsSync(join(REPO_ROOT, p)));
+    expect(missing, `Missing architecture layer paths:\n${missing.join("\n")}`).toEqual([]);
+  });
+});
 
 describe("Coding standards — file organization", () => {
   it("src/tools/ contains only the 11 harness handlers and shared helpers", () => {

@@ -8,7 +8,7 @@
  * includes registry-contract, registry-metadata, and structural-validation tests.
  */
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
@@ -103,9 +103,12 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
 
-/** Files that must import Zod via the v4 subpath — computed after walkTsFiles is defined. */
+/** Any src/ file that imports Zod must use the v4 subpath (AGENTS.md / coding-standards). */
 function zodV4RequiredFiles(): string[] {
-  return [join(SRC, "config.ts"), ...walkTsFiles(join(SRC, "tools"))];
+  return walkTsFiles(SRC).filter((file) => {
+    const content = readFileSync(file, "utf8");
+    return content.includes("from \"zod") || content.includes("from 'zod");
+  });
 }
 
 /** Global fetch API calls — not method names like `async fetch(` or interface `fetch(...)`. */
