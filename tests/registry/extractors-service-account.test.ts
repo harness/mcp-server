@@ -83,6 +83,27 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
   });
+
+  it("prefers nested serviceAccount identity over duplicate top-level fields", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "stale-top-level",
+        serviceAccount: {
+          identifier: "nested-sa",
+          email: "nested@service.harness.io",
+        },
+        tokensCount: 1,
+      }),
+    ).toEqual({
+      identifier: "nested-sa",
+      email: "nested@service.harness.io",
+      tokensCount: 1,
+    });
+  });
+
+  it("returns an empty object when aggregate envelope has an empty nested serviceAccount", () => {
+    expect(flattenServiceAccountAggregate({ serviceAccount: {} })).toEqual({});
+  });
 });
 
 describe("serviceAccountListExtract", () => {

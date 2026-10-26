@@ -15,6 +15,7 @@ const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/cve-dependency-pins.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
+  "tests/scripts/npm-shrinkwrap-security.test.ts",
 ] as const;
 
 /** pnpm override keys that must stay at or above documented security floors. */
