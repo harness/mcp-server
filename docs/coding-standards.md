@@ -20,6 +20,10 @@ User → MCP Tool (e.g. harness_list) → Registry.dispatch() → HarnessClient.
 | **Resources** | `src/resources/*.ts` | MCP resource definitions (read-only data for LLMs) |
 | **Prompts** | `src/prompts/*.ts` | MCP prompt templates |
 
+### Automated enforcement
+
+Run `pnpm standards:check` before every commit (also enforced in CI). Guardrails live under `tests/coding-standards/` plus `tests/registry/structural-validation.test.ts`. The canonical list of the 11 consolidated MCP tools and handler file paths is `tests/coding-standards/consolidated-tools.ts` — update it when adding a tool (rare) so docs and architecture tests stay aligned.
+
 ---
 
 ## Rules for Every Commit
