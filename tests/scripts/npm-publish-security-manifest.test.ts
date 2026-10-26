@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -31,5 +32,15 @@ describe("npm publish security manifest (adm-zip postinstall)", () => {
     const script = readFileSync(join(root, "scripts/ensure-secure-adm-zip.mjs"), "utf8");
     expect(script).toContain("HARNESS_MCP_SKIP_ADM_ZIP_PATCH");
     expect(script).toContain('import { ensureSecureAdmZip');
+  });
+
+  it("exits successfully when HARNESS_MCP_SKIP_ADM_ZIP_PATCH suppresses postinstall patching", () => {
+    const result = spawnSync(process.execPath, [join(root, "scripts/ensure-secure-adm-zip.mjs")], {
+      cwd: root,
+      env: { ...process.env, HARNESS_MCP_SKIP_ADM_ZIP_PATCH: "1" },
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr ?? "").not.toMatch(/failed to upgrade adm-zip/);
   });
 });
