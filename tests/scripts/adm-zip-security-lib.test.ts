@@ -51,6 +51,11 @@ describe("adm-zip-security-lib", () => {
     expect(isSecureAdmZipVersion("0.6.0-beta.1", SECURE_ADM_ZIP_VERSION)).toBe(false);
   });
 
+  it("ignores build metadata when comparing the security floor", () => {
+    expect(isSecureAdmZipVersion("0.6.1+build.9", SECURE_ADM_ZIP_VERSION)).toBe(true);
+    expect(isSecureAdmZipVersion("0.5.18+build.1", SECURE_ADM_ZIP_VERSION)).toBe(false);
+  });
+
   it("treats missing or invalid versions as insecure", () => {
     expect(isSecureAdmZipVersion(null, SECURE_ADM_ZIP_VERSION)).toBe(false);
     expect(isSecureAdmZipVersion("", SECURE_ADM_ZIP_VERSION)).toBe(false);
