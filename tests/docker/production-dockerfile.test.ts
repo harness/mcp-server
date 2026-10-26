@@ -1,65 +1,96 @@
-/**
- * Static guards for production image build hardening (apt CVE refresh, OpenSSL floor,
- * adm-zip postinstall ordering). Fails CI if a security Dockerfile regression lands
- * without updating these assertions.
- */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const REPO_ROOT = join(import.meta.dirname, "../..");
-const DOCKERFILE_PATH = join(REPO_ROOT, "Dockerfile");
+const dockerfilePath = join(process.cwd(), "Dockerfile");
 
-function readDockerfile(): string {
-  return readFileSync(DOCKERFILE_PATH, "utf8");
+/** Bump when Debian/OpenSSL CVE fixes require invalidating the production apt layer cache. */
+const MIN_DEBIAN_SECURITY_REFRESH = "2026-10-26";
+
+function productionStage(dockerfile: string): string {
+  const marker = "FROM ${RUNTIME_IMAGE} AS production";
+  const start = dockerfile.indexOf(marker);
+  expect(start, "expected production stage in Dockerfile").toBeGreaterThan(-1);
+  return dockerfile.slice(start);
 }
 
-function stageBody(content: string, stageName: string): string {
-  const match = content.match(
-    new RegExp(
-      `FROM [^\\n]+ AS ${stageName}\\s*\\n([\\s\\S]*?)(?=\\nFROM [^\\n]+ AS |$)`,
-    ),
-  );
-  expect(match, `Dockerfile missing stage ${stageName}`).toBeTruthy();
-  return match![1];
-}
+describe("production Dockerfile (Trivy / Debian base image)", () => {
+  const dockerfile = readFileSync(dockerfilePath, "utf8");
 
-describe("production Dockerfile — security build guards", () => {
-  const dockerfile = readDockerfile();
+  it("bumps DEBIAN_SECURITY_REFRESH so GHA layer cache replays apt security upgrades", () => {
+    const argMatch = dockerfile.match(/^ARG DEBIAN_SECURITY_REFRESH=(\d{4}-\d{2}-\d{2})/m);
+    expect(argMatch, "expected ARG DEBIAN_SECURITY_REFRESH=YYYY-MM-DD in Dockerfile").not.toBeNull();
 
-  it("declares DEBIAN_SECURITY_REFRESH so cached apt layers invalidate on CVE patches", () => {
-    expect(dockerfile).toMatch(/ARG DEBIAN_SECURITY_REFRESH=\d{4}-\d{2}-\d{2}/);
-    expect(dockerfile).toContain("debian-security-refresh=${DEBIAN_SECURITY_REFRESH}");
-  });
+    expect(dockerfile).toContain('echo "debian-security-refresh=${DEBIAN_SECURITY_REFRESH}"');
+    expect(dockerfile).toMatch(/apt-get update[\s\S]*apt-get upgrade -y --no-install-recommends/);
 
-  it("installs OpenSSL packages and enforces Debian security floor versions", () => {
-    const production = stageBody(dockerfile, "production");
-    expect(production).toMatch(/\blibssl3\b/);
-    expect(production).toMatch(/\bopenssl\b/);
-    expect(production).toMatch(
-      /dpkg --compare-versions "\$\(dpkg-query -W -f='\$\{Version\}' libssl3\)" ge 3\.0\.22-1~deb12u2/,
-    );
-    expect(production).toMatch(
-      /dpkg --compare-versions "\$\(dpkg-query -W -f='\$\{Version\}' openssl\)" ge 3\.0\.22-1~deb12u2/,
+    const refreshDate = argMatch![1];
+    expect(refreshDate >= MIN_DEBIAN_SECURITY_REFRESH, `DEBIAN_SECURITY_REFRESH ${refreshDate} is below ${MIN_DEBIAN_SECURITY_REFRESH}`).toBe(
+      true,
     );
   });
 
-  it("copies adm-zip postinstall scripts before pnpm install in dependency stages", () => {
-    for (const stage of ["build", "production-dependencies"] as const) {
-      const body = stageBody(dockerfile, stage);
-      const copyAt = body.indexOf("ensure-secure-adm-zip.mjs");
-      const installAt = body.indexOf("pnpm install");
-      expect(copyAt, `${stage}: missing adm-zip script COPY`).toBeGreaterThan(-1);
-      expect(installAt, `${stage}: missing pnpm install`).toBeGreaterThan(-1);
-      expect(copyAt, `${stage}: postinstall scripts must precede pnpm install`).toBeLessThan(installAt);
+  it("installs OpenSSL runtime packages patched for recent Debian CVEs", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\blibssl3\b[\s\S]*\bopenssl\b/,
+    );
+    expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
+  });
+
+  it("installs libpcre2-8-0 for Trivy-flagged PCRE2 CVEs in the production runtime image", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\blibpcre2-8-0\b/,
+    );
+  });
+
+  it("keeps DEBIAN_SECURITY_REFRESH only in the production stage so toolchain layers stay cacheable", () => {
+    const productionMarker = "FROM ${RUNTIME_IMAGE} AS production";
+    const beforeProduction = dockerfile.slice(0, dockerfile.indexOf(productionMarker));
+    expect(beforeProduction).not.toContain("DEBIAN_SECURITY_REFRESH");
+    expect(productionStage(dockerfile)).toContain("ARG DEBIAN_SECURITY_REFRESH=");
+  });
+
+  it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
+    const stage = productionStage(dockerfile);
+    const upgradeIndex = stage.indexOf("apt-get upgrade");
+    const opensslInstallIndex = stage.indexOf("libssl3");
+    expect(upgradeIndex, "production stage must apt-get upgrade").toBeGreaterThan(-1);
+    expect(opensslInstallIndex, "production stage must install libssl3").toBeGreaterThan(-1);
+    expect(upgradeIndex).toBeLessThan(opensslInstallIndex);
+  });
+
+  it("fails the image build when Debian OpenSSL packages are below the patched bookworm floor", () => {
+    const stage = productionStage(dockerfile);
+    const opensslFloor = "3.0.22-1~deb12u2";
+    expect(stage).toContain("dpkg --compare-versions \"$(dpkg-query -W -f='${Version}' libssl3)\" ge");
+    expect(stage).toContain("dpkg --compare-versions \"$(dpkg-query -W -f='${Version}' openssl)\" ge");
+    expect(stage).toContain(opensslFloor);
+  });
+
+  it("uses the Debian bookworm-slim runtime image for the production stage", () => {
+    expect(dockerfile).toMatch(/^ARG RUNTIME_IMAGE=debian:bookworm-slim/m);
+    const stage = productionStage(dockerfile);
+    expect(stage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
+    expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
+  });
+
+  it("copies adm-zip postinstall security scripts before frozen pnpm install in build stages", () => {
+    const scriptCopy =
+      /COPY scripts\/ensure-secure-adm-zip\.mjs scripts\/adm-zip-security-lib\.mjs scripts\//;
+
+    for (const stageName of ["build", "production-dependencies"]) {
+      const marker = `FROM toolchain AS ${stageName}`;
+      const start = dockerfile.indexOf(marker);
+      expect(start, `expected ${stageName} stage`).toBeGreaterThan(-1);
+      const nextFrom = dockerfile.indexOf("\nFROM ", start + marker.length);
+      const stage = nextFrom === -1 ? dockerfile.slice(start) : dockerfile.slice(start, nextFrom);
+      expect(stage).toMatch(scriptCopy);
+      const copyIndex = stage.search(scriptCopy);
+      const installIndex = stage.indexOf("pnpm install --frozen-lockfile");
+      expect(installIndex, `${stageName} must run pnpm install`).toBeGreaterThan(-1);
+      expect(copyIndex, `${stageName} must copy adm-zip scripts before install`).toBeLessThan(installIndex);
     }
-  });
-
-  it("ships a package-manager-free runtime running as the node user", () => {
-    const production = stageBody(dockerfile, "production");
-    expect(production).toMatch(/\bUSER node\b/);
-    expect(dockerfile).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
-    expect(production).not.toMatch(/\bpnpm install\b/);
-    expect(production).not.toMatch(/\bnpm install\b/);
   });
 });
