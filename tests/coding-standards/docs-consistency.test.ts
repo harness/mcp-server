@@ -8,6 +8,8 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
+const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
+const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
 
 const REQUIRED_TOOLS = [
   "harness_list",
@@ -55,5 +57,21 @@ describe("Coding standards — documentation consistency", () => {
     expect(content).toMatch(/registry-driven/i);
     expect(content).toContain("Registry.dispatch()");
     expect(content).toContain("server.registerTool()");
+  });
+
+  it("AGENTS.md stays aligned with the 11-tool registry model and Zod v4", () => {
+    const agents = readFileSync(AGENTS_PATH, "utf8");
+    expect(agents).toMatch(/11 consolidated tools/);
+    expect(agents).toContain("harness_schema");
+    expect(agents).toMatch(/Zod v4/);
+    expect(agents).toContain("pnpm standards:check");
+    expect(agents).not.toMatch(/10 consolidated tool/);
+    expect(agents).not.toMatch(/\bserver\.tool\(\)/);
+  });
+
+  it("CONTRIBUTING.md points contributors at standards guardrails", () => {
+    const contributing = readFileSync(CONTRIBUTING_PATH, "utf8");
+    expect(contributing).toContain("pnpm standards:check");
+    expect(contributing).toContain("docs/coding-standards.md");
   });
 });
