@@ -7,17 +7,13 @@ import {
   listInsecureAdmZipInstalls,
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
+import {
+  parseNpmShrinkwrapPackageVersion,
+  parsePnpmLockPackageVersions,
+} from "./lockfile-parsers.js";
 
 const require = createRequire(import.meta.url);
 const root = process.cwd();
-
-function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
-  const shrinkwrap = JSON.parse(shrinkwrapText) as {
-    packages?: Record<string, { version?: string }>;
-  };
-  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
-  return typeof version === "string" ? version : null;
-}
 
 function readInstalledPackageVersion(packageName: string): string {
   const packageJsonPath = require.resolve(`${packageName}/package.json`);
@@ -48,6 +44,15 @@ describe("adm-zip dependency pins (CVE-2026-39244 / CVE-2026-76845)", () => {
         "scripts/ensure-secure-adm-zip.mjs",
       ]),
     );
+  });
+
+  it("resolves only patched adm-zip releases in pnpm-lock.yaml", () => {
+    const lockText = readFileSync(join(root, "pnpm-lock.yaml"), "utf8");
+    const versions = parsePnpmLockPackageVersions(lockText, "adm-zip");
+    expect(versions.length, "expected adm-zip entries in pnpm-lock.yaml").toBeGreaterThan(0);
+    for (const version of versions) {
+      expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
+    }
   });
 
   it("documents a patched adm-zip release in npm-shrinkwrap.json for global npm installs", () => {
