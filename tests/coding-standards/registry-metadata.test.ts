@@ -96,6 +96,13 @@ function propertyHasDescribe(_name: string, block: string): boolean {
 describe("Coding standards — registry metadata", () => {
   const registry = new Registry(MINIMAL_CONFIG);
 
+  it("secret resource is metadata-only (values never exposed in descriptions)", () => {
+    const def = registry.getResource("secret");
+    expect(def.description).toMatch(/NEVER|never/);
+    expect(def.operations.get?.description).toMatch(/never exposed/i);
+    expect(def.operations.list?.description).toMatch(/never exposed/i);
+  });
+
   it("declares listFilterFields only on resources with a list operation", () => {
     const violations: string[] = [];
 
