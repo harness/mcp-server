@@ -58,4 +58,11 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
     expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
   });
+
+  it("installs ONNX / Node native runtime libraries in the production stage", () => {
+    const stage = productionStage(dockerfile);
+    for (const pkg of ["ca-certificates", "libgomp1", "libstdc++6", "libpcre2-8-0"]) {
+      expect(stage, `production stage must install ${pkg}`).toContain(pkg);
+    }
+  });
 });
