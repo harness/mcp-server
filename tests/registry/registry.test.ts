@@ -490,6 +490,72 @@ describe("Registry", () => {
     });
   });
 
+  describe("describeByOperation", () => {
+    it("returns only types that support list within a toolset", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+      const result = registry.describeByOperation({ operation: "list", toolset: "pipelines" }) as {
+        operation: string;
+        total_resource_types: number;
+        resource_types: Array<{ type: string }>;
+      };
+      expect(result.operation).toBe("list");
+      expect(result.total_resource_types).toBeGreaterThan(0);
+      const types = result.resource_types.map((r) => r.type);
+      expect(types).toContain("pipeline");
+      for (const type of types) {
+        expect(registry.getResource(type).operations.list).toBeDefined();
+      }
+    });
+
+    it("surfaces execute action names when filtering by execute", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+      const result = registry.describeByOperation({ operation: "execute", toolset: "pipelines" }) as {
+        resource_types: Array<{ type: string; actions?: string[] }>;
+      };
+      const pipeline = result.resource_types.find((r) => r.type === "pipeline");
+      expect(pipeline?.actions?.length).toBeGreaterThan(0);
+      expect(pipeline?.actions).toContain("run");
+    });
+
+    it("intersects operation filter with search_term", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,services" }));
+      const result = registry.describeByOperation({
+        operation: "list",
+        searchTerm: "pipeline",
+      }) as { resource_types: Array<{ type: string }>; total_results: number };
+      const types = result.resource_types.map((r) => r.type);
+      expect(types.length).toBeGreaterThan(0);
+      expect(types.every((t) => registry.getResource(t).operations.list)).toBe(true);
+      expect(types.some((t) => t.includes("pipeline"))).toBe(true);
+    });
+
+    it("includes service_account for list discovery in access_control", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "access_control" }));
+      const result = registry.describeByOperation({ operation: "list", toolset: "access_control" }) as {
+        resource_types: Array<{ type: string }>;
+      };
+      expect(result.resource_types.map((r) => r.type)).toContain("service_account");
+    });
+
+    it("returns guidance when search_term matches nothing under an operation filter", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+      const result = registry.describeByOperation({
+        operation: "list",
+        searchTerm: "zzzz_no_such_resource_type",
+      }) as { total_resource_types: number; hint: string };
+      expect(result.total_resource_types).toBe(0);
+      expect(result.hint).toContain("No matches found");
+    });
+
+    it("rejects unknown toolset filters", () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+      const result = registry.describeByOperation({ operation: "list", toolset: "nonexistent" }) as {
+        error: string;
+      };
+      expect(result.error).toContain('Unknown toolset "nonexistent"');
+    });
+  });
+
   describe("dispatch", () => {
     let registry: Registry;
     beforeEach(() => {
