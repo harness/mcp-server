@@ -295,7 +295,7 @@ The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `
 
 Before every commit, verify:
 
-- [ ] **No new `server.registerTool()` calls** — only toolset definitions added/modified
+- [ ] **No new `registerTool()` outside the 11 consolidated handler files** — extend `src/registry/toolsets/` instead
 - [ ] **No `console.log()`** — only `createLogger()` for stderr output
 - [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 11)
 - [ ] **No new `harness-*.ts` handler files** — the 11 handlers are fixed
@@ -318,7 +318,7 @@ Before every commit, verify:
 
 | Anti-Pattern | Why It Breaks Things |
 |-------------|---------------------|
-| Add a new `server.registerTool()` call | Breaks the consolidated tool model — use the registry instead |
+| Add `registerTool()` outside the 11 handler files | Breaks the consolidated tool model — use the registry instead |
 | Import `HarnessClient` in a toolset file | Toolsets are pure data — they don't execute HTTP directly |
 | Import `createLogger` in a toolset file | Toolsets are pure data — logging belongs in handlers/infrastructure |
 | Use `console.log()` | Corrupts stdio JSON-RPC transport |

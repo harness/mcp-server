@@ -17,7 +17,7 @@
 
 ## Coding Standards (registry-driven MCP model)
 If this PR adds or changes Harness API coverage:
-- [ ] No new `server.registerTool()` calls — only toolset definitions in `src/registry/toolsets/`
+- [ ] No new `registerTool()` outside the 11 consolidated handler files — only toolset definitions in `src/registry/toolsets/`
 - [ ] Toolset registered in `ALL_TOOLSETS` and `ToolsetName` union
 - [ ] `operationPolicy` on every new/changed endpoint
 - [ ] Shared response extractors from `src/registry/extractors.ts` (no raw passthrough on real endpoints)
