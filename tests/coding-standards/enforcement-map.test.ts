@@ -110,7 +110,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
   },
   {
     rule: "adm-zip CVE patch (postinstall, nested onnxruntime-node)",
-    tests: ["tests/scripts/adm-zip-security-lib.test.ts", "tests/scripts/cve-dependency-pins.test.ts"],
+    tests: [
+      "tests/scripts/adm-zip-security-lib.test.ts",
+      "tests/scripts/adm-zip-postinstall.test.ts",
+      "tests/scripts/cve-dependency-pins.test.ts",
+    ],
     signal: "SECURE_ADM_ZIP_VERSION",
   },
   {
