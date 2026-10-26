@@ -39,6 +39,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "ALLOWED_GLOBAL_FETCH_FILES",
   },
   {
+    rule: "HarnessClient singleton uses RateLimiter.acquire() before API calls",
+    tests: ["tests/coding-standards/architecture.test.ts"],
+    signal: "rateLimiter.acquire",
+  },
+  {
     rule: "No new harness-*.ts handler files under src/tools/",
     tests: ["tests/coding-standards/architecture.test.ts"],
     signal: "ALLOWED_HARNESS_HANDLER_FILES",

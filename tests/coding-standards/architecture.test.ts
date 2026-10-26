@@ -329,6 +329,20 @@ describe("Coding standards — logging and HTTP", () => {
     ).toEqual([]);
   });
 
+  it("HarnessClient applies RateLimiter before outbound Harness API calls", () => {
+    const clientPath = join(SRC, "client/harness-client.ts");
+    const content = readFileSync(clientPath, "utf8");
+    expect(content, "HarnessClient must import RateLimiter").toMatch(
+      /import\s*\{[^}]*RateLimiter[^}]*\}\s*from\s*["'][^"']*rate-limiter/,
+    );
+    expect(content, "HarnessClient must construct RateLimiter from config").toMatch(
+      /new\s+RateLimiter\s*\(\s*config\.HARNESS_RATE_LIMIT_RPS\s*\)/,
+    );
+    expect(content, "HarnessClient must throttle via rateLimiter.acquire()").toMatch(
+      /await\s+this\.rateLimiter\.acquire\s*\(\s*\)/,
+    );
+  });
+
   it("client.request() is only used in documented handler exceptions", () => {
     const violations: string[] = [];
     const toolsDir = join(SRC, "tools");
