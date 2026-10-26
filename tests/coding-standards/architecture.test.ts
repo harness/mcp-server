@@ -12,44 +12,16 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
+import {
+  ALLOWED_HARNESS_HANDLER_FILES,
+  ALLOWED_MCP_TOOLS,
+  ALLOWED_REGISTER_TOOL_FILES,
+  REGISTER_TOOL_HANDLER_FILES,
+  WRITE_HANDLER_FILES,
+} from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
-
-/** The only MCP tools allowed in the server. */
-const ALLOWED_MCP_TOOLS = new Set([
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-]);
-
-/** Only these files may call server.registerTool(). */
-const ALLOWED_REGISTER_TOOL_FILES = new Set([
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-status.ts",
-  "src/tools/harness-schema.ts",
-]);
-
-/** Only these harness-*.ts handler files may exist under src/tools/. */
-const ALLOWED_HARNESS_HANDLER_FILES = new Set([
-  ...ALLOWED_REGISTER_TOOL_FILES,
-]);
 
 /** Toolset helper modules — not required to export a ToolsetDefinition. */
 const TOOLSET_HELPER_FILES = new Set([
@@ -70,13 +42,6 @@ const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
   "src/registry/toolsets/knowledge-graph.ts": 1,
   "src/registry/toolsets/sto.ts": 3,
 };
-
-const WRITE_TOOL_FILES = [
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-] as const;
 
 /** Forbidden import patterns in toolset definition files. */
 const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
@@ -448,7 +413,7 @@ describe("Coding standards — toolset purity", () => {
 });
 
 describe("Coding standards — Zod input schemas", () => {
-  const handlerFiles = [...ALLOWED_REGISTER_TOOL_FILES];
+  const handlerFiles = [...REGISTER_TOOL_HANDLER_FILES];
 
   it("tool handlers use .describe() after .optional() / .default() (Zod 4 chaining)", () => {
     const violations: string[] = [];
@@ -504,7 +469,7 @@ describe("Coding standards — tool handler contracts", () => {
   it("write tool handlers declare confirm param and use elicitation", () => {
     const violations: string[] = [];
 
-    for (const file of WRITE_TOOL_FILES) {
+    for (const file of WRITE_HANDLER_FILES) {
       const content = readFileSync(join(REPO_ROOT, file), "utf8");
       if (!/confirm:\s*z\.boolean\(/.test(content)) {
         violations.push(`${file}: missing confirm z.boolean() input param`);
