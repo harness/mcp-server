@@ -37,4 +37,16 @@ describe("Dockerfile production security", () => {
     expect(productionStage).not.toMatch(/pnpm install/);
     expect(productionStage).toContain('COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node');
   });
+
+  it("copies adm-zip postinstall scripts before pnpm install in build stages", () => {
+    for (const stageName of ["build", "production-dependencies"] as const) {
+      const marker = `FROM toolchain AS ${stageName}`;
+      const stage = dockerfile.slice(dockerfile.indexOf(marker), dockerfile.indexOf(marker) + 600);
+      const copyIndex = stage.indexOf("COPY scripts/ensure-secure-adm-zip.mjs");
+      const installIndex = stage.indexOf("RUN pnpm install");
+      expect(copyIndex, `${stageName}: missing adm-zip script COPY`).toBeGreaterThan(-1);
+      expect(installIndex, `${stageName}: missing pnpm install`).toBeGreaterThan(-1);
+      expect(copyIndex, `${stageName}: adm-zip scripts must precede pnpm install`).toBeLessThan(installIndex);
+    }
+  });
 });
