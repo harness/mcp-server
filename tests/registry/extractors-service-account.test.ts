@@ -135,6 +135,23 @@ describe("serviceAccountListExtract", () => {
       total: 1,
     });
   });
+
+  it("returns an empty list for account-scope responses with no rows", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: [],
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
+  it("preserves paginated aggregate totals when content is empty", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalElements: 0 },
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
 });
 
 describe("compact vs nested service account DTO", () => {
