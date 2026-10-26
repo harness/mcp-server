@@ -135,6 +135,22 @@ describe("serviceAccountListExtract", () => {
       total: 1,
     });
   });
+
+  it("preserves aggregate totalItems when the current page is empty", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalItems: 42 },
+      }),
+    ).toEqual({ items: [], total: 42 });
+  });
+
+  it("passes non-object page entries through flatten unchanged", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [null, "legacy-row"], totalElements: 2 },
+      }),
+    ).toEqual({ items: [null, "legacy-row"], total: 2 });
+  });
 });
 
 describe("compact vs nested service account DTO", () => {

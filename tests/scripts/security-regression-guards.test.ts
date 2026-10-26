@@ -28,6 +28,11 @@ const SECURITY_GUARDS: SecurityGuard[] = [
     anchors: ["SECURE_ADM_ZIP_VERSION", "listInsecureAdmZipInstalls", "pnpm.overrides"],
   },
   {
+    area: "adm-zip postinstall skip env (npm --ignore-scripts)",
+    testPath: "tests/scripts/ensure-secure-adm-zip.test.ts",
+    anchors: ["HARNESS_MCP_SKIP_ADM_ZIP_PATCH", "ensure-secure-adm-zip.mjs", "listInsecureAdmZipInstalls"],
+  },
+  {
     area: "Transitive CVE dependency pins (body-parser, zod, fast-uri, qs, proxy-addr)",
     testPath: "tests/scripts/cve-dependency-pins.test.ts",
     anchors: ["SECURE_ZOD_VERSION", "SECURE_FAST_URI_VERSION", "npm-shrinkwrap.json"],
