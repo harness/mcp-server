@@ -693,7 +693,7 @@ async function main() {
         const createBody = bodyFactory(uniqueId, PROJECT_ID, orgId);
         const createCase = {
           id: `${resourceType}_create`, tier: 4, domain: "CRUD", tool: "harness_create",
-          args: { resource_type: resourceType, body: createBody, confirmation: true, project_id: PROJECT_ID },
+          args: { resource_type: resourceType, body: createBody, confirm: true, project_id: PROJECT_ID },
           check: (r) => {
             const d = parse(r);
             return d?.identifier || d?.name || (d && !r?.isError);
@@ -727,7 +727,7 @@ async function main() {
 
           const updateCase = {
             id: `${resourceType}_update`, tier: 4, domain: "CRUD", tool: "harness_update",
-            args: { resource_type: resourceType, resource_id: uniqueId, body: updateBody, confirmation: true, project_id: PROJECT_ID },
+            args: { resource_type: resourceType, resource_id: uniqueId, body: updateBody, confirm: true, project_id: PROJECT_ID },
             check: (r) => !r?.isError,
             desc: `Update ${resourceType}`,
           };
@@ -750,7 +750,7 @@ async function main() {
         if (createOk) {
           const deleteCase = {
             id: `${resourceType}_delete`, tier: 4, domain: "CRUD", tool: "harness_delete",
-            args: { resource_type: resourceType, resource_id: uniqueId, confirmation: true, project_id: PROJECT_ID },
+            args: { resource_type: resourceType, resource_id: uniqueId, confirm: true, project_id: PROJECT_ID },
             check: (r) => !r?.isError,
             desc: `Delete ${resourceType} (cleanup)`,
           };
@@ -782,7 +782,7 @@ async function main() {
           resource_type: "connector",
           resource_id: discovered.connector,
           body: { connector: { description: "Eval update test " + Date.now() } },
-          confirmation: true,
+          confirm: true,
           project_id: PROJECT_ID,
         },
         check: (r) => !r?.isError,
@@ -797,7 +797,7 @@ async function main() {
             resource_type: "connector",
             resource_id: discovered.connector,
             body: { connector: { description: originalDesc } },
-            confirmation: true,
+            confirm: true,
             project_id: PROJECT_ID,
           });
         } catch { /* best effort restore */ }
@@ -852,7 +852,7 @@ async function main() {
       if (requiredFields.length > 0) {
         const emptyBodyCase = {
           id: `schema_${st.type}_empty`, tier: 6, domain: st.domain, tool: "harness_create",
-          args: { resource_type: st.type, body: {}, confirmation: true, project_id: PROJECT_ID },
+          args: { resource_type: st.type, body: {}, confirm: true, project_id: PROJECT_ID },
           check: (r) => {
             // We EXPECT an error (isError=true) mentioning "Missing required fields"
             // This validates our pre-flight validation is working correctly
@@ -943,7 +943,7 @@ async function main() {
       const createStart = Date.now();
       try {
         const result = await callTool(client, "harness_create", {
-          resource_type: st.type, body: createBody, confirmation: true, project_id: PROJECT_ID,
+          resource_type: st.type, body: createBody, confirm: true, project_id: PROJECT_ID,
         });
         const elapsed = Date.now() - createStart;
         const text = result?.content?.[0]?.text || "";
@@ -986,7 +986,7 @@ async function main() {
       // Cleanup if created
       if (createOk) {
         try {
-          const deleteArgs = { resource_type: st.type, resource_id: uniqueId, confirmation: true, project_id: PROJECT_ID };
+          const deleteArgs = { resource_type: st.type, resource_id: uniqueId, confirm: true, project_id: PROJECT_ID };
           // Pipeline needs pipeline_id
           if (st.type === "pipeline") deleteArgs.resource_id = uniqueId;
           await callTool(client, "harness_delete", deleteArgs);
@@ -1021,7 +1021,7 @@ async function main() {
           resource_type: "connector",
           action: "test_connection",
           resource_id: discovered.connector,
-          confirmation: true,
+          confirm: true,
           project_id: PROJECT_ID,
         },
         check: (r) => {
@@ -1057,7 +1057,7 @@ async function main() {
             feature_flag_name: discovered.fme_feature_flag,
             workspace_id: discovered.fme_workspace,
             environment_id: fmeEnvId,
-            confirmation: true,
+            confirm: true,
           },
           skipIfUnavailable: true,
           check: (r) => !r?.isError,
@@ -1073,7 +1073,7 @@ async function main() {
             feature_flag_name: discovered.fme_feature_flag,
             workspace_id: discovered.fme_workspace,
             environment_id: fmeEnvId,
-            confirmation: true,
+            confirm: true,
           },
           skipIfUnavailable: true,
           check: (r) => !r?.isError,
