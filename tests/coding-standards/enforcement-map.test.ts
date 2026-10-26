@@ -119,6 +119,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "SECURE_PATH_TO_REGEXP_VERSION",
   },
   {
+    rule: "Transitive media and telemetry security pins (sharp, protobufjs, @opentelemetry/core)",
+    tests: ["tests/scripts/transitive-media-security-pins.test.ts"],
+    signal: "SECURE_SHARP_VERSION",
+  },
+  {
     rule: "adm-zip CVE patch (postinstall, nested onnxruntime-node)",
     tests: [
       "tests/scripts/adm-zip-security-lib.test.ts",

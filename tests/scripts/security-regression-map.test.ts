@@ -51,6 +51,12 @@ const SECURITY_REGRESSION_MAP: SecurityRegressionEntry[] = [
     signal: "SECURE_PATH_TO_REGEXP_VERSION",
   },
   {
+    label: "Transitive media and telemetry pins (sharp, protobufjs, @opentelemetry/core)",
+    artifacts: ["package.json", "pnpm-lock.yaml"],
+    tests: ["tests/scripts/transitive-media-security-pins.test.ts"],
+    signal: "SECURE_SHARP_VERSION",
+  },
+  {
     label: "ip-address NAT64 / zone-identifier ReDoS floor",
     artifacts: ["scripts/ip-address-security-lib.mjs"],
     tests: ["tests/scripts/ip-address-security-lib.test.ts"],
