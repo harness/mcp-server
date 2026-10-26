@@ -48,6 +48,9 @@ const ENFORCEMENT_MAP: Record<string, readonly string[]> = {
   "§10 Singleton HarnessClient and fetch allowlist": ["tests/coding-standards/architecture.test.ts"],
   "§11 File organization": ["tests/coding-standards/file-organization.test.ts"],
   "Docs stay aligned with enforced constants": ["tests/coding-standards/docs-consistency.test.ts"],
+  "Security regression guard map (supply chain / image / scope fixes)": [
+    "tests/coding-standards/security-regression-guards.test.ts",
+  ],
 };
 
 function assertGuardFilesExist(rule: string, files: readonly string[]): void {
