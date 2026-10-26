@@ -80,6 +80,19 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
   });
+
+  it("ignores a non-object serviceAccount wrapper and reads top-level identity fields", () => {
+    const malformed = {
+      serviceAccount: "not-an-object",
+      identifier: "still-visible",
+      email: "still@service.harness.io",
+      tokensCount: 1,
+    };
+    expect(flattenServiceAccountAggregate(malformed)).toEqual({
+      identifier: "still-visible",
+      email: "still@service.harness.io",
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
