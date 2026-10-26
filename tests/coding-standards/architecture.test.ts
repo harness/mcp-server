@@ -8,7 +8,7 @@
  * includes registry-contract, registry-metadata, and structural-validation tests.
  */
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
@@ -433,6 +433,17 @@ describe("Coding standards — toolset purity", () => {
     }
 
     expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
+describe("Coding standards — shared extractors regression tests", () => {
+  it("service account aggregate flattening and list totals have vitest coverage", () => {
+    const regressionTest = join(REPO_ROOT, "tests/registry/extractors-service-account.test.ts");
+    expect(existsSync(regressionTest), "missing service account extractor regression tests").toBe(true);
+
+    const extractors = readFileSync(join(SRC, "registry/extractors.ts"), "utf8");
+    expect(extractors).toContain("export function flattenServiceAccountAggregate");
+    expect(extractors).toContain("export const serviceAccountListExtract");
   });
 });
 

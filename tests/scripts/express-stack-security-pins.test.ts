@@ -107,6 +107,7 @@ describe("Express stack security pins (qs, proxy-addr, path-to-regexp, express-r
       { name: "qs", floor: SECURE_QS_VERSION },
       { name: "proxy-addr", floor: SECURE_PROXY_ADDR_VERSION },
       { name: "path-to-regexp", floor: SECURE_PATH_TO_REGEXP_VERSION },
+      { name: "express-rate-limit", floor: SECURE_EXPRESS_RATE_LIMIT_VERSION },
     ];
 
     for (const { name, floor } of checks) {

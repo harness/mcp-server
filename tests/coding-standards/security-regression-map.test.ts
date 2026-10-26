@@ -37,6 +37,9 @@ const REQUIRED_PNPM_OVERRIDE_KEYS = [
   "qs",
   "proxy-addr",
   "path-to-regexp",
+  "hono",
+  "@hono/node-server",
+  "vite",
 ] as const;
 
 describe("Security regression — enforcement map", () => {
