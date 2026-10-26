@@ -64,4 +64,10 @@ describe("Coding standards — contributor docs alignment", () => {
       expect(readme, `missing ${tool} in README.md`).toContain(tool);
     }
   });
+
+  it("README.md documents pnpm standards:check next to other contributor commands", () => {
+    const readme = readFileSync(README_PATH, "utf8");
+    expect(readme).toContain("pnpm standards:check");
+    expect(readme).toMatch(/pnpm test[\s\S]{0,400}pnpm standards:check/);
+  });
 });

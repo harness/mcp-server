@@ -68,6 +68,26 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
     checklist: "Contributor docs aligned with enforced tool count and Zod v4",
     guardFiles: ["tests/coding-standards/docs-consistency.test.ts"],
   },
+  {
+    checklist: "Transitive dependency CVE floors (body-parser, zod, fast-uri, ip-address)",
+    guardFiles: ["tests/scripts/cve-dependency-pins.test.ts", "tests/scripts/ip-address-security-lib.test.ts"],
+  },
+  {
+    checklist: "HTTP framework security pins (hono, @hono/node-server, vite)",
+    guardFiles: ["tests/scripts/http-framework-security-pins.test.ts"],
+  },
+  {
+    checklist: "adm-zip CVE pins and postinstall remediation (onnxruntime-node nested copy)",
+    guardFiles: [
+      "tests/scripts/adm-zip-dependency-pins.test.ts",
+      "tests/scripts/adm-zip-security-lib.test.ts",
+      "tests/release-metadata.test.ts",
+    ],
+  },
+  {
+    checklist: "Production container image Debian/OpenSSL security baseline",
+    guardFiles: ["tests/docker/production-dockerfile.test.ts"],
+  },
 ];
 
 describe("Coding standards — enforcement map", () => {
