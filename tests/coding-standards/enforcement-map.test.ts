@@ -114,8 +114,14 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
       "tests/scripts/adm-zip-security-lib.test.ts",
       "tests/scripts/adm-zip-postinstall.test.ts",
       "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/npm-shrinkwrap-guardrails.test.ts",
     ],
     signal: "SECURE_ADM_ZIP_VERSION",
+  },
+  {
+    rule: "npm-shrinkwrap.json metadata and adm-zip pins (npm-shrinkwrap:check)",
+    tests: ["tests/scripts/npm-shrinkwrap-guardrails.test.ts"],
+    signal: "generate-npm-shrinkwrap.mjs",
   },
   {
     rule: "Service account aggregate list extractors and multi-scope dispatch",

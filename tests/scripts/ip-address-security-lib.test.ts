@@ -78,6 +78,38 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("not-a-version", SECURE_IP_ADDRESS_VERSION)).toBe(false);
   });
 
+  it("readIpAddressVersion returns null when package.json is missing or version is empty", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ip-address-read-"));
+    tempDirs.push(dir);
+    expect(readIpAddressVersion(dir)).toBeNull();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "ip-address", version: "" }));
+    expect(readIpAddressVersion(dir)).toBeNull();
+  });
+
+  it("parseNpmShrinkwrapIpAddressVersion reads legacy shrinkwrap dependency shapes", () => {
+    const fromPackages = parseNpmShrinkwrapIpAddressVersion(
+      JSON.stringify({
+        packages: { "node_modules/ip-address": { version: "10.7.4" } },
+      }),
+    );
+    expect(fromPackages).toBe("10.7.4");
+
+    const fromDependencies = parseNpmShrinkwrapIpAddressVersion(
+      JSON.stringify({
+        dependencies: { "ip-address": { version: "10.7.4" } },
+      }),
+    );
+    expect(fromDependencies).toBe("10.7.4");
+
+    const fromLegacyNodeModules = parseNpmShrinkwrapIpAddressVersion(
+      JSON.stringify({
+        "node_modules/ip-address": { version: "10.7.4" },
+      }),
+    );
+    expect(fromLegacyNodeModules).toBe("10.7.4");
+  });
+
   it("keeps pnpm overrides and lockfile on a patched ip-address release", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     expect(packageJson.pnpm.overrides["ip-address"]).toBe(`>=${SECURE_IP_ADDRESS_VERSION}`);
