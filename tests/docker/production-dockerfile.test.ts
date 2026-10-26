@@ -20,6 +20,15 @@ describe("production Dockerfile — container security gates", () => {
     expect(dockerfile).toContain('echo "debian-security-refresh=${DEBIAN_SECURITY_REFRESH}"');
   });
 
+  it("runs apt-get upgrade in the production stage before installing runtime packages", () => {
+    const productionStage = dockerfile.slice(dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"));
+    const upgradeIndex = productionStage.indexOf("apt-get upgrade");
+    const installIndex = productionStage.indexOf("apt-get install -y --no-install-recommends ca-certificates");
+    expect(upgradeIndex).toBeGreaterThan(-1);
+    expect(installIndex).toBeGreaterThan(upgradeIndex);
+    expect(productionStage).toMatch(/apt-get upgrade -y --no-install-recommends/);
+  });
+
   it("installs OpenSSL packages and enforces patched Debian floor versions", () => {
     const productionStage = dockerfile.slice(dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"));
     expect(productionStage).toContain("libssl3");
