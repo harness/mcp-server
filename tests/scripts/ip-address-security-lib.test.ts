@@ -175,4 +175,25 @@ describe("ip-address-security-lib", () => {
     expect(documentation.isPrivate()).toBe(false);
     expect(documentation.isGlobal()).toBe(false);
   });
+
+  it("parses ip-address versions from pnpm lockfile and npm-shrinkwrap shapes", () => {
+    const lockSample = `
+packages:
+  ip-address@10.7.4:
+    resolution: {integrity: sha512-example}
+  ip-address@10.4.0:
+    resolution: {integrity: sha512-old}
+`;
+    expect(parsePnpmLockIpAddressVersions(lockSample).sort()).toEqual(["10.4.0", "10.7.4"]);
+
+    const shrinkwrapPackages = JSON.stringify({
+      packages: { "node_modules/ip-address": { version: "10.7.4" } },
+    });
+    expect(parseNpmShrinkwrapIpAddressVersion(shrinkwrapPackages)).toBe("10.7.4");
+
+    const shrinkwrapDependencies = JSON.stringify({
+      dependencies: { "ip-address": { version: "10.7.4" } },
+    });
+    expect(parseNpmShrinkwrapIpAddressVersion(shrinkwrapDependencies)).toBe("10.7.4");
+  });
 });

@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -19,6 +20,7 @@ import {
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
 
+const root = process.cwd();
 const require = createRequire(import.meta.url);
 const AdmZip = require("adm-zip") as new () => {
   addFile(name: string, content: Buffer): void;
@@ -116,15 +118,35 @@ describe("adm-zip-security-lib", () => {
   });
 
   it("returns warnings instead of throwing when strict is false", () => {
-    const root = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
-    tempDirs.push(root);
-    writeAdmZip(join(root, "node_modules", "adm-zip"), "0.5.18");
+    const packageRoot = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
+    tempDirs.push(packageRoot);
+    writeAdmZip(join(packageRoot, "node_modules", "adm-zip"), "0.5.18");
 
-    const result = ensureSecureAdmZip(root, {
+    const result = ensureSecureAdmZip(packageRoot, {
       npmCommand: "__missing-npm-binary__",
       strict: false,
     });
     expect(result.warnings.length).toBeGreaterThan(0);
-    expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
+    expect(listInsecureAdmZipInstalls(packageRoot)).toHaveLength(1);
+  });
+
+  it("keeps pnpm overrides and lockfile on a patched adm-zip release", () => {
+    const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    expect(packageJson.pnpm.overrides["adm-zip"]).toBe(`>=${SECURE_ADM_ZIP_VERSION}`);
+    expect(packageJson.overrides["onnxruntime-node"]["adm-zip"]).toBe(SECURE_ADM_ZIP_VERSION);
+
+    const lockText = readFileSync(join(root, "pnpm-lock.yaml"), "utf8");
+    const versions = new Set<string>();
+    for (const match of lockText.matchAll(/^\s+adm-zip@([0-9]+\.[0-9]+\.[0-9]+):/gm)) {
+      versions.add(match[1]);
+    }
+    expect(versions.size).toBeGreaterThan(0);
+    for (const version of versions) {
+      expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
+    }
+  });
+
+  it("flags no vulnerable adm-zip installs under the workspace node_modules", () => {
+    expect(listInsecureAdmZipInstalls(root)).toEqual([]);
   });
 });
