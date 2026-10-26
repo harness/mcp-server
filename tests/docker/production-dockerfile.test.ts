@@ -32,7 +32,17 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toMatch(
       /apt-get install -y --no-install-recommends[\s\S]*\blibssl3\b[\s\S]*\bopenssl\b/,
     );
+    expect(stage).toMatch(/\blibpcre2-8-0\b/);
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
+  });
+
+  it("copies adm-zip postinstall scripts before pnpm install in build stages", () => {
+    expect(dockerfile).toMatch(
+      /FROM toolchain AS build[\s\S]*COPY scripts\/ensure-secure-adm-zip\.mjs scripts\/adm-zip-security-lib\.mjs scripts\/[\s\S]*RUN pnpm install --frozen-lockfile/,
+    );
+    expect(dockerfile).toMatch(
+      /FROM toolchain AS production-dependencies[\s\S]*COPY scripts\/ensure-secure-adm-zip\.mjs scripts\/adm-zip-security-lib\.mjs scripts\/[\s\S]*RUN pnpm install --frozen-lockfile --prod/,
+    );
   });
 
   it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
