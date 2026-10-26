@@ -73,6 +73,23 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("not-a-version", SECURE_IP_ADDRESS_VERSION)).toBe(false);
   });
 
+  it("ignores pre-release suffixes when comparing against the security floor", () => {
+    expect(isSecureIpAddressVersion("10.7.4-beta.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.3-rc.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+    expect(isSecureIpAddressVersion("4.13.10", "4.13.11")).toBe(false);
+    expect(isSecureIpAddressVersion("4.13.11", "4.13.11")).toBe(true);
+  });
+
+  it("parses ip-address lock keys that include peer-dependency suffixes", () => {
+    const sample = `
+  ip-address@10.4.0:
+    resolution: {integrity: old}
+  ip-address@10.7.4(peer):
+    resolution: {integrity: patched}
+`;
+    expect(parsePnpmLockIpAddressVersions(sample).sort()).toEqual(["10.4.0", "10.7.4"]);
+  });
+
   it("keeps pnpm overrides and lockfile on a patched ip-address release", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     expect(packageJson.pnpm.overrides["ip-address"]).toBe(`>=${SECURE_IP_ADDRESS_VERSION}`);

@@ -80,6 +80,9 @@ describe("Coding standards — documentation consistency", () => {
     expect(readme).toMatch(new RegExp(`${CONSOLIDATED_TOOL_COUNT} consolidated tools`));
     expect(readme).toContain("harness_schema");
     expect(readme).not.toMatch(/10 consolidated tools/);
+    for (const tool of CONSOLIDATED_MCP_TOOLS) {
+      expect(readme, `missing ${tool} in README.md`).toContain(tool);
+    }
     for (const pattern of OUTDATED_ARCHITECTURE_PATTERNS) {
       expect(readme).not.toMatch(pattern);
     }

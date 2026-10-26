@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
+import { parsePnpmLockPackageVersions } from "../../scripts/pnpm-lock-parse-lib.mjs";
 
 const root = process.cwd();
 
@@ -18,58 +19,42 @@ function readInstalledPackageVersion(packageName: string): string {
   return manifest.version!;
 }
 
-function parsePnpmLockPackageVersions(lockfileText: string, packageName: string): string[] {
-  const versions = new Set<string>();
-  const unscopedPattern = new RegExp(`^\\s+${packageName}@([0-9]+\\.[0-9]+\\.[0-9]+):`, "gm");
-  for (const match of lockfileText.matchAll(unscopedPattern)) {
-    versions.add(match[1]);
-  }
-
-  if (packageName.includes("/")) {
-    const scopedPattern = new RegExp(
-      `'${packageName.replace("/", "\\/")}@([0-9]+\\.[0-9]+\\.[0-9]+)':`,
-      "g",
-    );
-    for (const match of lockfileText.matchAll(scopedPattern)) {
-      versions.add(match[1]);
-    }
-  }
-
-  return [...versions];
-}
-
-function assertAllAtLeastFloor(versions: string[], floor: string, label: string): void {
-  expect(versions.length, `expected ${label} entries in pnpm-lock.yaml`).toBeGreaterThan(0);
-  for (const version of versions) {
-    expect(isSecureIpAddressVersion(version, floor)).toBe(true);
-  }
+function expectAtLeastFloor(version: string, floor: string, label: string): void {
+  expect(isSecureIpAddressVersion(version, floor), `${label}: ${version} < ${floor}`).toBe(true);
 }
 
 describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
-  it("declares patched floors in pnpm overrides", () => {
+  it("declares patched floors in package.json and pnpm overrides", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
-      pnpm: { overrides: Record<string, string> };
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
+      pnpm: { overrides: Record<string, string> };
     };
+
+    expect(packageJson.dependencies.hono).toBe(`^${SECURE_HONO_VERSION}`);
+    expect(packageJson.dependencies["@hono/node-server"]).toBe(`^${SECURE_HONO_NODE_SERVER_VERSION}`);
+    expect(packageJson.devDependencies.vite).toBe(`^${SECURE_VITE_VERSION}`);
 
     expect(packageJson.pnpm.overrides.hono).toBe(`>=${SECURE_HONO_VERSION}`);
     expect(packageJson.pnpm.overrides["@hono/node-server"]).toBe(`>=${SECURE_HONO_NODE_SERVER_VERSION}`);
     expect(packageJson.pnpm.overrides.vite).toBe(`^${SECURE_VITE_VERSION}`);
-    expect(packageJson.dependencies.hono).toBe(`^${SECURE_HONO_VERSION}`);
-    expect(packageJson.dependencies["@hono/node-server"]).toBe(`^${SECURE_HONO_NODE_SERVER_VERSION}`);
-    expect(packageJson.devDependencies.vite).toBe(`^${SECURE_VITE_VERSION}`);
   });
 
   it("resolves patched releases in pnpm-lock.yaml", () => {
     const lockText = readFileSync(join(root, "pnpm-lock.yaml"), "utf8");
-    assertAllAtLeastFloor(parsePnpmLockPackageVersions(lockText, "hono"), SECURE_HONO_VERSION, "hono");
-    assertAllAtLeastFloor(
-      parsePnpmLockPackageVersions(lockText, "@hono/node-server"),
-      SECURE_HONO_NODE_SERVER_VERSION,
-      "@hono/node-server",
-    );
-    assertAllAtLeastFloor(parsePnpmLockPackageVersions(lockText, "vite"), SECURE_VITE_VERSION, "vite");
+    const checks: Array<{ name: string; floor: string }> = [
+      { name: "hono", floor: SECURE_HONO_VERSION },
+      { name: "@hono/node-server", floor: SECURE_HONO_NODE_SERVER_VERSION },
+      { name: "vite", floor: SECURE_VITE_VERSION },
+    ];
+
+    for (const { name, floor } of checks) {
+      const versions = parsePnpmLockPackageVersions(lockText, name);
+      expect(versions.length, `expected ${name} entries in pnpm-lock.yaml`).toBeGreaterThan(0);
+      for (const version of versions) {
+        expectAtLeastFloor(version, floor, name);
+      }
+    }
   });
 
   it("links patched copies under node_modules after install", () => {
@@ -81,7 +66,29 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
 
     for (const { name, floor } of checks) {
       const version = readInstalledPackageVersion(name);
-      expect(isSecureIpAddressVersion(version, floor)).toBe(true);
+      expectAtLeastFloor(version, floor, name);
     }
+  });
+
+  it("parses pnpm lock entries for scoped packages and peer-dependency suffixes", () => {
+    const sample = `
+  hono@4.13.10:
+    resolution: {integrity: old}
+  hono@4.13.11(peer):
+    resolution: {integrity: patched}
+  '@hono/node-server@2.0.9':
+    resolution: {integrity: old}
+  '@hono/node-server@2.0.10(typescript@5.7.3)':
+    resolution: {integrity: patched}
+  vite@7.3.6:
+    resolution: {integrity: old}
+  vite@7.3.7:
+    resolution: {integrity: patched}
+`;
+    expect(parsePnpmLockPackageVersions(sample, "hono").sort()).toEqual(["4.13.10", "4.13.11"]);
+    expect(parsePnpmLockPackageVersions(sample, "@hono/node-server").sort()).toEqual(
+      ["2.0.9", "2.0.10"].sort(),
+    );
+    expect(parsePnpmLockPackageVersions(sample, "vite").sort()).toEqual(["7.3.6", "7.3.7"]);
   });
 });
