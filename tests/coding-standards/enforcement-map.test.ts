@@ -113,6 +113,7 @@ const COMMIT_CHECKLIST_ENFORCEMENT: ChecklistEntry[] = [
       "tests/coding-standards/consolidated-tools.test.ts",
       "tests/coding-standards/error-handling.test.ts",
       "tests/coding-standards/enforcement-map.test.ts",
+      "tests/coding-standards/security-regression-map.test.ts",
       "tests/registry/structural-validation.test.ts",
     ],
   },
