@@ -2,21 +2,16 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
-import { parsePnpmLockPackageVersions } from "./pnpm-lock-package-versions.js";
+import {
+  parseNpmShrinkwrapPackageVersion,
+  parsePnpmLockPackageVersions,
+} from "./pnpm-lock-package-versions.js";
 
 const root = process.cwd();
 
 const SECURE_HONO_VERSION = "4.13.11";
 const SECURE_HONO_NODE_SERVER_VERSION = "2.0.10";
 const SECURE_VITE_VERSION = "7.3.7";
-
-function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
-  const shrinkwrap = JSON.parse(shrinkwrapText) as {
-    packages?: Record<string, { version?: string }>;
-  };
-  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
-  return typeof version === "string" ? version : null;
-}
 
 function readInstalledPackageVersion(packageName: string): string {
   const packageJsonPath = join(root, "node_modules", packageName, "package.json");

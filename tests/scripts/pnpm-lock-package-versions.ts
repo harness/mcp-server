@@ -27,3 +27,15 @@ export function parsePnpmLockPackageVersions(lockfileText: string, packageName: 
 
   return [...versions];
 }
+
+/** Read a top-level shrinkwrap package version (npm v7+ lockfile layout). */
+export function parseNpmShrinkwrapPackageVersion(
+  shrinkwrapText: string,
+  packageName: string,
+): string | null {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+  };
+  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
+  return typeof version === "string" ? version : null;
+}
