@@ -45,4 +45,15 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md does not regress to outdated 10-tool architecture copy", () => {
+    expect(content).not.toMatch(/10 consolidated tool handlers/);
+    expect(content).not.toMatch(/\bserver\.tool\(\)/);
+  });
+
+  it("docs/coding-standards.md documents registry dispatch and registerTool registration", () => {
+    expect(content).toMatch(/registry-driven/i);
+    expect(content).toContain("Registry.dispatch()");
+    expect(content).toContain("server.registerTool()");
+  });
 });
