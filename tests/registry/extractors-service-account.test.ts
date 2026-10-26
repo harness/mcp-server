@@ -33,6 +33,24 @@ describe("flattenServiceAccountAggregate", () => {
     });
   });
 
+  it("flattens nested description and tags for compact list output", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "tagged-sa",
+          description: "Org-level bot",
+          tags: { team: "platform", env: "prod" },
+        },
+        tokensCount: 0,
+      }),
+    ).toEqual({
+      identifier: "tagged-sa",
+      description: "Org-level bot",
+      tags: { team: "platform", env: "prod" },
+      tokensCount: 0,
+    });
+  });
+
   it("keeps already-flat list DTO fields", () => {
     expect(
       flattenServiceAccountAggregate({

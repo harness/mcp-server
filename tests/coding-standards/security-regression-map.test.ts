@@ -13,6 +13,7 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 const SECURITY_REGRESSION_TEST_FILES = [
   "tests/coding-standards/consolidated-tools-sync.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
+  "tests/scripts/ensure-secure-adm-zip-postinstall.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
   "tests/scripts/dockerfile-production-security.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
