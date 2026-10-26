@@ -1,8 +1,10 @@
+import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
 
+const require = createRequire(import.meta.url);
 const root = process.cwd();
 
 /** pnpm overrides from the Oct 2026 security branch not covered by cve/http-framework pin suites. */
@@ -85,5 +87,14 @@ describe("Additional pnpm security overrides (transitive CVE floors)", () => {
       expect(version, `expected ${name} in npm-shrinkwrap.json`).not.toBeNull();
       expect(isSecureIpAddressVersion(version, floor)).toBe(true);
     }
+  });
+
+  it("links patched @opentelemetry/core under node_modules for the tracing stack", () => {
+    const floor = floors.find((entry) => entry.name === "@opentelemetry/core")!.floor;
+    const manifest = JSON.parse(
+      readFileSync(require.resolve("@opentelemetry/core/package.json"), "utf8"),
+    ) as { version?: string };
+    expect(typeof manifest.version).toBe("string");
+    expect(isSecureIpAddressVersion(manifest.version!, floor)).toBe(true);
   });
 });
