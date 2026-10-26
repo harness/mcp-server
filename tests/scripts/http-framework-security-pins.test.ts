@@ -2,39 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
+import { parsePnpmLockPackageVersions } from "./pnpm-lock-package-versions.js";
 
 const root = process.cwd();
 
 const SECURE_HONO_VERSION = "4.13.11";
 const SECURE_HONO_NODE_SERVER_VERSION = "2.0.10";
 const SECURE_VITE_VERSION = "7.3.7";
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function parsePnpmLockPackageVersions(lockfileText: string, packageName: string): string[] {
-  const versions = new Set<string>();
-
-  const unquoted = new RegExp(
-    `^\\s+${escapeRegExp(packageName)}@([0-9]+\\.[0-9]+\\.[0-9]+)(?:\\([^)]*\\))?:`,
-    "gm",
-  );
-  for (const match of lockfileText.matchAll(unquoted)) {
-    versions.add(match[1]);
-  }
-
-  // pnpm quotes scoped package keys: '@scope/pkg@1.2.3':
-  const quotedScoped = new RegExp(
-    `^\\s+'${escapeRegExp(packageName)}@([0-9]+\\.[0-9]+\\.[0-9]+)(?:\\([^)]*\\))?'?:`,
-    "gm",
-  );
-  for (const match of lockfileText.matchAll(quotedScoped)) {
-    versions.add(match[1]);
-  }
-
-  return [...versions];
-}
 
 function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
   const shrinkwrap = JSON.parse(shrinkwrapText) as {
