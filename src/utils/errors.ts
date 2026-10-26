@@ -1,4 +1,5 @@
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { redactPatTokensInText } from "./redact.js";
 
 /*
  * Error handling convention for tool handlers:
@@ -62,7 +63,7 @@ function sanitizeErrorMessage(message: string): string {
   if (/function\s+\w+\s*\(/.test(message) || /redirectPage|signInPath/.test(message)) {
     return "Harness returned a login redirect. The API key may be invalid or expired.";
   }
-  return message;
+  return redactPatTokensInText(message);
 }
 
 /**
