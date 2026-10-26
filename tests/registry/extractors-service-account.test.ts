@@ -55,6 +55,30 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBeNull();
     expect(flattenServiceAccountAggregate("plain")).toBe("plain");
   });
+
+  it("prefers nested serviceAccount identity over conflicting top-level stub fields", () => {
+    const aggregate = {
+      identifier: "stale-top-level",
+      name: "Stale",
+      email: "stale@example.com",
+      serviceAccount: {
+        identifier: "ci-bot",
+        name: "CI Bot",
+        email: "ci-bot@service.harness.io",
+        accountIdentifier: "acct-1",
+      },
+      createdAt: 1710000000000,
+      tokensCount: 1,
+    };
+    expect(flattenServiceAccountAggregate(aggregate)).toEqual({
+      identifier: "ci-bot",
+      name: "CI Bot",
+      email: "ci-bot@service.harness.io",
+      accountIdentifier: "acct-1",
+      createdAt: 1710000000000,
+      tokensCount: 1,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
@@ -89,6 +113,22 @@ describe("serviceAccountListExtract", () => {
     ).toEqual({
       items: [flatItem],
       total: 1,
+    });
+  });
+
+  it("uses totalItems when the aggregate page omits totalElements", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [nestedAggregate], totalItems: 42 },
+      }),
+    ).toEqual({
+      items: [
+        expect.objectContaining({
+          identifier: "ci-bot",
+          email: "ci-bot@service.harness.io",
+        }),
+      ],
+      total: 42,
     });
   });
 });
