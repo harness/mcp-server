@@ -62,9 +62,18 @@ describe("Coding standards — contributor docs alignment", () => {
     expect(agents).not.toMatch(/\b10 consolidated tools\b/);
   });
 
+  it("AGENTS.md documents the registry-driven extension model and forbids per-endpoint handlers", () => {
+    expect(agents).toContain("src/registry/toolsets/");
+    expect(agents).toMatch(/Do NOT add per-endpoint tool handlers/);
+    expect(agents).toMatch(/adding a declarative toolset in `src\/registry\/toolsets\/`/);
+    expect(agents).toMatch(/Never[\s\S]*Use `console\.log\(\)`/);
+  });
+
   it("CONTRIBUTING.md references standards guardrails and Zod v4 import path", () => {
     expect(contributing).toContain("pnpm standards:check");
     expect(contributing).toMatch(/11 generic MCP tools/);
     expect(contributing).toMatch(/import \* as z from "zod\/v4"/);
+    expect(contributing).toContain("src/registry/toolsets/");
+    expect(contributing).toMatch(/don't need to touch any tool files/);
   });
 });
