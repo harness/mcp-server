@@ -18,6 +18,12 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     const argMatch = dockerfile.match(/^ARG DEBIAN_SECURITY_REFRESH=(\d{4}-\d{2}-\d{2})/m);
     expect(argMatch, "expected ARG DEBIAN_SECURITY_REFRESH=YYYY-MM-DD in Dockerfile").not.toBeNull();
 
+    const refreshDate = argMatch![1];
+    const minimumRefresh = "2026-10-26";
+    expect(refreshDate >= minimumRefresh, `DEBIAN_SECURITY_REFRESH must be >= ${minimumRefresh}`).toBe(
+      true,
+    );
+
     expect(dockerfile).toContain('echo "debian-security-refresh=${DEBIAN_SECURITY_REFRESH}"');
     expect(dockerfile).toMatch(/apt-get update[\s\S]*apt-get upgrade -y --no-install-recommends/);
   });
