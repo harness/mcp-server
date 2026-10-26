@@ -293,6 +293,8 @@ The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `
 
 ## Commit Checklist
 
+Automated vs manual coverage for these items is indexed in `tests/coding-standards/enforcement-map.test.ts` (run via `pnpm standards:check`).
+
 Before every commit, verify:
 
 - [ ] **No new `server.registerTool()` calls** — only toolset definitions added/modified
