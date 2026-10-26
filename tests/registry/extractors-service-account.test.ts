@@ -59,6 +59,26 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(nestedAggregate)).not.toHaveProperty("governanceMetadata");
   });
 
+  it("copies description and tags from the nested serviceAccount DTO", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "sa-tags",
+          email: "sa-tags@example.com",
+          description: "automation bot",
+          tags: { env: "ci" },
+        },
+        tokensCount: 0,
+      }),
+    ).toEqual({
+      identifier: "sa-tags",
+      email: "sa-tags@example.com",
+      description: "automation bot",
+      tags: { env: "ci" },
+      tokensCount: 0,
+    });
+  });
+
   it("keeps already-flat service account DTOs unchanged", () => {
     const flat = {
       identifier: "sa-1",

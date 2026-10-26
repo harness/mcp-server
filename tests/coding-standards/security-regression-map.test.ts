@@ -12,11 +12,15 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 const SECURITY_REGRESSION_TEST_FILES = [
   "tests/docker/dockerfile-adm-zip-postinstall.test.ts",
   "tests/docker/production-dockerfile.test.ts",
+  "tests/registry/access-control-service-account.test.ts",
+  "tests/registry/extractors-service-account.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
+  "tests/scripts/ensure-secure-adm-zip-postinstall.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/npm-shrinkwrap-security.test.ts",
+  "tests/scripts/pnpm-lock-package-versions.test.ts",
 ] as const;
 
 /** pnpm override keys that must stay at or above documented security floors. */
