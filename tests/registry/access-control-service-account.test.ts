@@ -77,7 +77,9 @@ describe("service_account resource", () => {
     const mockRequest = vi.fn().mockResolvedValue(aggregateListResponse);
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "service_account", "list", { search_term: "ci-bot" });
+    const result = (await registry.dispatch(client, "service_account", "list", {
+      search_term: "ci-bot",
+    })) as { items: Record<string, unknown>[] };
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
@@ -85,6 +87,9 @@ describe("service_account resource", () => {
     expect(call.params.searchTerm).toBe("ci-bot");
     expect(call.params.orgIdentifier).toBe("default");
     expect(call.params.projectIdentifier).toBe("test-project");
+    expect(String(result.items[0].openInHarness)).toContain(
+      "/all/orgs/default/projects/test-project/settings/access-control/service-accounts/ci-bot",
+    );
   });
 
   it("list: resource_scope=account omits configured org and project", async () => {
