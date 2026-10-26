@@ -272,7 +272,10 @@ export function flattenServiceAccountAggregate(item: unknown): unknown {
  * lists are not dropped by the page extractor.
  */
 export const serviceAccountListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  if (isRecord(raw) && Array.isArray(raw.data)) {
+  if (!isRecord(raw)) {
+    return { items: [], total: 0 };
+  }
+  if (Array.isArray(raw.data)) {
     return {
       items: raw.data.map(flattenServiceAccountAggregate),
       total: raw.data.length,

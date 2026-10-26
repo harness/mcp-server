@@ -30,7 +30,7 @@ const SECURITY_GUARDS: SecurityGuard[] = [
   {
     area: "Transitive CVE dependency pins (body-parser, zod, fast-uri, qs, proxy-addr)",
     testPath: "tests/scripts/cve-dependency-pins.test.ts",
-    anchors: ["SECURE_ZOD_VERSION", "SECURE_FAST_URI_VERSION", "npm-shrinkwrap.json"],
+    anchors: ["SECURE_ZOD_VERSION", "SECURE_VITEST_VERSION", "SECURE_FAST_URI_VERSION", "npm-shrinkwrap.json"],
   },
   {
     area: "HTTP framework pins (hono, @hono/node-server, vite)",

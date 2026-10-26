@@ -92,6 +92,12 @@ describe("flattenServiceAccountAggregate", () => {
       }),
     ).toEqual({ identifier: "flat-only" });
   });
+
+  it("keeps aggregate metadata when nested serviceAccount has no identity fields", () => {
+    expect(flattenServiceAccountAggregate({ serviceAccount: {}, tokensCount: 3 })).toEqual({
+      tokensCount: 3,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
@@ -134,6 +140,31 @@ describe("serviceAccountListExtract", () => {
       ],
       total: 1,
     });
+  });
+
+  it("uses totalItems from aggregate pages when totalElements is absent", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { content: [nestedAggregate], totalItems: 42 },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot", tokensCount: 2 })],
+      total: 42,
+    });
+  });
+
+  it("returns empty items and zero total for an empty account-scope data array", () => {
+    expect(serviceAccountListExtract({ status: "SUCCESS", data: [] })).toEqual({
+      items: [],
+      total: 0,
+    });
+  });
+
+  it("treats malformed list envelopes as empty pages instead of throwing", () => {
+    expect(serviceAccountListExtract(null)).toEqual({ items: [], total: 0 });
+    expect(serviceAccountListExtract("not-json")).toEqual({ items: [], total: 0 });
+    expect(serviceAccountListExtract({ status: "SUCCESS" })).toEqual({ items: [], total: 0 });
   });
 });
 
