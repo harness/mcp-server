@@ -76,3 +76,42 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
   });
 });
+
+function stageBody(dockerfile: string, stageName: string): string {
+  const fromIndex = dockerfile.indexOf(`FROM toolchain AS ${stageName}`);
+  expect(fromIndex, `expected Dockerfile stage ${stageName}`).toBeGreaterThan(-1);
+  const nextFrom = dockerfile.indexOf("\nFROM ", fromIndex + 1);
+  return nextFrom >= 0 ? dockerfile.slice(fromIndex, nextFrom) : dockerfile.slice(fromIndex);
+}
+
+describe("Dockerfile dependency stages (adm-zip postinstall)", () => {
+  const dockerfile = readFileSync(dockerfilePath, "utf8");
+  const admZipCopy =
+    "COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/";
+
+  for (const stage of ["build", "production-dependencies"] as const) {
+    it(`${stage} stage copies adm-zip security scripts before pnpm install`, () => {
+      const body = stageBody(dockerfile, stage);
+      const copyIndex = body.indexOf(admZipCopy);
+      const installIndex = body.indexOf("pnpm install");
+      expect(copyIndex, `${stage} must COPY adm-zip patch scripts`).toBeGreaterThan(-1);
+      expect(installIndex, `${stage} must run pnpm install`).toBeGreaterThan(-1);
+      expect(copyIndex).toBeLessThan(installIndex);
+    });
+  }
+
+  it("documents why adm-zip scripts must exist before install (package.json postinstall)", () => {
+    expect(dockerfile).toContain("package.json postinstall imports both files");
+    const packageJson = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+      files: string[];
+    };
+    expect(packageJson.scripts.postinstall).toBe("node scripts/ensure-secure-adm-zip.mjs");
+    expect(packageJson.files).toEqual(
+      expect.arrayContaining([
+        "scripts/adm-zip-security-lib.mjs",
+        "scripts/ensure-secure-adm-zip.mjs",
+      ]),
+    );
+  });
+});
