@@ -45,6 +45,14 @@ function assertAllAtLeastFloor(versions: string[], floor: string, label: string)
   }
 }
 
+function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+  };
+  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
+  return typeof version === "string" ? version : null;
+}
+
 describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
   it("declares patched floors in pnpm overrides", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
@@ -83,5 +91,24 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
       const version = readInstalledPackageVersion(name);
       expect(isSecureIpAddressVersion(version, floor)).toBe(true);
     }
+  });
+
+  it("documents patched runtime HTTP deps in npm-shrinkwrap.json for global npm installs", () => {
+    const shrinkwrapText = readFileSync(join(root, "npm-shrinkwrap.json"), "utf8");
+    const checks: Array<{ name: string; floor: string }> = [
+      { name: "hono", floor: SECURE_HONO_VERSION },
+      { name: "@hono/node-server", floor: SECURE_HONO_NODE_SERVER_VERSION },
+    ];
+
+    for (const { name, floor } of checks) {
+      const version = parseNpmShrinkwrapPackageVersion(shrinkwrapText, name);
+      expect(version, `expected ${name} in npm-shrinkwrap.json`).not.toBeNull();
+      expect(isSecureIpAddressVersion(version, floor)).toBe(true);
+    }
+
+    expect(
+      parseNpmShrinkwrapPackageVersion(shrinkwrapText, "vite"),
+      "npm-shrinkwrap is production-only; vite stays a devDependency",
+    ).toBeNull();
   });
 });

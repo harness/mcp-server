@@ -83,6 +83,31 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
   });
+
+  it("does not promote aggregate metadata when the list item is already flat", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "flat-sa",
+        tokensCount: 9,
+        createdAt: 1,
+      }),
+    ).toEqual({
+      identifier: "flat-sa",
+    });
+  });
+
+  it("treats an empty nested serviceAccount envelope as aggregate-shaped (outer identity is not merged)", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {},
+        identifier: "outer-only",
+        email: "outer@service.harness.io",
+        tokensCount: 3,
+      }),
+    ).toEqual({
+      tokensCount: 3,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
