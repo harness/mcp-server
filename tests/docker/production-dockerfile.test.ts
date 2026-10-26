@@ -52,4 +52,18 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(dockerfile).toMatch(/ARG RUNTIME_IMAGE=debian:bookworm-slim/);
     expect(productionStage).toMatch(/^FROM \$\{RUNTIME_IMAGE\} AS production/m);
   });
+
+  it("copies adm-zip postinstall scripts before pnpm install in dependency stages", () => {
+    for (const stage of ["build", "production-dependencies"]) {
+      const stageMatch = dockerfile.match(
+        new RegExp(`FROM toolchain AS ${stage}([\\s\\S]*?)(?=\\nFROM )`),
+      );
+      expect(stageMatch, `expected ${stage} stage in Dockerfile`).not.toBeNull();
+      const body = stageMatch![1];
+      const copyIdx = body.indexOf("COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/");
+      const installIdx = body.indexOf("RUN pnpm install");
+      expect(copyIdx).toBeGreaterThan(-1);
+      expect(installIdx).toBeGreaterThan(copyIdx);
+    }
+  });
 });
