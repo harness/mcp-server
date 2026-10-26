@@ -12,7 +12,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
-import { CONSOLIDATED_MCP_TOOL_SET } from "./consolidated-tools.js";
+import { CONSOLIDATED_MCP_TOOLS, CONSOLIDATED_MCP_TOOL_SET } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
@@ -161,7 +161,7 @@ function extractToolsetNamesFromUnion(): Set<string> {
 }
 
 describe("Coding standards — MCP tool handlers", () => {
-  it("registerAllTools wires exactly the 11 allowed handlers (no extra register* calls)", () => {
+  it("registerAllTools wires exactly the allowed handlers (no extra register* calls)", () => {
     const indexPath = join(SRC, "tools/index.ts");
     const content = readFileSync(indexPath, "utf8");
     const registerCalls = [...content.matchAll(/\bregister(\w+)Tool\s*\(/g)].map((m) => m[1]!);
@@ -180,10 +180,10 @@ describe("Coding standards — MCP tool handlers", () => {
     ];
 
     expect([...registerCalls].sort()).toEqual([...expected].sort());
-    expect(registerCalls).toHaveLength(11);
+    expect(registerCalls).toHaveLength(CONSOLIDATED_MCP_TOOLS.length);
   });
 
-  it("registers exactly the 11 allowed consolidated MCP tools", () => {
+  it("registers exactly the allowed consolidated MCP tools", () => {
     const registered = new Set<string>();
 
     for (const file of ALLOWED_REGISTER_TOOL_FILES) {
@@ -196,7 +196,7 @@ describe("Coding standards — MCP tool handlers", () => {
     expect([...registered].sort()).toEqual([...ALLOWED_MCP_TOOLS].sort());
   });
 
-  it("only allows registerTool() in the 11 harness handler files", () => {
+  it("only allows registerTool() in the harness handler files", () => {
     const violations: string[] = [];
     const srcFiles = walkTsFiles(SRC);
 

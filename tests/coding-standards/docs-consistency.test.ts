@@ -14,11 +14,31 @@ const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
 const README_PATH = join(REPO_ROOT, "README.md");
 
+/** Core rule sections from docs/coding-standards.md — guard against accidental deletion. */
+const REQUIRED_STANDARDS_SECTIONS = [
+  "### 1. Never Add New MCP Tool Handlers",
+  "### 2. Toolset Definitions Are Pure Data",
+  "### 3. Use Shared Response Extractors",
+  "### 4. Follow the Harness Scoping Model",
+  "### 7. Logging Rules (CRITICAL)",
+  "### 11. HTTP Client Is Singleton",
+  "## Commit Checklist",
+  "## What NOT to Do",
+];
+
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
 
-  it("docs/coding-standards.md documents 11 consolidated MCP tools including harness_schema", () => {
-    expect(content).toMatch(/11 consolidated tool handlers/);
+  it("docs/coding-standards.md retains core architecture rule sections", () => {
+    for (const heading of REQUIRED_STANDARDS_SECTIONS) {
+      expect(content, `missing section ${heading}`).toContain(heading);
+    }
+  });
+
+  it("docs/coding-standards.md documents consolidated MCP tools including harness_schema", () => {
+    expect(content).toMatch(
+      new RegExp(`${CONSOLIDATED_MCP_TOOLS.length} consolidated tool handlers`),
+    );
     for (const tool of CONSOLIDATED_MCP_TOOLS) {
       expect(content, `missing ${tool} in docs/coding-standards.md`).toContain(tool);
     }
