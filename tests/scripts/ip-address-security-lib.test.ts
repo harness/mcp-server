@@ -65,6 +65,9 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("10.5.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("10.7.3", SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("10.7.4", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.4-rc.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.4+build", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.3-beta", SECURE_IP_ADDRESS_VERSION)).toBe(false);
   });
 
   it("treats missing or invalid versions as insecure", () => {
@@ -90,6 +93,25 @@ describe("ip-address-security-lib", () => {
     );
     expect(shrinkwrapVersion).not.toBeNull();
     expect(isSecureIpAddressVersion(shrinkwrapVersion, SECURE_IP_ADDRESS_VERSION)).toBe(true);
+  });
+
+  it("parseNpmShrinkwrapIpAddressVersion falls back to legacy shrinkwrap shapes", () => {
+    const packagesOnly = JSON.stringify({
+      packages: { "node_modules/ip-address": { version: "10.7.4" } },
+    });
+    expect(parseNpmShrinkwrapIpAddressVersion(packagesOnly)).toBe("10.7.4");
+
+    const dependenciesOnly = JSON.stringify({
+      dependencies: { "ip-address": { version: "10.7.4" } },
+    });
+    expect(parseNpmShrinkwrapIpAddressVersion(dependenciesOnly)).toBe("10.7.4");
+
+    const legacyTopLevel = JSON.stringify({
+      "node_modules/ip-address": { version: "10.7.4" },
+    });
+    expect(parseNpmShrinkwrapIpAddressVersion(legacyTopLevel)).toBe("10.7.4");
+
+    expect(parseNpmShrinkwrapIpAddressVersion("{}")).toBeNull();
   });
 
   it("flags vulnerable ip-address installs under node_modules", () => {

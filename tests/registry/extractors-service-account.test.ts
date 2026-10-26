@@ -112,6 +112,31 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("uses totalItems from aggregate list responses (Harness default envelope)", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { content: [nestedAggregate], totalItems: 42 },
+      }),
+    ).toEqual({
+      items: [
+        expect.objectContaining({
+          identifier: "ci-bot",
+          email: "ci-bot@service.harness.io",
+        }),
+      ],
+      total: 42,
+    });
+  });
+
+  it("prefers totalElements over totalItems when both are present", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalElements: 3, totalItems: 99 },
+      }),
+    ).toEqual({ items: [], total: 3 });
+  });
+
   it("accepts raw data arrays from account-scope list responses", () => {
     expect(
       serviceAccountListExtract({
