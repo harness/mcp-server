@@ -87,6 +87,11 @@ describe("flattenServiceAccountAggregate", () => {
       email: "flat@service.harness.io",
     });
   });
+
+  it("returns non-object list items unchanged", () => {
+    expect(flattenServiceAccountAggregate(null)).toBe(null);
+    expect(flattenServiceAccountAggregate("legacy-row")).toBe("legacy-row");
+  });
 });
 
 describe("serviceAccountListExtract", () => {

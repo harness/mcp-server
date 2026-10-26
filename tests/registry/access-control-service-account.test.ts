@@ -184,6 +184,33 @@ describe("service_account resource", () => {
     expect(String(result.openInHarness)).not.toContain("/projects/");
   });
 
+  it("get: org scope sends org only and avoids configured project in deep link", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: {
+        identifier: "ci-bot",
+        name: "CI Bot",
+        email: "ci-bot@service.harness.io",
+        orgIdentifier: "platform",
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "service_account", "get", {
+      resource_scope: "org",
+      org_id: "platform",
+      service_account_id: "ci-bot",
+    })) as Record<string, unknown>;
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
+    expect(String(result.openInHarness)).toContain(
+      "/all/orgs/platform/settings/access-control/service-accounts/ci-bot",
+    );
+    expect(String(result.openInHarness)).not.toContain("/projects/");
+  });
+
   it("create: account scope injects account only", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "ci-bot" } });
     const client = makeClient(mockRequest);
