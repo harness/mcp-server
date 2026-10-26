@@ -152,6 +152,28 @@ describe("serviceAccountListExtract", () => {
       }),
     ).toEqual({ items: [], total: 0 });
   });
+
+  it("unwraps aggregate pages that report totalItems (NG service account list shape)", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: {
+          content: [nestedAggregate],
+          totalItems: 99,
+        },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot" })],
+      total: 99,
+    });
+  });
+
+  it("returns empty items when the envelope has no recognizable list shape", () => {
+    expect(serviceAccountListExtract({ status: "SUCCESS" })).toEqual({
+      items: [],
+      total: 0,
+    });
+  });
 });
 
 describe("compact vs nested service account DTO", () => {
