@@ -112,6 +112,22 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("uses totalItems when totalElements is absent on aggregate list pages", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [nestedAggregate], totalItems: 42 },
+      }),
+    ).toEqual({
+      items: [
+        expect.objectContaining({
+          identifier: "ci-bot",
+          email: "ci-bot@service.harness.io",
+        }),
+      ],
+      total: 42,
+    });
+  });
+
   it("returns an empty list when account-scope data is an empty array", () => {
     expect(
       serviceAccountListExtract({
