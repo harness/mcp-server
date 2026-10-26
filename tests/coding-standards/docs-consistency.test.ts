@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { CONSOLIDATED_MCP_TOOLS } from "./consolidated-tools.js";
+import { ALLOWED_GLOBAL_FETCH_FILES } from "./http-fetch-exceptions.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
@@ -46,6 +47,12 @@ describe("Coding standards — documentation consistency", () => {
     expect(content).toMatch(/registry-driven/i);
     expect(content).toContain("Registry.dispatch()");
     expect(content).toContain("server.registerTool()");
+  });
+
+  it("docs/coding-standards.md documents every enforced global fetch() exception file", () => {
+    for (const file of ALLOWED_GLOBAL_FETCH_FILES) {
+      expect(content, `missing fetch exception doc for ${file}`).toContain(file);
+    }
   });
 
   it("AGENTS.md stays aligned with the 11-tool registry model and Zod v4", () => {

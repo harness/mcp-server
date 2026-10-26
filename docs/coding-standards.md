@@ -155,6 +155,7 @@ All Zod schemas in tool handlers must:
 | `src/utils/oauth-broker.ts` | Upstream discovery and token exchange for the embedded OAuth broker (not Harness API traffic) |
 | `src/audit/sinks/webhook.ts` | Best-effort POST to a user-configured external audit webhook URL |
 | `src/search/remote-provider.ts` | Calls an external semantic-search service (not the Harness API) |
+| `src/client/typesafe-client.ts` | POSTs to the TypeSafe System One API for diagnose triage (not Harness API traffic) |
 
 **Documented exceptions** for `client.request()` in tool handlers (bypass registry dispatch for multi-step workflows):
 

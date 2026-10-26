@@ -13,6 +13,7 @@ import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
 import { CONSOLIDATED_MCP_TOOL_SET } from "./consolidated-tools.js";
+import { ALLOWED_GLOBAL_FETCH_FILE_SET } from "./http-fetch-exceptions.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
@@ -89,16 +90,7 @@ const ALLOWED_CLIENT_REQUEST_FILES = new Set([
 const SEARCH_DIR = join(SRC, "search");
 
 /** Files allowed to call the global fetch() API (documented exceptions). */
-const ALLOWED_GLOBAL_FETCH_FILES = new Set([
-  "src/client/harness-client.ts",
-  "src/utils/log-resolver.ts",
-  "src/utils/oauth-auth.ts",
-  "src/utils/oauth-proxy.ts",
-  "src/utils/oauth-broker.ts",
-  "src/audit/sinks/webhook.ts",
-  "src/search/remote-provider.ts",
-  "src/client/typesafe-client.ts",
-]);
+const ALLOWED_GLOBAL_FETCH_FILES = ALLOWED_GLOBAL_FETCH_FILE_SET;
 
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
