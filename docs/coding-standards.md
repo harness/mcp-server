@@ -310,7 +310,7 @@ Before every commit, verify:
 - [ ] **`pnpm build` passes** — no type errors
 - [ ] **`pnpm typecheck` passes** — strict mode
 - [ ] **`pnpm test` passes** — no regressions
-- [ ] **`pnpm standards:check` passes** — automated architecture guardrails
+- [ ] **`pnpm standards:check` passes** — automated architecture guardrails (see `tests/coding-standards/enforcement-map.test.ts` for checklist ↔ test mapping)
 
 ---
 
