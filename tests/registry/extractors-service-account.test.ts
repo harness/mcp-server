@@ -48,6 +48,28 @@ describe("flattenServiceAccountAggregate", () => {
       email: "account-sa@service.harness.io",
     });
   });
+
+  it("passes through non-object list items unchanged", () => {
+    expect(flattenServiceAccountAggregate(null)).toBeNull();
+    expect(flattenServiceAccountAggregate("legacy-row")).toBe("legacy-row");
+  });
+
+  it("promotes tags from nested serviceAccount identity", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "tagged-sa",
+          email: "tagged@service.harness.io",
+          tags: { team: "platform" },
+        },
+        tokensCount: 0,
+      }),
+    ).toMatchObject({
+      identifier: "tagged-sa",
+      tags: { team: "platform" },
+      tokensCount: 0,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {

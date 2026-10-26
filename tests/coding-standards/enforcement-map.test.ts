@@ -25,7 +25,7 @@ const ENFORCEMENT_MAP: ReadonlyArray<{ section: string; files: readonly string[]
   },
   {
     section: "§3 — shared response extractors",
-    files: ["architecture.test.ts"],
+    files: ["architecture.test.ts", "../registry/extractors-service-account.test.ts"],
   },
   {
     section: "§4 — Harness scoping model",

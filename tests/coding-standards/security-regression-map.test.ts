@@ -18,6 +18,8 @@ export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/adm-zip-dependency-pins.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
+  "tests/scripts/ensure-secure-adm-zip-postinstall.test.ts",
+  "tests/scripts/npm-shrinkwrap-check.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/docker/production-dockerfile.test.ts",
 ] as const;
