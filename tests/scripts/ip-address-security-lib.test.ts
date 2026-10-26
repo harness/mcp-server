@@ -175,4 +175,17 @@ describe("ip-address-security-lib", () => {
     expect(documentation.isPrivate()).toBe(false);
     expect(documentation.isGlobal()).toBe(false);
   });
+
+  it("parses IPv6 zone identifiers and handles long zone labels without hanging", () => {
+    const { Address6 } = loadInstalledAddress6();
+
+    expect(Address6.isValid("fe80::1%en0")).toBe(true);
+    const withZone = new Address6("fe80::1%en0");
+    expect(withZone.zone).toContain("en0");
+
+    const longZone = `fe80::1%${"a".repeat(12_000)}`;
+    const started = Date.now();
+    expect(Address6.isValid(longZone)).toBe(true);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
 });

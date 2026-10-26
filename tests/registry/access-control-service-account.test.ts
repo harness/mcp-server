@@ -134,6 +134,25 @@ describe("service_account resource", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("list: maps inherited filter_type enums to Harness aggregate query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue(aggregateListResponse);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service_account", "list", {
+      resource_scope: "org",
+      org_id: "platform",
+      filter_type: "exclude_inherited_service_accounts",
+    });
+    expect(mockRequest.mock.calls[0][0].params.filterType).toBe("EXCLUDE_INHERITED_SERVICE_ACCOUNTS");
+
+    await registry.dispatch(client, "service_account", "list", {
+      resource_scope: "org",
+      org_id: "platform",
+      filter_type: "include_inherited_service_accounts",
+    });
+    expect(mockRequest.mock.calls[1][0].params.filterType).toBe("INCLUDE_INHERITED_SERVICE_ACCOUNTS");
+  });
+
   it("list: raw data array is not dropped", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       status: "SUCCESS",

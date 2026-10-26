@@ -133,6 +133,45 @@ const STANDARDS_ENFORCEMENT: EnforcementEntry[] = [
     tests: ["tests/coding-standards/docs-consistency.test.ts"],
   },
   {
+    checklist: "Production Docker image applies Debian security refresh and OpenSSL floor",
+    automated: true,
+    tests: ["tests/docker/production-dockerfile.test.ts"],
+  },
+  {
+    checklist: "Direct dependency CVE floors (body-parser, zod, fast-uri, ip-address)",
+    automated: true,
+    tests: [
+      "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/ip-address-security-lib.test.ts",
+    ],
+  },
+  {
+    checklist: "adm-zip postinstall patch and lockfile pins (CVE-2026-39244 / CVE-2026-76845)",
+    automated: true,
+    tests: [
+      "tests/scripts/adm-zip-dependency-pins.test.ts",
+      "tests/scripts/adm-zip-security-lib.test.ts",
+    ],
+  },
+  {
+    checklist: "HTTP framework security pins (hono, @hono/node-server, vite)",
+    automated: true,
+    tests: ["tests/scripts/http-framework-security-pins.test.ts"],
+  },
+  {
+    checklist: "Transitive build/parser toolchain security pins",
+    automated: true,
+    tests: ["tests/scripts/transitive-security-pins.test.ts"],
+  },
+  {
+    checklist: "Service account list flattening and multi-scope registry contract",
+    automated: true,
+    tests: [
+      "tests/registry/access-control-service-account.test.ts",
+      "tests/registry/extractors-service-account.test.ts",
+    ],
+  },
+  {
     checklist: "pnpm build passes",
     automated: false,
     tests: [],
