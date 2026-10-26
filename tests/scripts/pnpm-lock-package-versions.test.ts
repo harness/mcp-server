@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parsePnpmLockPackageVersions } from "./pnpm-lock-package-versions.js";
+import {
+  parsePnpmLockPackageVersions,
+  readInstalledPackageVersion,
+} from "./pnpm-lock-package-versions.js";
 
 describe("parsePnpmLockPackageVersions", () => {
   it("reads unquoted package keys", () => {
@@ -41,5 +44,10 @@ packages:
     resolution: {integrity: sha512-b}
 `;
     expect(parsePnpmLockPackageVersions(lock, "zod").sort()).toEqual(["4.6.6", "4.6.7"]);
+  });
+
+  it("reads transitive packages from the pnpm virtual store", () => {
+    const version = readInstalledPackageVersion(process.cwd(), "express-rate-limit");
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
