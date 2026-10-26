@@ -18,6 +18,7 @@ export const SECURITY_REGRESSION_TESTS: Record<string, string> = {
   "tests/scripts/http-framework-security-pins.test.ts": "hono, @hono/node-server, vite floors",
   "tests/scripts/ip-address-security-lib.test.ts": "ip-address override, lockfile, NAT64 classification",
   "tests/scripts/security-version-floor.test.ts": "lockfile semver helper unit tests",
+  "tests/scripts/npm-shrinkwrap-check.test.ts": "npm-shrinkwrap --check and prepublishOnly wiring",
   "tests/registry/extractors-service-account.test.ts": "service account list flattening (account-scope lists)",
   "tests/registry/access-control-service-account.test.ts": "service_account scope dispatch and aggregate API",
 };
