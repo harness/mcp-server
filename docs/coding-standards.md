@@ -20,6 +20,8 @@ User → MCP Tool (e.g. harness_list) → Registry.dispatch() → HarnessClient.
 | **Resources** | `src/resources/*.ts` | MCP resource definitions (read-only data for LLMs) |
 | **Prompts** | `src/prompts/*.ts` | MCP prompt templates |
 
+**Automated guardrails:** `pnpm standards:check` runs `tests/coding-standards/` plus registry structural validation. Tool names and handler paths are pinned in `tests/coding-standards/consolidated-tools.ts`; `enforcement-map.test.ts` maps each rule in this document to the test file that enforces it.
+
 ---
 
 ## Rules for Every Commit
