@@ -10,6 +10,17 @@ describe("redactPatTokensInText", () => {
     expect(out).not.toContain("secret");
     expect(out).not.toContain("value");
   });
+
+  it("normalizes token prefix casing and redacts multiple tokens", () => {
+    const input = "PAT.Acct.Id.Secret and sat.second.id.here";
+    const out = redactPatTokensInText(input);
+    expect(out).toBe("pat.[REDACTED] and sat.[REDACTED]");
+  });
+
+  it("does not treat unrelated words as PAT/SAT tokens", () => {
+    const input = "patient sat down; pathology report";
+    expect(redactPatTokensInText(input)).toBe(input);
+  });
 });
 
 describe("redactSensitiveFields", () => {

@@ -62,6 +62,22 @@ describe("adm-zip dependency pins (CVE-2026-39244 / CVE-2026-76845)", () => {
     expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
   });
 
+  it("pins every adm-zip copy in npm-shrinkwrap.json (hoisted and nested onnxruntime-node)", () => {
+    const shrinkwrap = JSON.parse(readFileSync(join(root, "npm-shrinkwrap.json"), "utf8")) as {
+      packages?: Record<string, { version?: string }>;
+    };
+    const admZipInstalls = Object.entries(shrinkwrap.packages ?? {}).filter(([path]) =>
+      path.endsWith("node_modules/adm-zip"),
+    );
+    expect(admZipInstalls.length, "expected at least one adm-zip entry in shrinkwrap").toBeGreaterThan(0);
+    for (const [path, metadata] of admZipInstalls) {
+      expect(
+        isSecureAdmZipVersion(metadata?.version, SECURE_ADM_ZIP_VERSION),
+        `insecure adm-zip at ${path}@${metadata?.version ?? "missing"}`,
+      ).toBe(true);
+    }
+  });
+
   it("links only patched adm-zip copies under node_modules after install", () => {
     expect(listInsecureAdmZipInstalls(root)).toEqual([]);
 
