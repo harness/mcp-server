@@ -8,6 +8,8 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
+const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
+const README_PATH = join(REPO_ROOT, "README.md");
 
 const REQUIRED_TOOLS = [
   "harness_list",
@@ -55,5 +57,24 @@ describe("Coding standards — documentation consistency", () => {
     expect(content).toMatch(/registry-driven/i);
     expect(content).toContain("Registry.dispatch()");
     expect(content).toContain("server.registerTool()");
+  });
+});
+
+describe("Contributor docs — 11-tool architecture consistency", () => {
+  const agents = readFileSync(AGENTS_PATH, "utf8");
+  const readme = readFileSync(README_PATH, "utf8");
+
+  it("AGENTS.md documents 11 consolidated tools including harness_schema", () => {
+    expect(agents).toMatch(/11 consolidated tools/);
+    for (const tool of REQUIRED_TOOLS) {
+      expect(agents, `missing ${tool} in AGENTS.md`).toContain(tool);
+    }
+    expect(agents).not.toMatch(/10 consolidated tools/);
+  });
+
+  it("README.md documents 11 consolidated tools (not legacy 10-tool copy)", () => {
+    expect(readme).toMatch(/11 consolidated tools/);
+    expect(readme).not.toMatch(/10 consolidated tools/);
+    expect(readme).toContain("harness_schema");
   });
 });
