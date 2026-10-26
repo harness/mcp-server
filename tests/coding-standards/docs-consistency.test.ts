@@ -5,23 +5,10 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ALLOWED_MCP_TOOLS as REQUIRED_TOOLS } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
-
-const REQUIRED_TOOLS = [
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-];
 
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
@@ -44,5 +31,24 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
+  });
+
+  it("docs/coding-standards.md documents confirm (not deprecated confirmation) for write tools", () => {
+    expect(content).toMatch(/confirm: true/);
+    expect(content).not.toMatch(/confirmation:\s*true/);
+  });
+
+  it("does not regress to outdated automation snapshots (10 tools, Zod v3, server.tool)", () => {
+    expect(content).not.toMatch(/10 consolidated tool handlers/);
+    expect(content).not.toMatch(/\|\s*Schema validation\s*\|\s*Zod v3\s*\|/);
+    expect(content).toMatch(/registerTool\(\)/);
+    expect(content).not.toMatch(/server\.tool\(\)/);
+  });
+
+  it("tasks/eval-comprehensive.md uses confirm (not deprecated confirmation) for write tool examples", () => {
+    const evalPath = join(REPO_ROOT, "tasks/eval-comprehensive.md");
+    const evalContent = readFileSync(evalPath, "utf8");
+    expect(evalContent).not.toMatch(/confirmation:\s*true/);
+    expect(evalContent).toMatch(/confirm:\s*true/);
   });
 });
