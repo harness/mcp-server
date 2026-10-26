@@ -37,6 +37,26 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("preserves aggregate totalItems for paginated account-scope lists", () => {
+    const raw = {
+      data: {
+        content: [
+          {
+            serviceAccount: {
+              identifier: "page-one",
+              name: "Page One",
+              email: "one@service.harness.io",
+            },
+          },
+        ],
+        totalItems: 25,
+      },
+    };
+    const { items, total } = serviceAccountListExtract(raw);
+    expect(items).toHaveLength(1);
+    expect(total).toBe(25);
+  });
+
   it("accepts a raw data array (non-aggregate list) without dropping rows", () => {
     const raw = {
       data: [
