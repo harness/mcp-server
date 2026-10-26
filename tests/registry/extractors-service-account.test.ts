@@ -18,6 +18,11 @@ const nestedAggregateItem = {
 };
 
 describe("flattenServiceAccountAggregate", () => {
+  it("returns non-record values unchanged", () => {
+    expect(flattenServiceAccountAggregate(null)).toBe(null);
+    expect(flattenServiceAccountAggregate("plain")).toBe("plain");
+  });
+
   it("promotes nested serviceAccount identity fields and aggregate metadata", () => {
     expect(flattenServiceAccountAggregate(nestedAggregateItem)).toMatchObject({
       identifier: "ci-bot",
@@ -60,6 +65,20 @@ describe("serviceAccountListExtract", () => {
     expect(result.total).toBe(42);
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({ identifier: "ci-bot", tokensCount: 2 });
+  });
+
+  it("uses totalItems when aggregate page content is empty", () => {
+    const raw = {
+      status: "SUCCESS",
+      data: {
+        content: [],
+        totalItems: 99,
+      },
+    };
+
+    const result = serviceAccountListExtract(raw);
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(99);
   });
 
   it("accepts raw data arrays from non-aggregate list endpoints", () => {

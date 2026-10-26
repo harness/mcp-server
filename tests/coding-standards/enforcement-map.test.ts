@@ -24,6 +24,7 @@ const ENFORCEMENT_TEST_FILES = [
   "registry-metadata.test.ts",
   "scope-params.test.ts",
   "security-regression-map.test.ts",
+  "service-account-regression-map.test.ts",
   "toolset-scope.test.ts",
 ] as const;
 
@@ -51,6 +52,7 @@ const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
   "§12 file organization": ["file-organization.test.ts"],
   "docs drift (11 tools, Zod v4)": ["docs-consistency.test.ts"],
   "security regression (deps, HTTP, image)": ["security-regression-map.test.ts"],
+  "service account scope (#1152)": ["service-account-regression-map.test.ts"],
 };
 
 describe("Coding standards — enforcement map", () => {
