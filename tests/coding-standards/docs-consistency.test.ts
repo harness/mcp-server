@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { CONSOLIDATED_MCP_TOOLS } from "./consolidated-tools.js";
+import { CONSOLIDATED_MCP_TOOLS, CONSOLIDATED_TOOL_COUNT } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
@@ -13,11 +13,19 @@ const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 const README_PATH = join(REPO_ROOT, "README.md");
 const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
 
+const OUTDATED_ARCHITECTURE_PATTERNS = [
+  /10 consolidated tool handlers/,
+  /\bserver\.tool\(\)/,
+  /\|\s*Schema validation\s*\|\s*Zod v3\s*\|/,
+];
+
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
 
-  it("docs/coding-standards.md documents 11 consolidated MCP tools including harness_schema", () => {
-    expect(content).toMatch(/11 consolidated tool handlers/);
+  it(`docs/coding-standards.md documents ${CONSOLIDATED_TOOL_COUNT} consolidated MCP tools`, () => {
+    expect(content).toMatch(
+      new RegExp(`${CONSOLIDATED_TOOL_COUNT} consolidated tool handlers`),
+    );
     for (const tool of CONSOLIDATED_MCP_TOOLS) {
       expect(content, `missing ${tool} in docs/coding-standards.md`).toContain(tool);
     }
@@ -36,9 +44,10 @@ describe("Coding standards — documentation consistency", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
 
-  it("docs/coding-standards.md does not regress to outdated 10-tool architecture copy", () => {
-    expect(content).not.toMatch(/10 consolidated tool handlers/);
-    expect(content).not.toMatch(/\bserver\.tool\(\)/);
+  it("docs/coding-standards.md does not regress to outdated architecture copy", () => {
+    for (const pattern of OUTDATED_ARCHITECTURE_PATTERNS) {
+      expect(content).not.toMatch(pattern);
+    }
   });
 
   it("docs/coding-standards.md documents registry dispatch and registerTool registration", () => {
@@ -65,14 +74,21 @@ describe("Coding standards — documentation consistency", () => {
     expect(contributing).toContain("pnpm standards:check");
     expect(contributing).toContain("docs/coding-standards.md");
   });
-});
 
-describe("Contributor docs — 11-tool architecture consistency", () => {
-  const readme = readFileSync(README_PATH, "utf8");
-
-  it("README.md documents 11 consolidated tools (not legacy 10-tool copy)", () => {
-    expect(readme).toMatch(/11 consolidated tools/);
-    expect(readme).not.toMatch(/10 consolidated tools/);
+  it(`README.md stays aligned with the ${CONSOLIDATED_TOOL_COUNT}-tool registry model`, () => {
+    const readme = readFileSync(README_PATH, "utf8");
+    expect(readme).toMatch(new RegExp(`${CONSOLIDATED_TOOL_COUNT} consolidated tools`));
     expect(readme).toContain("harness_schema");
+    expect(readme).not.toMatch(/10 consolidated tools/);
+    for (const pattern of OUTDATED_ARCHITECTURE_PATTERNS) {
+      expect(readme).not.toMatch(pattern);
+    }
+  });
+
+  it("enforced tool count matches docs/coding-standards.md headline", () => {
+    const headline = content.match(/(\d+) consolidated tool handlers/);
+    expect(headline?.[1], "docs/coding-standards.md missing consolidated tool handlers headline").toBe(
+      String(CONSOLIDATED_TOOL_COUNT),
+    );
   });
 });
