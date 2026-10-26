@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -18,6 +19,27 @@ import {
   listInsecureAdmZipInstalls,
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
+
+const repoRoot = process.cwd();
+
+function parsePnpmLockAdmZipVersions(lockfileText: string): string[] {
+  const versions = new Set<string>();
+  for (const match of lockfileText.matchAll(/^\s+adm-zip@([0-9]+\.[0-9]+\.[0-9]+):/gm)) {
+    versions.add(match[1]);
+  }
+  return [...versions];
+}
+
+function parseNpmShrinkwrapAdmZipVersion(shrinkwrapText: string): string | null {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+    dependencies?: Record<string, { version?: string }>;
+  };
+  const version =
+    shrinkwrap.packages?.["node_modules/adm-zip"]?.version
+    ?? shrinkwrap.dependencies?.["adm-zip"]?.version;
+  return typeof version === "string" ? version : null;
+}
 
 const require = createRequire(import.meta.url);
 const AdmZip = require("adm-zip") as new () => {
@@ -49,6 +71,40 @@ describe("adm-zip-security-lib", () => {
     expect(isSecureAdmZipVersion("0.7.0", SECURE_ADM_ZIP_VERSION)).toBe(true);
     expect(isSecureAdmZipVersion("0.5.18", SECURE_ADM_ZIP_VERSION)).toBe(false);
     expect(isSecureAdmZipVersion("0.6.0-beta.1", SECURE_ADM_ZIP_VERSION)).toBe(false);
+  });
+
+  it("ignores pre-release suffixes when comparing CVE pin floors", () => {
+    expect(isSecureAdmZipVersion("0.6.0-rc.1", SECURE_ADM_ZIP_VERSION)).toBe(false);
+    expect(isSecureAdmZipVersion("0.6.1-beta.0", SECURE_ADM_ZIP_VERSION)).toBe(true);
+    expect(isSecureAdmZipVersion("0.6.1+build", SECURE_ADM_ZIP_VERSION)).toBe(true);
+  });
+
+  it("keeps pnpm overrides, npm parent override, and lockfiles on patched adm-zip", () => {
+    const packageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as {
+      overrides: { "onnxruntime-node": { "adm-zip": string } };
+      pnpm: { overrides: Record<string, string> };
+      dependencies: Record<string, string>;
+    };
+
+    expect(packageJson.pnpm.overrides["adm-zip"]).toBe(`>=${SECURE_ADM_ZIP_VERSION}`);
+    expect(packageJson.overrides["onnxruntime-node"]["adm-zip"]).toBe(SECURE_ADM_ZIP_VERSION);
+    expect(isSecureAdmZipVersion(packageJson.dependencies["adm-zip"].replace(/^\^/, ""))).toBe(true);
+
+    const lockVersions = parsePnpmLockAdmZipVersions(readFileSync(join(repoRoot, "pnpm-lock.yaml"), "utf8"));
+    expect(lockVersions.length).toBeGreaterThan(0);
+    for (const version of lockVersions) {
+      expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
+    }
+
+    const shrinkwrapVersion = parseNpmShrinkwrapAdmZipVersion(
+      readFileSync(join(repoRoot, "npm-shrinkwrap.json"), "utf8"),
+    );
+    expect(shrinkwrapVersion).not.toBeNull();
+    expect(isSecureAdmZipVersion(shrinkwrapVersion, SECURE_ADM_ZIP_VERSION)).toBe(true);
+  });
+
+  it("flags no insecure adm-zip installs in the workspace node_modules tree", () => {
+    expect(listInsecureAdmZipInstalls(repoRoot)).toEqual([]);
   });
 
   it("treats missing or invalid versions as insecure", () => {
@@ -126,5 +182,40 @@ describe("adm-zip-security-lib", () => {
     });
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
+  });
+
+  it("no-ops when every adm-zip install is already at the secure floor", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), SECURE_ADM_ZIP_VERSION);
+
+    const result = ensureSecureAdmZip(root, { dryRun: true });
+    expect(result).toEqual({ patched: [], skipped: true, warnings: [] });
+  });
+
+  it("throws in strict mode when npm upgrade cannot run", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), "0.5.18");
+
+    expect(() =>
+      ensureSecureAdmZip(root, {
+        npmCommand: "__missing-npm-binary__",
+        strict: true,
+      }),
+    ).toThrow(/failed to upgrade adm-zip/);
+  });
+
+  it("dry-run schedules nested onnxruntime-node adm-zip prefixes separately", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), "0.5.18");
+    const ortDir = join(root, "node_modules", "onnxruntime-node");
+    writePackage(ortDir, "onnxruntime-node");
+    writeAdmZip(join(ortDir, "node_modules", "adm-zip"), "0.5.18");
+
+    const result = ensureSecureAdmZip(root, { dryRun: true });
+    expect(result.skipped).toBe(false);
+    expect(result.patched.sort()).toEqual([root, ortDir].sort());
   });
 });

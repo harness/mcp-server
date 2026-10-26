@@ -52,4 +52,32 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(dockerfile).toMatch(/ARG RUNTIME_IMAGE=debian:bookworm-slim/);
     expect(productionStage).toMatch(/^FROM \$\{RUNTIME_IMAGE\} AS production/m);
   });
+
+  it("copies adm-zip postinstall scripts before pnpm install in build and prod-deps stages", () => {
+    const admZipCopy =
+      /COPY scripts\/ensure-secure-adm-zip\.mjs scripts\/adm-zip-security-lib\.mjs scripts\//;
+
+    const buildStage = dockerfile.slice(
+      dockerfile.indexOf("FROM toolchain AS build"),
+      dockerfile.indexOf("FROM toolchain AS production-dependencies"),
+    );
+    const prodDepsStage = dockerfile.slice(
+      dockerfile.indexOf("FROM toolchain AS production-dependencies"),
+      dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"),
+    );
+
+    for (const [label, stage] of [
+      ["build", buildStage],
+      ["production-dependencies", prodDepsStage],
+    ] as const) {
+      const copyIndex = stage.search(admZipCopy);
+      const installIndex = stage.indexOf("RUN pnpm install");
+      expect(copyIndex, `${label} stage missing adm-zip script COPY`).toBeGreaterThanOrEqual(0);
+      expect(installIndex, `${label} stage missing pnpm install`).toBeGreaterThanOrEqual(0);
+      expect(
+        copyIndex < installIndex,
+        `${label} must COPY adm-zip scripts before postinstall runs during pnpm install`,
+      ).toBe(true);
+    }
+  });
 });
