@@ -89,7 +89,17 @@ const ARCHITECTURE_GUARDS: ArchitectureGuard[] = [
   },
   {
     label: "documentation stays aligned with enforced constants (11 tools, Zod v4)",
-    tests: ["tests/coding-standards/docs-consistency.test.ts"],
+    tests: [
+      "tests/coding-standards/docs-consistency.test.ts",
+      "tests/coding-standards/commit-checklist-coverage.test.ts",
+    ],
+  },
+  {
+    label: "security regression guards (shrinkwrap, CVE pins, container hardening)",
+    tests: [
+      "tests/coding-standards/security-regression-guards.test.ts",
+      "tests/scripts/npm-shrinkwrap-check.test.ts",
+    ],
   },
 ];
 
@@ -114,5 +124,15 @@ describe("Coding standards — architecture enforcement map", () => {
     const script = packageJson.scripts?.["standards:check"] ?? "";
     expect(script).toContain("tests/coding-standards");
     expect(script).toContain("tests/registry/structural-validation.test.ts");
+  });
+
+  it("GitHub CI workflow enforces build, shrinkwrap, test, standards, typecheck, and docs", () => {
+    const ci = readFileSync(repoPath(".github/workflows/ci.yml"), "utf8");
+    expect(ci).toContain("pnpm build");
+    expect(ci).toContain("pnpm npm-shrinkwrap:check");
+    expect(ci).toContain("pnpm test");
+    expect(ci).toContain("pnpm standards:check");
+    expect(ci).toContain("pnpm typecheck");
+    expect(ci).toContain("pnpm docs:check");
   });
 });
