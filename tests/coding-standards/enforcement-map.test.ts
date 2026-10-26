@@ -75,6 +75,7 @@ const ENFORCEMENT_MAP: ReadonlyArray<{ section: string; files: readonly string[]
       "../scripts/cve-dependency-pins.test.ts",
       "../scripts/http-framework-security-pins.test.ts",
       "../scripts/express-transitive-security-pins.test.ts",
+      "../scripts/transitive-security-pins.test.ts",
       "../scripts/ip-address-security-lib.test.ts",
       "../scripts/adm-zip-security-lib.test.ts",
       "../scripts/adm-zip-dependency-pins.test.ts",

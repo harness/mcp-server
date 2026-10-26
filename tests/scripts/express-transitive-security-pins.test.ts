@@ -63,11 +63,15 @@ describe("Express transitive security pins (proxy-addr, path-to-regexp)", () => 
     }
   });
 
-  it("documents proxy-addr in npm-shrinkwrap.json for global npm installs", () => {
+  it("documents proxy-addr and path-to-regexp in npm-shrinkwrap.json for global npm installs", () => {
     const shrinkwrapText = readFileSync(join(root, "npm-shrinkwrap.json"), "utf8");
-    const version = parseNpmShrinkwrapPackageVersion(shrinkwrapText, "proxy-addr");
-    expect(version, "expected proxy-addr in npm-shrinkwrap.json").not.toBeNull();
-    expect(isSecureIpAddressVersion(version, SECURE_PROXY_ADDR_VERSION)).toBe(true);
+    const proxyVersion = parseNpmShrinkwrapPackageVersion(shrinkwrapText, "proxy-addr");
+    expect(proxyVersion, "expected proxy-addr in npm-shrinkwrap.json").not.toBeNull();
+    expect(isSecureIpAddressVersion(proxyVersion, SECURE_PROXY_ADDR_VERSION)).toBe(true);
+
+    const pathVersion = parseNpmShrinkwrapPackageVersion(shrinkwrapText, "path-to-regexp");
+    expect(pathVersion, "expected path-to-regexp in npm-shrinkwrap.json").not.toBeNull();
+    expect(isSecureIpAddressVersion(pathVersion, SECURE_PATH_TO_REGEXP_VERSION)).toBe(true);
   });
 
   it("links a patched proxy-addr copy on the Express dependency chain after install", () => {

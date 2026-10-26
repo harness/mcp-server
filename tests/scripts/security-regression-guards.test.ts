@@ -22,6 +22,11 @@ const SECURITY_REGRESSION_GUARDS: ReadonlyArray<{
     testFile: "tests/scripts/express-transitive-security-pins.test.ts",
   },
   {
+    artifact:
+      "package.json pnpm.overrides (picomatch, nanoid, esbuild, postcss, source-map-js, sharp, protobufjs, qs, express-rate-limit, @opentelemetry/core)",
+    testFile: "tests/scripts/transitive-security-pins.test.ts",
+  },
+  {
     artifact: "scripts/ip-address-security-lib.mjs (SECURE_IP_ADDRESS_VERSION floor)",
     testFile: "tests/scripts/ip-address-security-lib.test.ts",
   },
