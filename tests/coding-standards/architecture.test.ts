@@ -12,24 +12,17 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
+import {
+  CONSOLIDATED_MCP_TOOL_COUNT,
+  CONSOLIDATED_MCP_TOOLS,
+  REGISTER_TOOL_SUFFIXES,
+} from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
 
 /** The only MCP tools allowed in the server. */
-const ALLOWED_MCP_TOOLS = new Set([
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-]);
+const ALLOWED_MCP_TOOLS = new Set<string>(CONSOLIDATED_MCP_TOOLS);
 
 /** Only these files may call server.registerTool(). */
 const ALLOWED_REGISTER_TOOL_FILES = new Set([
@@ -172,29 +165,17 @@ function extractToolsetNamesFromUnion(): Set<string> {
 }
 
 describe("Coding standards — MCP tool handlers", () => {
-  it("registerAllTools wires exactly the 11 allowed handlers (no extra register* calls)", () => {
+  it("registerAllTools wires exactly the allowed handlers (no extra register* calls)", () => {
     const indexPath = join(SRC, "tools/index.ts");
     const content = readFileSync(indexPath, "utf8");
     const registerCalls = [...content.matchAll(/\bregister(\w+)Tool\s*\(/g)].map((m) => m[1]!);
-    const expected = [
-      "List",
-      "Get",
-      "Create",
-      "Update",
-      "Delete",
-      "Execute",
-      "Diagnose",
-      "Search",
-      "Describe",
-      "Status",
-      "Schema",
-    ];
+    const expected = [...REGISTER_TOOL_SUFFIXES];
 
     expect([...registerCalls].sort()).toEqual([...expected].sort());
-    expect(registerCalls).toHaveLength(11);
+    expect(registerCalls).toHaveLength(CONSOLIDATED_MCP_TOOL_COUNT);
   });
 
-  it("registers exactly the 11 allowed consolidated MCP tools", () => {
+  it("registers exactly the allowed consolidated MCP tools", () => {
     const registered = new Set<string>();
 
     for (const file of ALLOWED_REGISTER_TOOL_FILES) {

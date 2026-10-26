@@ -2195,6 +2195,9 @@ pnpm typecheck
 # Run tests
 pnpm test
 
+# Architecture / coding-standards guardrails (CI enforces this)
+pnpm standards:check
+
 # Watch tests
 pnpm test:watch
 
@@ -2211,6 +2214,8 @@ pnpm docs:check
 pnpm sync-schemas
 pnpm check-schema-coverage
 ```
+
+Before changing tool handlers or registry toolsets, read [docs/coding-standards.md](docs/coding-standards.md) (registry-driven model: 11 consolidated MCP tools, pure-data toolsets, stderr-only logging).
 
 ### Project Structure
 
