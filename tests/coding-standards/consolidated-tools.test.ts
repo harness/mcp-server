@@ -60,4 +60,27 @@ describe("Coding standards — consolidated MCP tool list", () => {
     const registerCalls = [...indexContent.matchAll(/\bregister(\w+)Tool\s*\(/g)].map((m) => m[1]!);
     expect(registerCalls).toHaveLength(CONSOLIDATED_MCP_TOOLS.length);
   });
+
+  it("CONSOLIDATED_MCP_TOOLS order matches registerAllTools registration order", () => {
+    const indexContent = readFileSync(join(TOOLS_DIR, "index.ts"), "utf8");
+    const registerBlock = indexContent.slice(indexContent.indexOf("export function registerAllTools"));
+    const registerCalls = [...registerBlock.matchAll(/\bregister(\w+)Tool\s*\(/g)].map((m) => m[1]!);
+
+    const slugToTool: Record<string, string> = {
+      List: "harness_list",
+      Get: "harness_get",
+      Create: "harness_create",
+      Update: "harness_update",
+      Delete: "harness_delete",
+      Execute: "harness_execute",
+      Diagnose: "harness_diagnose",
+      Search: "harness_search",
+      Describe: "harness_describe",
+      Status: "harness_status",
+      Schema: "harness_schema",
+    };
+
+    const fromIndex = registerCalls.map((name) => slugToTool[name]!);
+    expect(fromIndex).toEqual([...CONSOLIDATED_MCP_TOOLS]);
+  });
 });

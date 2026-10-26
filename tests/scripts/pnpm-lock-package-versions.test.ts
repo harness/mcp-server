@@ -67,6 +67,11 @@ packages:
 `;
     expect(parsePnpmLockPackageVersions(lock, "@scope/with.dots")).toEqual(["1.2.3"]);
   });
+
+  it("returns an empty list when the package is absent from the lockfile", () => {
+    expect(parsePnpmLockPackageVersions("packages:\n", "missing-pkg")).toEqual([]);
+    expect(parsePnpmLockPackageVersions("", "zod")).toEqual([]);
+  });
 });
 
 describe("parseNpmShrinkwrapPackageVersion", () => {
@@ -80,5 +85,21 @@ describe("parseNpmShrinkwrapPackageVersion", () => {
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "zod")).toBe("4.6.7");
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "@hono/node-server")).toBe("2.0.10");
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "missing")).toBeNull();
+  });
+
+  it("returns null when packages is missing or version is not a string", () => {
+    expect(parseNpmShrinkwrapPackageVersion(JSON.stringify({}), "zod")).toBeNull();
+    expect(
+      parseNpmShrinkwrapPackageVersion(
+        JSON.stringify({ packages: { "node_modules/zod": { version: 466 } } }),
+        "zod",
+      ),
+    ).toBeNull();
+    expect(
+      parseNpmShrinkwrapPackageVersion(
+        JSON.stringify({ packages: { "node_modules/zod": {} } }),
+        "zod",
+      ),
+    ).toBeNull();
   });
 });

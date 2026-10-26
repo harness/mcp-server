@@ -127,4 +127,19 @@ describe("adm-zip-security-lib", () => {
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
   });
+
+  it("no-ops when every adm-zip install already meets the security floor", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), SECURE_ADM_ZIP_VERSION);
+    writePackage(join(root, "node_modules", "onnxruntime-node"));
+    writeAdmZip(
+      join(root, "node_modules", "onnxruntime-node", "node_modules", "adm-zip"),
+      SECURE_ADM_ZIP_VERSION,
+    );
+
+    const result = ensureSecureAdmZip(root, { npmCommand: "__missing-npm-binary__" });
+    expect(result).toEqual({ patched: [], skipped: true, warnings: [] });
+    expect(listInsecureAdmZipInstalls(root)).toHaveLength(0);
+  });
 });

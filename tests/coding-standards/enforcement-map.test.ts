@@ -163,4 +163,21 @@ describe("Coding standards — enforcement map", () => {
       "No secrets exposed in tool responses (metadata only)",
     ]);
   });
+
+  it("uses unique checklist labels and test needles per automated rule", () => {
+    const automated = ENFORCEMENT_MAP.filter((e) => e.automated);
+    const checklistLabels = automated.map((e) => e.checklist);
+    const needles = automated.map((e) => e.needle!);
+
+    expect(new Set(checklistLabels).size, "duplicate checklist labels").toBe(checklistLabels.length);
+    expect(new Set(needles).size, "duplicate guardrail needles can hide regressions").toBe(
+      needles.length,
+    );
+  });
+
+  it("is referenced from docs/coding-standards.md Commit Checklist", () => {
+    const standards = readFileSync(join(REPO_ROOT, "docs/coding-standards.md"), "utf8");
+    expect(standards).toContain("tests/coding-standards/enforcement-map.test.ts");
+    expect(standards).toMatch(/Commit Checklist[\s\S]*enforcement-map\.test\.ts/);
+  });
 });
