@@ -31,6 +31,14 @@ const SECURITY_REGRESSION_GUARDS: GuardRow[] = [
     tests: ["tests/scripts/cve-dependency-pins.test.ts"],
   },
   {
+    artifact: "Express middleware stack (qs, proxy-addr, path-to-regexp, express-rate-limit)",
+    tests: ["tests/scripts/express-stack-security-pins.test.ts"],
+  },
+  {
+    artifact: "Remaining pnpm transitive security overrides (picomatch, nanoid, OTel core, etc.)",
+    tests: ["tests/scripts/additional-pnpm-security-pins.test.ts"],
+  },
+  {
     artifact: "HTTP framework pins (hono, @hono/node-server, vite)",
     tests: ["tests/scripts/http-framework-security-pins.test.ts"],
   },

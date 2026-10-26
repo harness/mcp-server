@@ -96,6 +96,24 @@ describe("ip-address-security-lib", () => {
     expect(listInsecureIpAddressInstalls(root)).toEqual([]);
   });
 
+  it("prefers the ip-address copy linked from express-rate-limit when multiple secure installs exist", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-consumer-pick-"));
+    tempDirs.push(packageRoot);
+    const linked = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.4/node_modules/ip-address");
+    const otherSecure = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.5/node_modules/ip-address");
+    writeIpAddressPackage(linked, "10.7.4");
+    writeIpAddressPackage(otherSecure, "10.7.5");
+    const linkDir = join(packageRoot, "node_modules/.pnpm/express-rate-limit@8.3.2/node_modules");
+    mkdirSync(linkDir, { recursive: true });
+    symlinkSync("../../ip-address@10.7.4/node_modules/ip-address", join(linkDir, "ip-address"), "dir");
+
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(linked);
+  });
+
   it("ignores an unlinked pnpm virtual-store leftover", () => {
     if (process.platform === "win32") {
       return;
