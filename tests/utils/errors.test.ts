@@ -157,4 +157,11 @@ describe("toMcpError", () => {
     const result = toMcpError(new HarnessApiError(normalMsg, 404));
     expect(result.message).toContain(normalMsg);
   });
+
+  it("redacts PAT/SAT tokens embedded in API error messages", () => {
+    const token = "pat.myacct.tokenid.supersecretvalue";
+    const result = toMcpError(new HarnessApiError(`Invalid key ${token}`, 401));
+    expect(result.message).not.toContain("supersecretvalue");
+    expect(result.message).toContain("pat.[REDACTED]");
+  });
 });

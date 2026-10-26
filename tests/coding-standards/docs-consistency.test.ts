@@ -73,4 +73,22 @@ describe("Coding standards — documentation consistency", () => {
       expect(readme, `missing ${tool} in README.md`).toContain(tool);
     }
   });
+
+  it("docs/coding-standards.md retains the registry architecture layers and commit rules", () => {
+    expect(content).toMatch(/registry-driven MCP server/i);
+    expect(content).toContain("Registry.dispatch()");
+    expect(content).toContain("src/registry/toolsets/");
+    expect(content).toContain("src/client/harness-client.ts");
+    for (let rule = 1; rule <= 12; rule++) {
+      expect(content, `missing rule ${rule} heading`).toMatch(new RegExp(`### ${rule}\\.`));
+    }
+    expect(content).toContain("## Commit Checklist");
+    expect(content).toContain("## What NOT to Do");
+  });
+
+  it(".github/PULL_REQUEST_TEMPLATE.md requires standards:check", () => {
+    const template = readFileSync(join(REPO_ROOT, ".github/PULL_REQUEST_TEMPLATE.md"), "utf8");
+    expect(template).toContain("pnpm standards:check");
+    expect(template).toContain("docs/coding-standards.md");
+  });
 });

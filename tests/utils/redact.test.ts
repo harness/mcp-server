@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { redactSensitiveFields, redactJsonString } from "../../src/utils/redact.js";
+import { redactPatTokensInText, redactSensitiveFields, redactJsonString } from "../../src/utils/redact.js";
+
+describe("redactPatTokensInText", () => {
+  it("redacts Harness PAT and SAT tokens in free text", () => {
+    const input = "Key pat.acct.tok.secret rejected; sat.other.id.value also invalid";
+    const out = redactPatTokensInText(input);
+    expect(out).toContain("pat.[REDACTED]");
+    expect(out).toContain("sat.[REDACTED]");
+    expect(out).not.toContain("secret");
+    expect(out).not.toContain("value");
+  });
+});
 
 describe("redactSensitiveFields", () => {
   it("redacts top-level sensitive keys", () => {

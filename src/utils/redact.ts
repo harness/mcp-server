@@ -5,6 +5,19 @@ const SENSITIVE_KEY_PATTERN = new RegExp(`^(${SENSITIVE_KEYS})$`, "i");
 
 const REDACTED = "[REDACTED]";
 
+/** Harness PAT/SAT token prefixes embedded in free-text error messages. */
+const PAT_OR_SAT_TOKEN = /\b(?:pat|sat)\.[A-Za-z0-9][A-Za-z0-9_.-]*\b/gi;
+
+/**
+ * Redact Harness PAT/SAT tokens that appear inline in error text (not JSON key paths).
+ */
+export function redactPatTokensInText(message: string): string {
+  return message.replace(PAT_OR_SAT_TOKEN, (match) => {
+    const prefix = match.split(".")[0]!.toLowerCase();
+    return `${prefix}.[REDACTED]`;
+  });
+}
+
 /**
  * Recursively redact values whose keys match sensitive patterns.
  * Returns a new object — the original is never mutated.
