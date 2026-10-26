@@ -67,6 +67,11 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("10.7.4", SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
+  it("ignores pre-release and build metadata when comparing the security floor", () => {
+    expect(isSecureIpAddressVersion("10.7.4+build.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.3-rc.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+  });
+
   it("treats missing or invalid versions as insecure", () => {
     expect(isSecureIpAddressVersion(null, SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("", SECURE_IP_ADDRESS_VERSION)).toBe(false);
