@@ -11,6 +11,26 @@ function productionStage(dockerfile: string): string {
   return dockerfile.slice(start);
 }
 
+function toolchainDependencyStage(dockerfile: string, stageName: "build" | "production-dependencies"): string {
+  const marker = `FROM toolchain AS ${stageName}`;
+  const start = dockerfile.indexOf(marker);
+  expect(start, `expected ${stageName} stage in Dockerfile`).toBeGreaterThan(-1);
+  const nextFrom = dockerfile.indexOf("\nFROM ", start + marker.length);
+  return nextFrom === -1 ? dockerfile.slice(start) : dockerfile.slice(start, nextFrom);
+}
+
+function assertAdmZipScriptsBeforePnpmInstall(stage: string, label: string): void {
+  const copyScripts = stage.indexOf("COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/");
+  const pnpmInstall = stage.indexOf("pnpm install");
+  expect(copyScripts, `${label}: must COPY adm-zip postinstall scripts`).toBeGreaterThan(-1);
+  expect(stage).toContain("scripts/adm-zip-security-lib.mjs");
+  expect(pnpmInstall, `${label}: must run pnpm install`).toBeGreaterThan(-1);
+  expect(
+    copyScripts,
+    `${label}: postinstall scripts must exist before pnpm install (package.json postinstall imports them)`,
+  ).toBeLessThan(pnpmInstall);
+}
+
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
 
@@ -80,5 +100,13 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     const stage = productionStage(dockerfile);
     expect(stage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
     expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
+  });
+
+  it("copies adm-zip postinstall scripts before pnpm install in build and production-dependencies stages", () => {
+    assertAdmZipScriptsBeforePnpmInstall(toolchainDependencyStage(dockerfile, "build"), "build");
+    assertAdmZipScriptsBeforePnpmInstall(
+      toolchainDependencyStage(dockerfile, "production-dependencies"),
+      "production-dependencies",
+    );
   });
 });
