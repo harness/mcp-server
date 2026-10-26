@@ -27,3 +27,23 @@ export function parsePnpmLockPackageVersions(lockText: string, packageName: stri
   }
   return versions;
 }
+
+/** Collect installed versions for packageName from npm-shrinkwrap packages entries. */
+export function parseNpmShrinkwrapPackageVersions(
+  shrinkwrapText: string,
+  packageName: string,
+): string[] {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+  };
+  const suffix = `node_modules/${packageName}`;
+  const versions: string[] = [];
+  for (const [path, metadata] of Object.entries(shrinkwrap.packages ?? {})) {
+    if (!path.endsWith(suffix)) continue;
+    const version = metadata?.version;
+    if (typeof version === "string" && version.length > 0) {
+      versions.push(version);
+    }
+  }
+  return versions;
+}

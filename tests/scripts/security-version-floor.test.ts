@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   meetsVersionFloor,
+  parseNpmShrinkwrapPackageVersions,
   parsePnpmLockPackageVersions,
   parseSemverTriple,
 } from "./security-version-floor.js";
@@ -29,5 +30,17 @@ packages:
 `;
     expect(parsePnpmLockPackageVersions(sample, "fast-uri")).toEqual(["4.2.3"]);
     expect(parsePnpmLockPackageVersions(sample, "@hono/node-server")).toEqual(["2.0.10"]);
+  });
+
+  it("collects package versions from npm-shrinkwrap node_modules paths", () => {
+    const sample = JSON.stringify({
+      packages: {
+        "node_modules/fast-uri": { version: "4.2.3" },
+        "node_modules/onnxruntime-node/node_modules/adm-zip": { version: "0.6.1" },
+        "node_modules/adm-zip": { version: "0.6.1" },
+      },
+    });
+    expect(parseNpmShrinkwrapPackageVersions(sample, "fast-uri")).toEqual(["4.2.3"]);
+    expect(parseNpmShrinkwrapPackageVersions(sample, "adm-zip")).toEqual(["0.6.1", "0.6.1"]);
   });
 });
