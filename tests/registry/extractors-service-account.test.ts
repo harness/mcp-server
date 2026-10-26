@@ -59,6 +59,28 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
   });
+
+  it("omits governanceMetadata and other fields outside the service account DTO", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "ci-bot",
+          name: "CI Bot",
+          email: "ci-bot@service.harness.io",
+          governanceMetadata: { deny: false },
+        },
+        governanceMetadata: { deny: true },
+        createdAt: 1,
+        tokensCount: 0,
+      }),
+    ).toEqual({
+      identifier: "ci-bot",
+      name: "CI Bot",
+      email: "ci-bot@service.harness.io",
+      createdAt: 1,
+      tokensCount: 0,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
@@ -83,6 +105,18 @@ describe("serviceAccountListExtract", () => {
       items: [flattenServiceAccountAggregate(aggregateItem)],
       total: 1,
     });
+  });
+
+  it("returns an empty list for a raw data array with no items", () => {
+    expect(serviceAccountListExtract({ data: [] })).toEqual({ items: [], total: 0 });
+  });
+
+  it("uses pageExtract when data is not a top-level array", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalElements: 0 },
+      }),
+    ).toEqual({ items: [], total: 0 });
   });
 });
 
