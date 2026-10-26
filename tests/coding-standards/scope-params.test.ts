@@ -8,27 +8,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { LOCAL_ONLY_HANDLERS, SCOPE_AWARE_HANDLERS } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
-
-/** Handlers that dispatch to the registry against the live Harness API. */
-const SCOPE_AWARE_HANDLERS = [
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-status.ts",
-];
-
-/** Local metadata tools — no org_id/project_id required. */
-const LOCAL_ONLY_HANDLERS = [
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-schema.ts",
-];
 
 function hasOptionalScopeParam(content: string, param: "org_id" | "project_id"): boolean {
   const inline = new RegExp(
