@@ -40,6 +40,7 @@ const SECURITY_REGRESSION_GUARDS: SecurityRegressionEntry[] = [
     tests: [
       "tests/registry/extractors-service-account.test.ts",
       "tests/registry/access-control-service-account.test.ts",
+      "tests/prompts/access-control-audit.test.ts",
     ],
   },
 ];
