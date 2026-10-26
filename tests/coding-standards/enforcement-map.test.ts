@@ -22,6 +22,7 @@ const ENFORCEMENT_TEST_FILES = [
   "registry-contract.test.ts",
   "registry-metadata.test.ts",
   "scope-params.test.ts",
+  "security-regression-guards.test.ts",
   "toolset-scope.test.ts",
 ] as const;
 
@@ -39,6 +40,7 @@ const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
   "§10 singleton HTTP client / fetch exceptions": ["architecture.test.ts"],
   "§11 file organization": ["file-organization.test.ts", "architecture.test.ts"],
   "docs drift (11 tools, Zod v4)": ["docs-consistency.test.ts"],
+  "security dependency / image pins": ["security-regression-guards.test.ts"],
 };
 
 describe("Coding standards — enforcement map", () => {
