@@ -2195,6 +2195,9 @@ pnpm typecheck
 # Run tests
 pnpm test
 
+# Architecture guardrails (registry-driven MCP model — see docs/coding-standards.md)
+pnpm standards:check
+
 # Watch tests
 pnpm test:watch
 

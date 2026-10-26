@@ -12,24 +12,13 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
+import { CONSOLIDATED_MCP_TOOL_COUNT, CONSOLIDATED_MCP_TOOLS } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
 
 /** The only MCP tools allowed in the server. */
-const ALLOWED_MCP_TOOLS = new Set([
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-]);
+const ALLOWED_MCP_TOOLS = new Set<string>(CONSOLIDATED_MCP_TOOLS);
 
 /** Only these files may call server.registerTool(). */
 const ALLOWED_REGISTER_TOOL_FILES = new Set([
@@ -191,7 +180,7 @@ describe("Coding standards — MCP tool handlers", () => {
     ];
 
     expect([...registerCalls].sort()).toEqual([...expected].sort());
-    expect(registerCalls).toHaveLength(11);
+    expect(registerCalls).toHaveLength(CONSOLIDATED_MCP_TOOL_COUNT);
   });
 
   it("registers exactly the 11 allowed consolidated MCP tools", () => {

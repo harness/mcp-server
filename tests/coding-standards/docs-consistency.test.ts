@@ -5,32 +5,21 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { CONSOLIDATED_MCP_TOOL_COUNT, CONSOLIDATED_MCP_TOOLS } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
 const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
-
-const REQUIRED_TOOLS = [
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-];
+const README_PATH = join(REPO_ROOT, "README.md");
 
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
 
   it("docs/coding-standards.md documents 11 consolidated MCP tools including harness_schema", () => {
-    expect(content).toMatch(/11 consolidated tool handlers/);
-    for (const tool of REQUIRED_TOOLS) {
+    expect(content).toMatch(new RegExp(`${CONSOLIDATED_MCP_TOOL_COUNT} consolidated tool handlers`));
+    expect(content).not.toMatch(/\b10 consolidated tool handlers\b/);
+    for (const tool of CONSOLIDATED_MCP_TOOLS) {
       expect(content, `missing ${tool} in docs/coding-standards.md`).toContain(tool);
     }
   });
@@ -55,7 +44,7 @@ describe("Coding standards — contributor docs alignment", () => {
 
   it("AGENTS.md documents 11 consolidated MCP tools and Zod v4", () => {
     expect(agents).toMatch(/11 consolidated tools/);
-    for (const tool of REQUIRED_TOOLS) {
+    for (const tool of CONSOLIDATED_MCP_TOOLS) {
       expect(agents, `missing ${tool} in AGENTS.md`).toContain(tool);
     }
     expect(agents).toMatch(/Zod v4/);
@@ -66,5 +55,13 @@ describe("Coding standards — contributor docs alignment", () => {
     expect(contributing).toContain("pnpm standards:check");
     expect(contributing).toMatch(/11 generic MCP tools/);
     expect(contributing).toMatch(/import \* as z from "zod\/v4"/);
+  });
+
+  it("README.md links coding standards and lists every consolidated MCP tool", () => {
+    const readme = readFileSync(README_PATH, "utf8");
+    expect(readme).toContain("docs/coding-standards.md");
+    for (const tool of CONSOLIDATED_MCP_TOOLS) {
+      expect(readme, `missing ${tool} in README.md`).toContain(tool);
+    }
   });
 });
