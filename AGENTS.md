@@ -12,7 +12,7 @@ pnpm build             # tsc → build/
 pnpm dev               # tsc --watch
 pnpm typecheck         # tsc --noEmit
 pnpm test              # vitest run (118 test files, 2510 tests, ~9s)
-pnpm standards:check   # coding-standards, structural validation, adm-zip/Docker pin guards
+pnpm standards:check   # coding-standards, structural validation, dependency/Docker security pin guards
 pnpm start             # stdio transport (requires HARNESS_API_KEY)
 pnpm start:http        # HTTP transport (node build/index.js http)
 pnpm inspect           # MCP Inspector against stdio build

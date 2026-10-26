@@ -71,6 +71,8 @@ const ENFORCEMENT_MAP: ReadonlyArray<{ section: string; files: readonly string[]
     section: "Dependency security pins (adm-zip CVE floors, Docker postinstall ordering)",
     files: [
       "../scripts/adm-zip-dependency-pins.test.ts",
+      "../scripts/cve-dependency-pins.test.ts",
+      "../scripts/http-framework-security-pins.test.ts",
       "../docker/production-dockerfile.test.ts",
     ],
   },
