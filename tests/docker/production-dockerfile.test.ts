@@ -14,8 +14,28 @@ function productionStage(dockerfile: string): string {
   return dockerfile.slice(start);
 }
 
+function stageBetween(dockerfile: string, startMarker: string, endMarker: string | null): string {
+  const start = dockerfile.indexOf(startMarker);
+  expect(start, `expected stage marker ${startMarker}`).toBeGreaterThan(-1);
+  const end = endMarker ? dockerfile.indexOf(endMarker, start + startMarker.length) : dockerfile.length;
+  expect(end, `expected end marker after ${startMarker}`).toBeGreaterThan(start);
+  return dockerfile.slice(start, end);
+}
+
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
+
+  it("copies adm-zip patch scripts before pnpm install in dependency stages", () => {
+    for (const marker of ["FROM toolchain AS build", "FROM toolchain AS production-dependencies"]) {
+      const stage = stageBetween(dockerfile, marker, "FROM ");
+      expect(stage).toContain("COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/");
+      const copyIndex = stage.indexOf("ensure-secure-adm-zip.mjs");
+      const installIndex = stage.indexOf("pnpm install");
+      expect(copyIndex, `${marker} must copy adm-zip scripts`).toBeGreaterThan(-1);
+      expect(installIndex, `${marker} must run pnpm install`).toBeGreaterThan(-1);
+      expect(copyIndex).toBeLessThan(installIndex);
+    }
+  });
 
   it("bumps DEBIAN_SECURITY_REFRESH so GHA layer cache replays apt security upgrades", () => {
     const argMatch = dockerfile.match(/^ARG DEBIAN_SECURITY_REFRESH=(\d{4}-\d{2}-\d{2})/m);
