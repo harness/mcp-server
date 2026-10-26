@@ -106,6 +106,7 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
     checklist: "adm-zip CVE pins and postinstall remediation (onnxruntime-node nested copy)",
     guardFiles: [
       "tests/scripts/adm-zip-dependency-pins.test.ts",
+      "tests/scripts/npm-shrinkwrap-check.test.ts",
       "tests/scripts/adm-zip-security-lib.test.ts",
       "tests/release-metadata.test.ts",
     ],

@@ -14,6 +14,7 @@ export const SECURITY_REGRESSION_GUARD_FILES = [
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/adm-zip-dependency-pins.test.ts",
+  "tests/scripts/npm-shrinkwrap-check.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/docker/production-dockerfile.test.ts",
   "tests/registry/access-control-service-account.test.ts",

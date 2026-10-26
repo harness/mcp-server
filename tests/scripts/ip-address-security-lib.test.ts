@@ -84,6 +84,35 @@ describe("ip-address-security-lib", () => {
     }
   });
 
+  it("parses ip-address version from shrinkwrap packages, dependencies, or legacy keys", () => {
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({ packages: { "node_modules/ip-address": { version: "10.7.4" } } }),
+      ),
+    ).toBe("10.7.4");
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({ dependencies: { "ip-address": { version: "10.7.4" } } }),
+      ),
+    ).toBe("10.7.4");
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({ "node_modules/ip-address": { version: "10.7.4" } }),
+      ),
+    ).toBe("10.7.4");
+    expect(parseNpmShrinkwrapIpAddressVersion(JSON.stringify({ packages: {} }))).toBeNull();
+  });
+
+  it("collects distinct ip-address versions from pnpm-lock.yaml resolver lines", () => {
+    const sample = `
+  ip-address@10.7.4:
+    resolution: {integrity: sha512-example}
+  ip-address@10.4.0:
+    resolution: {integrity: sha512-old}
+`;
+    expect(parsePnpmLockIpAddressVersions(sample).sort()).toEqual(["10.4.0", "10.7.4"]);
+  });
+
   it("keeps npm-shrinkwrap on a patched ip-address release", () => {
     const shrinkwrapVersion = parseNpmShrinkwrapIpAddressVersion(
       readFileSync(join(root, "npm-shrinkwrap.json"), "utf8"),
