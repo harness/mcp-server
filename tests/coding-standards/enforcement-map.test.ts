@@ -122,6 +122,10 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
     checklist: "Security regression guard inventory (CVE pins, Docker, service accounts)",
     guardFiles: ["tests/scripts/security-regression-guards.test.ts"],
   },
+  {
+    checklist: "Commit Checklist bullets map to guard tests or CI",
+    guardFiles: ["tests/coding-standards/commit-checklist-coverage.test.ts"],
+  },
 ];
 
 /**

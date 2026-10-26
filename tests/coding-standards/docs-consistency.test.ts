@@ -47,9 +47,16 @@ describe("Coding standards — documentation consistency", () => {
 });
 
 describe("Coding standards — CI guardrails", () => {
+  const ci = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
+
   it(".github/workflows/ci.yml runs pnpm standards:check", () => {
-    const ci = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
     expect(ci).toContain("pnpm standards:check");
+  });
+
+  it(".github/workflows/ci.yml runs pnpm build, test, and typecheck", () => {
+    expect(ci).toContain("pnpm build");
+    expect(ci).toContain("pnpm test");
+    expect(ci).toContain("pnpm typecheck");
   });
 });
 
