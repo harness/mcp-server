@@ -36,4 +36,19 @@ describe("ensure-secure-adm-zip postinstall", () => {
     expect(result.status).toBe(0);
     expect(result.stderr ?? "").not.toMatch(/adm-zip patch warning/i);
   });
+
+  it("exits successfully on a patched tree without skip env (default npm postinstall path)", () => {
+    const env = { ...process.env };
+    delete env.HARNESS_MCP_SKIP_ADM_ZIP_PATCH;
+
+    const result = spawnSync(process.execPath, [postinstallScript], {
+      cwd: root,
+      env,
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stderr ?? "").not.toMatch(/adm-zip patch warning/i);
+    expect(result.stderr ?? "").not.toMatch(/may remain vulnerable/i);
+  });
 });

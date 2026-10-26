@@ -3,6 +3,7 @@ import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import {
   flattenServiceAccountAggregate,
+  pageExtract,
   serviceAccountListExtract,
 } from "../../src/registry/extractors.js";
 import { compactItems } from "../../src/utils/compact.js";
@@ -150,6 +151,47 @@ describe("serviceAccountListExtract", () => {
     expect(serviceAccountListExtract({ status: "SUCCESS" })).toEqual({
       items: [],
       total: 0,
+    });
+  });
+
+  it("returns empty items for non-object API payloads", () => {
+    expect(serviceAccountListExtract(null)).toEqual({ items: [], total: 0 });
+    expect(serviceAccountListExtract("unexpected")).toEqual({ items: [], total: 0 });
+  });
+});
+
+describe("pageExtract (service account aggregate pagination)", () => {
+  it("returns empty items for non-object payloads", () => {
+    expect(pageExtract(null)).toEqual({ items: [], total: 0 });
+    expect(pageExtract(undefined)).toEqual({ items: [], total: 0 });
+  });
+
+  it("prefers totalElements over totalItems when both are present", () => {
+    expect(
+      pageExtract({
+        data: {
+          content: [{ identifier: "sa-1" }],
+          totalElements: 5,
+          totalItems: 99,
+        },
+      }),
+    ).toEqual({
+      items: [{ identifier: "sa-1" }],
+      total: 5,
+    });
+  });
+
+  it("falls back to totalItems when totalElements is absent", () => {
+    expect(
+      pageExtract({
+        data: {
+          content: [{ identifier: "sa-1" }],
+          totalItems: 12,
+        },
+      }),
+    ).toEqual({
+      items: [{ identifier: "sa-1" }],
+      total: 12,
     });
   });
 });
