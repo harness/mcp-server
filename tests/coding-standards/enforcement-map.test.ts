@@ -97,6 +97,39 @@ const ENFORCEMENT_MAP: ChecklistEnforcement[] = [
     testFiles: ["tests/registry/structural-validation.test.ts"],
     mustContain: "structural validation",
   },
+  {
+    checklist: "CVE dependency floors (body-parser, zod, fast-uri, ip-address)",
+    testFiles: ["tests/scripts/cve-dependency-pins.test.ts"],
+    mustContain: "CVE dependency pins",
+  },
+  {
+    checklist: "HTTP framework CVE pins (hono, @hono/node-server, vite)",
+    testFiles: ["tests/scripts/http-framework-security-pins.test.ts"],
+    mustContain: "HTTP framework security pins",
+  },
+  {
+    checklist: "Production Dockerfile Debian/OpenSSL security layers",
+    testFiles: ["tests/docker/production-dockerfile.test.ts"],
+    mustContain: "DEBIAN_SECURITY_REFRESH",
+  },
+  {
+    checklist: "adm-zip postinstall security patch for npm consumers",
+    testFiles: [
+      "tests/scripts/adm-zip-security-lib.test.ts",
+      "tests/scripts/npm-publish-security-manifest.test.ts",
+    ],
+    mustContain: "ensure-secure-adm-zip",
+  },
+  {
+    checklist: "ip-address security floor and active install resolution",
+    testFiles: ["tests/scripts/ip-address-security-lib.test.ts"],
+    mustContain: "SECURE_IP_ADDRESS_VERSION",
+  },
+  {
+    checklist: "Shared pnpm-lock version parsing for security scans",
+    testFiles: ["tests/scripts/pnpm-lock-parse-lib.test.ts"],
+    mustContain: "parsePnpmLockPackageVersions",
+  },
 ];
 
 describe("Coding standards — enforcement map", () => {
@@ -146,6 +179,33 @@ describe("Coding standards — enforcement map", () => {
         existsSync(join(CODING_STANDARDS_DIR, module)),
         `missing tests/coding-standards/${module}`,
       ).toBe(true);
+    }
+  });
+
+  it("security regression suite includes every docker and scripts guard module", () => {
+    const securityModules = [
+      "tests/docker/production-dockerfile.test.ts",
+      "tests/scripts/adm-zip-security-lib.test.ts",
+      "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/http-framework-security-pins.test.ts",
+      "tests/scripts/ip-address-security-lib.test.ts",
+      "tests/scripts/npm-publish-security-manifest.test.ts",
+      "tests/scripts/pnpm-lock-parse-lib.test.ts",
+    ];
+
+    for (const module of securityModules) {
+      expect(existsSync(join(REPO_ROOT, module)), `missing ${module}`).toBe(true);
+    }
+
+    const mappedSecurityTests = new Set(
+      ENFORCEMENT_MAP.flatMap((entry) => entry.testFiles).filter((file) =>
+        file.startsWith("tests/docker/") || file.startsWith("tests/scripts/"),
+      ),
+    );
+    for (const module of securityModules) {
+      expect(mappedSecurityTests.has(module), `${module} must appear in ENFORCEMENT_MAP`).toBe(
+        true,
+      );
     }
   });
 });

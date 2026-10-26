@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
-import { parsePnpmLockPackageVersions } from "../../scripts/pnpm-lock-parse-lib.mjs";
+import {
+  parseNpmShrinkwrapPackageVersion,
+  parsePnpmLockPackageVersions,
+} from "../../scripts/pnpm-lock-parse-lib.mjs";
 
 const root = process.cwd();
 
@@ -55,6 +58,22 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
         expectAtLeastFloor(version, floor, name);
       }
     }
+  });
+
+  it("documents patched runtime HTTP deps in npm-shrinkwrap.json (production install graph)", () => {
+    const shrinkwrapText = readFileSync(join(root, "npm-shrinkwrap.json"), "utf8");
+    const checks: Array<{ name: string; floor: string }> = [
+      { name: "hono", floor: SECURE_HONO_VERSION },
+      { name: "@hono/node-server", floor: SECURE_HONO_NODE_SERVER_VERSION },
+    ];
+
+    for (const { name, floor } of checks) {
+      const version = parseNpmShrinkwrapPackageVersion(shrinkwrapText, name);
+      expect(version, `expected ${name} in npm-shrinkwrap.json`).not.toBeNull();
+      expectAtLeastFloor(version!, floor, name);
+    }
+
+    expect(parseNpmShrinkwrapPackageVersion(shrinkwrapText, "vite")).toBeNull();
   });
 
   it("links patched copies under node_modules after install", () => {
