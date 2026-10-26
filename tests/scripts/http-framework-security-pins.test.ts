@@ -36,6 +36,14 @@ function parsePnpmLockPackageVersions(lockfileText: string, packageName: string)
   return [...versions];
 }
 
+function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+  };
+  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
+  return typeof version === "string" ? version : null;
+}
+
 function readInstalledPackageVersion(packageName: string): string {
   const packageJsonPath = join(root, "node_modules", packageName, "package.json");
   const manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: string };
@@ -93,6 +101,20 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
     for (const { name, floor } of checks) {
       const version = readInstalledPackageVersion(name);
       expectAtLeastFloor(version, floor, name);
+    }
+  });
+
+  it("documents patched HTTP runtime deps in npm-shrinkwrap.json for global npm installs", () => {
+    const shrinkwrapText = readFileSync(join(root, "npm-shrinkwrap.json"), "utf8");
+    const checks: Array<{ name: string; floor: string }> = [
+      { name: "hono", floor: SECURE_HONO_VERSION },
+      { name: "@hono/node-server", floor: SECURE_HONO_NODE_SERVER_VERSION },
+    ];
+
+    for (const { name, floor } of checks) {
+      const version = parseNpmShrinkwrapPackageVersion(shrinkwrapText, name);
+      expect(version, `expected ${name} in npm-shrinkwrap.json`).not.toBeNull();
+      expectAtLeastFloor(version!, floor, name);
     }
   });
 });

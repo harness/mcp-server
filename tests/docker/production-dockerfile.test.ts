@@ -38,6 +38,20 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
 
+  it("installs libpcre2-8-0 for Trivy-flagged PCRE2 CVEs in the production runtime image", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\blibpcre2-8-0\b/,
+    );
+  });
+
+  it("keeps DEBIAN_SECURITY_REFRESH only in the production stage so toolchain layers stay cacheable", () => {
+    const productionMarker = "FROM ${RUNTIME_IMAGE} AS production";
+    const beforeProduction = dockerfile.slice(0, dockerfile.indexOf(productionMarker));
+    expect(beforeProduction).not.toContain("DEBIAN_SECURITY_REFRESH");
+    expect(productionStage(dockerfile)).toContain("ARG DEBIAN_SECURITY_REFRESH=");
+  });
+
   it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
     const stage = productionStage(dockerfile);
     const upgradeIndex = stage.indexOf("apt-get upgrade");
