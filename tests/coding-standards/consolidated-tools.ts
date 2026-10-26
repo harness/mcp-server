@@ -22,6 +22,8 @@ export type ConsolidatedMcpTool = (typeof CONSOLIDATED_MCP_TOOLS)[number];
 
 export const CONSOLIDATED_MCP_TOOL_COUNT = CONSOLIDATED_MCP_TOOLS.length;
 
+export const CONSOLIDATED_MCP_TOOL_SET = new Set<string>(CONSOLIDATED_MCP_TOOLS);
+
 /** Handler files that call server.registerTool(). */
 export const ALLOWED_REGISTER_TOOL_FILES = [
   "src/tools/harness-list.ts",

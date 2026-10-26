@@ -10,6 +10,8 @@ import { CONSOLIDATED_MCP_TOOLS, CONSOLIDATED_MCP_TOOL_COUNT } from "./consolida
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
 const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
+const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
+const README_PATH = join(REPO_ROOT, "README.md");
 
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
@@ -17,7 +19,6 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md documents 11 consolidated MCP tools including harness_schema", () => {
     expect(CONSOLIDATED_MCP_TOOL_COUNT).toBe(11);
     expect(content).toMatch(/11 consolidated tool handlers/);
-    expect(content).not.toMatch(/10 consolidated tool handlers/);
     for (const tool of CONSOLIDATED_MCP_TOOLS) {
       expect(content, `missing ${tool} in docs/coding-standards.md`).toContain(tool);
     }
@@ -36,14 +37,40 @@ describe("Coding standards — documentation consistency", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
 
-  it("docs/coding-standards.md uses registerTool (not legacy server.tool)", () => {
-    expect(content).toContain("registerTool");
-    expect(content).not.toMatch(/Do NOT create new `server\.tool\(\)` calls/);
+  it("docs/coding-standards.md does not regress to outdated 10-tool architecture copy", () => {
+    expect(content).not.toMatch(/10 consolidated tool handlers/);
+    expect(content).not.toMatch(/\bserver\.tool\(\)/);
   });
 
-  it("AGENTS.md references pnpm standards:check", () => {
+  it("docs/coding-standards.md documents registry dispatch and registerTool registration", () => {
+    expect(content).toMatch(/registry-driven/i);
+    expect(content).toContain("Registry.dispatch()");
+    expect(content).toContain("server.registerTool()");
+  });
+
+  it("AGENTS.md stays aligned with the 11-tool registry model and Zod v4", () => {
     const agents = readFileSync(AGENTS_PATH, "utf8");
-    expect(agents).toContain("pnpm standards:check");
     expect(agents).toMatch(/11 consolidated tools/);
+    expect(agents).toContain("harness_schema");
+    expect(agents).toMatch(/Zod v4/);
+    expect(agents).toContain("pnpm standards:check");
+    expect(agents).not.toMatch(/10 consolidated tool/);
+    expect(agents).not.toMatch(/\bserver\.tool\(\)/);
+  });
+
+  it("CONTRIBUTING.md points contributors at standards guardrails", () => {
+    const contributing = readFileSync(CONTRIBUTING_PATH, "utf8");
+    expect(contributing).toContain("pnpm standards:check");
+    expect(contributing).toContain("docs/coding-standards.md");
+  });
+
+  it("README.md stays aligned with the 11-tool registry model", () => {
+    const readme = readFileSync(README_PATH, "utf8");
+    expect(readme).toMatch(/11 consolidated tools/);
+    expect(readme).toContain("harness_schema");
+    expect(readme).not.toMatch(/10 consolidated tool/);
+    for (const tool of CONSOLIDATED_MCP_TOOLS) {
+      expect(readme, `missing ${tool} in README.md`).toContain(tool);
+    }
   });
 });
