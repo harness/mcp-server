@@ -11,12 +11,19 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 /** snake_case: lowercase letters, digits, underscores only. */
 const SNAKE_CASE = /^[a-z][a-z0-9_]*$/;
 
-function extractInputSchemaPropertyNames(content: string): string[] {
+/** Shared field builders in input-schemas.ts that attach .describe() internally. */
+const INPUT_SCHEMA_FIELD_BUILDERS = new Set([
+  "orgIdField",
+  "projectIdField",
+  "resourceScopeField",
+]);
+
+function extractInputSchemaBody(content: string): string | null {
   const schemaStart = content.indexOf("inputSchema:");
-  if (schemaStart === -1) return [];
+  if (schemaStart === -1) return null;
 
   const braceStart = content.indexOf("{", schemaStart);
-  if (braceStart === -1) return [];
+  if (braceStart === -1) return null;
 
   let depth = 0;
   let braceEnd = -1;
@@ -30,12 +37,21 @@ function extractInputSchemaPropertyNames(content: string): string[] {
       }
     }
   }
-  if (braceEnd === -1) return [];
+  if (braceEnd === -1) return null;
 
-  const body = content.slice(braceStart + 1, braceEnd);
-  const names: string[] = [];
+  return content.slice(braceStart + 1, braceEnd);
+}
+
+type InputSchemaProperty = { name: string; text: string };
+
+function extractInputSchemaProperties(content: string): InputSchemaProperty[] {
+  const body = extractInputSchemaBody(content);
+  if (!body) return [];
+
+  const properties: InputSchemaProperty[] = [];
   let scanDepth = 0;
   let lineStart = 0;
+  let current: InputSchemaProperty | null = null;
 
   for (let i = 0; i < body.length; i++) {
     const ch = body[i];
@@ -46,13 +62,39 @@ function extractInputSchemaPropertyNames(content: string): string[] {
       const line = body.slice(lineStart, ch === "\n" ? i : i + 1);
       if (scanDepth === 0) {
         const lineMatch = /^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:/.exec(line);
-        if (lineMatch) names.push(lineMatch[1]!);
+        if (lineMatch) {
+          if (current) properties.push(current);
+          current = { name: lineMatch[1]!, text: line };
+        } else if (current) {
+          current.text += line;
+        }
+      } else if (current) {
+        current.text += line;
       }
       lineStart = i + 1;
     }
   }
 
-  return names;
+  if (current) properties.push(current);
+  return properties;
+}
+
+function extractInputSchemaPropertyNames(content: string): string[] {
+  return extractInputSchemaProperties(content).map((p) => p.name);
+}
+
+function inputSchemaPropertyHasDescribe(property: InputSchemaProperty, fileContent: string): boolean {
+  if (/\.describe\s*\(/.test(property.text)) return true;
+  for (const builder of INPUT_SCHEMA_FIELD_BUILDERS) {
+    if (new RegExp(`\\b${builder}\\s*\\(`).test(property.text)) return true;
+  }
+  const aliasMatch = /:\s*([A-Za-z_][A-Za-z0-9_]*)\s*,?\s*$/.exec(property.text.trim());
+  if (aliasMatch) {
+    const alias = aliasMatch[1]!;
+    const constRe = new RegExp(`const\\s+${alias}\\s*=[\\s\\S]*?\\.describe\\s*\\(`);
+    if (constRe.test(fileContent)) return true;
+  }
+  return false;
 }
 
 describe("Coding standards — tool input conventions", () => {
@@ -60,6 +102,24 @@ describe("Coding standards — tool input conventions", () => {
     const content = readFileSync(join(REPO_ROOT, "src/tools/harness-list.ts"), "utf8");
     expect(content).toMatch(/page:\s*z\.number\(\)\.default\(0\)/);
     expect(content).toMatch(/size:\s*z\.number\(\)\.min\(1\)\.max\(100\)\.default\(20\)/);
+  });
+
+  it("every harness handler inputSchema param has .describe() (LLM tool selection)", () => {
+    const violations: string[] = [];
+
+    for (const file of HANDLER_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      for (const property of extractInputSchemaProperties(content)) {
+        if (!inputSchemaPropertyHasDescribe(property, content)) {
+          violations.push(`${file}: ${property.name}`);
+        }
+      }
+    }
+
+    expect(
+      violations,
+      `inputSchema params missing .describe():\n${violations.join("\n")}`,
+    ).toEqual([]);
   });
 
   it("all harness handler inputSchema params use snake_case", () => {

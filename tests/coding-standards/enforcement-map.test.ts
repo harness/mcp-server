@@ -57,6 +57,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     mustMatch: /pagination defaults page=0 and size=20/,
   },
   {
+    rule: "§8 — tool input conventions (.describe on every param)",
+    file: "input-conventions.test.ts",
+    mustMatch: /every harness handler inputSchema param has \.describe\(\)/,
+  },
+  {
     rule: "§9 — write safety (confirm / elicitation)",
     file: "registry-metadata.test.ts",
     mustMatch: /confirmViaElicitation before dispatch/,
