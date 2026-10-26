@@ -51,6 +51,24 @@ describe("flattenServiceAccountAggregate", () => {
     });
   });
 
+  it("promotes org and project scope identifiers from nested serviceAccount", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "project-bot",
+          orgIdentifier: "platform",
+          projectIdentifier: "checkout",
+        },
+        tokensCount: 1,
+      }),
+    ).toEqual({
+      identifier: "project-bot",
+      orgIdentifier: "platform",
+      projectIdentifier: "checkout",
+      tokensCount: 1,
+    });
+  });
+
   it("keeps already-flat list DTO fields", () => {
     expect(
       flattenServiceAccountAggregate({

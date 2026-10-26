@@ -65,6 +65,27 @@ describe("Security regression — enforcement map", () => {
     expect(packageJson.scripts.postinstall).toBe("node scripts/ensure-secure-adm-zip.mjs");
   });
 
+  it("npm publish runs shrinkwrap check and ships adm-zip hardening scripts", () => {
+    const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      scripts: { prepublishOnly?: string; "npm-shrinkwrap:check"?: string };
+      files?: string[];
+      overrides?: { "onnxruntime-node"?: { "adm-zip"?: string } };
+    };
+
+    expect(packageJson.scripts.prepublishOnly).toMatch(/pnpm build/);
+    expect(packageJson.scripts.prepublishOnly).toMatch(/npm-shrinkwrap:check/);
+    expect(packageJson.scripts["npm-shrinkwrap:check"]).toMatch(/generate-npm-shrinkwrap\.mjs --check/);
+
+    expect(packageJson.files).toEqual(
+      expect.arrayContaining([
+        "npm-shrinkwrap.json",
+        "scripts/adm-zip-security-lib.mjs",
+        "scripts/ensure-secure-adm-zip.mjs",
+      ]),
+    );
+    expect(packageJson.overrides?.["onnxruntime-node"]?.["adm-zip"]).toBe("0.6.1");
+  });
+
   it("documents semver floor comparison used by CVE pin tests", () => {
     expect(isSecureIpAddressVersion("4.6.5", "4.6.6")).toBe(false);
     expect(isSecureIpAddressVersion("4.6.6", "4.6.6")).toBe(true);
