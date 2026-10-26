@@ -4,12 +4,45 @@ import { describe, expect, it } from "vitest";
 
 const dockerfilePath = join(process.cwd(), "Dockerfile");
 
-function productionStage(dockerfile: string): string {
-  const marker = "FROM ${RUNTIME_IMAGE} AS production";
+const STAGE_MARKERS: Record<string, string> = {
+  build: "FROM toolchain AS build",
+  "production-dependencies": "FROM toolchain AS production-dependencies",
+  production: "FROM ${RUNTIME_IMAGE} AS production",
+};
+
+function dockerStage(dockerfile: string, stageName: string): string {
+  const marker = STAGE_MARKERS[stageName];
+  expect(marker, `unknown Dockerfile stage ${stageName}`).toBeTruthy();
   const start = dockerfile.indexOf(marker);
-  expect(start, "expected production stage in Dockerfile").toBeGreaterThan(-1);
-  return dockerfile.slice(start);
+  expect(start, `expected ${stageName} stage in Dockerfile`).toBeGreaterThan(-1);
+  const nextFrom = dockerfile.indexOf("\nFROM ", start + marker.length);
+  return nextFrom === -1 ? dockerfile.slice(start) : dockerfile.slice(start, nextFrom);
 }
+
+function productionStage(dockerfile: string): string {
+  return dockerStage(dockerfile, "production");
+}
+
+function pnpmInstallStageCopiesAdmZipScriptsBeforeInstall(stage: string): void {
+  const copyScripts = stage.indexOf("COPY scripts/ensure-secure-adm-zip.mjs");
+  const pnpmInstall = stage.indexOf("RUN pnpm install");
+  expect(copyScripts, "stage must COPY adm-zip postinstall scripts").toBeGreaterThan(-1);
+  expect(pnpmInstall, "stage must run pnpm install").toBeGreaterThan(-1);
+  expect(copyScripts).toBeLessThan(pnpmInstall);
+  expect(stage).toContain("scripts/adm-zip-security-lib.mjs");
+}
+
+describe("Dockerfile — dependency install stages (adm-zip postinstall)", () => {
+  const dockerfile = readFileSync(dockerfilePath, "utf8");
+
+  it("copies adm-zip patch scripts before pnpm install in the build stage", () => {
+    pnpmInstallStageCopiesAdmZipScriptsBeforeInstall(dockerStage(dockerfile, "build"));
+  });
+
+  it("copies adm-zip patch scripts before pnpm install in production-dependencies", () => {
+    pnpmInstallStageCopiesAdmZipScriptsBeforeInstall(dockerStage(dockerfile, "production-dependencies"));
+  });
+});
 
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
