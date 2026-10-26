@@ -53,6 +53,8 @@ const TRANSITIVE_PIN_FLOORS: Record<string, string> = {
   "source-map-js": "1.2.2",
   sharp: "0.35.5",
   protobufjs: "8.6.0",
+  esbuild: "0.28.1",
+  "path-to-regexp": "8.4.0",
 };
 
 describe("transitive security pins (pnpm overrides → lockfile)", () => {

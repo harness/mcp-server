@@ -54,6 +54,7 @@ const ENFORCEMENT_MAP: Record<string, readonly string[]> = {
   "§11 File organization": ["tests/coding-standards/file-organization.test.ts"],
   "Docs stay aligned with enforced constants": ["tests/coding-standards/docs-consistency.test.ts"],
   "Commit checklist → guardrails or CI": ["tests/coding-standards/commit-checklist-coverage.test.ts"],
+  "Security CVE / supply-chain regression guards": ["tests/scripts/security-regression-map.test.ts"],
 };
 
 function assertGuardFilesExist(rule: string, files: readonly string[]): void {
