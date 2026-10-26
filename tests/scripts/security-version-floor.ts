@@ -27,3 +27,20 @@ export function parsePnpmLockPackageVersions(lockText: string, packageName: stri
   }
   return versions;
 }
+
+/** Read a top-level package version from npm-shrinkwrap.json (packages or legacy deps). */
+export function parseNpmShrinkwrapPackageVersion(
+  shrinkwrapText: string,
+  packageName: string,
+): string | null {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+    dependencies?: Record<string, { version?: string }>;
+  };
+  const pkgKey = `node_modules/${packageName}`;
+  const version =
+    shrinkwrap.packages?.[pkgKey]?.version ??
+    shrinkwrap.dependencies?.[packageName]?.version ??
+    (shrinkwrap as Record<string, { version?: string }>)[pkgKey]?.version;
+  return typeof version === "string" ? version : null;
+}

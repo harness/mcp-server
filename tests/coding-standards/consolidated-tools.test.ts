@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ALLOWED_REGISTER_TOOL_FILES,
   API_HANDLERS,
   CONSOLIDATED_MCP_TOOLS,
   HARNESS_HANDLER_FILES,
@@ -42,5 +43,12 @@ describe("consolidated-tools — structural invariants", () => {
       expect(HARNESS_HANDLER_FILES).toContain(file);
     }
     expect(WRITE_TOOL_FILES).toHaveLength(4);
+  });
+
+  it("allows registerTool only in the documented handler files", () => {
+    expect(ALLOWED_REGISTER_TOOL_FILES.size).toBe(HARNESS_HANDLER_FILES.length);
+    for (const file of HARNESS_HANDLER_FILES) {
+      expect(ALLOWED_REGISTER_TOOL_FILES.has(file)).toBe(true);
+    }
   });
 });
