@@ -32,4 +32,10 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md does not regress to legacy 10-tool / server.tool() architecture", () => {
+    expect(content).not.toMatch(/10 consolidated tool handlers/);
+    expect(content).not.toMatch(/\bserver\.tool\s*\(/);
+    expect(content).toMatch(/server\.registerTool\(\)/);
+  });
 });

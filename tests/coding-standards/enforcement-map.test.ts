@@ -81,6 +81,11 @@ const CHECKLIST_ENFORCEMENT: EnforcementEntry[] = [
     testFiles: ["docs-consistency.test.ts"],
     mustMatch: /documents 11 consolidated MCP tools/,
   },
+  {
+    topic: "docs reject legacy 10-tool and server.tool() wording",
+    testFiles: ["docs-consistency.test.ts"],
+    mustMatch: /does not regress to legacy 10-tool/,
+  },
 ];
 
 function readTestFile(name: string): string {
