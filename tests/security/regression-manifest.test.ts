@@ -35,8 +35,13 @@ const SECURITY_REGRESSION_GUARDS: SecurityRegressionGuard[] = [
   },
   {
     path: "tests/scripts/cve-dependency-pins.test.ts",
-    anchor: "SECURE_BODY_PARSER_VERSION",
-    topic: "body-parser, zod, fast-uri, ip-address, express-rate-limit CVE pins",
+    anchor: "SECURE_QS_VERSION",
+    topic: "body-parser, zod, fast-uri, ip-address, express-rate-limit, qs, proxy-addr CVE pins",
+  },
+  {
+    path: "tests/scripts/ensure-secure-adm-zip.test.ts",
+    anchor: "HARNESS_MCP_SKIP_ADM_ZIP_PATCH",
+    topic: "postinstall adm-zip patch skip env for controlled installs",
   },
   {
     path: "tests/scripts/http-framework-security-pins.test.ts",
