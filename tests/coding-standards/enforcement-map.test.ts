@@ -34,6 +34,7 @@ const ENFORCEMENT_MAP: Record<string, readonly string[]> = {
     "tests/coding-standards/registry-metadata.test.ts",
     "tests/registry/structural-validation.test.ts",
   ],
+  "§5b operationPolicy on every endpoint": ["tests/coding-standards/registry-contract.test.ts"],
   "§6 Error handling (toMcpError / errorResult)": [
     "tests/coding-standards/error-handling.test.ts",
     "tests/coding-standards/architecture.test.ts",
@@ -45,9 +46,14 @@ const ENFORCEMENT_MAP: Record<string, readonly string[]> = {
     "tests/coding-standards/architecture.test.ts",
   ],
   "§9 Write safety (confirm + elicitation)": ["tests/coding-standards/architecture.test.ts"],
+  "§9b Secret redaction (metadata-only contract)": [
+    "tests/utils/redact.test.ts",
+    "tests/client/harness-client.test.ts",
+  ],
   "§10 Singleton HarnessClient and fetch allowlist": ["tests/coding-standards/architecture.test.ts"],
   "§11 File organization": ["tests/coding-standards/file-organization.test.ts"],
   "Docs stay aligned with enforced constants": ["tests/coding-standards/docs-consistency.test.ts"],
+  "Commit checklist → guardrails or CI": ["tests/coding-standards/commit-checklist-coverage.test.ts"],
 };
 
 function assertGuardFilesExist(rule: string, files: readonly string[]): void {
