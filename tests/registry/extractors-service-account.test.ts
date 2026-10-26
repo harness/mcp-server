@@ -83,6 +83,26 @@ describe("flattenServiceAccountAggregate", () => {
       }),
     ).toEqual({ tokensCount: 0, createdAt: 1 });
   });
+
+  it("promotes org and project scope identifiers and tags from nested aggregates", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "org-sa",
+          orgIdentifier: "platform",
+          projectIdentifier: "payments",
+          tags: { team: "sre" },
+        },
+        lastModifiedAt: 99,
+      }),
+    ).toEqual({
+      identifier: "org-sa",
+      orgIdentifier: "platform",
+      projectIdentifier: "payments",
+      tags: { team: "sre" },
+      lastModifiedAt: 99,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
