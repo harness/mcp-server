@@ -73,6 +73,42 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("not-a-version", SECURE_IP_ADDRESS_VERSION)).toBe(false);
   });
 
+  it("parses ip-address versions from pnpm lockfile importer blocks", () => {
+    const lockSnippet = `
+importers:
+  .:
+    dependencies:
+      express-rate-limit:
+        specifier: ^8.3.2
+        version: 8.3.2
+packages:
+  ip-address@10.7.4:
+    resolution: {integrity: sha512-example}
+    engines: {node: '>= 12'}
+  ip-address@10.4.0:
+    resolution: {integrity: sha512-old}
+`;
+    expect(parsePnpmLockIpAddressVersions(lockSnippet).sort()).toEqual(["10.4.0", "10.7.4"]);
+    expect(parsePnpmLockIpAddressVersions("no ip-address entries here")).toEqual([]);
+  });
+
+  it("parses ip-address version from npm-shrinkwrap package layouts", () => {
+    const fromPackages = JSON.stringify({
+      packages: { "node_modules/ip-address": { version: "10.7.4" } },
+    });
+    const fromDependencies = JSON.stringify({
+      dependencies: { "ip-address": { version: "10.7.4" } },
+    });
+    const legacyLayout = JSON.stringify({
+      "node_modules/ip-address": { version: "10.7.4" },
+    });
+
+    expect(parseNpmShrinkwrapIpAddressVersion(fromPackages)).toBe("10.7.4");
+    expect(parseNpmShrinkwrapIpAddressVersion(fromDependencies)).toBe("10.7.4");
+    expect(parseNpmShrinkwrapIpAddressVersion(legacyLayout)).toBe("10.7.4");
+    expect(parseNpmShrinkwrapIpAddressVersion("{}")).toBeNull();
+  });
+
   it("keeps pnpm overrides and lockfile on a patched ip-address release", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     expect(packageJson.pnpm.overrides["ip-address"]).toBe(`>=${SECURE_IP_ADDRESS_VERSION}`);

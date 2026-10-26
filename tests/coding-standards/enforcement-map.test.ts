@@ -13,6 +13,7 @@ const GUARDRAILS_DIR = join(REPO_ROOT, "tests/coding-standards");
 /** Vitest files that implement automated checks for docs/coding-standards.md. */
 const ENFORCEMENT_TEST_FILES = [
   "architecture.test.ts",
+  "consolidated-tools.test.ts",
   "consolidated-tools.ts",
   "docs-consistency.test.ts",
   "enforcement-map.test.ts",
@@ -27,7 +28,12 @@ const ENFORCEMENT_TEST_FILES = [
 
 /** Human-readable mapping from standards topics to guard files (documentation for contributors). */
 const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
-  "§1 fixed MCP tool surface": ["architecture.test.ts", "file-organization.test.ts", "consolidated-tools.ts"],
+  "§1 fixed MCP tool surface": [
+    "architecture.test.ts",
+    "consolidated-tools.test.ts",
+    "file-organization.test.ts",
+    "consolidated-tools.ts",
+  ],
   "§2 pure-data toolsets": ["architecture.test.ts"],
   "§4 scoping model": ["scope-params.test.ts", "toolset-scope.test.ts", "registry-contract.test.ts"],
   "§5 identifierFields / metadata": ["registry-contract.test.ts", "registry-metadata.test.ts"],
@@ -71,5 +77,26 @@ describe("Coding standards — enforcement map", () => {
   it("consolidated tool count matches architecture constants", () => {
     expect(CONSOLIDATED_MCP_TOOLS).toHaveLength(11);
     expect(CONSOLIDATED_MCP_TOOLS).toContain("harness_schema");
+  });
+
+  it("maps every guardrail test file to at least one standards topic", () => {
+    const referenced = new Set<string>();
+    for (const files of Object.values(STANDARDS_TOPIC_COVERAGE)) {
+      for (const file of files) {
+        referenced.add(file);
+      }
+    }
+
+    const unmapped: string[] = [];
+    for (const file of ENFORCEMENT_TEST_FILES) {
+      if (file === "enforcement-map.test.ts" || file === "consolidated-tools.ts") {
+        continue;
+      }
+      if (!referenced.has(file)) {
+        unmapped.push(file);
+      }
+    }
+
+    expect(unmapped, unmapped.join(", ")).toEqual([]);
   });
 });
