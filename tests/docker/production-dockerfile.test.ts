@@ -11,6 +11,48 @@ function productionStage(dockerfile: string): string {
   return dockerfile.slice(start);
 }
 
+function dockerStage(dockerfile: string, stageName: string, nextStageName?: string): string {
+  const marker = `FROM toolchain AS ${stageName}`;
+  const start = dockerfile.indexOf(marker);
+  expect(start, `expected ${marker} in Dockerfile`).toBeGreaterThan(-1);
+  const end =
+    nextStageName === undefined
+      ? dockerfile.length
+      : dockerfile.indexOf(`FROM toolchain AS ${nextStageName}`, start + 1);
+  return dockerfile.slice(start, end === -1 ? dockerfile.length : end);
+}
+
+const ADM_ZIP_SCRIPT_COPY =
+  /COPY scripts\/ensure-secure-adm-zip\.mjs scripts\/adm-zip-security-lib\.mjs scripts\//;
+
+describe("Dockerfile dependency stages (adm-zip postinstall)", () => {
+  const dockerfile = readFileSync(dockerfilePath, "utf8");
+
+  it("copies adm-zip postinstall scripts before pnpm install in the build stage", () => {
+    const stage = dockerStage(dockerfile, "build", "production-dependencies");
+    const copyIndex = stage.search(ADM_ZIP_SCRIPT_COPY);
+    const installIndex = stage.indexOf("RUN pnpm install --frozen-lockfile");
+    expect(copyIndex, "build stage must COPY adm-zip scripts").toBeGreaterThan(-1);
+    expect(installIndex, "build stage must run pnpm install").toBeGreaterThan(-1);
+    expect(copyIndex).toBeLessThan(installIndex);
+    expect(stage).toMatch(
+      /package\.json postinstall imports both files, so they must exist before install/,
+    );
+  });
+
+  it("copies adm-zip postinstall scripts before prod-only pnpm install", () => {
+    const stage = dockerStage(dockerfile, "production-dependencies", undefined);
+    const bounded = stage.split("FROM ${RUNTIME_IMAGE} AS production")[0]!;
+    const copyIndex = bounded.search(ADM_ZIP_SCRIPT_COPY);
+    const installIndex = bounded.indexOf("RUN pnpm install --frozen-lockfile --prod");
+    expect(copyIndex, "production-dependencies stage must COPY adm-zip scripts").toBeGreaterThan(-1);
+    expect(installIndex, "production-dependencies stage must run pnpm install --prod").toBeGreaterThan(
+      -1,
+    );
+    expect(copyIndex).toBeLessThan(installIndex);
+  });
+});
+
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
 
