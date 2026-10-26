@@ -175,6 +175,24 @@ describe("ip-address-security-lib", () => {
     expect(resolveActiveIpAddressDir(packageRoot)).toBe(vulnerable);
   });
 
+  it("prefers a secure active install when multiple copies are reachable", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-multi-"));
+    tempDirs.push(packageRoot);
+    const vulnerable = join(packageRoot, "node_modules", "legacy-pkg", "node_modules", "ip-address");
+    const patched = join(packageRoot, "node_modules", "other-pkg", "node_modules", "ip-address");
+    writeIpAddressPackage(vulnerable, "10.4.0");
+    writeIpAddressPackage(patched, "10.7.4");
+
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(patched);
+    expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([
+      { dir: vulnerable, version: "10.4.0" },
+    ]);
+  });
+
+  it("parseNpmShrinkwrapIpAddressVersion returns null when ip-address is absent", () => {
+    expect(parseNpmShrinkwrapIpAddressVersion(JSON.stringify({ packages: {} }))).toBeNull();
+  });
+
   it("still flags a real nested install outside the pnpm virtual store", () => {
     const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-nested-"));
     tempDirs.push(packageRoot);

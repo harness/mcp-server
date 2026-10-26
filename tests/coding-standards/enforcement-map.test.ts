@@ -131,6 +131,14 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     ],
     signal: "serviceAccountListExtract",
   },
+  {
+    rule: "Security regression artifact map (Dockerfile, shrinkwrap, CVE libs)",
+    tests: [
+      "tests/scripts/security-regression-map.test.ts",
+      "tests/scripts/npm-publish-security-artifacts.test.ts",
+    ],
+    signal: "SECURITY_REGRESSION_MAP",
+  },
 ];
 
 describe("Coding standards — enforcement map", () => {

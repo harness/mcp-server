@@ -158,6 +158,16 @@ describe("adm-zip-security-lib", () => {
     ).toThrow(/failed to upgrade adm-zip/);
   });
 
+  it("no-ops when every adm-zip copy already meets the security floor", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-secure-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), SECURE_ADM_ZIP_VERSION);
+
+    const result = ensureSecureAdmZip(root);
+    expect(result).toEqual({ patched: [], skipped: true, warnings: [] });
+    expect(listInsecureAdmZipInstalls(root)).toEqual([]);
+  });
+
   it("dry-run schedules both hoisted and nested onnxruntime-node prefixes", () => {
     const root = mkdtempSync(join(tmpdir(), "adm-zip-nested-dry-"));
     tempDirs.push(root);
