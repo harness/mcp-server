@@ -133,6 +133,32 @@ const STANDARDS_ENFORCEMENT: EnforcementEntry[] = [
     tests: ["tests/coding-standards/docs-consistency.test.ts"],
   },
   {
+    checklist: "CVE and transitive dependency pins stay at patched floors",
+    automated: true,
+    tests: [
+      "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/http-framework-security-pins.test.ts",
+      "tests/scripts/transitive-security-pins.test.ts",
+      "tests/scripts/security-regression-guards.test.ts",
+    ],
+  },
+  {
+    checklist: "Production Docker image applies Debian/OpenSSL and adm-zip install gates",
+    automated: true,
+    tests: [
+      "tests/docker/production-dockerfile.test.ts",
+      "tests/docker/dockerfile-adm-zip-postinstall.test.ts",
+    ],
+  },
+  {
+    checklist: "Service account aggregate responses flatten identity and totals",
+    automated: true,
+    tests: [
+      "tests/registry/extractors-service-account.test.ts",
+      "tests/registry/access-control-service-account.test.ts",
+    ],
+  },
+  {
     checklist: "pnpm build passes",
     automated: false,
     tests: [],
