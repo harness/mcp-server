@@ -33,6 +33,12 @@ describe("Coding standards — documentation consistency", () => {
     expect(content).toContain("pnpm standards:check");
   });
 
+  it("docs/coding-standards.md documents automated enforcement and the enforcement map", () => {
+    expect(content).toMatch(/## Automated Enforcement/);
+    expect(content).toContain("tests/coding-standards/enforcement-map.test.ts");
+    expect(content).toContain("tests/registry/structural-validation.test.ts");
+  });
+
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });

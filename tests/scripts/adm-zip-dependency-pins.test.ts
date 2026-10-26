@@ -28,6 +28,15 @@ function readInstalledPackageVersion(packageName: string): string {
   return manifest.version!;
 }
 
+function parsePnpmLockAdmZipVersions(lockfileText: string): string[] {
+  const versions = new Set<string>();
+  const pattern = /^\s+adm-zip@([0-9]+\.[0-9]+\.[0-9]+):/gm;
+  for (const match of lockfileText.matchAll(pattern)) {
+    versions.add(match[1]!);
+  }
+  return [...versions];
+}
+
 describe("adm-zip dependency pins (CVE-2026-39244 / CVE-2026-76845)", () => {
   it("declares patched floors in package.json, pnpm overrides, and npm parent override", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
@@ -62,5 +71,16 @@ describe("adm-zip dependency pins (CVE-2026-39244 / CVE-2026-76845)", () => {
 
     const version = readInstalledPackageVersion("adm-zip");
     expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
+  });
+
+  it("resolves only patched adm-zip releases in pnpm-lock.yaml (including onnxruntime transitive)", () => {
+    const lockText = readFileSync(join(root, "pnpm-lock.yaml"), "utf8");
+    const versions = parsePnpmLockAdmZipVersions(lockText);
+    expect(versions.length, "expected adm-zip entries in pnpm-lock.yaml").toBeGreaterThan(0);
+    for (const version of versions) {
+      expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION), `adm-zip@${version}`).toBe(
+        true,
+      );
+    }
   });
 });
