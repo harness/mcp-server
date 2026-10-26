@@ -185,6 +185,10 @@ const COMMIT_RULE_GUARDS: Array<{ heading: string; guardFiles: string[] }> = [
     heading: "HTTP Client Is Singleton",
     guardFiles: ["tests/coding-standards/architecture.test.ts"],
   },
+  {
+    heading: "File Organization Rules",
+    guardFiles: ["tests/coding-standards/file-organization.test.ts"],
+  },
 ];
 
 describe("Coding standards — enforcement map", () => {
@@ -218,7 +222,7 @@ describe("Coding standards — enforcement map", () => {
     }
   });
 
-  it("docs/coding-standards.md lists 11 numbered Rules for Every Commit sections", () => {
+  it("docs/coding-standards.md lists 12 numbered Rules for Every Commit sections", () => {
     const content = readFileSync(STANDARDS_PATH, "utf8");
     const start = content.indexOf("## Rules for Every Commit");
     const end = content.indexOf("## Adding a New Harness Resource");
@@ -226,13 +230,13 @@ describe("Coding standards — enforcement map", () => {
     expect(end).toBeGreaterThan(start);
     const rulesSection = content.slice(start, end);
 
-    for (let n = 1; n <= 11; n++) {
+    for (let n = 1; n <= 12; n++) {
       expect(rulesSection, `missing ### ${n}.`).toMatch(new RegExp(`### ${n}\\.`));
     }
   });
 
   it("each Rules for Every Commit section has automated guard tests", () => {
-    expect(COMMIT_RULE_GUARDS).toHaveLength(11);
+    expect(COMMIT_RULE_GUARDS).toHaveLength(12);
 
     const content = readFileSync(STANDARDS_PATH, "utf8");
     const rulesStart = content.indexOf("## Rules for Every Commit");

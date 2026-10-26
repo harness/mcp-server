@@ -1,5 +1,5 @@
 /**
- * File organization rules — docs/coding-standards.md §11.
+ * File organization rules — docs/coding-standards.md §12.
  *
  * src/tools/ is fixed to the 11 harness handler files plus shared schemas and
  * diagnose/entity-schema helpers. New Harness API domains belong in
