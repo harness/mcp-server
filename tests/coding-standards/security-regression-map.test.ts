@@ -16,6 +16,7 @@ const ROOT = process.cwd();
 export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/cve-dependency-pins.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
+  "tests/scripts/express-stack-security-pins.test.ts",
   "tests/scripts/adm-zip-dependency-pins.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
@@ -31,6 +32,10 @@ const PNPM_OVERRIDE_FLOORS: Readonly<Record<string, string>> = {
   "@hono/node-server": ">=2.0.10",
   vite: "^7.3.7",
   "adm-zip": `>=${SECURE_ADM_ZIP_VERSION}`,
+  "path-to-regexp": ">=8.4.0",
+  qs: ">=6.16.0",
+  "proxy-addr": ">=2.0.8",
+  "express-rate-limit": ">=8.2.2",
 };
 
 describe("Security regression map", () => {
