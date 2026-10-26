@@ -27,10 +27,20 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(dockerfile).toMatch(/apt-get update[\s\S]*apt-get upgrade -y --no-install-recommends/);
   });
 
-  it("installs OpenSSL runtime packages patched for recent Debian CVEs", () => {
+  it("declares DEBIAN_SECURITY_REFRESH only in the production stage (not build/toolchain)", () => {
+    const prodMarker = "FROM ${RUNTIME_IMAGE} AS production";
+    const prodStart = dockerfile.indexOf(prodMarker);
+    expect(prodStart, "expected production stage marker").toBeGreaterThan(-1);
+
+    const beforeProduction = dockerfile.slice(0, prodStart);
+    expect(beforeProduction).not.toMatch(/DEBIAN_SECURITY_REFRESH/);
+    expect(productionStage(dockerfile)).toMatch(/^ARG DEBIAN_SECURITY_REFRESH=/m);
+  });
+
+  it("installs ONNX and Debian security runtime packages including libpcre2-8-0 and OpenSSL", () => {
     const stage = productionStage(dockerfile);
     expect(stage).toMatch(
-      /apt-get install -y --no-install-recommends[\s\S]*\blibssl3\b[\s\S]*\bopenssl\b/,
+      /apt-get install -y --no-install-recommends[\s\S]*\blibpcre2-8-0\b[\s\S]*\blibssl3\b[\s\S]*\bopenssl\b/,
     );
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
