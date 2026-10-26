@@ -52,6 +52,10 @@ describe("Coding standards — contributor docs alignment", () => {
   const agents = readFileSync(AGENTS_PATH, "utf8");
   const contributing = readFileSync(CONTRIBUTING_PATH, "utf8");
 
+  it("AGENTS.md links to docs/coding-standards.md for full architecture rules", () => {
+    expect(agents).toContain("docs/coding-standards.md");
+  });
+
   it("AGENTS.md documents 11 consolidated MCP tools and Zod v4", () => {
     expect(agents).toMatch(/11 consolidated tools/);
     for (const tool of CONSOLIDATED_MCP_TOOLS) {
