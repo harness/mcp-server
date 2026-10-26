@@ -18,6 +18,7 @@ export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/lockfile-parsers.test.ts",
   "tests/scripts/npm-shrinkwrap-security.test.ts",
+  "tests/scripts/transitive-toolchain-security-pins.test.ts",
   "tests/docker/production-dockerfile.test.ts",
 ] as const;
 
@@ -35,6 +36,14 @@ const REQUIRED_PNPM_OVERRIDE_KEYS = [
   "ip-address",
   "vite",
   "zod",
+  "picomatch",
+  "nanoid",
+  "esbuild",
+  "postcss",
+  "source-map-js",
+  "sharp",
+  "protobufjs",
+  "@opentelemetry/core",
 ] as const;
 
 describe("Coding standards — security regression map", () => {
