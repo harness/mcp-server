@@ -18,6 +18,11 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     const argMatch = dockerfile.match(/^ARG DEBIAN_SECURITY_REFRESH=(\d{4}-\d{2}-\d{2})/m);
     expect(argMatch, "expected ARG DEBIAN_SECURITY_REFRESH=YYYY-MM-DD in Dockerfile").not.toBeNull();
 
+    const refreshDate = argMatch![1];
+    expect(refreshDate >= "2026-10-26", "bump DEBIAN_SECURITY_REFRESH when Debian apt CVEs are patched").toBe(
+      true,
+    );
+
     expect(dockerfile).toContain('echo "debian-security-refresh=${DEBIAN_SECURITY_REFRESH}"');
     expect(dockerfile).toMatch(/apt-get update[\s\S]*apt-get upgrade -y --no-install-recommends/);
   });
@@ -28,17 +33,6 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
       /apt-get install -y --no-install-recommends[\s\S]*\blibssl3\b[\s\S]*\bopenssl\b/,
     );
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
-  });
-
-  it("keeps ONNX and Trivy-patched Debian runtime libraries in the production apt install", () => {
-    const stage = productionStage(dockerfile);
-    const installLine = stage.match(
-      /apt-get install -y --no-install-recommends ([^\n\\]+)/,
-    )?.[1];
-    expect(installLine, "expected production apt-get install package list").toBeTruthy();
-    for (const pkg of ["ca-certificates", "libgomp1", "libstdc++6", "libpcre2-8-0"]) {
-      expect(installLine).toContain(pkg);
-    }
   });
 
   it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
@@ -63,5 +57,12 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     const stage = productionStage(dockerfile);
     expect(stage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
     expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
+  });
+
+  it("installs ONNX / Node native runtime libraries in the production stage", () => {
+    const stage = productionStage(dockerfile);
+    for (const pkg of ["ca-certificates", "libgomp1", "libstdc++6", "libpcre2-8-0"]) {
+      expect(stage, `production stage must install ${pkg}`).toContain(pkg);
+    }
   });
 });
