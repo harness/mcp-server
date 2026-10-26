@@ -87,6 +87,11 @@ export const STANDARDS_ENFORCEMENT_MAP: Array<{
     docSection: "Commit checklist",
     tests: ["registry-contract.test.ts"],
   },
+  {
+    topic: "Dependency and container CVE guardrails",
+    docSection: "Automated Enforcement",
+    tests: ["security-regression-map.test.ts"],
+  },
 ];
 
 function listCodingStandardsTestFiles(): string[] {
