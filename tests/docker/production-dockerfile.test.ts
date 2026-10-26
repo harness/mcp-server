@@ -61,6 +61,15 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(upgradeIndex).toBeLessThan(opensslInstallIndex);
   });
 
+  it("runs apt upgrade before installing libpcre2 so Trivy-flagged PCRE2 fixes land in the runtime image", () => {
+    const stage = productionStage(dockerfile);
+    const upgradeIndex = stage.indexOf("apt-get upgrade");
+    const pcreInstallIndex = stage.indexOf("libpcre2-8-0");
+    expect(upgradeIndex, "production stage must apt-get upgrade").toBeGreaterThan(-1);
+    expect(pcreInstallIndex, "production stage must install libpcre2-8-0").toBeGreaterThan(-1);
+    expect(upgradeIndex).toBeLessThan(pcreInstallIndex);
+  });
+
   it("fails the image build when Debian OpenSSL packages are below the patched bookworm floor", () => {
     const stage = productionStage(dockerfile);
     const opensslFloor = "3.0.22-1~deb12u2";

@@ -44,4 +44,13 @@ packages:
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "express-rate-limit")).toBe("8.7.1");
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "not-listed")).toBeNull();
   });
+
+  it("reads scoped npm-shrinkwrap package paths", () => {
+    const shrinkwrap = JSON.stringify({
+      packages: {
+        "node_modules/@opentelemetry/core": { version: "2.9.0" },
+      },
+    });
+    expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "@opentelemetry/core")).toBe("2.9.0");
+  });
 });

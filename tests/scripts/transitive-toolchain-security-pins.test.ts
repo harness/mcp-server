@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
-import { parsePnpmLockPackageVersions } from "./lockfile-parsers.js";
+import {
+  parseNpmShrinkwrapPackageVersion,
+  parsePnpmLockPackageVersions,
+} from "./lockfile-parsers.js";
 
 const root = process.cwd();
 
@@ -82,6 +85,20 @@ describe("Optional and telemetry security pins (sharp, protobufjs, @opentelemetr
 
     for (const { name, floor } of nativePackages) {
       assertAllAtLeastFloor(parsePnpmLockPackageVersions(lockText, name), floor, name);
+    }
+  });
+
+  it("documents patched optional runtime deps in npm-shrinkwrap.json for global npm installs", () => {
+    const shrinkwrapText = readFileSync(join(root, "npm-shrinkwrap.json"), "utf8");
+    const shrinkwrapPackages: Array<{ name: string; floor: string }> = [
+      { name: "sharp", floor: SECURE_SHARP_VERSION },
+      { name: "protobufjs", floor: SECURE_PROTOBUFJS_VERSION },
+    ];
+
+    for (const { name, floor } of shrinkwrapPackages) {
+      const version = parseNpmShrinkwrapPackageVersion(shrinkwrapText, name);
+      expect(version, `expected ${name} in npm-shrinkwrap.json`).not.toBeNull();
+      expect(isSecureIpAddressVersion(version, floor), `${name}: ${version} < ${floor}`).toBe(true);
     }
   });
 });
