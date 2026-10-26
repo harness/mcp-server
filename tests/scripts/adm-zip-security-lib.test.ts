@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -16,9 +17,11 @@ import {
   findOnnxRuntimeNodeDirs,
   isSecureAdmZipVersion,
   listInsecureAdmZipInstalls,
+  readAdmZipVersion,
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
 
+const repoRoot = join(import.meta.dirname, "../..");
 const require = createRequire(import.meta.url);
 const AdmZip = require("adm-zip") as new () => {
   addFile(name: string, content: Buffer): void;
@@ -41,6 +44,51 @@ describe("adm-zip-security-lib", () => {
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("reads adm-zip version from package.json", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-read-"));
+    tempDirs.push(root);
+    expect(readAdmZipVersion(root)).toBeNull();
+
+    writeAdmZip(root, "0.6.1");
+    expect(readAdmZipVersion(root)).toBe("0.6.1");
+
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "adm-zip", version: 601 }));
+    expect(readAdmZipVersion(root)).toBeNull();
+
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "adm-zip" }));
+    expect(readAdmZipVersion(root)).toBeNull();
+  });
+
+  it("keeps npm-shrinkwrap adm-zip on the secure release", () => {
+    const shrinkwrap = JSON.parse(readFileSync(join(repoRoot, "npm-shrinkwrap.json"), "utf8")) as {
+      packages?: Record<string, { version?: string }>;
+    };
+    const hoisted = shrinkwrap.packages?.["node_modules/adm-zip"]?.version;
+    expect(hoisted).toBe(SECURE_ADM_ZIP_VERSION);
+    expect(isSecureAdmZipVersion(hoisted, SECURE_ADM_ZIP_VERSION)).toBe(true);
+
+    for (const [path, entry] of Object.entries(shrinkwrap.packages ?? {})) {
+      if (!path.endsWith("/adm-zip")) {
+        continue;
+      }
+      expect(
+        isSecureAdmZipVersion(entry.version, SECURE_ADM_ZIP_VERSION),
+        `insecure adm-zip at ${path}: ${entry.version}`,
+      ).toBe(true);
+    }
+  });
+
+  it("ships postinstall security scripts in the published package manifest", () => {
+    const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as {
+      files: string[];
+      scripts: { postinstall?: string };
+    };
+    expect(pkg.scripts.postinstall).toBe("node scripts/ensure-secure-adm-zip.mjs");
+    expect(pkg.files).toContain("scripts/ensure-secure-adm-zip.mjs");
+    expect(pkg.files).toContain("scripts/adm-zip-security-lib.mjs");
+    expect(pkg.files).toContain("npm-shrinkwrap.json");
   });
 
   it("compares semver patch levels", () => {

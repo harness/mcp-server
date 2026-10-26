@@ -3,7 +3,7 @@
  * Prevents removing or renaming enforcement tests without updating this map.
  */
 import { describe, it, expect } from "vitest";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONSOLIDATED_MCP_TOOLS } from "./consolidated-tools.js";
 
@@ -73,5 +73,27 @@ describe("Coding standards — enforcement map", () => {
   it("consolidated tool count matches architecture constants", () => {
     expect(CONSOLIDATED_MCP_TOOLS).toHaveLength(11);
     expect(CONSOLIDATED_MCP_TOOLS).toContain("harness_schema");
+  });
+
+  it("maps all 11 numbered architecture rules from coding-standards.md", () => {
+    const architectureTopics = Object.keys(STANDARDS_TOPIC_COVERAGE).filter((key) => key.startsWith("§"));
+    expect(architectureTopics).toHaveLength(11);
+  });
+
+  it("consolidated tool list matches registerTool names in src/tools handlers", () => {
+    const toolsDir = join(REPO_ROOT, "src/tools");
+    const registered = new Set<string>();
+
+    for (const name of readdirSync(toolsDir)) {
+      if (!name.startsWith("harness-") || !name.endsWith(".ts")) {
+        continue;
+      }
+      const content = readFileSync(join(toolsDir, name), "utf8");
+      for (const match of content.matchAll(/registerTool\s*\(\s*["']([^"']+)["']/g)) {
+        registered.add(match[1]!);
+      }
+    }
+
+    expect([...registered].sort()).toEqual([...CONSOLIDATED_MCP_TOOLS].sort());
   });
 });
