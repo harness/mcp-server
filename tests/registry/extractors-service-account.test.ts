@@ -113,4 +113,31 @@ describe("serviceAccountListExtract", () => {
   it("returns empty items when the envelope is missing list data", () => {
     expect(serviceAccountListExtract({ status: "SUCCESS" })).toEqual({ items: [], total: 0 });
   });
+
+  it("preserves totalItems when aggregate content is empty (last page / filter miss)", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { content: [], totalItems: 99 },
+      }),
+    ).toEqual({ items: [], total: 99 });
+  });
+
+  it("treats a raw empty data array as zero total", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: [],
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
+  it("prefers totalElements over totalItems for paginated envelopes", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { content: [], totalElements: 7, totalItems: 99 },
+      }),
+    ).toEqual({ items: [], total: 7 });
+  });
 });

@@ -28,7 +28,7 @@ const SECURITY_REGRESSION_GUARDS: SecurityRegressionEntry[] = [
     tests: ["tests/docker/production-dockerfile.test.ts"],
   },
   {
-    area: "body-parser, zod, fast-uri, ip-address dependency floors",
+    area: "body-parser, zod, fast-uri, ip-address, qs, proxy-addr dependency floors",
     tests: [
       "tests/scripts/cve-dependency-pins.test.ts",
       "tests/scripts/http-framework-security-pins.test.ts",
