@@ -6,11 +6,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONSOLIDATED_MCP_TOOLS, CONSOLIDATED_MCP_TOOL_COUNT } from "./consolidated-tools.js";
-
-const SECURITY_REGRESSION_TEST_PATHS = [
-  "tests/docker/production-dockerfile.test.ts",
-  "tests/scripts/cve-dependency-pins.test.ts",
-];
+import { STANDARDS_CHECK_PATHS as SECURITY_REGRESSION_TEST_PATHS } from "./security-regression-map.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");

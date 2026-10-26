@@ -11,7 +11,7 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 const CODING_STANDARDS_DIR = join(REPO_ROOT, "tests/coding-standards");
 
 /** Non-test shared constants — excluded from "every test file is mapped". */
-const NON_TEST_MODULES = new Set(["consolidated-tools.ts"]);
+const NON_TEST_MODULES = new Set(["consolidated-tools.ts", "security-regression-map.ts"]);
 
 /**
  * docSection references headings/rules in docs/coding-standards.md.
@@ -81,6 +81,11 @@ export const STANDARDS_ENFORCEMENT_MAP: Array<{
     topic: "Documentation matches enforced constants (11 tools, Zod v4)",
     docSection: "Architecture overview, Tech stack",
     tests: ["docs-consistency.test.ts"],
+  },
+  {
+    topic: "Security regression suites (Docker, CVE pins, adm-zip postinstall)",
+    docSection: "Automated Enforcement",
+    tests: ["security-regression-map.test.ts", "docs-consistency.test.ts"],
   },
   {
     topic: "operationPolicy on every endpoint",
