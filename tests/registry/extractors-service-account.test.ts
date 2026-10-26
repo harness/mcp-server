@@ -73,6 +73,15 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("returns empty items when aggregate pagination has no content", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { content: [], totalItems: 0 },
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
   it("unwraps a raw data array for non-aggregate list responses", () => {
     expect(
       serviceAccountListExtract({

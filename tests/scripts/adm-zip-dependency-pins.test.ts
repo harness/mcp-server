@@ -7,6 +7,10 @@ import {
   listInsecureAdmZipInstalls,
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
+import {
+  parseNpmShrinkwrapPackageVersion,
+  parsePnpmLockPackageVersions,
+} from "./lockfile-parsers.js";
 
 const require = createRequire(import.meta.url);
 const root = process.cwd();
@@ -18,23 +22,6 @@ function readInstalledPackageVersion(packageName: string): string {
     "string",
   );
   return manifest.version!;
-}
-
-function parsePnpmLockPackageVersions(lockfileText: string, packageName: string): string[] {
-  const versions = new Set<string>();
-  const pattern = new RegExp(`^\\s+${packageName}@([0-9]+\\.[0-9]+\\.[0-9]+):`, "gm");
-  for (const match of lockfileText.matchAll(pattern)) {
-    versions.add(match[1]);
-  }
-  return [...versions];
-}
-
-function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
-  const shrinkwrap = JSON.parse(shrinkwrapText) as {
-    packages?: Record<string, { version?: string }>;
-  };
-  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
-  return typeof version === "string" ? version : null;
 }
 
 describe("adm-zip dependency pins (CVE-2026-39244 / CVE-2026-76845)", () => {

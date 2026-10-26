@@ -1,8 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   parseNpmShrinkwrapPackageVersion,
   parsePnpmLockPackageVersions,
 } from "./lockfile-parsers.js";
+
+const REPO_ROOT = join(import.meta.dirname, "../..");
 
 describe("lockfile-parsers", () => {
   it("parses unquoted pnpm lock package keys", () => {
@@ -43,5 +47,14 @@ packages:
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "zod")).toBe("4.6.6");
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "express-rate-limit")).toBe("8.7.1");
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrap, "not-listed")).toBeNull();
+  });
+
+  it("parses patched packages from the committed pnpm-lock.yaml and npm-shrinkwrap.json", () => {
+    const lockText = readFileSync(join(REPO_ROOT, "pnpm-lock.yaml"), "utf8");
+    const shrinkwrapText = readFileSync(join(REPO_ROOT, "npm-shrinkwrap.json"), "utf8");
+
+    expect(parsePnpmLockPackageVersions(lockText, "zod").length).toBeGreaterThan(0);
+    expect(parsePnpmLockPackageVersions(lockText, "@hono/node-server").length).toBeGreaterThan(0);
+    expect(parseNpmShrinkwrapPackageVersion(shrinkwrapText, "zod")).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
