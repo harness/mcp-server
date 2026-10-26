@@ -57,6 +57,11 @@ const SECURITY_GUARDS: SecurityGuard[] = [
     testPath: "tests/scripts/pnpm-transitive-security-overrides.test.ts",
     anchors: ["TRANSITIVE_SECURITY_OVERRIDES", "parsePnpmLockPackageVersions"],
   },
+  {
+    area: "npm-shrinkwrap metadata check (global npm install tree)",
+    testPath: "tests/scripts/npm-shrinkwrap-check.test.ts",
+    anchors: ["generate-npm-shrinkwrap.mjs", "--check", "npm-shrinkwrap.json metadata is up to date"],
+  },
 ];
 
 function parseOverrideFloor(specifier: string): string {
