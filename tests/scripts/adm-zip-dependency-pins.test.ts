@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -57,6 +58,7 @@ describe("adm-zip dependency pins (CVE-2026-39244 / CVE-2026-76845)", () => {
       dependencies: Record<string, string>;
       overrides: Record<string, Record<string, string>>;
       scripts: Record<string, string>;
+      files: string[];
     };
 
     expect(packageJson.pnpm.overrides["adm-zip"]).toBe(`>=${SECURE_ADM_ZIP_VERSION}`);
@@ -65,6 +67,34 @@ describe("adm-zip dependency pins (CVE-2026-39244 / CVE-2026-76845)", () => {
       "adm-zip": SECURE_ADM_ZIP_VERSION,
     });
     expect(packageJson.scripts.postinstall).toContain("ensure-secure-adm-zip.mjs");
+    expect(packageJson.files).toEqual(
+      expect.arrayContaining([
+        "scripts/adm-zip-security-lib.mjs",
+        "scripts/ensure-secure-adm-zip.mjs",
+      ]),
+    );
+  });
+
+  it("includes adm-zip postinstall scripts in the npm pack manifest", () => {
+    const pack = spawnSync("npm", ["pack", "--dry-run", "--json", "--silent"], {
+      cwd: root,
+      encoding: "utf8",
+      env: process.env,
+    });
+    expect(pack.status, pack.stderr || pack.stdout).toBe(0);
+
+    const manifest = JSON.parse(pack.stdout) as Array<{ files: Array<{ path: string }> }>;
+    const paths = manifest[0]?.files.map((entry) => entry.path) ?? [];
+    expect(paths).toContain("scripts/adm-zip-security-lib.mjs");
+    expect(paths).toContain("scripts/ensure-secure-adm-zip.mjs");
+  });
+
+  it("allows skipping postinstall remediation via HARNESS_MCP_SKIP_ADM_ZIP_PATCH", () => {
+    const result = spawnSync(process.execPath, [join(root, "scripts/ensure-secure-adm-zip.mjs")], {
+      cwd: root,
+      env: { ...process.env, HARNESS_MCP_SKIP_ADM_ZIP_PATCH: "1" },
+    });
+    expect(result.status).toBe(0);
   });
 
   it("resolves patched adm-zip releases in pnpm-lock.yaml", () => {
