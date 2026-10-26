@@ -19,7 +19,6 @@ COPY . .
 # set required build flags
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    GOTOOLCHAIN=local \
     CGO_ENABLED=0 \
     GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -o ./cmd/harness-mcp-server/harness-mcp-server ./cmd/harness-mcp-server
