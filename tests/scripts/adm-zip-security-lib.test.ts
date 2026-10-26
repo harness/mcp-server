@@ -12,11 +12,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  ADM_ZIP_ADVISORIES,
   ensureSecureAdmZip,
   findAdmZipInstallDirs,
   findOnnxRuntimeNodeDirs,
   isSecureAdmZipVersion,
   listInsecureAdmZipInstalls,
+  readAdmZipVersion,
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
 
@@ -30,15 +32,16 @@ function parsePnpmLockAdmZipVersions(lockfileText: string): string[] {
   return [...versions];
 }
 
-function parseNpmShrinkwrapAdmZipVersion(shrinkwrapText: string): string | null {
+function listNpmShrinkwrapAdmZipVersions(shrinkwrapText: string): Array<{ path: string; version: string | null }> {
   const shrinkwrap = JSON.parse(shrinkwrapText) as {
     packages?: Record<string, { version?: string }>;
-    dependencies?: Record<string, { version?: string }>;
   };
-  const version =
-    shrinkwrap.packages?.["node_modules/adm-zip"]?.version
-    ?? shrinkwrap.dependencies?.["adm-zip"]?.version;
-  return typeof version === "string" ? version : null;
+  return Object.entries(shrinkwrap.packages ?? {})
+    .filter(([path]) => path.endsWith("node_modules/adm-zip"))
+    .map(([path, metadata]) => ({
+      path,
+      version: typeof metadata?.version === "string" ? metadata.version : null,
+    }));
 }
 
 const require = createRequire(import.meta.url);
@@ -96,11 +99,47 @@ describe("adm-zip-security-lib", () => {
       expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
     }
 
-    const shrinkwrapVersion = parseNpmShrinkwrapAdmZipVersion(
+    const shrinkwrapInstalls = listNpmShrinkwrapAdmZipVersions(
       readFileSync(join(repoRoot, "npm-shrinkwrap.json"), "utf8"),
     );
-    expect(shrinkwrapVersion).not.toBeNull();
-    expect(isSecureAdmZipVersion(shrinkwrapVersion, SECURE_ADM_ZIP_VERSION)).toBe(true);
+    expect(shrinkwrapInstalls.length).toBeGreaterThan(0);
+    for (const { path, version } of shrinkwrapInstalls) {
+      expect(version, `${path} missing version in npm-shrinkwrap.json`).not.toBeNull();
+      expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION), `${path}@${version}`).toBe(true);
+    }
+  });
+
+  it("ships postinstall fallback scripts in the published npm package manifest", () => {
+    const packageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as {
+      files: string[];
+      scripts: { postinstall?: string };
+    };
+
+    expect(packageJson.scripts.postinstall).toBe("node scripts/ensure-secure-adm-zip.mjs");
+    expect(packageJson.files).toEqual(
+      expect.arrayContaining([
+        "scripts/adm-zip-security-lib.mjs",
+        "scripts/ensure-secure-adm-zip.mjs",
+      ]),
+    );
+  });
+
+  it("readAdmZipVersion returns null for missing or invalid package metadata", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-read-"));
+    tempDirs.push(root);
+    const admZipDir = join(root, "node_modules", "adm-zip");
+
+    expect(readAdmZipVersion(admZipDir)).toBeNull();
+
+    mkdirSync(admZipDir, { recursive: true });
+    writeFileSync(join(admZipDir, "package.json"), JSON.stringify({ name: "adm-zip" }));
+    expect(readAdmZipVersion(admZipDir)).toBeNull();
+
+    writeFileSync(join(admZipDir, "package.json"), JSON.stringify({ name: "adm-zip", version: "" }));
+    expect(readAdmZipVersion(admZipDir)).toBeNull();
+
+    writeAdmZip(admZipDir, SECURE_ADM_ZIP_VERSION);
+    expect(readAdmZipVersion(admZipDir)).toBe(SECURE_ADM_ZIP_VERSION);
   });
 
   it("flags no insecure adm-zip installs in the workspace node_modules tree", () => {
@@ -180,8 +219,22 @@ describe("adm-zip-security-lib", () => {
       npmCommand: "__missing-npm-binary__",
       strict: false,
     });
-    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.warnings.some((message) => message.includes("failed to upgrade adm-zip"))).toBe(true);
     expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
+  });
+
+  it("surfaces advisory ids when insecure copies remain after a failed patch", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), "0.5.18");
+
+    const result = ensureSecureAdmZip(root, {
+      npmCommand: "__missing-npm-binary__",
+      strict: false,
+      dryRun: false,
+    });
+
+    expect(result.warnings.some((message) => message.includes(ADM_ZIP_ADVISORIES))).toBe(true);
   });
 
   it("no-ops when every adm-zip install is already at the secure floor", () => {
