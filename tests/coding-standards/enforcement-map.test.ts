@@ -15,6 +15,7 @@ const ENFORCEMENT_MAP: ReadonlyArray<{ section: string; files: readonly string[]
     section: "§1 — fixed consolidated MCP tools (no new handlers)",
     files: [
       "architecture.test.ts",
+      "architecture-layers.test.ts",
       "consolidated-tools-sync.test.ts",
       "file-organization.test.ts",
     ],
