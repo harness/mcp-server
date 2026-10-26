@@ -2180,6 +2180,8 @@ export const myModuleToolset: ToolsetDefinition = {
 
 Then import it in `src/registry/index.ts` and add it to the `ALL_TOOLSETS` array. No changes needed to any tool files.
 
+See [docs/coding-standards.md](docs/coding-standards.md) for the full registry-driven architecture rules and commit checklist. CI runs `pnpm standards:check` on every pull request.
+
 ## Development
 
 ```bash
@@ -2194,6 +2196,9 @@ pnpm typecheck
 
 # Run tests
 pnpm test
+
+# Architecture / coding-standards guardrails (registry model, toolsets, logging)
+pnpm standards:check
 
 # Watch tests
 pnpm test:watch
