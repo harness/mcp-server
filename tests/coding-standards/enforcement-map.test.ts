@@ -106,6 +106,8 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     standard: "Dependency CVE floors (lockfile, shrinkwrap, node_modules)",
     tests: [
       "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/express-stack-security-pins.test.ts",
+      "tests/scripts/transitive-toolchain-security-pins.test.ts",
       "tests/scripts/http-framework-security-pins.test.ts",
       "tests/scripts/adm-zip-supply-chain.test.ts",
       "tests/scripts/adm-zip-security-lib.test.ts",
