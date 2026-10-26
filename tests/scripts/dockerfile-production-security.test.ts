@@ -33,4 +33,19 @@ describe("Dockerfile — production runtime security", () => {
     expect(productionStage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
     expect(productionStage).not.toMatch(/COPY --from=toolchain[^\n]*pnpm/);
   });
+
+  it("stages adm-zip security scripts before pnpm install in build and prod-deps layers", () => {
+    const admZipCopy =
+      "COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/";
+    const buildStage = content.slice(content.indexOf("FROM toolchain AS build"));
+    const prodDepsStage = content.slice(content.indexOf("FROM toolchain AS production-dependencies"));
+    expect(buildStage).toContain(admZipCopy);
+    expect(prodDepsStage).toContain(admZipCopy);
+    expect(buildStage.indexOf(admZipCopy)).toBeLessThan(buildStage.indexOf("pnpm install"));
+    expect(prodDepsStage.indexOf(admZipCopy)).toBeLessThan(prodDepsStage.indexOf("pnpm install"));
+  });
+
+  it("installs libpcre2 for ONNX runtime glibc dependencies in production", () => {
+    expect(productionStage).toContain("libpcre2-8-0");
+  });
 });
