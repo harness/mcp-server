@@ -27,7 +27,7 @@
     "search:benchmark": "node scripts/benchmark-search-routing.mjs",
     "docs:generate": "node scripts/generate-docs.js",
     "docs:check": "node scripts/generate-docs.js --check",
-    "standards:check": "vitest run tests/coding-standards tests/registry/structural-validation.test.ts tests/scripts/adm-zip-dependency-pins.test.ts tests/docker/production-dockerfile.test.ts",
+    "standards:check": "vitest run tests/coding-standards tests/registry/structural-validation.test.ts tests/scripts/security-regression-guards.test.ts tests/scripts/cve-dependency-pins.test.ts tests/scripts/http-framework-security-pins.test.ts tests/scripts/express-transitive-security-pins.test.ts tests/scripts/ip-address-security-lib.test.ts tests/scripts/adm-zip-security-lib.test.ts tests/scripts/adm-zip-dependency-pins.test.ts tests/scripts/npm-adm-zip-consumer-wiring.test.ts tests/docker/production-dockerfile.test.ts",
     "npm-shrinkwrap:generate": "node scripts/generate-npm-shrinkwrap.mjs",
     "npm-shrinkwrap:check": "node scripts/generate-npm-shrinkwrap.mjs --check",
     "test": "vitest run",

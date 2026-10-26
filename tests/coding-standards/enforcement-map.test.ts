@@ -68,9 +68,16 @@ const ENFORCEMENT_MAP: ReadonlyArray<{ section: string; files: readonly string[]
     files: ["docs-consistency.test.ts"],
   },
   {
-    section: "Dependency security pins (adm-zip CVE floors, Docker postinstall ordering)",
+    section: "Dependency security pins (CVE floors, Docker postinstall ordering)",
     files: [
+      "../scripts/security-regression-guards.test.ts",
+      "../scripts/cve-dependency-pins.test.ts",
+      "../scripts/http-framework-security-pins.test.ts",
+      "../scripts/express-transitive-security-pins.test.ts",
+      "../scripts/ip-address-security-lib.test.ts",
+      "../scripts/adm-zip-security-lib.test.ts",
       "../scripts/adm-zip-dependency-pins.test.ts",
+      "../scripts/npm-adm-zip-consumer-wiring.test.ts",
       "../docker/production-dockerfile.test.ts",
     ],
   },
