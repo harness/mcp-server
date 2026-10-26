@@ -3,6 +3,7 @@ import { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import type { Config } from "../../src/config.js";
 import { getVersion } from "../../src/utils/cli.js";
+import { RateLimiter } from "../../src/utils/rate-limiter.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -46,6 +47,20 @@ describe("HarnessClient", () => {
       const client = new HarnessClient(makeConfig());
       client.setAccountIdResolver(() => "resolved-account");
       expect(client.account).toBe("resolved-account");
+    });
+  });
+
+  describe("rate limiting", () => {
+    it("acquires a token before request() and requestStream()", async () => {
+      const acquireSpy = vi.spyOn(RateLimiter.prototype, "acquire");
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_RATE_LIMIT_RPS: 5 }));
+
+      await client.request({ path: "/ng/api/test" });
+      await client.requestStream({ method: "POST", path: "/ng/api/stream" });
+
+      expect(acquireSpy).toHaveBeenCalledTimes(2);
+      acquireSpy.mockRestore();
     });
   });
 

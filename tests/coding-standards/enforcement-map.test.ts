@@ -39,6 +39,11 @@ const ENFORCEMENT_TARGETS: EnforcementTarget[] = [
     describeSnippet: "does not add new inline responseExtractor functions in toolsets",
   },
   {
+    rule: "§3 Service account list extractors (account/org scope)",
+    testFile: "../registry/extractors-service-account.test.ts",
+    describeSnippet: "serviceAccountListExtract",
+  },
+  {
     rule: "§4 Harness scoping model",
     testFile: "toolset-scope.test.ts",
     describeSnippet: "Coding standards — toolset scope injection",

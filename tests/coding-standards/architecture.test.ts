@@ -336,7 +336,12 @@ describe("Coding standards — logging and HTTP", () => {
     const clientPath = join(SRC, "client/harness-client.ts");
     const content = readFileSync(clientPath, "utf8");
     expect(content).toContain("import { RateLimiter }");
-    expect(content).toMatch(/await this\.rateLimiter\.acquire\(\)/);
+    expect(content).toMatch(/async request</);
+    expect(content).toMatch(/async requestStream\(/);
+    const requestBody = content.slice(content.indexOf("async request<"), content.indexOf("async requestStream("));
+    const streamBody = content.slice(content.indexOf("async requestStream("));
+    expect(requestBody).toMatch(/await this\.rateLimiter\.acquire\(\)/);
+    expect(streamBody).toMatch(/await this\.rateLimiter\.acquire\(\)/);
   });
 
   it("client.request() is only used in documented handler exceptions", () => {

@@ -73,6 +73,23 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("defaults total to zero when aggregate pagination omits totalItems", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { content: [nestedAggregateItem] },
+      }),
+    ).toEqual({
+      items: [
+        expect.objectContaining({
+          identifier: "ci-bot",
+          email: "ci-bot@service.harness.io",
+        }),
+      ],
+      total: 0,
+    });
+  });
+
   it("unwraps a raw data array for non-aggregate list responses", () => {
     expect(
       serviceAccountListExtract({

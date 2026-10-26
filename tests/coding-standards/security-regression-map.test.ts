@@ -17,6 +17,7 @@ export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/lockfile-parsers.test.ts",
   "tests/docker/production-dockerfile.test.ts",
+  "tests/registry/extractors-service-account.test.ts",
 ] as const;
 
 /** pnpm.overrides keys that back the CVE pin suites above. */
