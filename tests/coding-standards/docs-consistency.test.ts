@@ -37,14 +37,24 @@ describe("Coding standards — documentation consistency", () => {
   });
 
   it("docs/coding-standards.md does not regress to outdated 10-tool architecture copy", () => {
-    expect(content).not.toMatch(/10 consolidated tool handlers/);
-    expect(content).not.toMatch(/\bserver\.tool\(\)/);
+    const archIdx = content.indexOf("## Architecture Overview");
+    const body = archIdx >= 0 ? content.slice(archIdx) : content;
+    expect(body).not.toMatch(/10 consolidated tool handlers/);
+    expect(body).not.toMatch(/\bserver\.tool\(\)/);
   });
 
   it("docs/coding-standards.md documents registry dispatch and registerTool registration", () => {
     expect(content).toMatch(/registry-driven/i);
     expect(content).toContain("Registry.dispatch()");
     expect(content).toContain("server.registerTool()");
+  });
+
+  it("docs/coding-standards.md warns against outdated 10-tool / Zod v3 / server.tool() copies", () => {
+    expect(content).toMatch(/Canonical architecture/i);
+    expect(content).toContain("harness_schema");
+    expect(content).toMatch(/Zod v3/);
+    expect(content).toMatch(/server\.tool\(\)/);
+    expect(content).toMatch(/confirmViaElicitation/);
   });
 
   it("AGENTS.md stays aligned with the 11-tool registry model and Zod v4", () => {

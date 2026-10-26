@@ -89,6 +89,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "CONSOLIDATED_MCP_TOOLS",
   },
   {
+    rule: "Reject outdated architecture copy (10 tools, Zod v3, server.tool)",
+    tests: ["tests/coding-standards/docs-consistency.test.ts"],
+    signal: "Canonical architecture",
+  },
+  {
     rule: "Registry structural validation (resource definitions)",
     tests: ["tests/registry/structural-validation.test.ts"],
     signal: "structural",

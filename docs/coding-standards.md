@@ -1,5 +1,7 @@
 # Coding Standards — Harness MCP Server
 
+> **Canonical architecture (2026+).** Some older prompts and docs still mention **10** consolidated MCP tools (missing `harness_schema`), **Zod v3**, or `server.tool()`. The live server uses **11** handlers (`harness_schema` included), **`import * as z from "zod/v4"`**, and **`server.registerTool()`** only. Write paths use `confirm` plus client elicitation (`confirmViaElicitation`), not a standalone `confirmation: true` flag alone. **`pnpm standards:check`** and CI enforce this document — treat it as the source of truth, not pasted checklists.
+
 ## Architecture Overview
 
 This is a **registry-driven MCP server**. Instead of one MCP tool per Harness API endpoint, we use **11 consolidated tool handlers** (`harness_list`, `harness_get`, `harness_create`, `harness_update`, `harness_delete`, `harness_execute`, `harness_diagnose`, `harness_search`, `harness_describe`, `harness_status`, `harness_schema`) that dispatch to a **declarative resource registry**. The registry maps `resource_type` + `operation` to Harness API endpoints via pure-data `EndpointSpec` definitions.
