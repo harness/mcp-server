@@ -4,15 +4,34 @@ import { describe, expect, it } from "vitest";
 
 const dockerfilePath = join(process.cwd(), "Dockerfile");
 
+function dockerStage(dockerfile: string, stageName: string): string {
+  const pattern = new RegExp(`^FROM .+ AS ${stageName}\\s*$`, "m");
+  const match = pattern.exec(dockerfile);
+  expect(match, `expected ${stageName} stage in Dockerfile`).not.toBeNull();
+  const start = match!.index!;
+  const nextFrom = dockerfile.indexOf("\nFROM ", start + 1);
+  return dockerfile.slice(start, nextFrom === -1 ? undefined : nextFrom);
+}
+
 function productionStage(dockerfile: string): string {
-  const marker = "FROM ${RUNTIME_IMAGE} AS production";
-  const start = dockerfile.indexOf(marker);
-  expect(start, "expected production stage in Dockerfile").toBeGreaterThan(-1);
-  return dockerfile.slice(start);
+  return dockerStage(dockerfile, "production");
 }
 
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
+
+  it("copies adm-zip postinstall scripts before pnpm install in dependency stages", () => {
+    for (const stageName of ["build", "production-dependencies"]) {
+      const stage = dockerStage(dockerfile, stageName);
+      expect(stage).toContain("ensure-secure-adm-zip.mjs");
+      expect(stage).toContain("adm-zip-security-lib.mjs");
+      const copyIndex = stage.indexOf("ensure-secure-adm-zip.mjs");
+      const installIndex = stage.indexOf("pnpm install");
+      expect(copyIndex, `${stageName} must COPY adm-zip scripts`).toBeGreaterThan(-1);
+      expect(installIndex, `${stageName} must run pnpm install`).toBeGreaterThan(-1);
+      expect(copyIndex).toBeLessThan(installIndex);
+    }
+  });
 
   it("bumps DEBIAN_SECURITY_REFRESH so GHA layer cache replays apt security upgrades", () => {
     const argMatch = dockerfile.match(/^ARG DEBIAN_SECURITY_REFRESH=(\d{4}-\d{2}-\d{2})/m);
