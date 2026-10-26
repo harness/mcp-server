@@ -47,6 +47,31 @@ describe("flattenServiceAccountAggregate", () => {
     });
   });
 
+  it("passes through non-record values unchanged", () => {
+    expect(flattenServiceAccountAggregate(null)).toBe(null);
+    expect(flattenServiceAccountAggregate("plain")).toBe("plain");
+  });
+
+  it("promotes org and project identifiers from nested serviceAccount", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "org-sa",
+          email: "org-sa@service.harness.io",
+          orgIdentifier: "platform",
+          projectIdentifier: "checkout",
+        },
+        tokensCount: 0,
+      }),
+    ).toEqual({
+      identifier: "org-sa",
+      email: "org-sa@service.harness.io",
+      orgIdentifier: "platform",
+      projectIdentifier: "checkout",
+      tokensCount: 0,
+    });
+  });
+
   it("does not copy governanceMetadata from nested serviceAccount", () => {
     const flat = flattenServiceAccountAggregate(nestedAggregateItem) as Record<string, unknown>;
     expect(flat.governanceMetadata).toBeUndefined();
