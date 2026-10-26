@@ -240,6 +240,20 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
   });
 
+  it("never writes to process.stdout in src/ (stdio JSON-RPC safety)", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (/\bprocess\.stdout\.(write|end)\s*\(/.test(content)) {
+        violations.push(rel(file));
+      }
+    }
+
+    expect(violations, `process.stdout write found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
   it("toolset files do not use console.* (logging belongs in handlers, not toolsets)", () => {
     const violations: string[] = [];
     const toolsetDir = join(SRC, "registry/toolsets");

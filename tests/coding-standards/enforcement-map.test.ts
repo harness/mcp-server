@@ -43,7 +43,7 @@ const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
   "§4 scoping model": ["scope-params.test.ts", "toolset-scope.test.ts", "registry-contract.test.ts"],
   "§5 identifierFields / metadata": ["registry-contract.test.ts", "registry-metadata.test.ts"],
   "§6 error handling": ["error-handling.test.ts", "architecture.test.ts"],
-  "§7 stderr-only logging": ["architecture.test.ts"],
+  "§7 stderr-only logging (no stdout writes)": ["architecture.test.ts"],
   "§8 input schema conventions": [
     "input-conventions.test.ts",
     "registry-metadata.test.ts",
@@ -63,7 +63,7 @@ const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
  */
 const COMMIT_CHECKLIST_GUARDS: Record<string, readonly string[]> = {
   "No new `server.registerTool()` calls": ["architecture.test.ts"],
-  "No `console.log()`": ["architecture.test.ts"],
+  "No stdout writes": ["architecture.test.ts"],
   "No direct `fetch()` calls": ["architecture.test.ts"],
   "No new `harness-*.ts` handler files": ["architecture.test.ts"],
   "Toolset files are pure data": ["architecture.test.ts"],

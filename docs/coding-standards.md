@@ -97,7 +97,7 @@ Never swallow errors. Never expose API tokens in error messages.
 
 ### 7. Logging Rules (CRITICAL)
 
-**NEVER write to stdout.** Stdio transport uses stdout for JSON-RPC — any `console.log()` will corrupt the protocol.
+**NEVER write to stdout.** Stdio transport uses stdout for JSON-RPC — any `console.log()` or `process.stdout.write()` will corrupt the protocol.
 
 ```typescript
 // FORBIDDEN — breaks the server
@@ -296,7 +296,7 @@ The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `
 Before every commit, verify:
 
 - [ ] **No new `server.registerTool()` calls** — only toolset definitions added/modified
-- [ ] **No `console.log()`** — only `createLogger()` for stderr output
+- [ ] **No stdout writes** — no `console.log()` or `process.stdout.write()`; use `createLogger()` (stderr) only
 - [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 11)
 - [ ] **No new `harness-*.ts` handler files** — the 11 handlers are fixed
 - [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, `Registry`, or `createLogger`
