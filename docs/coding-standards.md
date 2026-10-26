@@ -8,6 +8,10 @@ This is a **registry-driven MCP server**. Instead of one MCP tool per Harness AP
 User → MCP Tool (e.g. harness_list) → Registry.dispatch() → HarnessClient.request() → Harness API
 ```
 
+### Automated enforcement
+
+CI and local development run `pnpm standards:check`, which executes Vitest suites under `tests/coding-standards/` plus `tests/registry/structural-validation.test.ts`. The mapping from each architecture rule to its enforcing tests is maintained in `tests/coding-standards/enforcement-map.test.ts` (fails if a guardrail test is removed without updating the map).
+
 ### Key Layers
 
 | Layer | Location | Responsibility |
