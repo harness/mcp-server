@@ -92,6 +92,34 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion(shrinkwrapVersion, SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
+  it("parseNpmShrinkwrapIpAddressVersion reads packages, dependencies, and legacy layouts", () => {
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          packages: { "node_modules/ip-address": { version: "10.7.4" } },
+        }),
+      ),
+    ).toBe("10.7.4");
+
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          dependencies: { "ip-address": { version: "10.7.5" } },
+        }),
+      ),
+    ).toBe("10.7.5");
+
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          "node_modules/ip-address": { version: "10.4.0" },
+        }),
+      ),
+    ).toBe("10.4.0");
+
+    expect(parseNpmShrinkwrapIpAddressVersion("{}")).toBeNull();
+  });
+
   it("flags vulnerable ip-address installs under node_modules", () => {
     expect(listInsecureIpAddressInstalls(root)).toEqual([]);
   });
