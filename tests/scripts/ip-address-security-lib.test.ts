@@ -73,6 +73,21 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("not-a-version", SECURE_IP_ADDRESS_VERSION)).toBe(false);
   });
 
+  it("readIpAddressVersion returns null when package metadata is missing or invalid", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-read-"));
+    tempDirs.push(packageRoot);
+    const missing = join(packageRoot, "node_modules", "ip-address");
+    mkdirSync(missing, { recursive: true });
+
+    expect(readIpAddressVersion(missing)).toBeNull();
+
+    writeFileSync(join(missing, "package.json"), JSON.stringify({ name: "ip-address" }));
+    expect(readIpAddressVersion(missing)).toBeNull();
+
+    writeFileSync(join(missing, "package.json"), JSON.stringify({ name: "ip-address", version: "" }));
+    expect(readIpAddressVersion(missing)).toBeNull();
+  });
+
   it("ignores pre-release suffixes when comparing against the security floor", () => {
     expect(isSecureIpAddressVersion("10.7.4-beta.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
     expect(isSecureIpAddressVersion("10.7.3-rc.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
@@ -164,6 +179,30 @@ describe("ip-address-security-lib", () => {
     expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([
       { dir: nested, version: "10.4.0" },
     ]);
+  });
+
+  it("resolveActiveIpAddressDir prefers a secure install when no consumer symlink exists", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-pick-secure-"));
+    tempDirs.push(packageRoot);
+    const vulnerable = join(packageRoot, "node_modules/some-pkg/node_modules/ip-address");
+    const patched = join(packageRoot, "node_modules/other-pkg/node_modules/ip-address");
+    writeIpAddressPackage(vulnerable, "10.4.0");
+    writeIpAddressPackage(patched, "10.7.4");
+
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(patched);
+    expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([{ dir: vulnerable, version: "10.4.0" }]);
+  });
+
+  it("findIpAddressInstallDirs discovers pnpm virtual-store paths", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-pnpm-store-"));
+    tempDirs.push(packageRoot);
+    const storeCopy = join(
+      packageRoot,
+      "node_modules/.pnpm/ip-address@10.7.4/node_modules/ip-address",
+    );
+    writeIpAddressPackage(storeCopy, "10.7.4");
+
+    expect(findIpAddressInstallDirs(packageRoot)).toEqual([storeCopy]);
   });
 
   it("classifies RFC 8215 NAT64 local-use addresses as non-global private space", () => {

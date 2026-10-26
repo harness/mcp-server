@@ -53,6 +53,45 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBeNull();
     expect(flattenServiceAccountAggregate("plain")).toBe("plain");
   });
+
+  it("promotes org and project identifiers from nested serviceAccount", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "org-sa",
+          name: "Org SA",
+          email: "org-sa@service.harness.io",
+          orgIdentifier: "platform",
+          accountIdentifier: "acct-1",
+          governanceMetadata: { deny: true },
+        },
+        tokensCount: 1,
+      }),
+    ).toEqual({
+      identifier: "org-sa",
+      name: "Org SA",
+      email: "org-sa@service.harness.io",
+      orgIdentifier: "platform",
+      accountIdentifier: "acct-1",
+      tokensCount: 1,
+    });
+  });
+
+  it("does not copy aggregate metadata from already-flat list rows", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "flat-sa",
+        name: "Flat SA",
+        email: "flat-sa@service.harness.io",
+        tokensCount: 5,
+        createdAt: 1710000000000,
+      }),
+    ).toEqual({
+      identifier: "flat-sa",
+      name: "Flat SA",
+      email: "flat-sa@service.harness.io",
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {

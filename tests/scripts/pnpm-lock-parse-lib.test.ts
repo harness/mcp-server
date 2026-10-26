@@ -45,4 +45,18 @@ describe("pnpm-lock-parse-lib", () => {
 
     expect(parseNpmShrinkwrapPackageVersion('{"packages":{}}', "missing")).toBeNull();
   });
+
+  it("does not treat longer package names as a versioned lock entry", () => {
+    const sample = `
+  body-parser@2.4.0:
+    resolution: {integrity: patched}
+  body-parser-xml@2.0.0:
+    resolution: {integrity: other}
+`;
+    expect(parsePnpmLockPackageVersions(sample, "body-parser")).toEqual(["2.4.0"]);
+  });
+
+  it("returns an empty list when the package is absent from the lockfile", () => {
+    expect(parsePnpmLockPackageVersions("lockfileVersion: '9.0'\n", "not-installed")).toEqual([]);
+  });
 });
