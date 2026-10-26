@@ -26,6 +26,19 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     );
   });
 
+  it("installs libpcre2-8-0 in the production runtime image (Trivy / bookworm-slim)", () => {
+    expect(productionStage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\blibpcre2-8-0\b/,
+    );
+  });
+
+  it("keeps OpenSSL dpkg version gates only in the production stage", () => {
+    const beforeProduction = dockerfile.slice(0, dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"));
+    expect(beforeProduction).not.toContain("dpkg --compare-versions");
+    expect(beforeProduction).not.toMatch(/\blibssl3\b/);
+    expect(productionStage).toContain("dpkg --compare-versions");
+  });
+
   it("fails the image build when bookworm OpenSSL packages are below the patched floor", () => {
     const libsslGate =
       "dpkg --compare-versions \"$(dpkg-query -W -f='${Version}' libssl3)\" ge " + OPENSSL_DEBIAN_FLOOR;
