@@ -36,6 +36,21 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md documents the registry-driven dispatch model", () => {
+    expect(content).toMatch(/registry-driven MCP server/i);
+    expect(content).toContain("Registry.dispatch()");
+    expect(content).toContain("HarnessClient.request()");
+    expect(content).toMatch(/Never Add New MCP Tool Handlers/);
+    expect(content).toMatch(/src\/registry\/toolsets\//);
+  });
+});
+
+describe("Coding standards — CI guardrails", () => {
+  it(".github/workflows/ci.yml runs pnpm standards:check", () => {
+    const ci = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
+    expect(ci).toContain("pnpm standards:check");
+  });
 });
 
 describe("Coding standards — contributor docs alignment", () => {
