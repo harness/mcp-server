@@ -12,6 +12,7 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 /** Vitest files that lock patched dependency floors and production image hardening. */
 const SECURITY_REGRESSION_TEST_FILES = [
   "tests/coding-standards/consolidated-tools-sync.test.ts",
+  "tests/security/regression-manifest.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
   "tests/scripts/dockerfile-production-security.test.ts",
@@ -60,8 +61,15 @@ describe("Security regression — enforcement map", () => {
   it("postinstall runs adm-zip hardening before consumers load onnxruntime", () => {
     const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
       scripts: { postinstall?: string };
+      files: string[];
     };
     expect(packageJson.scripts.postinstall).toBe("node scripts/ensure-secure-adm-zip.mjs");
+    expect(packageJson.files).toEqual(
+      expect.arrayContaining([
+        "scripts/adm-zip-security-lib.mjs",
+        "scripts/ensure-secure-adm-zip.mjs",
+      ]),
+    );
   });
 
   it("documents semver floor comparison used by CVE pin tests", () => {
