@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   meetsVersionFloor,
+  parseNpmShrinkwrapPackageVersion,
   parsePnpmLockPackageVersions,
 } from "./security-version-floor.js";
 
@@ -22,5 +23,12 @@ describe("fast-uri security pins (transitive MCP SDK dependency)", () => {
     for (const version of versions) {
       expect(meetsVersionFloor(version, FAST_URI_FLOOR), `fast-uri@${version}`).toBe(true);
     }
+  });
+
+  it("pins fast-uri in npm-shrinkwrap for MCPB / npm consumers", () => {
+    const shrinkwrap = readFileSync(join(root, "npm-shrinkwrap.json"), "utf8");
+    const version = parseNpmShrinkwrapPackageVersion(shrinkwrap, "fast-uri");
+    expect(version).not.toBeNull();
+    expect(meetsVersionFloor(version!, FAST_URI_FLOOR)).toBe(true);
   });
 });
