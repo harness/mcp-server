@@ -39,6 +39,9 @@ export const STANDARDS_ENFORCEMENT_MAP: Record<string, readonly string[]> = {
     "listFilterFields only with list operation",
   ],
   "scope-params.test.ts": ["§4 optional org_id/project_id on API handlers"],
+  "security-regression-map.test.ts": [
+    "security CVE pin and Dockerfile regression test inventory",
+  ],
   "toolset-scope.test.ts": ["§4 no manual camelCase scope keys in queryParams"],
   "enforcement-map.test.ts": ["guardrail suite inventory (this file)"],
 };

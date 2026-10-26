@@ -457,6 +457,26 @@ describe("applyUrlDefaults", () => {
     expect(parsed.resource_scope).toBe("project");
   });
 
+  it("injects resource_scope='org' for org-level service account URLs", () => {
+    const parsed = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc/all/orgs/platform/settings/access-control/service-accounts/org-bot",
+    );
+    expect(parsed.resource_type).toBe("service_account");
+    expect(parsed.resource_id).toBe("org-bot");
+    expect(parsed.org_id).toBe("platform");
+    expect(parsed.project_id).toBeUndefined();
+    expect(parsed.resource_scope).toBe("org");
+
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/orgs/platform/settings/access-control/service-accounts/org-bot",
+      { includeResourceScope: true },
+    );
+    expect(result.resource_scope).toBe("org");
+    expect(result.org_id).toBe("platform");
+    expect(result.project_id).toBeUndefined();
+  });
+
   it("injects resource_scope='account' for account-level user-group URLs", () => {
     const parsed = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc/settings/access-control/user-groups/all_account_users",
