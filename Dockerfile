@@ -44,7 +44,9 @@ WORKDIR /app
 
 RUN apt-get update \
   && apt-get upgrade -y --no-install-recommends \
-  && apt-get install -y --no-install-recommends ca-certificates libgomp1 libstdc++6 libpcre2-8-0 \
+  && apt-get install -y --no-install-recommends ca-certificates libgomp1 libstdc++6 libpcre2-8-0 libssl3 openssl \
+  && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libssl3)" ge 3.0.22-1~deb12u2 \
+  && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' openssl)" ge 3.0.22-1~deb12u2 \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 1000 node \
   && useradd --uid 1000 --gid node --shell /bin/bash --create-home node \

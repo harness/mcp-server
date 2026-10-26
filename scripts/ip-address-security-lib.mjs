@@ -3,8 +3,8 @@
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-/** Minimum ip-address release that classifies RFC 8215 NAT64 local-use as private. */
-export const SECURE_IP_ADDRESS_VERSION = "10.5.1";
+/** Minimum ip-address release covering NAT64 classification and zone-identifier ReDoS fixes. */
+export const SECURE_IP_ADDRESS_VERSION = "10.7.4";
 
 /**
  * Compare semver-like versions (major.minor.patch). Pre-release/build metadata is ignored.

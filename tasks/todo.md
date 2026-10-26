@@ -949,3 +949,13 @@ Validation: 184 test files / 4,228 tests passed with `--maxWorkers=2 --testTimeo
 Delivery: push `chore/version-3.2.35` and open a PR against `main`.
 
 Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
+
+## GitHub security alerts #102–110 and container vulnerability gate
+
+- [x] Inspect failed Trivy scan: OpenSSL/libssl3, body-parser, and Zod.
+- [x] Create fix/security-alerts-oct26 from latest origin/main, separate from PR #1152.
+- [x] Update Zod, body-parser, ip-address, fast-uri, and Vitest; refresh runtime OpenSSL.
+- [x] Validate local audit, types, build, docs, shrinkwrap, and tests.
+Delivery: push the separate security branch, open a PR, and verify remote CI.
+
+Validation: pnpm audit reports zero vulnerabilities. Typecheck, build, docs, shrinkwrap consistency, and diff checks passed. Full suite: 4,237 passed with one outdated ip-address floor assertion; after updating the security floor and fixtures, all 11 tests in that file passed.

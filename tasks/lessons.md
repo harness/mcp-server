@@ -196,3 +196,6 @@
 
 ## Targeted Shrinkwrap Security Updates
 - Full shrinkwrap regeneration can refresh unrelated dependencies and remove platform metadata. Compare the generated diff against the requested fix; when the existing tree already contains the patched package, update only its root dependency minimum and verify consistency.
+
+## Security floor consistency
+- When raising the ip-address override, update `SECURE_IP_ADDRESS_VERSION` and its boundary/linked-install fixtures so the existing security guard checks the new patched floor.

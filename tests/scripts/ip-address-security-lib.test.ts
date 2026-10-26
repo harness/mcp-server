@@ -59,11 +59,12 @@ describe("ip-address-security-lib", () => {
     }
   });
 
-  it("compares semver patch levels for the NAT64 security floor", () => {
+  it("compares semver patch levels for the security floor", () => {
     expect(isSecureIpAddressVersion("10.4.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("10.5.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
-    expect(isSecureIpAddressVersion("10.5.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
-    expect(isSecureIpAddressVersion("10.7.2", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.5.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+    expect(isSecureIpAddressVersion("10.7.3", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+    expect(isSecureIpAddressVersion("10.7.4", SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
   it("treats missing or invalid versions as insecure", () => {
@@ -106,11 +107,11 @@ describe("ip-address-security-lib", () => {
       join(packageRoot, "node_modules/.pnpm/ip-address@10.4.0/node_modules/ip-address"),
       "10.4.0",
     );
-    const current = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.2/node_modules/ip-address");
-    writeIpAddressPackage(current, "10.7.2");
+    const current = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.4/node_modules/ip-address");
+    writeIpAddressPackage(current, "10.7.4");
     const linkDir = join(packageRoot, "node_modules/.pnpm/express-rate-limit@8.3.2/node_modules");
     mkdirSync(linkDir, { recursive: true });
-    symlinkSync("../../ip-address@10.7.2/node_modules/ip-address", join(linkDir, "ip-address"), "dir");
+    symlinkSync("../../ip-address@10.7.4/node_modules/ip-address", join(linkDir, "ip-address"), "dir");
 
     expect(findIpAddressInstallDirs(packageRoot)).toHaveLength(2);
     expect(findActiveIpAddressInstallDirs(packageRoot)).toEqual([current]);
