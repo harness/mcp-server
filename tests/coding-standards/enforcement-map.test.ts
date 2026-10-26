@@ -35,6 +35,8 @@ const RULE_ENFORCEMENT: Record<string, readonly string[]> = {
   "Contributor doc alignment": ["docs-consistency.test.ts"],
   "Supply-chain / container security regression guards": [
     "../scripts/npm-publish-security-manifest.test.ts",
+    "../scripts/npm-shrinkwrap-check.test.ts",
+    "../scripts/ensure-secure-adm-zip.test.ts",
     "../scripts/cve-dependency-pins.test.ts",
     "../scripts/http-framework-security-pins.test.ts",
     "../scripts/ip-address-security-lib.test.ts",
