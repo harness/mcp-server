@@ -15,6 +15,7 @@ const ROOT = process.cwd();
 /** Vitest modules that pin dependency, script, or image security floors. */
 export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/cve-dependency-pins.test.ts",
+  "tests/scripts/express-stack-security-pins.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/adm-zip-dependency-pins.test.ts",
   "tests/scripts/adm-zip-security-lib.test.ts",
@@ -34,6 +35,8 @@ const PNPM_OVERRIDE_FLOORS: Readonly<Record<string, string>> = {
   "adm-zip": `>=${SECURE_ADM_ZIP_VERSION}`,
   "proxy-addr": ">=2.0.8",
   "path-to-regexp": ">=8.4.0",
+  qs: ">=6.16.0",
+  "express-rate-limit": ">=8.2.2",
 };
 
 describe("Security regression map", () => {

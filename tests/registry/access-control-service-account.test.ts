@@ -159,6 +159,44 @@ describe("service_account resource", () => {
     });
   });
 
+  it("get: org scope sends org only", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: { identifier: "org-bot", name: "Org Bot", email: "org-bot@service.harness.io" },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service_account", "get", {
+      resource_scope: "org",
+      org_id: "platform",
+      service_account_id: "org-bot",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toBe("/ng/api/serviceaccount/org-bot");
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("create: org scope injects org and account in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "org-bot" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service_account", "create", {
+      resource_scope: "org",
+      org_id: "platform",
+      body: { identifier: "org-bot", name: "Org Bot", email: "org-bot@service.harness.io" },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
+    expect(call.body).toMatchObject({
+      identifier: "org-bot",
+      accountIdentifier: "test-account",
+    });
+  });
+
   it("get: account scope omits org and project", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       status: "SUCCESS",
