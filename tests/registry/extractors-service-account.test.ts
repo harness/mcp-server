@@ -70,6 +70,23 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("raw")).toBe("raw");
   });
+
+  it("prefers nested serviceAccount identity over duplicate top-level fields", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "stale-top-level",
+        serviceAccount: {
+          identifier: "nested-wins",
+          email: "nested@example.com",
+        },
+        tokensCount: 3,
+      }),
+    ).toEqual({
+      identifier: "nested-wins",
+      email: "nested@example.com",
+      tokensCount: 3,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
@@ -134,6 +151,15 @@ describe("serviceAccountListExtract", () => {
       items: [],
       total: 0,
     });
+  });
+
+  it("unwraps an empty raw data array without falling through to page extract", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: [],
+      }),
+    ).toEqual({ items: [], total: 0 });
   });
 });
 

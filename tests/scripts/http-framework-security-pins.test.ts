@@ -44,6 +44,13 @@ describe("HTTP framework security pins — package.json", () => {
     expect(meetsMinimum("7.3.6", viteOverrideFloor)).toBe(false);
     expect(meetsMinimum("7.3.7", viteOverrideFloor)).toBe(true);
   });
+
+  it("pins vitest dev dependency on the patched 4.1.12+ line", () => {
+    const vitestRange = packageJson.devDependencies.vitest;
+    const minimum = vitestRange.replace(/^\^/, "");
+    expect(meetsMinimum("4.1.12", minimum)).toBe(true);
+    expect(meetsMinimum("4.1.11", minimum)).toBe(false);
+  });
 });
 
 describe("HTTP framework security pins — lockfiles", () => {
