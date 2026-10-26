@@ -8,6 +8,10 @@ This is a **registry-driven MCP server**. Instead of one MCP tool per Harness AP
 User → MCP Tool (e.g. harness_list) → Registry.dispatch() → HarnessClient.request() → Harness API
 ```
 
+### Automated enforcement
+
+Architecture rules in this document are enforced in CI via `pnpm standards:check` (Vitest guardrails under `tests/coding-standards/` plus `tests/registry/structural-validation.test.ts`). The canonical list of consolidated MCP tools lives in `tests/coding-standards/consolidated-tools.ts`; `tests/coding-standards/enforcement-map.test.ts` maps each major rule here to its guardrail tests. When you change the tool surface or add a new rule, update the doc, the shared constants, and the enforcement map in the same PR.
+
 ### Key Layers
 
 | Layer | Location | Responsibility |
