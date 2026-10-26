@@ -97,6 +97,6 @@ describe("compact vs nested service account DTO", () => {
     expect(slim.email).toBeUndefined();
     expect(slim.identifier).toBeUndefined();
     expect(slim.serviceAccount).toBeUndefined();
-    expect(slim.tokensCount).toBe(2);
+    expect(slim.tokensCount).toBeUndefined();
   });
 });
