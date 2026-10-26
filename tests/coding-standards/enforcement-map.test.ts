@@ -93,6 +93,34 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     tests: ["tests/registry/structural-validation.test.ts"],
     signal: "structural",
   },
+  {
+    rule: "Production Dockerfile Debian security refresh and OpenSSL floor (Trivy)",
+    tests: ["tests/docker/production-dockerfile.test.ts"],
+    signal: "DEBIAN_SECURITY_REFRESH",
+  },
+  {
+    rule: "CVE dependency pins (body-parser, zod, fast-uri, ip-address)",
+    tests: ["tests/scripts/cve-dependency-pins.test.ts"],
+    signal: "SECURE_BODY_PARSER_VERSION",
+  },
+  {
+    rule: "HTTP framework security pins (hono, @hono/node-server, vite)",
+    tests: ["tests/scripts/http-framework-security-pins.test.ts"],
+    signal: "SECURE_HONO_VERSION",
+  },
+  {
+    rule: "adm-zip CVE patch (postinstall, nested onnxruntime-node)",
+    tests: ["tests/scripts/adm-zip-security-lib.test.ts", "tests/scripts/cve-dependency-pins.test.ts"],
+    signal: "SECURE_ADM_ZIP_VERSION",
+  },
+  {
+    rule: "Service account aggregate list extractors and multi-scope dispatch",
+    tests: [
+      "tests/registry/extractors-service-account.test.ts",
+      "tests/registry/access-control-service-account.test.ts",
+    ],
+    signal: "serviceAccountListExtract",
+  },
 ];
 
 describe("Coding standards — enforcement map", () => {
