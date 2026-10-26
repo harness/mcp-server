@@ -495,6 +495,9 @@ describe("Coding standards — tool handler contracts", () => {
       if (!/confirm:\s*z\.boolean\(/.test(content)) {
         violations.push(`${file}: missing confirm z.boolean() input param`);
       }
+      if (/confirmation:\s*z\./.test(content)) {
+        violations.push(`${file}: use confirm (not legacy confirmation) in inputSchema`);
+      }
       if (!content.includes("confirmViaElicitation")) {
         violations.push(`${file}: missing confirmViaElicitation()`);
       }

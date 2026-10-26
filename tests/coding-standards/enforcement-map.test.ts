@@ -74,6 +74,11 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "confirmViaElicitation",
   },
   {
+    rule: "Write tools expose confirm (not legacy confirmation) in input schemas",
+    tests: ["tests/coding-standards/architecture.test.ts"],
+    signal: "legacy confirmation",
+  },
+  {
     rule: "Tool input snake_case and harness_list pagination defaults",
     tests: ["tests/coding-standards/input-conventions.test.ts"],
     signal: "snake_case",
