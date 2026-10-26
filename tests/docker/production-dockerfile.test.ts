@@ -75,4 +75,31 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
     expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
   });
+
+  it("copies adm-zip postinstall scripts before pnpm install in build stages", () => {
+    const admZipScripts =
+      "COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/";
+
+    const buildMarker = "FROM toolchain AS build";
+    const prodDepsMarker = "FROM toolchain AS production-dependencies";
+    const productionMarker = "FROM ${RUNTIME_IMAGE} AS production";
+
+    const buildStage = dockerfile.slice(
+      dockerfile.indexOf(buildMarker),
+      dockerfile.indexOf(prodDepsMarker),
+    );
+    expect(buildStage).toContain(admZipScripts);
+    expect(buildStage.indexOf(admZipScripts)).toBeLessThan(
+      buildStage.indexOf("RUN pnpm install --frozen-lockfile"),
+    );
+
+    const prodDepsStage = dockerfile.slice(
+      dockerfile.indexOf(prodDepsMarker),
+      dockerfile.indexOf(productionMarker),
+    );
+    expect(prodDepsStage).toContain(admZipScripts);
+    expect(prodDepsStage.indexOf(admZipScripts)).toBeLessThan(
+      prodDepsStage.indexOf("RUN pnpm install --frozen-lockfile --prod"),
+    );
+  });
 });
