@@ -66,3 +66,27 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     }
   });
 });
+
+function dependencyInstallStage(dockerfile: string, stageName: "build" | "production-dependencies"): string {
+  const marker = `FROM toolchain AS ${stageName}`;
+  const start = dockerfile.indexOf(marker);
+  expect(start, `expected ${stageName} stage in Dockerfile`).toBeGreaterThan(-1);
+  const nextFrom = dockerfile.indexOf("\nFROM ", start + marker.length);
+  return nextFrom === -1 ? dockerfile.slice(start) : dockerfile.slice(start, nextFrom);
+}
+
+describe("Dockerfile dependency stages (adm-zip postinstall)", () => {
+  const dockerfile = readFileSync(dockerfilePath, "utf8");
+
+  for (const stageName of ["build", "production-dependencies"] as const) {
+    it(`${stageName}: copies adm-zip patch scripts before pnpm install`, () => {
+      const stage = dependencyInstallStage(dockerfile, stageName);
+      const ensureIndex = stage.indexOf("scripts/ensure-secure-adm-zip.mjs");
+      const installIndex = stage.indexOf("pnpm install");
+      expect(ensureIndex, `${stageName} must COPY ensure-secure-adm-zip.mjs`).toBeGreaterThan(-1);
+      expect(stage).toContain("scripts/adm-zip-security-lib.mjs");
+      expect(installIndex, `${stageName} must run pnpm install`).toBeGreaterThan(-1);
+      expect(ensureIndex).toBeLessThan(installIndex);
+    });
+  }
+});
