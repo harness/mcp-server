@@ -123,6 +123,23 @@ describe("service_account resource", () => {
     expect(slim.tokensCount).toBe(2);
   });
 
+  it("list: forwards page and size as pageIndex and pageSize at account scope", async () => {
+    const mockRequest = vi.fn().mockResolvedValue(aggregateListResponse);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service_account", "list", {
+      resource_scope: "account",
+      page: 2,
+      size: 50,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.pageIndex).toBe(2);
+    expect(call.params.pageSize).toBe(50);
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("list: resource_scope=org sends org only", async () => {
     const mockRequest = vi.fn().mockResolvedValue(aggregateListResponse);
     const client = makeClient(mockRequest);
@@ -182,6 +199,30 @@ describe("service_account resource", () => {
       identifier: "account-sa",
       email: "account-sa@service.harness.io",
     });
+  });
+
+  it("get: default project scope injects org and project and builds project deep link", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: {
+        identifier: "ci-bot",
+        name: "CI Bot",
+        email: "ci-bot@service.harness.io",
+        orgIdentifier: "default",
+        projectIdentifier: "test-project",
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "service_account", "get", {
+      service_account_id: "ci-bot",
+    })) as Record<string, unknown>;
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+    expect(String(result.openInHarness)).toContain("/orgs/default/projects/test-project/");
+    expect(String(result.openInHarness)).toContain("/service-accounts/ci-bot");
   });
 
   it("get: org scope sends org only and builds org deep link without project segment", async () => {

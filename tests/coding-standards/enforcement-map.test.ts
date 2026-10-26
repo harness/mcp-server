@@ -20,6 +20,11 @@ const REGRESSION_GUARDS: Array<{ file: string; mustMatch: RegExp; risk: string }
     risk: "HTTP framework CVE pins (hono, vite)",
   },
   {
+    file: "tests/scripts/transitive-toolchain-security-pins.test.ts",
+    mustMatch: /TRANSITIVE_PIN_FLOORS/,
+    risk: "transitive toolchain CVE pins (picomatch, esbuild, postcss, nanoid)",
+  },
+  {
     file: "tests/scripts/adm-zip-security-lib.test.ts",
     mustMatch: /listInsecureAdmZipInstalls/,
     risk: "adm-zip traversal CVE postinstall enforcement",
