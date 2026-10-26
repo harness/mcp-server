@@ -7,12 +7,19 @@ import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.
 const require = createRequire(import.meta.url);
 const root = process.cwd();
 
-const TRANSITIVE_PIN_FLOORS: Array<{ name: string; floor: string }> = [
+type TransitivePin = { name: string; floor: string; override?: string };
+
+const TRANSITIVE_PIN_FLOORS: TransitivePin[] = [
   { name: "esbuild", floor: "0.28.1" },
   { name: "postcss", floor: "8.5.18" },
   { name: "protobufjs", floor: "8.6.0" },
   { name: "sharp", floor: "0.35.5" },
   { name: "qs", floor: "6.16.0" },
+  { name: "picomatch", floor: "4.0.4" },
+  { name: "nanoid", floor: "3.3.18", override: "^3.3.18" },
+  { name: "source-map-js", floor: "1.2.2" },
+  { name: "@opentelemetry/core", floor: "2.8.0" },
+  { name: "proxy-addr", floor: "2.0.8" },
 ];
 
 function readInstalledPackageVersion(packageName: string): string {
@@ -40,8 +47,8 @@ describe("transitive security pins (build and parser toolchain)", () => {
       pnpm: { overrides: Record<string, string> };
     };
 
-    for (const { name, floor } of TRANSITIVE_PIN_FLOORS) {
-      expect(packageJson.pnpm.overrides[name]).toBe(`>=${floor}`);
+    for (const { name, floor, override } of TRANSITIVE_PIN_FLOORS) {
+      expect(packageJson.pnpm.overrides[name]).toBe(override ?? `>=${floor}`);
     }
   });
 

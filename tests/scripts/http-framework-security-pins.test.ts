@@ -8,6 +8,7 @@ const root = process.cwd();
 const SECURE_HONO_VERSION = "4.13.11";
 const SECURE_HONO_NODE_SERVER_VERSION = "2.0.10";
 const SECURE_VITE_VERSION = "7.3.7";
+const SECURE_PATH_TO_REGEXP_VERSION = "8.4.0";
 
 function readInstalledPackageVersion(packageName: string): string {
   const packageJsonPath = join(root, "node_modules", packageName, "package.json");
@@ -47,6 +48,7 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
 
     expect(packageJson.pnpm.overrides.hono).toBe(`>=${SECURE_HONO_VERSION}`);
     expect(packageJson.pnpm.overrides["@hono/node-server"]).toBe(`>=${SECURE_HONO_NODE_SERVER_VERSION}`);
+    expect(packageJson.pnpm.overrides["path-to-regexp"]).toBe(`>=${SECURE_PATH_TO_REGEXP_VERSION}`);
     expect(packageJson.pnpm.overrides.vite).toBe(`^${SECURE_VITE_VERSION}`);
     expect(packageJson.dependencies.hono).toBe(`^${SECURE_HONO_VERSION}`);
     expect(packageJson.dependencies["@hono/node-server"]).toBe(`^${SECURE_HONO_NODE_SERVER_VERSION}`);
@@ -58,6 +60,7 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
     const checks: Array<{ name: string; floor: string }> = [
       { name: "hono", floor: SECURE_HONO_VERSION },
       { name: "@hono/node-server", floor: SECURE_HONO_NODE_SERVER_VERSION },
+      { name: "path-to-regexp", floor: SECURE_PATH_TO_REGEXP_VERSION },
       { name: "vite", floor: SECURE_VITE_VERSION },
     ];
 
@@ -75,6 +78,8 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
     const checks: Array<{ name: string; floor: string }> = [
       { name: "hono", floor: SECURE_HONO_VERSION },
       { name: "@hono/node-server", floor: SECURE_HONO_NODE_SERVER_VERSION },
+      { name: "path-to-regexp", floor: SECURE_PATH_TO_REGEXP_VERSION },
+      { name: "proxy-addr", floor: "2.0.8" },
     ];
 
     for (const { name, floor } of checks) {
