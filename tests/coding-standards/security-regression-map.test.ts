@@ -17,8 +17,15 @@ export const SECURITY_REGRESSION_TEST_FILES = [
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/lockfile-parsers.test.ts",
+  "tests/scripts/npm-shrinkwrap-check.test.ts",
   "tests/scripts/transitive-security-pins.test.ts",
   "tests/docker/production-dockerfile.test.ts",
+] as const;
+
+/** Registry dispatch / extractor guards for multi-scope API behavior. */
+export const REGISTRY_REGRESSION_TEST_FILES = [
+  "tests/registry/extractors-service-account.test.ts",
+  "tests/registry/access-control-service-account.test.ts",
 ] as const;
 
 /** pnpm.overrides keys that back the CVE pin suites above. */
@@ -65,6 +72,13 @@ describe("Coding standards — security regression map", () => {
     }
   });
 
+  it("keeps registry regression tests for service account multi-scope behavior", () => {
+    for (const relativePath of REGISTRY_REGRESSION_TEST_FILES) {
+      const absolute = join(REPO_ROOT, relativePath);
+      expect(existsSync(absolute), `missing registry regression test: ${relativePath}`).toBe(true);
+    }
+  });
+
   it("runs adm-zip postinstall and ships security scripts in the npm package", () => {
     const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
@@ -72,10 +86,12 @@ describe("Coding standards — security regression map", () => {
     };
 
     expect(packageJson.scripts.postinstall).toBe("node scripts/ensure-secure-adm-zip.mjs");
+    expect(packageJson.scripts.prepublishOnly).toContain("npm-shrinkwrap:check");
     expect(packageJson.files).toEqual(
       expect.arrayContaining([
         "scripts/adm-zip-security-lib.mjs",
         "scripts/ensure-secure-adm-zip.mjs",
+        "npm-shrinkwrap.json",
       ]),
     );
   });
