@@ -3,7 +3,7 @@
  * Update this map when adding new guardrail tests.
  */
 import { describe, it, expect } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { CONSOLIDATED_TOOL_COUNT } from "./consolidated-tools.js";
 
@@ -13,6 +13,7 @@ const CODING_STANDARDS_DIR = join(REPO_ROOT, "tests/coding-standards");
 const RULE_TO_TEST_FILES: Record<string, readonly string[]> = {
   "§1 — fixed consolidated MCP tools (no new handlers)": [
     "architecture.test.ts",
+    "consolidated-tools.test.ts",
     "file-organization.test.ts",
   ],
   "§2 — pure-data toolsets": ["architecture.test.ts"],
@@ -32,6 +33,10 @@ const RULE_TO_TEST_FILES: Record<string, readonly string[]> = {
   "§10 — singleton HarnessClient": ["architecture.test.ts"],
   "§11 — file organization": ["file-organization.test.ts"],
   "docs — coding-standards.md drift prevention": ["docs-consistency.test.ts"],
+  "meta — enforcement map and shared constants": [
+    "enforcement-map.test.ts",
+    "consolidated-tools.test.ts",
+  ],
   "registry — structural validation": ["structural-validation.test.ts"],
 };
 
@@ -57,5 +62,17 @@ describe("Coding standards — enforcement map", () => {
 
   it("covers at least one test file per standards section", () => {
     expect(Object.keys(RULE_TO_TEST_FILES).length).toBeGreaterThanOrEqual(10);
+  });
+
+  it("maps every tests/coding-standards/*.test.ts file to at least one documented rule", () => {
+    const mapped = new Set(Object.values(RULE_TO_TEST_FILES).flat());
+    const guardrailTests = readdirSync(CODING_STANDARDS_DIR).filter((name) =>
+      name.endsWith(".test.ts"),
+    );
+    const unmapped = guardrailTests.filter((file) => !mapped.has(file));
+
+    expect(unmapped, `Add unmapped guardrail tests to RULE_TO_TEST_FILES:\n${unmapped.join("\n")}`).toEqual(
+      [],
+    );
   });
 });

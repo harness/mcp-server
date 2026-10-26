@@ -73,6 +73,16 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
     expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
   });
+
+  it("runs the HTTP server as the non-root node user after installing ca-certificates", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\bca-certificates\b/,
+    );
+    expect(stage).toMatch(/useradd --uid 1000 --gid node/);
+    expect(stage).toMatch(/^USER node\b/m);
+    expect(dockerfile).toMatch(/HEALTHCHECK[\s\S]*\/health/);
+  });
 });
 
 function dockerStage(dockerfile: string, marker: string): string {
