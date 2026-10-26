@@ -25,12 +25,14 @@ const SECURITY_GUARDS: SecurityGuard[] = [
     artifacts: [
       "scripts/adm-zip-security-lib.mjs",
       "scripts/ensure-secure-adm-zip.mjs",
+      "scripts/generate-npm-shrinkwrap.mjs",
       "package.json",
       "npm-shrinkwrap.json",
     ],
     tests: [
       "tests/scripts/adm-zip-security-lib.test.ts",
       "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/npm-shrinkwrap-check.test.ts",
       "tests/docker/production-dockerfile.test.ts",
     ],
   },
@@ -99,5 +101,6 @@ describe("Coding standards — security regression guard coverage", () => {
       ]),
     );
     expect(packageJson.scripts?.postinstall).toBe("node scripts/ensure-secure-adm-zip.mjs");
+    expect(packageJson.scripts?.prepublishOnly).toContain("npm-shrinkwrap:check");
   });
 });
