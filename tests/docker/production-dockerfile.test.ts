@@ -4,39 +4,62 @@ import { describe, expect, it } from "vitest";
 
 const dockerfilePath = join(process.cwd(), "Dockerfile");
 
-const OPENSSL_DEBIAN_FLOOR = "3.0.22-1~deb12u2";
+/** Bump when Debian/OpenSSL CVE fixes require invalidating the production apt layer cache. */
 const MIN_DEBIAN_SECURITY_REFRESH = "2026-10-26";
+
+function productionStage(dockerfile: string): string {
+  const marker = "FROM ${RUNTIME_IMAGE} AS production";
+  const start = dockerfile.indexOf(marker);
+  expect(start, "expected production stage in Dockerfile").toBeGreaterThan(-1);
+  return dockerfile.slice(start);
+}
 
 describe("production Dockerfile (Trivy / Debian base image)", () => {
   const dockerfile = readFileSync(dockerfilePath, "utf8");
-  const productionStage = dockerfile.slice(dockerfile.indexOf("FROM ${RUNTIME_IMAGE} AS production"));
 
   it("bumps DEBIAN_SECURITY_REFRESH so GHA layer cache replays apt security upgrades", () => {
     const argMatch = dockerfile.match(/^ARG DEBIAN_SECURITY_REFRESH=(\d{4}-\d{2}-\d{2})/m);
     expect(argMatch, "expected ARG DEBIAN_SECURITY_REFRESH=YYYY-MM-DD in Dockerfile").not.toBeNull();
-    expect(argMatch![1] >= MIN_DEBIAN_SECURITY_REFRESH).toBe(true);
 
     expect(dockerfile).toContain('echo "debian-security-refresh=${DEBIAN_SECURITY_REFRESH}"');
-    expect(dockerfile).toMatch(/apt-get update[\s\S]*apt-get upgrade -y/);
+    expect(dockerfile).toMatch(/apt-get update[\s\S]*apt-get upgrade -y --no-install-recommends/);
+
+    const refreshDate = argMatch![1];
+    expect(
+      refreshDate >= MIN_DEBIAN_SECURITY_REFRESH,
+      `DEBIAN_SECURITY_REFRESH ${refreshDate} is below ${MIN_DEBIAN_SECURITY_REFRESH}`,
+    ).toBe(true);
   });
 
   it("installs OpenSSL runtime packages patched for recent Debian CVEs", () => {
-    expect(productionStage).toMatch(
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
       /apt-get install -y --no-install-recommends[\s\S]*\blibssl3\b[\s\S]*\bopenssl\b/,
     );
+    expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
 
-  it("fails the image build when bookworm OpenSSL packages are below the patched floor", () => {
-    const libsslGate =
-      "dpkg --compare-versions \"$(dpkg-query -W -f='${Version}' libssl3)\" ge " + OPENSSL_DEBIAN_FLOOR;
-    const opensslGate =
-      "dpkg --compare-versions \"$(dpkg-query -W -f='${Version}' openssl)\" ge " + OPENSSL_DEBIAN_FLOOR;
-    expect(productionStage).toContain(libsslGate);
-    expect(productionStage).toContain(opensslGate);
+  it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
+    const stage = productionStage(dockerfile);
+    const upgradeIndex = stage.indexOf("apt-get upgrade");
+    const opensslInstallIndex = stage.indexOf("libssl3");
+    expect(upgradeIndex, "production stage must apt-get upgrade").toBeGreaterThan(-1);
+    expect(opensslInstallIndex, "production stage must install libssl3").toBeGreaterThan(-1);
+    expect(upgradeIndex).toBeLessThan(opensslInstallIndex);
   });
 
-  it("uses debian:bookworm-slim for the production runtime stage", () => {
-    expect(dockerfile).toMatch(/ARG RUNTIME_IMAGE=debian:bookworm-slim/);
-    expect(productionStage).toMatch(/^FROM \$\{RUNTIME_IMAGE\} AS production/m);
+  it("fails the image build when Debian OpenSSL packages are below the patched bookworm floor", () => {
+    const stage = productionStage(dockerfile);
+    const opensslFloor = "3.0.22-1~deb12u2";
+    expect(stage).toContain('dpkg --compare-versions "$(dpkg-query -W -f=\'${Version}\' libssl3)" ge');
+    expect(stage).toContain('dpkg --compare-versions "$(dpkg-query -W -f=\'${Version}\' openssl)" ge');
+    expect(stage).toContain(opensslFloor);
+  });
+
+  it("uses the Debian bookworm-slim runtime image for the production stage", () => {
+    expect(dockerfile).toMatch(/^ARG RUNTIME_IMAGE=debian:bookworm-slim/m);
+    const stage = productionStage(dockerfile);
+    expect(stage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
+    expect(stage).not.toMatch(/\bpnpm\b|\bcorepack\b|\bnpm install\b/);
   });
 });
