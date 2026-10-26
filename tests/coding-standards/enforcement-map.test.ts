@@ -23,6 +23,11 @@ const ENFORCEMENT_TARGETS: EnforcementTarget[] = [
     describeSnippet: "Coding standards — MCP tool handlers",
   },
   {
+    rule: "§1 Consolidated tools manifest ↔ handler files",
+    testFile: "consolidated-tools-sync.test.ts",
+    describeSnippet: "Coding standards — consolidated tools manifest",
+  },
+  {
     rule: "§2 Pure-data toolset definitions",
     testFile: "architecture.test.ts",
     describeSnippet: "Coding standards — toolset purity",
