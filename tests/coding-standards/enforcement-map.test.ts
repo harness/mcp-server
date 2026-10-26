@@ -50,6 +50,28 @@ const ENFORCEMENT_MAP: Record<string, readonly string[]> = {
   "Docs stay aligned with enforced constants": ["tests/coding-standards/docs-consistency.test.ts"],
 };
 
+/** Security regressions on fix/security-alerts-oct26 — mapped to guard tests. */
+const SECURITY_REGRESSION_MAP: Record<string, readonly string[]> = {
+  "CVE dependency pins (body-parser, zod, fast-uri, ip-address, qs, proxy-addr)": [
+    "tests/scripts/cve-dependency-pins.test.ts",
+    "tests/scripts/ip-address-security-lib.test.ts",
+  ],
+  "HTTP framework pins (hono, vite)": ["tests/scripts/http-framework-security-pins.test.ts"],
+  "adm-zip postinstall / npm shrinkwrap": [
+    "tests/scripts/adm-zip-security-lib.test.ts",
+    "tests/scripts/adm-zip-supply-chain.test.ts",
+    "tests/scripts/npm-shrinkwrap-check.test.ts",
+  ],
+  "Production Dockerfile (OpenSSL / apt cache bust)": [
+    "tests/docker/production-dockerfile.test.ts",
+    "tests/docker/dockerfile-build-security.test.ts",
+  ],
+  "Service account list extractors (#1152)": [
+    "tests/registry/extractors-service-account.test.ts",
+    "tests/registry/access-control-service-account.test.ts",
+  ],
+};
+
 function assertGuardFilesExist(rule: string, files: readonly string[]): void {
   const missing = files.filter((f) => !existsSync(join(REPO_ROOT, f)));
   expect(
@@ -71,6 +93,14 @@ describe("Coding standards — enforcement map", () => {
       assertGuardFilesExist(rule, files);
     });
   }
+
+  describe("security regression map", () => {
+    for (const [area, files] of Object.entries(SECURITY_REGRESSION_MAP)) {
+      it(area, () => {
+        assertGuardFilesExist(area, files);
+      });
+    }
+  });
 
   it("canonical standards doc and CI entrypoint exist", () => {
     expect(existsSync(join(REPO_ROOT, "docs/coding-standards.md"))).toBe(true);

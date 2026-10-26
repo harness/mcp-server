@@ -126,6 +126,27 @@ describe("serviceAccountListExtract", () => {
       total: 1,
     });
   });
+
+  it("uses totalItems when aggregate pages omit totalElements", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { content: [], totalItems: 0 },
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
+  it("passes non-object list entries through flattening without throwing", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: ["unexpected-row", nestedAggregate],
+      }),
+    ).toEqual({
+      items: ["unexpected-row", expect.objectContaining({ identifier: "ci-bot" })],
+      total: 2,
+    });
+  });
 });
 
 describe("service account compact mode", () => {
