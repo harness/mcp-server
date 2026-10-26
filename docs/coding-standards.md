@@ -262,7 +262,7 @@ If your resource uses list filter params not already in `harness_list`'s Zod sch
 pnpm build          # Must compile without errors
 pnpm typecheck      # Must pass strict type checking
 pnpm test           # Must not break existing tests
-pnpm standards:check # Architecture/coding-standards guardrails
+pnpm standards:check # Architecture/coding-standards guardrails (see tests/coding-standards/enforcement-map.ts)
 ```
 
 Use the MCP Inspector to manually verify your new resource type:
