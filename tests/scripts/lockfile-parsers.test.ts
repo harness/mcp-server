@@ -56,5 +56,8 @@ packages:
     expect(parsePnpmLockPackageVersions(lockText, "zod").length).toBeGreaterThan(0);
     expect(parsePnpmLockPackageVersions(lockText, "@hono/node-server").length).toBeGreaterThan(0);
     expect(parseNpmShrinkwrapPackageVersion(shrinkwrapText, "zod")).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(parsePnpmLockPackageVersions(lockText, "path-to-regexp").length).toBeGreaterThan(0);
+    expect(parsePnpmLockPackageVersions(lockText, "qs").length).toBeGreaterThan(0);
+    expect(parseNpmShrinkwrapPackageVersion(shrinkwrapText, "proxy-addr")).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });

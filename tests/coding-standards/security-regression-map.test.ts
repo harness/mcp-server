@@ -31,6 +31,9 @@ const REQUIRED_PNPM_OVERRIDE_KEYS = [
   "ip-address",
   "vite",
   "zod",
+  "path-to-regexp",
+  "qs",
+  "proxy-addr",
 ] as const;
 
 describe("Coding standards — security regression map", () => {
