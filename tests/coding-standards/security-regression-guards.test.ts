@@ -52,6 +52,11 @@ const SECURITY_GUARDS: SecurityGuard[] = [
     tests: ["tests/scripts/http-framework-security-pins.test.ts"],
   },
   {
+    label: "Express transitive dependency pins (qs, proxy-addr)",
+    artifacts: ["package.json", "pnpm-lock.yaml", "npm-shrinkwrap.json"],
+    tests: ["tests/scripts/express-stack-security-pins.test.ts"],
+  },
+  {
     label: "express-rate-limit dependency pin",
     artifacts: ["package.json", "pnpm-lock.yaml", "npm-shrinkwrap.json"],
     tests: ["tests/scripts/express-rate-limit-security-pins.test.ts"],
