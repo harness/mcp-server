@@ -52,7 +52,9 @@ describe("Coding standards — documentation consistency", () => {
   it("AGENTS.md stays aligned with the 11-tool registry model and Zod v4", () => {
     const agents = readFileSync(AGENTS_PATH, "utf8");
     expect(agents).toMatch(/11 consolidated tools/);
-    expect(agents).toContain("harness_schema");
+    for (const tool of REQUIRED_TOOLS) {
+      expect(agents, `missing ${tool} in AGENTS.md`).toContain(tool);
+    }
     expect(agents).toMatch(/Zod v4/);
     expect(agents).toContain("pnpm standards:check");
     expect(agents).not.toMatch(/10 consolidated tool/);
@@ -67,7 +69,9 @@ describe("Coding standards — documentation consistency", () => {
   it("README.md documents the 11-tool consolidated model (not legacy per-endpoint tools)", () => {
     const readme = readFileSync(README_PATH, "utf8");
     expect(readme).toMatch(/11 consolidated tools/);
-    expect(readme).toContain("harness_schema");
+    for (const tool of REQUIRED_TOOLS) {
+      expect(readme, `missing ${tool} in README.md`).toContain(tool);
+    }
     expect(readme).not.toMatch(/10 consolidated tool/);
   });
 });
