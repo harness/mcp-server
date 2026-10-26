@@ -36,6 +36,14 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
     guardFiles: ["tests/coding-standards/architecture.test.ts", "tests/coding-standards/input-conventions.test.ts"],
   },
   {
+    checklist: "Every inputSchema param has .describe()",
+    guardFiles: ["tests/coding-standards/registry-metadata.test.ts"],
+  },
+  {
+    checklist: "Tool input snake_case and list pagination defaults",
+    guardFiles: ["tests/coding-standards/input-conventions.test.ts"],
+  },
+  {
     checklist: "Response extractors from extractors.ts",
     guardFiles: ["tests/coding-standards/architecture.test.ts"],
   },
@@ -54,6 +62,14 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
   },
   {
     checklist: "Write operations require confirmation (confirm + elicitation)",
+    guardFiles: ["tests/coding-standards/architecture.test.ts", "tests/coding-standards/registry-metadata.test.ts"],
+  },
+  {
+    checklist: "No secrets exposed in tool output (redaction)",
+    guardFiles: ["tests/utils/redact.test.ts", "tests/utils/body-preview.test.ts"],
+  },
+  {
+    checklist: "HarnessClient singleton (no extra instances or bypass)",
     guardFiles: ["tests/coding-standards/architecture.test.ts"],
   },
   {
