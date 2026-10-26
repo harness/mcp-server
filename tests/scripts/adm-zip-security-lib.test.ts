@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -18,8 +19,22 @@ import {
   listInsecureAdmZipInstalls,
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
+import { parsePnpmLockPackageVersions } from "./pnpm-lock-package-versions.js";
 
+const repoRoot = process.cwd();
 const require = createRequire(import.meta.url);
+
+function parseAllNpmShrinkwrapAdmZipInstalls(shrinkwrapText: string): Array<{
+  path: string;
+  version: string | undefined;
+}> {
+  const shrinkwrap = JSON.parse(shrinkwrapText) as {
+    packages?: Record<string, { version?: string }>;
+  };
+  return Object.entries(shrinkwrap.packages ?? {})
+    .filter(([path]) => path.endsWith("node_modules/adm-zip"))
+    .map(([path, metadata]) => ({ path, version: metadata?.version }));
+}
 const AdmZip = require("adm-zip") as new () => {
   addFile(name: string, content: Buffer): void;
   extractAllTo(target: string, overwrite?: boolean): void;
@@ -126,5 +141,45 @@ describe("adm-zip-security-lib", () => {
     });
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
+  });
+
+  it("keeps package manifests and overrides on the patched adm-zip release", () => {
+    const packageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+      overrides: Record<string, { "adm-zip": string }>;
+      pnpm: { overrides: Record<string, string> };
+    };
+
+    expect(packageJson.dependencies["adm-zip"]).toBe(`^${SECURE_ADM_ZIP_VERSION}`);
+    expect(packageJson.pnpm.overrides["adm-zip"]).toBe(`>=${SECURE_ADM_ZIP_VERSION}`);
+    expect(packageJson.overrides["onnxruntime-node"]["adm-zip"]).toBe(SECURE_ADM_ZIP_VERSION);
+  });
+
+  it("resolves patched adm-zip releases in pnpm-lock.yaml", () => {
+    const lockText = readFileSync(join(repoRoot, "pnpm-lock.yaml"), "utf8");
+    const versions = parsePnpmLockPackageVersions(lockText, "adm-zip");
+    expect(versions.length, "expected adm-zip entries in pnpm-lock.yaml").toBeGreaterThan(0);
+    for (const version of versions) {
+      expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
+    }
+  });
+
+  it("documents every adm-zip copy in npm-shrinkwrap.json for global npm installs", () => {
+    const installs = parseAllNpmShrinkwrapAdmZipInstalls(
+      readFileSync(join(repoRoot, "npm-shrinkwrap.json"), "utf8"),
+    );
+    expect(installs.length, "expected at least one adm-zip entry in npm-shrinkwrap.json").toBeGreaterThan(
+      0,
+    );
+    for (const { path, version } of installs) {
+      expect(
+        isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION),
+        `${path}@${version ?? "missing"}`,
+      ).toBe(true);
+    }
+  });
+
+  it("flags no vulnerable adm-zip installs under node_modules after install", () => {
+    expect(listInsecureAdmZipInstalls(repoRoot)).toEqual([]);
   });
 });
