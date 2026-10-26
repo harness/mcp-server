@@ -27,6 +27,9 @@ const REQUIRED_PNPM_OVERRIDE_KEYS = [
   "hono",
   "@hono/node-server",
   "ip-address",
+  "path-to-regexp",
+  "proxy-addr",
+  "qs",
   "vite",
   "zod",
 ] as const;
