@@ -175,4 +175,14 @@ describe("ip-address-security-lib", () => {
     expect(documentation.isPrivate()).toBe(false);
     expect(documentation.isGlobal()).toBe(false);
   });
+
+  it("parses link-local IPv6 with a zone identifier without hanging (ReDoS regression)", () => {
+    const { Address6 } = loadInstalledAddress6();
+
+    const paddedZone = `eth0${"x".repeat(128)}`;
+    const zoned = new Address6(`fe80::1%${paddedZone}`);
+    expect(zoned.isLoopback()).toBe(false);
+    expect(zoned.isGlobal()).toBe(false);
+    expect(zoned.correctForm()).toContain("fe80::1");
+  });
 });

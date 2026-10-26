@@ -135,6 +135,38 @@ describe("serviceAccountListExtract", () => {
       total: 1,
     });
   });
+
+  it("uses totalItems when totalElements is absent (NG aggregate pagination)", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [nestedAggregate], totalItems: 42 },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot", email: "ci-bot@service.harness.io" })],
+      total: 42,
+    });
+  });
+
+  it("returns empty items and zero total for missing paginated fields", () => {
+    expect(serviceAccountListExtract({})).toEqual({ items: [], total: 0 });
+    expect(serviceAccountListExtract({ data: {} })).toEqual({ items: [], total: 0 });
+    expect(serviceAccountListExtract({ data: { content: [], totalItems: 0 } })).toEqual({
+      items: [],
+      total: 0,
+    });
+  });
+
+  it("throws when the API envelope is null (callers must pass an object)", () => {
+    expect(() => serviceAccountListExtract(null)).toThrow();
+  });
+
+  it("preserves totalItems when content is empty but the API reports a non-zero total", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalItems: 5 },
+      }),
+    ).toEqual({ items: [], total: 5 });
+  });
 });
 
 describe("compact vs nested service account DTO", () => {
