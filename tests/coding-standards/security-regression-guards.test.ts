@@ -12,8 +12,10 @@ const SECURITY_GUARD_TEST_FILES = [
   "tests/scripts/adm-zip-dependency-pins.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
   "tests/scripts/docker-production-security.test.ts",
+  "tests/scripts/ensure-secure-adm-zip-postinstall.test.ts",
   "tests/scripts/fast-uri-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
+  "tests/scripts/npm-shrinkwrap-check.test.ts",
 ] as const;
 
 describe("Security regression guard inventory", () => {
