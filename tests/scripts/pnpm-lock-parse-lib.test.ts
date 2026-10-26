@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  escapeRegExp,
   parseNpmShrinkwrapPackageVersion,
   parsePnpmLockPackageVersions,
 } from "../../scripts/pnpm-lock-parse-lib.mjs";
 
 describe("pnpm-lock-parse-lib", () => {
+  it("escapes regex metacharacters in package names used for lockfile scans", () => {
+    expect(escapeRegExp("body-parser")).toBe("body-parser");
+    expect(escapeRegExp("@hono/node-server")).toBe("@hono/node-server");
+    expect(escapeRegExp("pkg+legacy")).toBe("pkg\\+legacy");
+  });
+
+  it("returns no versions when the package is absent from lockfile text", () => {
+    expect(parsePnpmLockPackageVersions("  zod@4.6.6:\n", "missing-pkg")).toEqual([]);
+  });
+
   it("parses unquoted keys with optional peer suffixes", () => {
     const sample = `
   body-parser@2.3.0:

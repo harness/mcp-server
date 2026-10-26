@@ -127,4 +127,26 @@ describe("adm-zip-security-lib", () => {
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
   });
+
+  it("no-ops when every adm-zip install already meets the security floor", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-secure-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), SECURE_ADM_ZIP_VERSION);
+
+    const result = ensureSecureAdmZip(root, { dryRun: true });
+    expect(result).toEqual({ patched: [], skipped: true, warnings: [] });
+  });
+
+  it("throws in strict mode when npm upgrade cannot run", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-strict-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), "0.5.18");
+
+    expect(() =>
+      ensureSecureAdmZip(root, {
+        npmCommand: "__missing-npm-binary__",
+        strict: true,
+      }),
+    ).toThrow(/failed to upgrade adm-zip/);
+  });
 });

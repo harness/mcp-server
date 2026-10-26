@@ -73,6 +73,15 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("not-a-version", SECURE_IP_ADDRESS_VERSION)).toBe(false);
   });
 
+  it("reads package.json versions and returns null when the install is missing", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-read-"));
+    tempDirs.push(packageRoot);
+    const install = join(packageRoot, "node_modules", "ip-address");
+    writeIpAddressPackage(install, "10.7.4");
+    expect(readIpAddressVersion(install)).toBe("10.7.4");
+    expect(readIpAddressVersion(join(packageRoot, "node_modules", "missing"))).toBeNull();
+  });
+
   it("ignores pre-release suffixes when comparing against the security floor", () => {
     expect(isSecureIpAddressVersion("10.7.4-beta.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
     expect(isSecureIpAddressVersion("10.7.3-rc.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
