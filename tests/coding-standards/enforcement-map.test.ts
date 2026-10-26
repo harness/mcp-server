@@ -64,9 +64,10 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
   },
   {
     checklistPhrase: "`pnpm standards:check` passes",
-    testBasenames: ["docs-consistency.test.ts", "enforcement-map.test.ts"],
+    testBasenames: ["docs-consistency.test.ts", "enforcement-map.test.ts", "consolidated-tools-sync.test.ts"],
   },
 ];
+
 
 describe("Coding standards — enforcement map", () => {
   const standardsContent = readFileSync(STANDARDS_DOC, "utf8");

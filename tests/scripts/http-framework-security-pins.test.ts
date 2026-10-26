@@ -2,42 +2,17 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
+import {
+  parseNpmShrinkwrapPackageVersion,
+  parsePnpmLockPackageVersions,
+  readInstalledPackageVersion,
+} from "./lockfile-parse.js";
 
 const root = process.cwd();
 
 const SECURE_HONO_VERSION = "4.13.11";
 const SECURE_HONO_NODE_SERVER_VERSION = "2.0.10";
 const SECURE_VITE_VERSION = "7.3.7";
-
-function parsePnpmLockPackageVersions(lockfileText: string, packageName: string): string[] {
-  const escaped = packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const quoted = packageName.includes("/")
-    ? `'${escaped}@([0-9]+\\.[0-9]+\\.[0-9]+)'`
-    : `${escaped}@([0-9]+\\.[0-9]+\\.[0-9]+)`;
-  const pattern = new RegExp(`^\\s+${quoted}:`, "gm");
-  const versions = new Set<string>();
-  for (const match of lockfileText.matchAll(pattern)) {
-    versions.add(match[1]);
-  }
-  return [...versions];
-}
-
-function parseNpmShrinkwrapPackageVersion(shrinkwrapText: string, packageName: string): string | null {
-  const shrinkwrap = JSON.parse(shrinkwrapText) as {
-    packages?: Record<string, { version?: string }>;
-  };
-  const version = shrinkwrap.packages?.[`node_modules/${packageName}`]?.version;
-  return typeof version === "string" ? version : null;
-}
-
-function readInstalledPackageVersion(packageName: string): string {
-  const packageJsonPath = join(root, "node_modules", ...packageName.split("/"), "package.json");
-  const manifest = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: string };
-  expect(typeof manifest.version, `expected ${packageName} to expose a version in package.json`).toBe(
-    "string",
-  );
-  return manifest.version!;
-}
 
 describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
   it("declares patched floors in pnpm overrides and direct dependencies", () => {
@@ -94,7 +69,7 @@ describe("HTTP framework security pins (hono, @hono/node-server, vite)", () => {
     ];
 
     for (const { name, floor } of checks) {
-      const version = readInstalledPackageVersion(name);
+      const version = readInstalledPackageVersion(root, name);
       expect(isSecureIpAddressVersion(version, floor)).toBe(true);
     }
   });
