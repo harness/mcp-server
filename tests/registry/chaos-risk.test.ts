@@ -255,11 +255,11 @@ describe("chaos_risk_rule list/get", () => {
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/chaos/manager/api/v3/risk-rules");
     expect(call.params).toMatchObject({
-      organizationIdentifier: "default",
-      projectIdentifier: "chaos-proj",
       page: "0",
       limit: "15",
     });
+    expect(call.params.organizationIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(1);
   });
@@ -288,6 +288,8 @@ describe("chaos_risk_rule list/get", () => {
     expect(params.isSystem).toBe(true);
     expect(params.dataSource).toBe("manifest");
     expect(params.includeAllScope).toBe(false);
+    expect(params.organizationIdentifier).toBeUndefined();
+    expect(params.projectIdentifier).toBeUndefined();
   });
 
   it("get: builds correct path with identity param", async () => {
@@ -308,6 +310,8 @@ describe("chaos_risk_rule list/get", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/chaos/manager/api/v3/risk-rules/rule-1");
+    expect(call.params.organizationIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
     expect(result.identity).toBe("rule-1");
     expect(result.isSystem).toBe(true);
   });
@@ -849,7 +853,8 @@ describe("chaos_risk_rule create/update/delete", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/chaos/manager/api/v3/risk-rules");
-    expect(call.params).toMatchObject({ organizationIdentifier: "default", projectIdentifier: "chaos-proj" });
+    expect(call.params.organizationIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
     expect(call.body).toMatchObject({
       identity: ruleBody.identity,
       severity: "High",
@@ -986,11 +991,15 @@ describe("chaos_risk_rule create/update/delete", () => {
       org_id: "o", project_id: "p", custom_only: true,
     });
 
-    expect(mockRequest.mock.calls[0][0].params.customOnly).toBe(true);
+    const params = mockRequest.mock.calls[0][0].params;
+    expect(params.customOnly).toBe(true);
+    expect(params.organizationIdentifier).toBeUndefined();
+    expect(params.projectIdentifier).toBeUndefined();
   });
 
   it("declares write risk levels: create and update low_write, delete destructive", () => {
     const def = registry.getResource("chaos_risk_rule");
+    expect(def?.scope).toBe("account");
     expect(def.operations.create?.operationPolicy?.risk).toBe("low_write");
     expect(def.operations.update?.operationPolicy?.risk).toBe("low_write");
     expect(def.operations.delete?.operationPolicy?.risk).toBe("destructive");

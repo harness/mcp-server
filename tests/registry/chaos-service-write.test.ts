@@ -139,6 +139,24 @@ describe("chaos_service create", () => {
     });
   });
 
+  it("omits an empty linked discovered service on create", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "repo-svc" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_service", "create", {
+      org_id: "o",
+      project_id: "p",
+      identity: "repo-svc",
+      name: "repo svc",
+      external_service_id: "ext-repo",
+      agent_id: "custom-discovery-agent",
+      linked_discovered_service: {},
+    });
+
+    const body = mockRequest.mock.calls[0][0].body as Record<string, unknown>;
+    expect(body.linkedDiscoveredService).toBeUndefined();
+  });
+
   it("rejects a normal service that omits environment or infrastructure", async () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
@@ -472,6 +490,43 @@ describe("chaos_service update", () => {
       environmentId: "test",
       externalId: "disc-1",
     });
+  });
+
+  it("sends an empty linked discovered service when the update clears the link", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "svc-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_service", "update", {
+      identity: "svc-1",
+      org_id: "o",
+      project_id: "p",
+      name: "svc-1",
+      external_service_id: "ext-1",
+      agent_id: "custom-discovery-agent",
+      probes: [],
+      linked_discovered_service: {},
+    });
+
+    const body = mockRequest.mock.calls[0][0].body as Record<string, unknown>;
+    expect(body.linkedDiscoveredService).toEqual({});
+  });
+
+  it("leaves the link unchanged when the update omits linked_discovered_service", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "svc-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_service", "update", {
+      identity: "svc-1",
+      org_id: "o",
+      project_id: "p",
+      name: "svc-1",
+      external_service_id: "ext-1",
+      agent_id: "custom-discovery-agent",
+      probes: [],
+    });
+
+    const body = mockRequest.mock.calls[0][0].body as Record<string, unknown>;
+    expect(body.linkedDiscoveredService).toBeUndefined();
   });
 
   it("sends the mapped discovery agent's infrastructure on a code-repository update", async () => {

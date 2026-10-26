@@ -273,13 +273,16 @@ function stringList(value: unknown): string[] | undefined {
   return String(value).split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-function linkedDiscoveredService(value: unknown): Record<string, string> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+// "absent" leaves the stored link unchanged. "clear" is an explicit empty
+// object and removes the link on update. A complete object sets the link.
+function linkedDiscoveredService(value: unknown): "absent" | "clear" | Record<string, string> {
+  if (value == null) return "absent";
+  if (typeof value !== "object" || Array.isArray(value)) return "absent";
   const linked = value as Record<string, unknown>;
   const agentId = optionalText(linked.agent_id ?? linked.agentId);
   const environmentId = optionalText(linked.environment_id ?? linked.environmentId);
   const externalId = optionalText(linked.external_id ?? linked.externalId);
-  if (!agentId && !environmentId && !externalId) return undefined;
+  if (!agentId && !environmentId && !externalId) return "clear";
   if (!agentId || !environmentId || !externalId) {
     const missing = [
       !agentId ? "agent_id" : "",
@@ -291,6 +294,13 @@ function linkedDiscoveredService(value: unknown): Record<string, string> | undef
     );
   }
   return { agentId, environmentId, externalId };
+}
+
+function linkedDiscoveredServiceBody(value: unknown, allowClear: boolean): Record<string, unknown> {
+  const linked = linkedDiscoveredService(value);
+  if (linked === "absent" || (linked === "clear" && !allowClear)) return {};
+  if (linked === "clear") return { linkedDiscoveredService: {} };
+  return { linkedDiscoveredService: linked };
 }
 
 /**
@@ -2691,7 +2701,7 @@ export const chaosToolset: ToolsetDefinition = {
             const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const onboardingId = optionalText(b.onboarding_id ?? b.onboardingId);
             const tags = stringList(b.tags);
-            const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            const linked = linkedDiscoveredServiceBody(b.linked_discovered_service ?? b.linkedDiscoveredService, false);
             assertChaosServiceInfrastructure(agentId, environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
@@ -2715,7 +2725,7 @@ export const chaosToolset: ToolsetDefinition = {
               ...(infrastructureId ? { infrastructureId, infrastructure_id: infrastructureId } : {}),
               ...(infrastructureType ? { infrastructureType } : {}),
               ...(onboardingId ? { onboardingId } : {}),
-              ...(linked ? { linkedDiscoveredService: linked } : {}),
+              ...linked,
               ...(probes && probes.length > 0 ? { probes } : {}),
             };
           },
@@ -2752,7 +2762,7 @@ export const chaosToolset: ToolsetDefinition = {
             const infrastructureId = optionalText(b.infrastructure_id ?? b.infrastructureId);
             const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const tags = stringList(b.tags);
-            const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            const linked = linkedDiscoveredServiceBody(b.linked_discovered_service ?? b.linkedDiscoveredService, true);
             assertChaosServiceInfrastructure(optionalText(agentId), environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
@@ -2781,7 +2791,7 @@ export const chaosToolset: ToolsetDefinition = {
               ...(environmentId ? { environmentId, environment_id: environmentId } : {}),
               ...(infrastructureId ? { infrastructureId, infrastructure_id: infrastructureId } : {}),
               ...(infrastructureType ? { infrastructureType } : {}),
-              ...(linked ? { linkedDiscoveredService: linked } : {}),
+              ...linked,
               // Full desired-state replace (hce-saas reconcileProbeMappings):
               // pass an explicit [] straight through (detach all) rather than
               // dropping it, but leave the key absent when the caller omitted it
@@ -4707,7 +4717,9 @@ export const chaosToolset: ToolsetDefinition = {
       displayName: "Chaos Risk Rule",
       description: descChaosRiskRule,
       toolset: "chaos",
-      scope: "project",
+      // Custom rules are stored on the account. Org and project must not be sent,
+      // or the API stores and lists them as project rules.
+      scope: "account",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
       searchAliases: ["risk rule", "risk check", "manifest risk rule", "code risk rule", "source code risk rule", "umbrella risk rule"],
