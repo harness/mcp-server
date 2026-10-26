@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isSecureIpAddressVersion } from "../../scripts/ip-address-security-lib.mjs";
+import { parsePnpmLockPackageVersions } from "./lockfile-parse.js";
 
 const root = process.cwd();
 
@@ -16,26 +17,6 @@ function readInstalledPackageVersion(packageName: string): string {
     "string",
   );
   return manifest.version!;
-}
-
-function parsePnpmLockPackageVersions(lockfileText: string, packageName: string): string[] {
-  const versions = new Set<string>();
-  const unscopedPattern = new RegExp(`^\\s+${packageName}@([0-9]+\\.[0-9]+\\.[0-9]+):`, "gm");
-  for (const match of lockfileText.matchAll(unscopedPattern)) {
-    versions.add(match[1]);
-  }
-
-  if (packageName.includes("/")) {
-    const scopedPattern = new RegExp(
-      `'${packageName.replace("/", "\\/")}@([0-9]+\\.[0-9]+\\.[0-9]+)':`,
-      "g",
-    );
-    for (const match of lockfileText.matchAll(scopedPattern)) {
-      versions.add(match[1]);
-    }
-  }
-
-  return [...versions];
 }
 
 function assertAllAtLeastFloor(versions: string[], floor: string, label: string): void {
