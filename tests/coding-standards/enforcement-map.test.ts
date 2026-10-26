@@ -95,6 +95,18 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     standard: "Documentation drift (11 tools, Zod v4, standards:check in docs)",
     tests: ["tests/coding-standards/docs-consistency.test.ts"],
   },
+  {
+    standard: "Security regression guards (CVE pins, Docker hardening, shrinkwrap)",
+    tests: [
+      "tests/coding-standards/security-regression-map.test.ts",
+      "tests/docker/dockerfile-adm-zip-postinstall.test.ts",
+      "tests/docker/production-dockerfile.test.ts",
+      "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/http-framework-security-pins.test.ts",
+      "tests/scripts/ip-address-security-lib.test.ts",
+      "tests/scripts/npm-shrinkwrap-security.test.ts",
+    ],
+  },
 ];
 
 const MANUAL_ONLY_STANDARDS = [
