@@ -291,6 +291,28 @@ The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `
 
 ---
 
+## Automated Enforcement
+
+Most commit-checklist items above are enforced in CI via `pnpm standards:check` (also run locally before pushing). The command runs Vitest suites under `tests/coding-standards/` plus `tests/registry/structural-validation.test.ts`.
+
+| Checklist theme | Primary test files |
+|-----------------|-------------------|
+| Fixed 11 consolidated MCP tools | `architecture.test.ts`, `consolidated-tools.test.ts` |
+| stderr-only logging, HarnessClient singleton, no raw `fetch()` in handlers/toolsets | `architecture.test.ts` |
+| Pure-data toolsets and shared extractors | `architecture.test.ts` |
+| Registry registration (`ALL_TOOLSETS` ↔ `ToolsetName`) | `architecture.test.ts` |
+| Write-tool confirmation and error handling | `architecture.test.ts`, `error-handling.test.ts` |
+| Zod v4 imports and describe chaining | `architecture.test.ts` |
+| Tool input conventions (snake_case, pagination) | `input-conventions.test.ts` |
+| Scope model (no manual scope injection in toolsets) | `scope-params.test.ts`, `toolset-scope.test.ts` |
+| `identifierFields`, deep links, `operationPolicy` | `registry-metadata.test.ts`, `structural-validation.test.ts` |
+| File organization (`src/tools/` vs toolsets) | `file-organization.test.ts` |
+| Documentation drift (11 tools, Zod v4) | `docs-consistency.test.ts` |
+
+The living index in `tests/coding-standards/enforcement-map.test.ts` lists every mapped standard and fails if a referenced test file is missing. Two items remain manual at PR review time: never returning secret values in tool output, and human review of destructive-operation flows beyond the `confirm` / elicitation guards.
+
+---
+
 ## Commit Checklist
 
 Before every commit, verify:
