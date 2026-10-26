@@ -8,27 +8,10 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { ALLOWED_TOOLS_ROOT_FILES, CONSOLIDATED_TOOL_COUNT } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const TOOLS_DIR = join(REPO_ROOT, "src/tools");
-
-const ALLOWED_TOOLS_ROOT_FILES = new Set([
-  "harness-list.ts",
-  "harness-get.ts",
-  "harness-create.ts",
-  "harness-update.ts",
-  "harness-delete.ts",
-  "harness-execute.ts",
-  "harness-diagnose.ts",
-  "harness-search.ts",
-  "harness-describe.ts",
-  "harness-status.ts",
-  "harness-schema.ts",
-  "index.ts",
-  "field-copy.ts",
-  "input-schemas.ts",
-  "output-schemas.ts",
-]);
 
 const ALLOWED_TOOLS_SUBDIRS = new Set(["diagnose", "entity-schema"]);
 
@@ -37,7 +20,7 @@ function rel(path: string): string {
 }
 
 describe("Coding standards — file organization", () => {
-  it("src/tools/ contains only the 11 harness handlers and shared helpers", () => {
+  it(`src/tools/ contains only the ${CONSOLIDATED_TOOL_COUNT} harness handlers and shared helpers`, () => {
     const violations: string[] = [];
 
     for (const entry of readdirSync(TOOLS_DIR)) {
