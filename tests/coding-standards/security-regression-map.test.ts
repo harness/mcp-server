@@ -63,4 +63,16 @@ describe("Security regression — enforcement map", () => {
     const missing = REQUIRED_PNPM_OVERRIDE_KEYS.filter((key) => overrides[key] === undefined);
     expect(missing, `missing pnpm overrides: ${missing.join(", ")}`).toEqual([]);
   });
+
+  it("pnpm standards:check runs every security regression vitest file", () => {
+    const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      scripts?: { "standards:check"?: string };
+    };
+    const script = packageJson.scripts?.["standards:check"] ?? "";
+    const missing = SECURITY_REGRESSION_TEST_FILES.filter((rel) => {
+      const dir = rel.replace(/\/[^/]+\.test\.ts$/, "");
+      return !script.includes(dir);
+    });
+    expect(missing, `standards:check must include: ${missing.join(", ")}`).toEqual([]);
+  });
 });
