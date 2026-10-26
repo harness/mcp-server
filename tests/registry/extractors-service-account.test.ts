@@ -49,6 +49,40 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
   });
+
+  it("prefers nested serviceAccount identity over stale top-level fields", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "stale-top-level",
+        email: "stale@example.com",
+        serviceAccount: {
+          identifier: "nested-sa",
+          email: "nested@service.harness.io",
+          name: "Nested",
+        },
+        tokensCount: 1,
+      }),
+    ).toEqual({
+      identifier: "nested-sa",
+      email: "nested@service.harness.io",
+      name: "Nested",
+      tokensCount: 1,
+    });
+  });
+
+  it("omits identity fields when aggregate row has an empty nested serviceAccount", () => {
+    expect(flattenServiceAccountAggregate({ serviceAccount: {} })).toEqual({});
+  });
+
+  it("still copies aggregate metadata when nested serviceAccount is empty", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {},
+        tokensCount: 0,
+        createdAt: 1,
+      }),
+    ).toEqual({ tokensCount: 0, createdAt: 1 });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
@@ -70,6 +104,20 @@ describe("serviceAccountListExtract", () => {
         }),
       ],
       total: 42,
+    });
+  });
+
+  it("falls back to zero total when aggregate pagination omits totalItems", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: {
+          content: [nestedAggregateItem],
+        },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot" })],
+      total: 0,
     });
   });
 
