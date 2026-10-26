@@ -12,6 +12,7 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
 const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
+const README_PATH = join(REPO_ROOT, "README.md");
 
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
@@ -68,5 +69,11 @@ describe("Coding standards — contributor docs alignment", () => {
     expect(contributing).toMatch(/import \* as z from "zod\/v4"/);
     expect(contributing).toContain("src/registry/toolsets/");
     expect(contributing).toMatch(/don't need to touch any tool files/);
+  });
+
+  it("README.md documents pnpm standards:check in the Development section", () => {
+    const readme = readFileSync(README_PATH, "utf8");
+    expect(readme).toContain("pnpm standards:check");
+    expect(readme).toContain("docs/coding-standards.md");
   });
 });

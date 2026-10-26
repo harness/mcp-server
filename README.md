@@ -2195,6 +2195,9 @@ pnpm typecheck
 # Run tests
 pnpm test
 
+# Architecture / coding-standards guardrails (CI — see docs/coding-standards.md)
+pnpm standards:check
+
 # Watch tests
 pnpm test:watch
 
