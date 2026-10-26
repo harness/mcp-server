@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -18,7 +19,12 @@ import {
   listInsecureAdmZipInstalls,
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
+import {
+  parseNpmShrinkwrapPackageVersion,
+  parsePnpmLockPackageVersions,
+} from "../../scripts/pnpm-lock-parse-lib.mjs";
 
+const root = process.cwd();
 const require = createRequire(import.meta.url);
 const AdmZip = require("adm-zip") as new () => {
   addFile(name: string, content: Buffer): void;
@@ -41,6 +47,40 @@ describe("adm-zip-security-lib", () => {
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("keeps pnpm overrides, lockfile, and shrinkwrap on a patched adm-zip release", () => {
+    const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+      overrides: Record<string, unknown>;
+      pnpm: { overrides: Record<string, string> };
+    };
+
+    expect(packageJson.dependencies["adm-zip"]).toBe(`^${SECURE_ADM_ZIP_VERSION}`);
+    expect(packageJson.pnpm.overrides["adm-zip"]).toBe(`>=${SECURE_ADM_ZIP_VERSION}`);
+    expect(packageJson.overrides["onnxruntime-node"]).toEqual({
+      "adm-zip": SECURE_ADM_ZIP_VERSION,
+    });
+
+    const lockVersions = parsePnpmLockPackageVersions(
+      readFileSync(join(root, "pnpm-lock.yaml"), "utf8"),
+      "adm-zip",
+    );
+    expect(lockVersions.length).toBeGreaterThan(0);
+    for (const version of lockVersions) {
+      expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
+    }
+
+    const shrinkwrapVersion = parseNpmShrinkwrapPackageVersion(
+      readFileSync(join(root, "npm-shrinkwrap.json"), "utf8"),
+      "adm-zip",
+    );
+    expect(shrinkwrapVersion).not.toBeNull();
+    expect(isSecureAdmZipVersion(shrinkwrapVersion, SECURE_ADM_ZIP_VERSION)).toBe(true);
+  });
+
+  it("flags no insecure adm-zip installs under node_modules after install", () => {
+    expect(listInsecureAdmZipInstalls(root)).toEqual([]);
   });
 
   it("compares semver patch levels", () => {
