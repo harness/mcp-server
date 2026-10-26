@@ -19,6 +19,7 @@ import {
   HARNESS_HANDLER_FILES,
   REGISTER_TOOL_SUFFIXES,
 } from "./consolidated-tools.js";
+import { TOOLSET_HELPER_FILES } from "./toolset-helpers.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
@@ -31,14 +32,6 @@ const ALLOWED_REGISTER_TOOL_FILES = HARNESS_HANDLER_FILE_SET;
 
 /** Only these harness-*.ts handler files may exist under src/tools/. */
 const ALLOWED_HARNESS_HANDLER_FILES = HARNESS_HANDLER_FILE_SET;
-
-/** Toolset helper modules — not required to export a ToolsetDefinition. */
-const TOOLSET_HELPER_FILES = new Set([
-  "src/registry/toolsets/ccm-cost-category.ts",
-  "src/registry/toolsets/chaos-descriptions.ts",
-  "src/registry/toolsets/related-activities.ts",
-  "src/registry/toolsets/scopes.ts",
-]);
 
 /** Legacy inline responseExtractor arrow functions — new ones must live in extractors.ts. */
 const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
@@ -290,6 +283,12 @@ describe("Coding standards — logging and HTTP", () => {
       violations,
       `Unexpected global fetch() usage (allowed: ${[...ALLOWED_GLOBAL_FETCH_FILES].join(", ")}):\n${violations.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("HarnessClient applies client-side rate limiting via RateLimiter", () => {
+    const content = readFileSync(join(SRC, "client/harness-client.ts"), "utf8");
+    expect(content).toContain("new RateLimiter(");
+    expect(content).toMatch(/await this\.rateLimiter\.acquire\(\)/);
   });
 
   it("instantiates HarnessClient only in src/index.ts", () => {

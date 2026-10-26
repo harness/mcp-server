@@ -30,7 +30,10 @@ const RULE_TO_TEST_FILES: Record<string, readonly string[]> = {
     "zod-input-schema-descriptions.test.ts",
     "input-schema-scope-descriptions.test.ts",
   ],
-  "§9 — write confirmation / safety": ["architecture.test.ts", "registry-metadata.test.ts"],
+  "§9 — write confirmation / safety and client rate limiting": [
+    "architecture.test.ts",
+    "registry-metadata.test.ts",
+  ],
   "§10 — singleton HarnessClient": ["architecture.test.ts"],
   "§11 — file organization": ["file-organization.test.ts"],
   "docs — coding-standards.md drift prevention": ["docs-consistency.test.ts"],
