@@ -109,6 +109,16 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "SECURE_HONO_VERSION",
   },
   {
+    rule: "Transitive toolchain security pins (picomatch, esbuild, postcss, nanoid, source-map-js)",
+    tests: ["tests/scripts/transitive-toolchain-security-pins.test.ts"],
+    signal: "SECURE_PICOMATCH_VERSION",
+  },
+  {
+    rule: "Express stack security pins (path-to-regexp, express-rate-limit, qs, proxy-addr)",
+    tests: ["tests/scripts/express-stack-security-pins.test.ts"],
+    signal: "SECURE_PATH_TO_REGEXP_VERSION",
+  },
+  {
     rule: "adm-zip CVE patch (postinstall, nested onnxruntime-node)",
     tests: [
       "tests/scripts/adm-zip-security-lib.test.ts",

@@ -39,6 +39,18 @@ const SECURITY_REGRESSION_MAP: SecurityRegressionEntry[] = [
     signal: "SECURE_HONO_VERSION",
   },
   {
+    label: "Transitive toolchain CVE pins (picomatch, esbuild, postcss, nanoid, source-map-js)",
+    artifacts: ["package.json", "pnpm-lock.yaml"],
+    tests: ["tests/scripts/transitive-toolchain-security-pins.test.ts"],
+    signal: "SECURE_PICOMATCH_VERSION",
+  },
+  {
+    label: "Express middleware stack pins (path-to-regexp, express-rate-limit, qs, proxy-addr)",
+    artifacts: ["package.json", "pnpm-lock.yaml"],
+    tests: ["tests/scripts/express-stack-security-pins.test.ts"],
+    signal: "SECURE_PATH_TO_REGEXP_VERSION",
+  },
+  {
     label: "ip-address NAT64 / zone-identifier ReDoS floor",
     artifacts: ["scripts/ip-address-security-lib.mjs"],
     tests: ["tests/scripts/ip-address-security-lib.test.ts"],
