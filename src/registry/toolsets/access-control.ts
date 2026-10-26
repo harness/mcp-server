@@ -22,7 +22,6 @@ function asBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
-/** Keep email/uuid through harness_list compact mode (email is not in the global whitelist). */
 /** Keep email through harness_list compact mode (email is not in the global whitelist). */
 function compactServiceAccountListItem(item: Record<string, unknown>): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
