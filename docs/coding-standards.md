@@ -318,6 +318,7 @@ Before every commit, verify:
 
 | Anti-Pattern | Why It Breaks Things |
 |-------------|---------------------|
+| Add a new `server.tool()` call (deprecated MCP SDK API) | Same as adding handlers — use toolsets + existing `registerTool()` sites only |
 | Add a new `server.registerTool()` call | Breaks the consolidated tool model — use the registry instead |
 | Import `HarnessClient` in a toolset file | Toolsets are pure data — they don't execute HTTP directly |
 | Import `createLogger` in a toolset file | Toolsets are pure data — logging belongs in handlers/infrastructure |

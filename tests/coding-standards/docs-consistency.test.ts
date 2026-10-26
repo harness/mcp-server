@@ -41,6 +41,11 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md documents deprecated server.tool() in anti-patterns", () => {
+    expect(content).toMatch(/server\.tool\(\)/);
+    expect(content).toMatch(/registerTool\(\)/);
+  });
 });
 
 describe("Coding standards — contributor docs alignment", () => {
