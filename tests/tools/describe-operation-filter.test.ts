@@ -94,4 +94,14 @@ describe("harness_describe operation filter", () => {
     expect(data.operations).toEqual(expect.arrayContaining([expect.objectContaining({ operation: "list" })]));
     expect(data.resource_types).toBeUndefined();
   });
+
+  it("includes multi-scope service_account in the list catalog", async () => {
+    const data = parse(await server.call("harness_describe", { operation: "list", toolset: "access_control" }));
+    const types = data.resource_types as Entry[];
+    expect(types.map((entry) => entry.type)).toContain("service_account");
+
+    const detail = parse(await server.call("harness_describe", { resource_type: "service_account" }));
+    expect(detail.supportedScopes).toEqual(["account", "org", "project"]);
+    expect(detail.scopeHint).toContain("resource_scope='account'");
+  });
 });

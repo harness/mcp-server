@@ -39,6 +39,31 @@ const REGRESSION_GUARDS: Array<{ file: string; mustMatch: RegExp; risk: string }
     mustMatch: /resource_scope.*account/,
     risk: "account/org scoped service account dispatch",
   },
+  {
+    file: "tests/scripts/transitive-toolchain-security-pins.test.ts",
+    mustMatch: /SECURE_PICOMATCH_VERSION/,
+    risk: "Vite/bundler transitive CVE pins (picomatch, esbuild, postcss, nanoid)",
+  },
+  {
+    file: "tests/scripts/express-stack-security-pins.test.ts",
+    mustMatch: /SECURE_PATH_TO_REGEXP_VERSION/,
+    risk: "Express middleware CVE pins (path-to-regexp, qs, proxy-addr)",
+  },
+  {
+    file: "tests/scripts/npm-shrinkwrap-guardrails.test.ts",
+    mustMatch: /generate-npm-shrinkwrap/,
+    risk: "npm-shrinkwrap metadata drift and adm-zip floors for global npm installs",
+  },
+  {
+    file: "tests/scripts/security-regression-map.test.ts",
+    mustMatch: /SECURITY_REGRESSION_MAP/,
+    risk: "security artifact to guardrail wiring",
+  },
+  {
+    file: "tests/prompts/access-control-audit.test.ts",
+    mustMatch: /resource_scope="account"/,
+    risk: "access-control audit prompt account-level service account guidance",
+  },
 ];
 
 describe("Regression guard enforcement map", () => {
