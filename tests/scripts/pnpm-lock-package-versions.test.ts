@@ -1,10 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import {
+  escapeRegExp,
   parsePnpmLockPackageVersions,
   readInstalledPackageVersion,
 } from "./pnpm-lock-package-versions.js";
 
 describe("parsePnpmLockPackageVersions", () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("escapes regex metacharacters used in lockfile package keys", () => {
+    expect(escapeRegExp("1.2.3")).toBe("1\\.2\\.3");
+    expect(escapeRegExp("pkg+meta")).toBe("pkg\\+meta");
+  });
+
   it("reads unquoted package keys", () => {
     const lock = `
 packages:
@@ -49,5 +66,18 @@ packages:
   it("reads transitive packages from the pnpm virtual store", () => {
     const version = readInstalledPackageVersion(process.cwd(), "express-rate-limit");
     expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  it("reads versions from .pnpm when the package is not linked at node_modules root", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "pnpm-lock-versions-"));
+    tempDirs.push(packageRoot);
+    const nested = join(
+      packageRoot,
+      "node_modules/.pnpm/transitive-only@9.8.7/node_modules/transitive-only",
+    );
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(nested, "package.json"), JSON.stringify({ name: "transitive-only", version: "9.8.7" }));
+
+    expect(readInstalledPackageVersion(packageRoot, "transitive-only")).toBe("9.8.7");
   });
 });

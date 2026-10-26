@@ -29,6 +29,11 @@ const SECURITY_REGRESSION_GUARDS: SecurityRegressionGuard[] = [
     topic: "Dockerfile copies adm-zip postinstall scripts before pnpm install",
   },
   {
+    path: "tests/docker/production-dockerfile.test.ts",
+    anchor: "libpcre2-8-0",
+    topic: "libpcre2 runtime package for Trivy-flagged PCRE2 CVEs",
+  },
+  {
     path: "tests/scripts/adm-zip-security-lib.test.ts",
     anchor: "listInsecureAdmZipInstalls",
     topic: "adm-zip CVE postinstall patch + lockfile/shrinkwrap floors",
@@ -60,7 +65,27 @@ const SECURITY_REGRESSION_GUARDS: SecurityRegressionGuard[] = [
   },
 ];
 
+/** Every Vitest file that guards dependency/container security — must have a manifest entry. */
+const SECURITY_REGRESSION_TEST_FILES = [
+  "tests/docker/production-dockerfile.test.ts",
+  "tests/scripts/adm-zip-security-lib.test.ts",
+  "tests/scripts/cve-dependency-pins.test.ts",
+  "tests/scripts/http-framework-security-pins.test.ts",
+  "tests/scripts/ip-address-security-lib.test.ts",
+  "tests/scripts/pnpm-lock-package-versions.test.ts",
+  "tests/security/regression-manifest.test.ts",
+] as const;
+
 describe("Security regression manifest", () => {
+  it("includes every security regression test file at least once", () => {
+    const manifestPaths = new Set(SECURITY_REGRESSION_GUARDS.map((guard) => guard.path));
+    const missing = SECURITY_REGRESSION_TEST_FILES.filter((path) => !manifestPaths.has(path));
+    expect(
+      missing,
+      `Add ${missing.join(", ")} to SECURITY_REGRESSION_GUARDS in regression-manifest.test.ts`,
+    ).toEqual([]);
+  });
+
   it("lists every on-disk security guard test with a live anchor assertion", () => {
     const violations: string[] = [];
 
