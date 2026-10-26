@@ -67,6 +67,13 @@ const ENFORCEMENT_MAP: ReadonlyArray<{ section: string; files: readonly string[]
     section: "Documentation drift (11 tools, Zod v4, registerTool)",
     files: ["docs-consistency.test.ts"],
   },
+  {
+    section: "Dependency security pins (adm-zip CVE floors, Docker postinstall ordering)",
+    files: [
+      "../scripts/adm-zip-dependency-pins.test.ts",
+      "../docker/production-dockerfile.test.ts",
+    ],
+  },
 ];
 
 describe("Coding standards — enforcement map", () => {
