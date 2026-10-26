@@ -104,7 +104,7 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     signal: "DEBIAN_SECURITY_REFRESH",
   },
   {
-    rule: "CVE dependency pins (body-parser, zod, fast-uri, ip-address)",
+    rule: "CVE dependency pins (body-parser, zod, fast-uri, ip-address, qs, proxy-addr)",
     tests: ["tests/scripts/cve-dependency-pins.test.ts"],
     signal: "SECURE_BODY_PARSER_VERSION",
   },
