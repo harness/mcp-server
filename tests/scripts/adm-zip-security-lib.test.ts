@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ensureSecureAdmZip,
@@ -126,5 +127,27 @@ describe("adm-zip-security-lib", () => {
     });
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
+  });
+
+  it("no-ops when every adm-zip install is already at the secure floor", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-secure-"));
+    tempDirs.push(root);
+    writeAdmZip(join(root, "node_modules", "adm-zip"), SECURE_ADM_ZIP_VERSION);
+
+    const result = ensureSecureAdmZip(root, { npmCommand: "__must-not-run__" });
+    expect(result).toEqual({ patched: [], skipped: true, warnings: [] });
+    expect(listInsecureAdmZipInstalls(root)).toEqual([]);
+  });
+});
+
+describe("ensure-secure-adm-zip postinstall entrypoint", () => {
+  it("exits immediately when HARNESS_MCP_SKIP_ADM_ZIP_PATCH=1", () => {
+    const script = join(process.cwd(), "scripts/ensure-secure-adm-zip.mjs");
+    const result = spawnSync(process.execPath, [script], {
+      env: { ...process.env, HARNESS_MCP_SKIP_ADM_ZIP_PATCH: "1" },
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr ?? "").not.toContain("adm-zip patch warning");
   });
 });
