@@ -112,6 +112,8 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
       "tests/scripts/pnpm-lock-package-versions.test.ts",
       "tests/scripts/pnpm-lock-package-versions.ts",
       "tests/scripts/ip-address-security-lib.test.ts",
+      "tests/scripts/npm-shrinkwrap-check.test.ts",
+      "tests/coding-standards/security-regression-guards.test.ts",
     ],
   },
 ];
