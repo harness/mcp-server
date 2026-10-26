@@ -63,8 +63,17 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     testBasenames: ["architecture.test.ts", "registry-metadata.test.ts"],
   },
   {
+    checklistPhrase: "No secrets exposed",
+    testBasenames: ["secrets-redaction-guard.test.ts"],
+  },
+  {
     checklistPhrase: "`pnpm standards:check` passes",
-    testBasenames: ["docs-consistency.test.ts", "enforcement-map.test.ts", "consolidated-tools-sync.test.ts"],
+    testBasenames: [
+      "docs-consistency.test.ts",
+      "enforcement-map.test.ts",
+      "consolidated-tools-sync.test.ts",
+      "security-regression-map.test.ts",
+    ],
   },
 ];
 
