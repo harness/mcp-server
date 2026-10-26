@@ -42,6 +42,34 @@ describe("flattenServiceAccountAggregate", () => {
       name: "Flat",
     });
   });
+
+  it("copies description and tags from nested serviceAccount", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {
+          identifier: "nested-sa",
+          email: "nested@service.harness.io",
+          description: "Automation account",
+          tags: { team: "platform" },
+          governanceMetadata: { deny: true },
+        },
+        tokensCount: 1,
+      }),
+    ).toEqual({
+      identifier: "nested-sa",
+      email: "nested@service.harness.io",
+      description: "Automation account",
+      tags: { team: "platform" },
+      tokensCount: 1,
+    });
+  });
+
+  it("does not leak governanceMetadata or the nested serviceAccount wrapper", () => {
+    const flat = flattenServiceAccountAggregate(aggregateRow) as Record<string, unknown>;
+    expect(flat).not.toHaveProperty("governanceMetadata");
+    expect(flat).not.toHaveProperty("serviceAccount");
+    expect(flat.accountIdentifier).toBe("acct");
+  });
 });
 
 describe("serviceAccountListExtract", () => {
