@@ -164,6 +164,12 @@ const STANDARDS_ENFORCEMENT: EnforcementEntry[] = [
     tests: ["tests/scripts/transitive-security-pins.test.ts"],
   },
   {
+    checklist:
+      "Express HTTP stack security pins (express-rate-limit, path-to-regexp, proxy-addr, qs)",
+    automated: true,
+    tests: ["tests/scripts/express-stack-security-pins.test.ts"],
+  },
+  {
     checklist: "Service account list flattening and multi-scope registry contract",
     automated: true,
     tests: [

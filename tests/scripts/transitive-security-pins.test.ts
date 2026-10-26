@@ -12,7 +12,6 @@ const TRANSITIVE_PIN_FLOORS: Array<{ name: string; floor: string }> = [
   { name: "postcss", floor: "8.5.18" },
   { name: "protobufjs", floor: "8.6.0" },
   { name: "sharp", floor: "0.35.5" },
-  { name: "qs", floor: "6.16.0" },
 ];
 
 function readInstalledPackageVersion(packageName: string): string {
