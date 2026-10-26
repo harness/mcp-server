@@ -67,6 +67,13 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion("10.7.4", SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
+  it("ignores pre-release suffixes when comparing CVE pin floors", () => {
+    expect(isSecureIpAddressVersion("10.7.3-beta.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+    expect(isSecureIpAddressVersion("10.7.4-rc.0", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("4.2.2-alpha", "4.2.3")).toBe(false);
+    expect(isSecureIpAddressVersion("4.2.3+build", "4.2.3")).toBe(true);
+  });
+
   it("treats missing or invalid versions as insecure", () => {
     expect(isSecureIpAddressVersion(null, SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("", SECURE_IP_ADDRESS_VERSION)).toBe(false);
