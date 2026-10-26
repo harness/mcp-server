@@ -67,4 +67,28 @@ describe("Coding standards — security regression map", () => {
       ]),
     );
   });
+
+  it("keeps npm-shrinkwrap consistency checks in CI and prepublishOnly", () => {
+    const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    const ciWorkflow = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
+
+    expect(packageJson.scripts["npm-shrinkwrap:check"]).toBe(
+      "node scripts/generate-npm-shrinkwrap.mjs --check",
+    );
+    expect(packageJson.scripts.prepublishOnly).toContain("pnpm npm-shrinkwrap:check");
+    expect(ciWorkflow).toContain("pnpm npm-shrinkwrap:check");
+    expect(ciWorkflow).toContain("pnpm test");
+  });
+
+  it("keeps the container vulnerability gate job wired in CI", () => {
+    const ciWorkflow = readFileSync(join(REPO_ROOT, ".github/workflows/ci.yml"), "utf8");
+
+    expect(ciWorkflow).toContain("container-build:");
+    expect(ciWorkflow).toContain("aquasecurity/trivy-action");
+    expect(ciWorkflow).toContain('exit-code: "1"');
+    expect(ciWorkflow).toContain("severity: CRITICAL,HIGH");
+    expect(ciWorkflow).toContain("Verify production image excludes package managers");
+  });
 });
