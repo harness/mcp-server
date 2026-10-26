@@ -79,7 +79,7 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
   {
     rule: "Documentation drift (11 tools, Zod v4, standards:check)",
     file: "docs-consistency.test.ts",
-    mustMatch: /documents 11 consolidated MCP tools/,
+    mustMatch: /AGENTS\.md stays aligned with canonical architecture/,
   },
   {
     rule: "Toolset scope injection (no manual camelCase scope in queryParams)",

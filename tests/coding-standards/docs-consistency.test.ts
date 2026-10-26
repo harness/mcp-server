@@ -53,4 +53,24 @@ describe("Coding standards — documentation consistency", () => {
     expect(evalContent).not.toMatch(/confirmation:\s*true/);
     expect(evalContent).toMatch(/confirm:\s*true/);
   });
+
+  it("AGENTS.md stays aligned with canonical architecture (11 tools, Zod v4, standards:check)", () => {
+    const agentsPath = join(REPO_ROOT, "AGENTS.md");
+    const agentsContent = readFileSync(agentsPath, "utf8");
+    expect(agentsContent).toMatch(/11 consolidated tools/);
+    expect(agentsContent).toContain("pnpm standards:check");
+    expect(agentsContent).toMatch(/Zod v4/);
+    expect(agentsContent).not.toMatch(/10 consolidated tool/);
+    expect(agentsContent).not.toMatch(/\bZod v3\b/);
+    for (const tool of REQUIRED_TOOLS) {
+      expect(agentsContent, `missing ${tool} in AGENTS.md`).toContain(tool);
+    }
+  });
+
+  it("CONTRIBUTING.md references automated standards guardrails", () => {
+    const contributingPath = join(REPO_ROOT, "CONTRIBUTING.md");
+    const contributingContent = readFileSync(contributingPath, "utf8");
+    expect(contributingContent).toContain("pnpm standards:check");
+    expect(contributingContent).toContain("docs/coding-standards.md");
+  });
 });
