@@ -10,6 +10,7 @@ import { CONSOLIDATED_MCP_TOOLS, CONSOLIDATED_MCP_TOOL_COUNT } from "./consolida
 const SECURITY_REGRESSION_TEST_PATHS = [
   "tests/docker/production-dockerfile.test.ts",
   "tests/scripts/cve-dependency-pins.test.ts",
+  "tests/scripts/npm-shrinkwrap-check.test.ts",
 ];
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
