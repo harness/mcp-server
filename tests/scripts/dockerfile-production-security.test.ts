@@ -33,4 +33,23 @@ describe("Dockerfile — production runtime security", () => {
     expect(productionStage).toContain("COPY --from=toolchain /usr/local/bin/node /usr/local/bin/node");
     expect(productionStage).not.toMatch(/COPY --from=toolchain[^\n]*pnpm/);
   });
+
+  it("stages adm-zip security scripts before pnpm install in dependency stages", () => {
+    const assertScriptOrder = (marker: string) => {
+      const stageStart = content.indexOf(marker);
+      expect(stageStart, marker).toBeGreaterThan(-1);
+      const nextFrom = content.indexOf("\nFROM ", stageStart + 1);
+      const stage = content.slice(stageStart, nextFrom === -1 ? undefined : nextFrom);
+      const copyIdx = stage.indexOf("COPY scripts/ensure-secure-adm-zip.mjs");
+      const installIdx = stage.indexOf("pnpm install");
+      expect(copyIdx, `${marker} copies postinstall scripts`).toBeGreaterThan(-1);
+      expect(installIdx, `${marker} runs pnpm install`).toBeGreaterThan(-1);
+      expect(copyIdx).toBeLessThan(installIdx);
+      return stage;
+    };
+
+    const buildStage = assertScriptOrder("FROM toolchain AS build");
+    expect(buildStage).toMatch(/package\.json postinstall imports both files/i);
+    assertScriptOrder("FROM toolchain AS production-dependencies");
+  });
 });
