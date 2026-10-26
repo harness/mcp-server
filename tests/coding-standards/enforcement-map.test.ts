@@ -15,6 +15,45 @@ type EnforcementEntry = {
   mustMatch: RegExp;
 };
 
+/** Security regression guards (Oct 2026 dependency / supply-chain refresh). */
+const SECURITY_REGRESSION_MAP: EnforcementEntry[] = [
+  {
+    rule: "CVE dependency floors (overrides, lockfile, shrinkwrap, node_modules)",
+    file: "../scripts/cve-dependency-pins.test.ts",
+    mustMatch: /CVE dependency pins/,
+  },
+  {
+    rule: "adm-zip symlink traversal and nested install repair",
+    file: "../scripts/adm-zip-security-lib.test.ts",
+    mustMatch: /blocks extraction through a destination symlink/,
+  },
+  {
+    rule: "adm-zip npm postinstall / published files manifest",
+    file: "../scripts/adm-zip-supply-chain.test.ts",
+    mustMatch: /HARNESS_MCP_SKIP_ADM_ZIP_PATCH/,
+  },
+  {
+    rule: "npm-shrinkwrap metadata and secure adm-zip copies",
+    file: "../scripts/npm-shrinkwrap-check.test.ts",
+    mustMatch: /generate-npm-shrinkwrap\.mjs --check/,
+  },
+  {
+    rule: "Dockerfile OpenSSL floors and postinstall script order",
+    file: "../scripts/dockerfile-production-security.test.ts",
+    mustMatch: /MIN_DEBIAN_OPENSSL/,
+  },
+  {
+    rule: "Service account aggregate list extractors (account/org scope)",
+    file: "../registry/extractors-service-account.test.ts",
+    mustMatch: /totalItems when totalElements is absent/,
+  },
+  {
+    rule: "Service account registry scope and list dispatch",
+    file: "../registry/access-control-service-account.test.ts",
+    mustMatch: /resource_scope=account omits configured org and project/,
+  },
+];
+
 const ENFORCEMENT_MAP: EnforcementEntry[] = [
   {
     rule: "§1 — fixed consolidated MCP tools (no new handlers)",
@@ -110,5 +149,23 @@ describe("Coding standards — enforcement map", () => {
   it("docs/coding-standards.md references the automated guardrail command", () => {
     const content = readFileSync(join(REPO_ROOT, "docs/coding-standards.md"), "utf8");
     expect(content).toContain("pnpm standards:check");
+  });
+
+  it("every security regression guard has a living test file", () => {
+    const violations: string[] = [];
+
+    for (const { rule, file, mustMatch } of SECURITY_REGRESSION_MAP) {
+      const path = join(STANDARDS_DIR, file);
+      if (!existsSync(path)) {
+        violations.push(`${rule}: missing file ${file}`);
+        continue;
+      }
+      const content = readFileSync(path, "utf8");
+      if (!mustMatch.test(content)) {
+        violations.push(`${rule}: ${file} no longer contains guardrail ${mustMatch}`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 });

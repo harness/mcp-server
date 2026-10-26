@@ -114,6 +114,30 @@ describe("serviceAccountListExtract", () => {
       total: 1,
     });
   });
+
+  it("returns an empty page with totalItems when aggregate content is empty", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalItems: 0 },
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
+  it("passes non-object page rows through flattenServiceAccountAggregate unchanged", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [null, "orphan-row", nestedAggregateItem], totalItems: 3 },
+      }),
+    ).toEqual({
+      items: [null, "orphan-row", expect.objectContaining({ identifier: "ci-bot" })],
+      total: 3,
+    });
+  });
+
+  it("returns non-object API payloads unchanged via pageExtract", () => {
+    expect(serviceAccountListExtract("not-json")).toEqual({ items: [], total: 0 });
+    expect(serviceAccountListExtract(42)).toEqual({ items: [], total: 0 });
+  });
 });
 
 describe("compact vs nested service account DTO", () => {
