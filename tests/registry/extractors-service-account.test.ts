@@ -83,6 +83,19 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("legacy")).toBe("legacy");
   });
+
+  it("still promotes aggregate metadata when the nested serviceAccount object is empty", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        serviceAccount: {},
+        createdAt: 1710000000000,
+        tokensCount: 3,
+      }),
+    ).toEqual({
+      createdAt: 1710000000000,
+      tokensCount: 3,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
@@ -150,6 +163,43 @@ describe("serviceAccountListExtract", () => {
     expect(serviceAccountListExtract({ status: "SUCCESS" })).toEqual({
       items: [],
       total: 0,
+    });
+  });
+
+  it("returns empty items and zero total for non-object API payloads", () => {
+    expect(serviceAccountListExtract(null)).toEqual({ items: [], total: 0 });
+    expect(serviceAccountListExtract("legacy")).toEqual({ items: [], total: 0 });
+  });
+
+  it("unwraps an empty raw data array without treating it as paginated content", () => {
+    expect(serviceAccountListExtract({ status: "SUCCESS", data: [] })).toEqual({
+      items: [],
+      total: 0,
+    });
+  });
+
+  it("returns empty items when data is an object without content or a list array", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: { pageIndex: 0, pageSize: 20 },
+      }),
+    ).toEqual({ items: [], total: 0 });
+  });
+
+  it("prefers totalElements over totalItems for paginated aggregate envelopes", () => {
+    expect(
+      serviceAccountListExtract({
+        status: "SUCCESS",
+        data: {
+          content: [nestedAggregate],
+          totalElements: 10,
+          totalItems: 99,
+        },
+      }),
+    ).toEqual({
+      items: [expect.objectContaining({ identifier: "ci-bot" })],
+      total: 10,
     });
   });
 });
