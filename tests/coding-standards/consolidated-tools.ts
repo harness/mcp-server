@@ -21,6 +21,21 @@ export type AllowedMcpTool = (typeof ALLOWED_MCP_TOOLS)[number];
 
 export const ALLOWED_MCP_TOOL_SET = new Set<string>(ALLOWED_MCP_TOOLS);
 
+/** PascalCase suffixes expected in registerAllTools (registerListTool, …). */
+export const REGISTER_TOOL_SUFFIXES = [
+  "List",
+  "Get",
+  "Create",
+  "Update",
+  "Delete",
+  "Execute",
+  "Diagnose",
+  "Search",
+  "Describe",
+  "Status",
+  "Schema",
+] as const;
+
 export const HANDLER_BASENAMES = [
   "harness-list.ts",
   "harness-get.ts",
