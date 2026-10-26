@@ -8,6 +8,8 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
+const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
+const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
 
 const REQUIRED_TOOLS = [
   "harness_list",
@@ -44,5 +46,25 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
+  });
+});
+
+describe("Coding standards — contributor docs alignment", () => {
+  const agents = readFileSync(AGENTS_PATH, "utf8");
+  const contributing = readFileSync(CONTRIBUTING_PATH, "utf8");
+
+  it("AGENTS.md documents 11 consolidated MCP tools and Zod v4", () => {
+    expect(agents).toMatch(/11 consolidated tools/);
+    for (const tool of REQUIRED_TOOLS) {
+      expect(agents, `missing ${tool} in AGENTS.md`).toContain(tool);
+    }
+    expect(agents).toMatch(/Zod v4/);
+    expect(agents).not.toMatch(/\b10 consolidated tools\b/);
+  });
+
+  it("CONTRIBUTING.md references standards guardrails and Zod v4 import path", () => {
+    expect(contributing).toContain("pnpm standards:check");
+    expect(contributing).toMatch(/11 generic MCP tools/);
+    expect(contributing).toMatch(/import \* as z from "zod\/v4"/);
   });
 });
