@@ -13,6 +13,7 @@ const GUARDRAILS_DIR = join(REPO_ROOT, "tests/coding-standards");
 /** Vitest files that implement automated checks for docs/coding-standards.md. */
 const ENFORCEMENT_TEST_FILES = [
   "architecture.test.ts",
+  "commit-checklist-coverage.test.ts",
   "consolidated-tools.ts",
   "docs-consistency.test.ts",
   "enforcement-map.test.ts",
@@ -40,6 +41,7 @@ const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
   "§10 singleton HTTP client / fetch exceptions": ["architecture.test.ts"],
   "§11 file organization": ["file-organization.test.ts", "architecture.test.ts"],
   "docs drift (11 tools, Zod v4)": ["docs-consistency.test.ts"],
+  "commit checklist ↔ guardrails": ["commit-checklist-coverage.test.ts"],
   "security dependency / image pins": ["security-regression-guards.test.ts"],
 };
 
