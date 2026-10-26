@@ -92,6 +92,34 @@ describe("ip-address-security-lib", () => {
     expect(isSecureIpAddressVersion(shrinkwrapVersion, SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
+  it("parses ip-address version from legacy shrinkwrap shapes", () => {
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          packages: { "node_modules/ip-address": { version: "10.7.4" } },
+        }),
+      ),
+    ).toBe("10.7.4");
+
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          dependencies: { "ip-address": { version: "10.7.5" } },
+        }),
+      ),
+    ).toBe("10.7.5");
+
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          "node_modules/ip-address": { version: "10.7.6" },
+        }),
+      ),
+    ).toBe("10.7.6");
+
+    expect(parseNpmShrinkwrapIpAddressVersion(JSON.stringify({ packages: {} }))).toBeNull();
+  });
+
   it("flags vulnerable ip-address installs under node_modules", () => {
     expect(listInsecureIpAddressInstalls(root)).toEqual([]);
   });
@@ -117,6 +145,24 @@ describe("ip-address-security-lib", () => {
     expect(findActiveIpAddressInstallDirs(packageRoot)).toEqual([current]);
     expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([]);
     expect(resolveActiveIpAddressDir(packageRoot)).toBe(current);
+  });
+
+  it("prefers the ip-address copy linked from express-rate-limit when multiple installs are active", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-erl-pref-"));
+    tempDirs.push(packageRoot);
+    const preferred = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.5/node_modules/ip-address");
+    const other = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.4/node_modules/ip-address");
+    writeIpAddressPackage(preferred, "10.7.5");
+    writeIpAddressPackage(other, "10.7.4");
+    const linkDir = join(packageRoot, "node_modules/.pnpm/express-rate-limit@8.3.2/node_modules");
+    mkdirSync(linkDir, { recursive: true });
+    symlinkSync("../../ip-address@10.7.5/node_modules/ip-address", join(linkDir, "ip-address"), "dir");
+
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(preferred);
   });
 
   it("still flags a linked vulnerable ip-address install", () => {
