@@ -13,6 +13,7 @@ import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
 import { ALLOWED_MCP_TOOLS } from "./consolidated-tools.js";
+import { TOOLSET_HELPER_FILES } from "./toolset-helpers.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
@@ -35,14 +36,6 @@ const ALLOWED_REGISTER_TOOL_FILES = new Set([
 /** Only these harness-*.ts handler files may exist under src/tools/. */
 const ALLOWED_HARNESS_HANDLER_FILES = new Set([
   ...ALLOWED_REGISTER_TOOL_FILES,
-]);
-
-/** Toolset helper modules — not required to export a ToolsetDefinition. */
-const TOOLSET_HELPER_FILES = new Set([
-  "src/registry/toolsets/ccm-cost-category.ts",
-  "src/registry/toolsets/chaos-descriptions.ts",
-  "src/registry/toolsets/related-activities.ts",
-  "src/registry/toolsets/scopes.ts",
 ]);
 
 /** Legacy inline responseExtractor arrow functions — new ones must live in extractors.ts. */

@@ -22,20 +22,23 @@ const ENFORCEMENT_TEST_FILES = [
   "registry-contract.test.ts",
   "registry-metadata.test.ts",
   "scope-params.test.ts",
+  "toolset-helpers.ts",
   "toolset-scope.test.ts",
 ] as const;
 
 /** Human-readable mapping from standards topics to guard files (documentation for contributors). */
 const STANDARDS_TOPIC_COVERAGE: Record<string, readonly string[]> = {
   "§1 fixed MCP tool surface": ["architecture.test.ts", "file-organization.test.ts", "consolidated-tools.ts"],
-  "§2 pure-data toolsets": ["architecture.test.ts"],
+  "§2 pure-data toolsets": ["architecture.test.ts", "toolset-helpers.ts"],
+  "§3 shared response extractors": ["architecture.test.ts"],
   "§4 scoping model": ["scope-params.test.ts", "toolset-scope.test.ts", "registry-contract.test.ts"],
   "§5 identifierFields / metadata": ["registry-contract.test.ts", "registry-metadata.test.ts"],
   "§6 error handling": ["error-handling.test.ts", "architecture.test.ts"],
   "§7 stderr-only logging": ["architecture.test.ts"],
   "§8 input schema conventions": ["input-conventions.test.ts", "registry-metadata.test.ts", "architecture.test.ts"],
   "§9 write confirmation / elicitation": ["architecture.test.ts", "registry-metadata.test.ts"],
-  "§11 singleton HTTP client / fetch exceptions": ["architecture.test.ts"],
+  "§10 singleton HTTP client": ["architecture.test.ts"],
+  "§11 file organization": ["file-organization.test.ts"],
   "docs drift (11 tools, Zod v4)": ["docs-consistency.test.ts"],
 };
 
