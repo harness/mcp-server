@@ -24,3 +24,30 @@ describe("Production Dockerfile — Debian OpenSSL refresh (#1154)", () => {
     expect(dockerfile).not.toMatch(/pnpm install.*production-dependencies/);
   });
 });
+
+describe("Production Dockerfile — adm-zip postinstall scripts before pnpm install", () => {
+  const dependencyStages = ["build", "production-dependencies"];
+
+  function toolchainStageBlock(stage: string): string {
+    const marker = `FROM toolchain AS ${stage}`;
+    const start = dockerfile.indexOf(marker);
+    expect(start, `missing ${marker}`).toBeGreaterThanOrEqual(0);
+    const nextFrom = dockerfile.indexOf("\nFROM ", start + marker.length);
+    return nextFrom === -1 ? dockerfile.slice(start) : dockerfile.slice(start, nextFrom);
+  }
+
+  it("copies adm-zip patch scripts before pnpm install in every dependency stage", () => {
+    for (const stage of dependencyStages) {
+      const block = toolchainStageBlock(stage);
+      const copyScripts = block.indexOf(
+        "COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/",
+      );
+      const pnpmInstall = block.indexOf("pnpm install");
+      expect(copyScripts, `${stage}: adm-zip scripts COPY`).toBeGreaterThan(-1);
+      expect(pnpmInstall, `${stage}: pnpm install`).toBeGreaterThan(-1);
+      expect(pnpmInstall, `${stage}: install must run after postinstall scripts exist`).toBeGreaterThan(
+        copyScripts,
+      );
+    }
+  });
+});
