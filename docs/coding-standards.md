@@ -20,6 +20,16 @@ User → MCP Tool (e.g. harness_list) → Registry.dispatch() → HarnessClient.
 | **Resources** | `src/resources/*.ts` | MCP resource definitions (read-only data for LLMs) |
 | **Prompts** | `src/prompts/*.ts` | MCP prompt templates |
 
+### Automated enforcement
+
+Architecture rules in this document are enforced in CI and locally via:
+
+```bash
+pnpm standards:check
+```
+
+That command runs Vitest guardrails under `tests/coding-standards/` plus `tests/registry/structural-validation.test.ts` (registry metadata, scoping, path/body consistency across all resource types). The fixed eleven-tool MCP surface is defined once in `tests/coding-standards/consolidated-tools.ts`. Each commit-checklist item below maps to specific guard files — see `tests/coding-standards/enforcement-map.test.ts` so removals of enforcement tests fail CI.
+
 ---
 
 ## Rules for Every Commit
