@@ -95,6 +95,25 @@ const ENFORCEMENT_MAP: EnforcementEntry[] = [
     standard: "Documentation drift (11 tools, Zod v4, standards:check in docs)",
     tests: ["tests/coding-standards/docs-consistency.test.ts"],
   },
+  {
+    standard: "Production container image Debian/OpenSSL and adm-zip install prerequisites",
+    tests: [
+      "tests/docker/production-dockerfile.test.ts",
+      "tests/docker/dockerfile-adm-zip-postinstall.test.ts",
+    ],
+  },
+  {
+    standard: "Dependency CVE floors (lockfile, shrinkwrap, node_modules)",
+    tests: [
+      "tests/scripts/cve-dependency-pins.test.ts",
+      "tests/scripts/http-framework-security-pins.test.ts",
+      "tests/scripts/adm-zip-supply-chain.test.ts",
+      "tests/scripts/adm-zip-security-lib.test.ts",
+      "tests/scripts/pnpm-lock-package-versions.test.ts",
+      "tests/scripts/pnpm-lock-package-versions.ts",
+      "tests/scripts/ip-address-security-lib.test.ts",
+    ],
+  },
 ];
 
 const MANUAL_ONLY_STANDARDS = [
