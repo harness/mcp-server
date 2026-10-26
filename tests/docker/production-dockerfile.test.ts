@@ -36,6 +36,13 @@ describe("production Dockerfile (Trivy / Debian base image)", () => {
     expect(stage).toMatch(/rm -rf \/var\/lib\/apt\/lists\/\*/);
   });
 
+  it("installs libpcre2-8-0 in the production runtime (Trivy / bookworm base)", () => {
+    const stage = productionStage(dockerfile);
+    expect(stage).toMatch(
+      /apt-get install -y --no-install-recommends[\s\S]*\blibpcre2-8-0\b/,
+    );
+  });
+
   it("runs apt upgrade before installing OpenSSL so cached layers pick up Debian security fixes", () => {
     const stage = productionStage(dockerfile);
     const upgradeIndex = stage.indexOf("apt-get upgrade");
