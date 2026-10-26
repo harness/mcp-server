@@ -5,44 +5,56 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { CONSOLIDATED_MCP_TOOLS, CONSOLIDATED_MCP_TOOL_COUNT } from "./consolidated-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
+const README_PATH = join(REPO_ROOT, "README.md");
+const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
 
-const REQUIRED_TOOLS = [
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-];
+const OUTDATED_TEN_TOOLS = /10 consolidated tool handlers?/i;
+const OUTDATED_ZOD_V3_ROW = /\|\s*Schema validation\s*\|\s*Zod v3\s*\|/;
+
+function assertElevenConsolidatedToolsDoc(content: string, label: string): void {
+  expect(content, `${label}: missing 11-tool count`).toMatch(
+    new RegExp(`${CONSOLIDATED_MCP_TOOL_COUNT} consolidated tool`),
+  );
+  expect(content, `${label}: outdated 10-tool wording`).not.toMatch(OUTDATED_TEN_TOOLS);
+  for (const tool of CONSOLIDATED_MCP_TOOLS) {
+    expect(content, `${label}: missing ${tool}`).toContain(tool);
+  }
+}
 
 describe("Coding standards — documentation consistency", () => {
-  const content = readFileSync(STANDARDS_PATH, "utf8");
+  const standardsContent = readFileSync(STANDARDS_PATH, "utf8");
 
   it("docs/coding-standards.md documents 11 consolidated MCP tools including harness_schema", () => {
-    expect(content).toMatch(/11 consolidated tool handlers/);
-    for (const tool of REQUIRED_TOOLS) {
-      expect(content, `missing ${tool} in docs/coding-standards.md`).toContain(tool);
-    }
+    assertElevenConsolidatedToolsDoc(standardsContent, "docs/coding-standards.md");
+    expect(standardsContent).toMatch(/11 consolidated tool handlers/);
   });
 
   it("docs/coding-standards.md references Zod v4 (not v3)", () => {
-    expect(content).toMatch(/Zod v4/);
-    expect(content).not.toMatch(/\|\s*Schema validation\s*\|\s*Zod v3\s*\|/);
+    expect(standardsContent).toMatch(/Zod v4/);
+    expect(standardsContent).not.toMatch(OUTDATED_ZOD_V3_ROW);
   });
 
   it("docs/coding-standards.md documents pnpm standards:check guardrails", () => {
-    expect(content).toContain("pnpm standards:check");
+    expect(standardsContent).toContain("pnpm standards:check");
   });
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
-    expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
+    expect(standardsContent).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
+  });
+
+  it("README.md documents 11 consolidated tools (no outdated 10-tool snapshot)", () => {
+    const readme = readFileSync(README_PATH, "utf8");
+    assertElevenConsolidatedToolsDoc(readme, "README.md");
+  });
+
+  it("AGENTS.md documents 11 consolidated tools and Zod v4", () => {
+    const agents = readFileSync(AGENTS_PATH, "utf8");
+    assertElevenConsolidatedToolsDoc(agents, "AGENTS.md");
+    expect(agents).toMatch(/Zod v4/);
+    expect(agents).not.toMatch(OUTDATED_ZOD_V3_ROW);
   });
 });

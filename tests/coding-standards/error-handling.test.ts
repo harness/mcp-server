@@ -8,25 +8,27 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { CONSOLIDATED_TOOL_HANDLER_FILES } from "./consolidated-tools.js";
+
 const REPO_ROOT = join(import.meta.dirname, "../..");
 
 /** Handlers that call HarnessClient / registry dispatch against the live API. */
 const API_HANDLERS = [
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-status.ts",
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_list,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_get,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_create,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_update,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_delete,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_execute,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_diagnose,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_search,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_status,
 ];
 
 /** Local metadata / schema tools — no toMcpError required. */
 const LOCAL_ONLY_HANDLERS = [
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-schema.ts",
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_describe,
+  CONSOLIDATED_TOOL_HANDLER_FILES.harness_schema,
 ];
 
 describe("Coding standards — error handling pattern", () => {
