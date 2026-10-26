@@ -11,6 +11,7 @@ const REPO_ROOT = join(import.meta.dirname, "../..");
 /** Guardrail vitest modules that must not be deleted without updating the enforcement map. */
 export const SECURITY_REGRESSION_GUARD_FILES = [
   "tests/scripts/cve-dependency-pins.test.ts",
+  "tests/scripts/express-stack-security-pins.test.ts",
   "tests/scripts/http-framework-security-pins.test.ts",
   "tests/scripts/ip-address-security-lib.test.ts",
   "tests/scripts/adm-zip-dependency-pins.test.ts",

@@ -103,6 +103,10 @@ const CHECKLIST_ENFORCEMENT: Array<{ checklist: string; guardFiles: string[] }> 
     guardFiles: ["tests/scripts/http-framework-security-pins.test.ts"],
   },
   {
+    checklist: "Express stack transitive CVE floors (qs, proxy-addr, path-to-regexp, express-rate-limit)",
+    guardFiles: ["tests/scripts/express-stack-security-pins.test.ts"],
+  },
+  {
     checklist: "adm-zip CVE pins and postinstall remediation (onnxruntime-node nested copy)",
     guardFiles: [
       "tests/scripts/adm-zip-dependency-pins.test.ts",
