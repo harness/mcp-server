@@ -97,6 +97,11 @@ const ENFORCEMENT_TARGETS: EnforcementTarget[] = [
     testFile: "../registry/structural-validation.test.ts",
     describeSnippet: "Toolset structural validation",
   },
+  {
+    rule: "Automated enforcement map traceability",
+    testFile: "enforcement-map.test.ts",
+    describeSnippet: "Coding standards — enforcement map",
+  },
 ];
 
 function readTestFile(relPath: string): string {
@@ -151,5 +156,8 @@ describe("Coding standards — enforcement map", () => {
     for (const file of localTargets) {
       expect(testFiles, `missing coding-standards test file ${file}`).toContain(file);
     }
+
+    const unmapped = testFiles.filter((file) => !localTargets.has(file));
+    expect(unmapped, `add ENFORCEMENT_TARGETS for: ${unmapped.join(", ")}`).toEqual([]);
   });
 });
