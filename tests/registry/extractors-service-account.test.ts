@@ -52,6 +52,25 @@ describe("flattenServiceAccountAggregate", () => {
     expect(flattenServiceAccountAggregate(null)).toBe(null);
     expect(flattenServiceAccountAggregate("broken")).toBe("broken");
   });
+
+  it("prefers nested serviceAccount identity over stale top-level duplicates", () => {
+    expect(
+      flattenServiceAccountAggregate({
+        identifier: "stale-top-level",
+        email: "stale@example.com",
+        serviceAccount: {
+          identifier: "ci-bot",
+          name: "CI Bot",
+          email: "ci-bot@service.harness.io",
+        },
+        tokensCount: 1,
+      }),
+    ).toMatchObject({
+      identifier: "ci-bot",
+      email: "ci-bot@service.harness.io",
+      tokensCount: 1,
+    });
+  });
 });
 
 describe("serviceAccountListExtract", () => {
@@ -70,6 +89,14 @@ describe("serviceAccountListExtract", () => {
       ],
       total: 1,
     });
+  });
+
+  it("reads totalItems from aggregate envelopes (Harness aggregate list API)", () => {
+    expect(
+      serviceAccountListExtract({
+        data: { content: [], totalItems: 42 },
+      }),
+    ).toEqual({ items: [], total: 42 });
   });
 
   it("accepts raw data arrays from non-aggregate list endpoints", () => {

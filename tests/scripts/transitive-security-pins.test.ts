@@ -13,6 +13,8 @@ const TRANSITIVE_PIN_FLOORS: Array<{ name: string; floor: string }> = [
   { name: "protobufjs", floor: "8.6.0" },
   { name: "sharp", floor: "0.35.5" },
   { name: "qs", floor: "6.16.0" },
+  { name: "express-rate-limit", floor: "8.2.2" },
+  { name: "proxy-addr", floor: "2.0.8" },
 ];
 
 function readInstalledPackageVersion(packageName: string): string {

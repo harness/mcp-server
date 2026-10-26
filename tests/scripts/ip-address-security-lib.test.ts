@@ -59,6 +59,36 @@ describe("ip-address-security-lib", () => {
     }
   });
 
+  it("ignores pre-release suffixes when comparing against the security floor", () => {
+    expect(isSecureIpAddressVersion("10.7.4-rc.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.7.3-beta", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+  });
+
+  it("parses shrinkwrap ip-address from packages, dependencies, or legacy node_modules keys", () => {
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          packages: { "node_modules/ip-address": { version: "10.7.4" } },
+        }),
+      ),
+    ).toBe("10.7.4");
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          dependencies: { "ip-address": { version: "10.7.5" } },
+        }),
+      ),
+    ).toBe("10.7.5");
+    expect(
+      parseNpmShrinkwrapIpAddressVersion(
+        JSON.stringify({
+          "node_modules/ip-address": { version: "10.7.6" },
+        }),
+      ),
+    ).toBe("10.7.6");
+    expect(parseNpmShrinkwrapIpAddressVersion("{}")).toBeNull();
+  });
+
   it("compares semver patch levels for the security floor", () => {
     expect(isSecureIpAddressVersion("10.4.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("10.5.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
