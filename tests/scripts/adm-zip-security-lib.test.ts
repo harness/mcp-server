@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -19,6 +20,7 @@ import {
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
 
+const root = process.cwd();
 const require = createRequire(import.meta.url);
 const AdmZip = require("adm-zip") as new () => {
   addFile(name: string, content: Buffer): void;
@@ -55,6 +57,44 @@ describe("adm-zip-security-lib", () => {
     expect(isSecureAdmZipVersion(null, SECURE_ADM_ZIP_VERSION)).toBe(false);
     expect(isSecureAdmZipVersion("", SECURE_ADM_ZIP_VERSION)).toBe(false);
     expect(isSecureAdmZipVersion("not-a-version", SECURE_ADM_ZIP_VERSION)).toBe(false);
+  });
+
+  it("ignores pre-release suffixes when comparing the security floor", () => {
+    expect(isSecureAdmZipVersion("0.6.1-rc.1", SECURE_ADM_ZIP_VERSION)).toBe(true);
+    expect(isSecureAdmZipVersion("0.6.0+build", SECURE_ADM_ZIP_VERSION)).toBe(false);
+  });
+
+  it("keeps pnpm overrides, lockfile, and shrinkwrap on a patched adm-zip release", () => {
+    const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+      pnpm: { overrides: Record<string, string> };
+      overrides: Record<string, unknown>;
+      dependencies: Record<string, string>;
+    };
+
+    expect(packageJson.pnpm.overrides["adm-zip"]).toBe(`>=${SECURE_ADM_ZIP_VERSION}`);
+    expect(packageJson.dependencies["adm-zip"]).toBe(`^${SECURE_ADM_ZIP_VERSION}`);
+    expect(packageJson.overrides["onnxruntime-node"]).toEqual({ "adm-zip": SECURE_ADM_ZIP_VERSION });
+
+    const lockText = readFileSync(join(root, "pnpm-lock.yaml"), "utf8");
+    const lockVersions = new Set<string>();
+    for (const match of lockText.matchAll(/^\s+adm-zip@([0-9]+\.[0-9]+\.[0-9]+):/gm)) {
+      lockVersions.add(match[1]);
+    }
+    expect(lockVersions.size).toBeGreaterThan(0);
+    for (const version of lockVersions) {
+      expect(isSecureAdmZipVersion(version, SECURE_ADM_ZIP_VERSION)).toBe(true);
+    }
+
+    const shrinkwrap = JSON.parse(readFileSync(join(root, "npm-shrinkwrap.json"), "utf8")) as {
+      packages?: Record<string, { version?: string }>;
+    };
+    const shrinkwrapVersion = shrinkwrap.packages?.["node_modules/adm-zip"]?.version;
+    expect(shrinkwrapVersion).toBeTruthy();
+    expect(isSecureAdmZipVersion(shrinkwrapVersion, SECURE_ADM_ZIP_VERSION)).toBe(true);
+  });
+
+  it("flags no vulnerable adm-zip installs under node_modules after install", () => {
+    expect(listInsecureAdmZipInstalls(root)).toEqual([]);
   });
 
   it("blocks extraction through a destination symlink", () => {
