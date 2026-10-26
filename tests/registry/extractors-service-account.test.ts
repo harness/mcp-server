@@ -37,6 +37,18 @@ describe("serviceAccountListExtract", () => {
     });
   });
 
+  it("returns an empty list for aggregate pages with no content rows", () => {
+    const raw = {
+      data: {
+        content: [],
+        totalItems: 0,
+      },
+    };
+    const { items, total } = serviceAccountListExtract(raw);
+    expect(items).toEqual([]);
+    expect(total).toBe(0);
+  });
+
   it("accepts a raw data array (non-aggregate list) without dropping rows", () => {
     const raw = {
       data: [
