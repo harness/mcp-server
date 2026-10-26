@@ -175,4 +175,12 @@ describe("ip-address-security-lib", () => {
     expect(documentation.isPrivate()).toBe(false);
     expect(documentation.isGlobal()).toBe(false);
   });
+
+  it("parses IPv6 zone identifiers on the patched ip-address release (ReDoS regression)", () => {
+    const { Address6 } = loadInstalledAddress6();
+
+    const linkLocalWithZone = new Address6("fe80::1%en0");
+    expect(linkLocalWithZone.isLinkLocal()).toBe(true);
+    expect(linkLocalWithZone.isGlobal()).toBe(false);
+  });
 });
