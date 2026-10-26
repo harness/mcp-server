@@ -31,6 +31,10 @@ const SECURITY_REGRESSION_GUARDS: GuardRow[] = [
     tests: ["tests/scripts/cve-dependency-pins.test.ts"],
   },
   {
+    artifact: "Express HTTP stack pins (express-rate-limit, proxy-addr, path-to-regexp, qs)",
+    tests: ["tests/scripts/express-stack-security-pins.test.ts"],
+  },
+  {
     artifact: "HTTP framework pins (hono, @hono/node-server, vite)",
     tests: ["tests/scripts/http-framework-security-pins.test.ts"],
   },

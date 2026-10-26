@@ -119,6 +119,39 @@ describe("ip-address-security-lib", () => {
     expect(resolveActiveIpAddressDir(packageRoot)).toBe(current);
   });
 
+  it("prefers the express-rate-limit linked ip-address when multiple secure installs exist", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-multi-secure-"));
+    tempDirs.push(packageRoot);
+    const rateLimitLinked = join(
+      packageRoot,
+      "node_modules/.pnpm/ip-address@10.7.4/node_modules/ip-address",
+    );
+    const expressLinked = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.5/node_modules/ip-address");
+    writeIpAddressPackage(rateLimitLinked, "10.7.4");
+    writeIpAddressPackage(expressLinked, "10.7.5");
+    const rateLimitModules = join(packageRoot, "node_modules/.pnpm/express-rate-limit@8.3.2/node_modules");
+    mkdirSync(rateLimitModules, { recursive: true });
+    symlinkSync(
+      "../../ip-address@10.7.4/node_modules/ip-address",
+      join(rateLimitModules, "ip-address"),
+      "dir",
+    );
+    const expressModules = join(packageRoot, "node_modules/.pnpm/express@5.2.1/node_modules");
+    mkdirSync(expressModules, { recursive: true });
+    symlinkSync(
+      "../../ip-address@10.7.5/node_modules/ip-address",
+      join(expressModules, "ip-address"),
+      "dir",
+    );
+
+    expect(findActiveIpAddressInstallDirs(packageRoot)).toHaveLength(2);
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(rateLimitLinked);
+  });
+
   it("still flags a linked vulnerable ip-address install", () => {
     if (process.platform === "win32") {
       return;
