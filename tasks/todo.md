@@ -959,3 +959,12 @@ Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh 
 Delivery: push the separate security branch, open a PR, and verify remote CI.
 
 Validation: pnpm audit reports zero vulnerabilities. Typecheck, build, docs, shrinkwrap consistency, and diff checks passed. Full suite: 4,237 passed with one outdated ip-address floor assertion; after updating the security floor and fixtures, all 11 tests in that file passed.
+
+## Version 3.2.36
+
+- [x] Fetch origin/main and create chore/version-3.2.36 from it.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.36` and open a PR against `main`.
+
+Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
