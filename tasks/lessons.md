@@ -199,3 +199,6 @@
 
 ## Security floor consistency
 - When raising the ip-address override, update `SECURE_IP_ADDRESS_VERSION` and its boundary/linked-install fixtures so the existing security guard checks the new patched floor.
+
+## Version-bump Git sequencing
+- If staging or committing fails because the sandbox blocks the Git index, retry with approved escalation and verify the commit succeeded before pushing or creating the PR.
