@@ -184,6 +184,7 @@ import {
   descBodyRiskRuleCreate, descBodyRiskRuleUpdate,
   descRiskRuleIdentity, descRiskRuleName, descRiskRuleDescription, descRiskRuleTags,
   descRiskRuleSeverity, descRiskRuleCategory, descRiskRuleSpec, descRiskRuleCustomOnly,
+  descRiskRuleIncludeInPassiveScan,
   descListRiskScans, descGetRiskScan, descCreateRiskScan, descUpdateRiskScan, descDeleteRiskScan,
   descRetryRiskScan, descAbortRiskScan,
   descSubmitRiskScanFindings, descBodySubmitRiskScanFindings, descRiskScanFindings, descRiskScanDetectionMethod,
@@ -481,6 +482,9 @@ function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> 
   riskRulePromptList(prompt.do, "spec.prompt.do", true);
   riskRulePromptList(prompt.dont, "spec.prompt.dont", false);
   riskRulePromptList(prompt.outcome, "spec.prompt.outcome", true);
+  if (spec.includeInPassiveScan != null && typeof spec.includeInPassiveScan !== "boolean") {
+    throw new Error("spec.includeInPassiveScan must be a boolean. Omit it to leave the rule out of the passive scan.");
+  }
   return {
     name: b.name,
     ...(b.description != null ? { description: b.description } : {}),
@@ -4731,6 +4735,7 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "is_system", description: descRiskRuleIsSystem, type: "boolean" },
         { name: "custom_only", description: descRiskRuleCustomOnly, type: "boolean" },
         { name: "data_source", description: descRiskRuleDataSource },
+        { name: "include_in_passive_scan", description: descRiskRuleIncludeInPassiveScan, type: "boolean" },
         { name: "include_all_scope", description: descRiskIncludeAllScope, type: "boolean" },
       ],
       relatedResources: [
@@ -4751,6 +4756,7 @@ export const chaosToolset: ToolsetDefinition = {
             is_system: "isSystem",
             custom_only: "customOnly",
             data_source: "dataSource",
+            include_in_passive_scan: "includeInPassiveScan",
             include_all_scope: "includeAllScope",
           },
           defaultQueryParams: { page: "0", limit: "15" },

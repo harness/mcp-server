@@ -997,6 +997,39 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(params.projectIdentifier).toBeUndefined();
   });
 
+  it("list: maps include_in_passive_scan to includeInPassiveScan", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "list", {
+      org_id: "o", project_id: "p", include_in_passive_scan: true, data_source: "SourceCode",
+    });
+
+    const params = mockRequest.mock.calls[0][0].params;
+    expect(params.includeInPassiveScan).toBe(true);
+    expect(params.dataSource).toBe("SourceCode");
+    expect(params.isSystem).toBeUndefined();
+    expect(params.customOnly).toBeUndefined();
+  });
+
+  it("create: keeps spec.includeInPassiveScan and rejects a non-boolean", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "create", {
+      org_id: "o", project_id: "p",
+      body: { ...ruleBody, spec: { ...ruleBody.spec, includeInPassiveScan: true } },
+    });
+    expect(mockRequest.mock.calls[0][0].body.spec.includeInPassiveScan).toBe(true);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { ...ruleBody.spec, includeInPassiveScan: "yes" } },
+      }),
+    ).rejects.toThrow(/includeInPassiveScan/);
+  });
+
   it("declares write risk levels: create and update low_write, delete destructive", () => {
     const def = registry.getResource("chaos_risk_rule");
     expect(def?.scope).toBe("account");

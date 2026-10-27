@@ -981,6 +981,7 @@ export const descChaosRiskRule = `A chaos risk rule: a check that flags a resili
 Each rule carries a severity, category, data source (ApplicationManifest or SourceCode), a prompt spec (do/dont/outcome), and for SourceCode rules the chaos faults (spec.faults) that prove the risk.
 System rules (isSystem=true) are synced from the ChaosHub and cannot be modified. Custom rules are account-scoped, SourceCode-only, and support create, update and delete. Do not pass org or project; the rule is stored with the account id and empty org and project.
 Custom rule identities must match ^code-[a-z0-9-]{3,60}$ and name a generic failure mode (e.g. code-outbound-call-without-timeout), never a repo, file or service. An account can hold at most 100 custom SourceCode rules.
+spec.includeInPassiveScan opts a custom rule into passive scans. Omit it or set false to store the rule without using it there. System rules ignore the flag.
 Supports list and get for every rule. Use the rule identity as riskRuleId when filtering scanned_risk findings.`;
 
 export const descChaosRiskScan = `A chaos risk scan: an analysis run that inspects services (from a pipeline execution, a service-discovery agent, or a source code repository) and produces risk findings (scanned_risk).
@@ -994,9 +995,9 @@ export const descListScannedRiskOccurrences = `List all occurrences (per-scan de
 export const descSummarizeScannedRisksByService = `Aggregate scanned-risk counts (total, critical, high, medium, low) per target service. Not keyed by a single risk — returns a paginated list of services with their risk breakdown. Supports service-type, environment/agent, and time-range filters.`;
 
 // Risk Rule operation descriptions
-export const descListRiskRules = `List chaos risk rules for the account. Supports filtering by data source, isSystem, customOnly, tags, and free-text search. customOnly returns this account's custom rules. A list without customOnly also includes system rules.`;
+export const descListRiskRules = `List chaos risk rules for the account. Supports filtering by data source, isSystem, customOnly, includeInPassiveScan, tags, and free-text search. customOnly returns this account's custom rules. A list without customOnly also includes system rules. includeInPassiveScan=true with isSystem returns every system rule. With customOnly it returns only custom rules that opted into the passive scan. Alone it returns every system rule plus this account's opted-in custom rules.`;
 export const descGetRiskRule = `Get a single chaos risk rule by its identity.`;
-export const descCreateRiskRule = `Create an account-scoped custom SourceCode risk rule. Requires identity (code-<failure-mode>), name, severity, category and spec {dataSource: ["SourceCode"], faults, prompt {do, dont, outcome}}. The account id is stored on the rule; org and project stay empty. Fails when the account already holds 100 custom SourceCode rules.`;
+export const descCreateRiskRule = `Create an account-scoped custom SourceCode risk rule. Requires identity (code-<failure-mode>), name, severity, category and spec {dataSource: ["SourceCode"], faults, prompt {do, dont, outcome}}. spec.includeInPassiveScan defaults to false; set it true to use the rule in passive scans. The account id is stored on the rule; org and project stay empty. Fails when the account already holds 100 custom SourceCode rules.`;
 export const descUpdateRiskRule = `Replace the mutable fields of a custom risk rule (name, description, tags, severity, category, spec). System rules cannot be updated.`;
 export const descDeleteRiskRule = `Delete a custom risk rule by its identity. System rules cannot be deleted.`;
 
@@ -1009,8 +1010,9 @@ export const descRiskRuleDescription = `What the failure mode is and why it hurt
 export const descRiskRuleTags = `Optional tags (at most 10).`;
 export const descRiskRuleSeverity = `One of: Critical, High, Medium, Low. Critical is reserved for failures that take a whole service down on a single dependency fault.`;
 export const descRiskRuleCategory = `One of: Availability, Performance, Dependency, Resilience, Config.`;
-export const descRiskRuleSpec = `Rule spec: { dataSource: ["SourceCode"], faults: [allowlisted chaos fault ids such as pod-network-latency, pod-http-status-code, pod-delete], prompt: { do: [code signals], dont: [mitigations that make a signal a non-finding], outcome: [hypothesis with fault and probe signal] } }. dataSource defaults to ["SourceCode"] and must be exactly that. faults, prompt.do and prompt.outcome must be non-empty; prompt.dont is optional. Each prompt list holds at most 10 entries of at most 500 characters.`;
+export const descRiskRuleSpec = `Rule spec: { dataSource: ["SourceCode"], includeInPassiveScan: false, faults: [allowlisted chaos fault ids such as pod-network-latency, pod-http-status-code, pod-delete], prompt: { do: [code signals], dont: [mitigations that make a signal a non-finding], outcome: [hypothesis with fault and probe signal] } }. dataSource defaults to ["SourceCode"] and must be exactly that. includeInPassiveScan defaults to false: the rule is stored and left out of passive scans. Set it true when a code scan creates the rule so findings for it can be submitted. System rules ignore the flag. faults, prompt.do and prompt.outcome must be non-empty; prompt.dont is optional. Each prompt list holds at most 10 entries of at most 500 characters.`;
 export const descRiskRuleCustomOnly = `When true, return only this account's custom risk rules. System rules are omitted.`;
+export const descRiskRuleIncludeInPassiveScan = `When true, a custom rule is returned only if spec.includeInPassiveScan is set. With is_system, system rules are unchanged. With custom_only, only opted-in custom rules are returned. Alone, every system rule plus this account's opted-in custom rules.`;
 
 // Risk Scan operation descriptions
 export const descListRiskScans = `List chaos risk scans. Supports filtering by scan type, status, pipeline/agent/environment identity, tags, time range, and free-text search.`;
