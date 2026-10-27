@@ -218,7 +218,8 @@ Response / read schema (what list/get returns — agents NEVER need to construct
 
 export const descChaosK8sInfrastructure = `Kubernetes chaos infrastructure (chaos server) available for running experiments.
 Do not list until you have environment_id. If it is missing, harness_list resource_type=chaos_environment and use the row's identifier. Do not get until you also have identity and environmentID from a chaos_k8s_infrastructure list row.
-Get passes the row's identity as resource_id. That is the path value for GET /rest/v2/infrastructure/{identity}. infraID can differ from identity; do not substitute it. Also pass that row's environmentID as params.environment_id.
+Get passes the row's identity as resource_id. That is the path value for GET /rest/v2/infrastructure/{identity}. infraID can differ from identity; do not pass infraID as resource_id. Also pass that row's environmentID as params.environment_id.
+check_health is the legacy V1 probe. Pass infraID as infra_id. resource_id (identity) is used only when infra_id is omitted. When both are set, infra_id is the path segment.
 For create_from_template, infra_ref is environmentID/infraID.
 IMPORTANT: Only infrastructures with status=ACTIVE AND isChaosEnabled=true can be used to create chaos experiments. Always check both fields before selecting an infrastructure.
 Supports list, get, create, plus check_health execute action.
@@ -827,13 +828,13 @@ ${descLoadtestFieldTaxonomy}
 
 Returns the updated load test (same shape as harness_get resource_type=chaos_loadtest).`;
 
-export const descListK8sInfra = `List Kubernetes chaos infrastructures available for running experiments.
-Do not call until you have the required filter. Required: filters.environment_id. If it is missing, harness_list resource_type=chaos_environment and use the row's identifier. If the user did not name an environment and you only need an infrastructure that can run an experiment, harness_list resource_type=chaos_enabled_infrastructure instead.
-Each row includes identity, environmentID, and infraID. For get, pass identity as resource_id and environmentID as params.environment_id. For create_from_template, infra_ref is environmentID/infraID.
+export const descListK8sInfra = `List Kubernetes chaos infrastructures in one environment.
+Do not call until you have the required filter. Required: filters.environment_id. OpenAPI marks environmentIdentifier optional, but k8s-ifs ListInfra always calls harness.ListInfraURL. An empty environment returns "missing envID", wrapped as HTTP 500 "failed to generate list harness infrastructure url, missing envID". If environment_id is missing, harness_list resource_type=chaos_environment and use the row's identifier. This list is not a project-wide inventory. Infrastructures that can run an experiment, with no environment, are chaos_enabled_infrastructure.
+Each row includes identity, environmentID, and infraID. The get path value is the row's identity. infraID can differ from identity. For get, pass identity as resource_id and environmentID as params.environment_id. For create_from_template, infra_ref is environmentID/infraID.
 IMPORTANT: Only infrastructures with status=ACTIVE AND isChaosEnabled=true can be used to create chaos experiments.
 Supports filtering by status (ACTIVE, INACTIVE, PENDING) and optional inclusion of legacy V1 infrastructures.`;
 export const descGetK8sInfra = `Get one Kubernetes chaos infrastructure.
-Do not call until you have both required values. Required: resource_id = the row's identity (not infraID; create can store a different infraID), and params.environment_id = environmentID. This get reads a v2 record; a legacy row from include_legacy_infra is not returned here. If either value is missing, harness_list resource_type=chaos_k8s_infrastructure. That list requires filters.environment_id from harness_list resource_type=chaos_environment.`;
+Do not call until you have both required values. Required: resource_id = the row's identity. That is the path value for GET /rest/v2/infrastructure/{identity}. infraID can differ from identity; do not pass infraID as resource_id. Also required: params.environment_id = environmentID. This get reads a v2 record; a legacy row from include_legacy_infra is not returned here. If either value is missing, harness_list resource_type=chaos_k8s_infrastructure. That list requires filters.environment_id because an empty environment returns HTTP 500 "failed to generate list harness infrastructure url, missing envID". Get the environment from harness_list resource_type=chaos_environment.`;
 
 export const descChaosEnabledInfrastructure = `Kubernetes chaos infrastructures that are READY to run experiments — i.e. chaos-enabled AND status=ACTIVE. Every result has isChaosEnabled=true and status=ACTIVE, so no post-filtering is needed.
 Backed by a dedicated endpoint (POST /rest/v2/infrastructures/chaos-enabled) that queries the chaos infrastructure store directly, so pagination and total counts reflect ONLY ready-to-use infra (correct totals).
@@ -841,11 +842,11 @@ Returns infrastructure details including identity, infraID, name, environmentID,
 Use chaos_environment list first to get an environmentId, then pass it here to scope to that environment.
 WHEN TO USE THIS vs chaos_k8s_infrastructure:
 - Use chaos_enabled_infrastructure when the goal is to PICK an infrastructure to run a chaos experiment, or to count/list ONLY infra that can actually run experiments (correct totals).
-- Use chaos_k8s_infrastructure for every status in one environment (including not-yet-chaos-enabled and INACTIVE/PENDING infra). That list requires filters.environment_id. It also has get and check_health. Its pagination spans all platform infra in that environment, not just chaos-ready ones. A project-wide list with no environment is chaos_enabled_infrastructure.
+- Use chaos_k8s_infrastructure for one environment, including infrastructures that are not ready to run an experiment. filters.environment_id is required there: an empty environment returns HTTP 500 "failed to generate list harness infrastructure url, missing envID". That list also has get and check_health. It is not a project-wide inventory. A list with no environment is chaos_enabled_infrastructure.
 Supports list only. Filter by environment_id, infra_type (KubernetesV2/All query the V2 chaos store; Kubernetes returns legacy V1), infra_scope, is_ai_enabled, and search. There is no status filter because results are always ACTIVE.`;
 
 export const descListChaosEnabledInfra = `List Kubernetes chaos infrastructures that are ready to run experiments (chaos-enabled AND status=ACTIVE).
-Unlike chaos_k8s_infrastructure (which lists ALL infra and stamps isChaosEnabled per row), this returns ONLY ready-to-use infra with pagination/total scoped to that set.
+chaos_k8s_infrastructure lists one environment and requires filters.environment_id. This list returns only ready-to-use infra, and environment_id is optional.
 Returns identity, infraID, name, description, tags, environmentID, status (always ACTIVE), infraType, infraScope, and isChaosEnabled. For create_from_template, infra_ref is environmentID/infraID.
 Filter by environment_id, infra_type, infra_scope, is_ai_enabled, and search.`;
 
@@ -1192,7 +1193,7 @@ NOTES:
 
 export const descListRevisions = `List revision history for a template.
 Returns all revisions with their identifiers, timestamps, and change descriptions. Use to track template evolution or find a specific revision for comparison.
-Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — hub the template belongs to, required).`;
+Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — optional; pass it when the list row has hubIdentity).`;
 
 export const descListExperimentTemplateRevisions = `List revision history for an experiment template.
 Returns all revisions with their identifiers, timestamps, and change descriptions. Use to track template evolution or find a specific revision for comparison.
@@ -1212,7 +1213,7 @@ Pass via params (NOT body): template_id (path — template identity, required), 
 
 export const descRunLoadtest = `Run a load test instance`;
 export const descStopLoadtest = `Stop a running load test`;
-export const descCheckK8sHealth = `Check connectivity of a legacy (V1) Kubernetes chaos infrastructure via GET /rest/kubernetes/infra/{infraId}/health. For a current infrastructure record, use chaos_k8s_infrastructure get.`;
+export const descCheckK8sHealth = `Check connectivity of a legacy (V1) Kubernetes chaos infrastructure. Published route (operationId testLegacyKubernetesChaosInfraConnection): GET /chaos/manager/api/rest/kubernetes/infra/{id}/health. Pass infraID as infra_id. infraID can differ from identity. resource_id (identity) is used only when infra_id is omitted. When both are set, infra_id is the path segment. For a current infrastructure record, use chaos_k8s_infrastructure get.`;
 
 export const descEnableGuardRule = `Enable or disable a ChaosGuard rule.
 When enabled, the rule actively enforces its governance conditions on chaos experiments.

@@ -1968,6 +1968,7 @@ export const chaosToolset: ToolsetDefinition = {
             limit: "limit",
           },
           responseExtractor: passthrough,
+          // ListExperimentTemplateQuery.Validate does not require hubIdentity.
           actionDescription: descListExperimentTemplateRevisions,
         },
         get_variables: {
@@ -2930,7 +2931,7 @@ export const chaosToolset: ToolsetDefinition = {
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
-      identifierFields: ["infra_id"],
+      identifierFields: ["identity"],
       compactItem: compactK8sInfra,
       deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/infrastructures/{infraId}",
       diagnosticHint: "An infrastructure can only create chaos experiments when status is ACTIVE and isChaosEnabled is true. Filter out any infrastructure that does not meet both conditions.",
@@ -2940,6 +2941,11 @@ export const chaosToolset: ToolsetDefinition = {
         { resourceType: "chaos_enabled_infrastructure", relationship: "child", description: "After install completes, the registered infra appears here once status=ACTIVE and isChaosEnabled=true." },
       ],
       listFilterFields: [
+        // OpenAPI marks environmentIdentifier optional on POST /rest/v2/infrastructures.
+        // Chaos manager forwards it to k8s-ifs ListInfra, which always calls
+        // harness.ListInfraURL. An empty environment returns "missing envID",
+        // wrapped as HTTP 500 "failed to generate list harness infrastructure url,
+        // missing envID". A list with no environment is chaos_enabled_infrastructure.
         { name: "environment_id", description: descEnvironmentId, required: true },
         { name: "status", description: descK8sInfraStatus, enum: ["ACTIVE", "INACTIVE", "PENDING", "All"] },
         { name: "infra_type", description: descInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows", "CloudFoundry", "Container"] },
@@ -2975,13 +2981,24 @@ export const chaosToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/infrastructure/{infraId}`,
+          path: `${CHAOS}/rest/v2/infrastructure/{identity}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { infra_id: "infraId" },
+          // Path value is the row's identity. Create allows infraID to differ.
+          // identity wins when both are set. infra_id is only a fallback when identity was not sent.
+          pathParams: { identity: "identity" },
+          pathBuilder: (input) => {
+            const id = input.identity ?? input.infra_id;
+            if (!id) {
+              throw new Error(
+                "Missing required field identity for chaos_k8s_infrastructure.get. " +
+                "Pass the list row's identity as resource_id. Do not substitute infraID.",
+              );
+            }
+            return `${CHAOS}/rest/v2/infrastructure/${encodeURIComponent(String(id))}`;
+          },
           queryParams: { environment_id: "environmentIdentifier" },
           paramsSchema: {
             fields: [
-              { name: "infra_id", required: true, description: "identity from the list row. Pass as resource_id or params.infra_id." },
               { name: "environment_id", required: true, description: "environmentID from the same list row. Pass as params.environment_id." },
             ],
           } satisfies ParamsSchema,
@@ -3057,9 +3074,27 @@ export const chaosToolset: ToolsetDefinition = {
       executeActions: {
         check_health: {
           method: "GET",
+          // Published OpenAPI operationId testLegacyKubernetesChaosInfraConnection:
+          // GET /rest/kubernetes/infra/{id}/health
+          // (graphql/server/apidocs/all/openapi.yaml and rest_router.go
+          // GET /kubernetes/infra/:id/health). There is no
+          // /rest/kubernetes/infra/health/{id} route.
+          // The segment is infraID. Create allows that to differ from identity.
+          // harness_execute writes resource_id onto identity, so identity is the
+          // fallback only when infra_id is omitted. When both are set, infraID wins.
           path: `${CHAOS}/rest/kubernetes/infra/{infraId}/health`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { infra_id: "infraId" },
+          pathBuilder: (input) => {
+            const id = optionalText(input.infra_id) ?? optionalText(input.identity);
+            if (!id) {
+              throw new Error(
+                "Missing required field infra_id for chaos_k8s_infrastructure.check_health. " +
+                "Pass the list row's infraID as infra_id. resource_id (identity) is used only when infra_id is omitted.",
+              );
+            }
+            return `${CHAOS}/rest/kubernetes/infra/${encodeURIComponent(id)}/health`;
+          },
           responseExtractor: passthrough,
           actionDescription: descCheckK8sHealth,
           bodySchema: { description: descBodyNoBody, fields: [] },
@@ -3086,7 +3121,7 @@ export const chaosToolset: ToolsetDefinition = {
           resourceType: "chaos_k8s_infrastructure",
           relationship: "alternative",
           description:
-            "Infrastructures in one environment, including ones that are not chaos-enabled, plus get and check_health. filters.environment_id is required. Use chaos_enabled_infrastructure when no environment is known.",
+            "One environment, including infrastructures that are not ready to run an experiment, plus get and check_health. filters.environment_id is required: an empty environment returns HTTP 500 missing envID. This is not a project-wide inventory. Use chaos_enabled_infrastructure when no environment is known.",
         },
         {
           resourceType: "chaos_experiment",
@@ -3471,7 +3506,7 @@ export const chaosToolset: ToolsetDefinition = {
             description: "No body required. Fault template identified by path parameter.",
             fields: [
               { name: "template_identity", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
+              { name: "hub_identity", type: "string", required: false, description: descHubIdentity },
             ],
           },
         },

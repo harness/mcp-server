@@ -620,6 +620,21 @@ describe("chaos_k8s_infrastructure list", () => {
     expect(call.params.environmentIdentifier).toBe("demoash");
   });
 
+  it("get: uses identity for the path when identity and infra_id differ", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "row-identity", infraID: "other-infra" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_k8s_infrastructure", "get", {
+      identity: "row-identity",
+      infra_id: "other-infra",
+      environment_id: "demoash",
+      project_id: "ChaosDev1",
+      org_id: "default",
+    });
+
+    expect(mockRequest.mock.calls[0][0].path).toBe("/chaos/manager/api/rest/v2/infrastructure/row-identity");
+  });
+
   it("get: rejects a call that omits environment_id", async () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
@@ -645,6 +660,44 @@ describe("chaos_k8s_infrastructure list", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/chaos/manager/api/rest/kubernetes/infra/infra-abc/health");
+  });
+
+  it("check_health: uses identity when resource_id was remapped and infra_id is omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ connected: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_k8s_infrastructure", "check_health", {
+      identity: "row-identity",
+      project_id: "ChaosDev1",
+      org_id: "default",
+    });
+
+    expect(mockRequest.mock.calls[0][0].path).toBe("/chaos/manager/api/rest/kubernetes/infra/row-identity/health");
+  });
+
+  it("check_health: keeps infra_id when identity and infra_id differ", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ connected: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_k8s_infrastructure", "check_health", {
+      identity: "row-identity",
+      infra_id: "legacy-infra",
+      project_id: "ChaosDev1",
+      org_id: "default",
+    });
+
+    expect(mockRequest.mock.calls[0][0].path).toBe("/chaos/manager/api/rest/kubernetes/infra/legacy-infra/health");
+  });
+
+  it("check_health: rejects a call with neither infra_id nor identity", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatchExecute(client, "chaos_k8s_infrastructure", "check_health", {
+      project_id: "ChaosDev1",
+      org_id: "default",
+    })).rejects.toThrow(/infra_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -941,6 +994,21 @@ describe("chaos_experiment_template create_from_template", () => {
       org_id: "default",
     })).rejects.toThrow(/hub_identity/);
     expect(mockRequest).toHaveBeenCalledOnce();
+  });
+
+  it("list_revisions: does not require hub_identity", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment_template", "list_revisions", {
+      template_id: "tmpl1",
+      project_id: "proj1",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toBe("/chaos/manager/api/rest/experimenttemplates/tmpl1/revisions");
+    expect(call.params.hubIdentity).toBeUndefined();
   });
 });
 
