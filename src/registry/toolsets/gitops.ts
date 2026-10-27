@@ -10,6 +10,7 @@ import {
   argoProjectListExtract,
   importReconcileExtract,
   autoCreateLogExtract,
+  agentMetricsListExtract,
 } from "../extractors.js";
 
 function gitopsListBody(
@@ -36,6 +37,53 @@ function compactAppProjMapItem(item: Record<string, unknown>): Record<string, un
     if (item[key] !== undefined) slim[key] = item[key];
   }
   return slim;
+}
+
+/** Keep agent metric sample fields that the global compact whitelist would drop (`source`, `values`). */
+function compactAgentMetricsItem(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "collectedAt",
+    "receivedAt",
+    "source",
+    "values",
+  ] as const) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
+/**
+ * Maximum span of a metrics range query. Mirrors `maxAgentMetricsRetention` in the GitOps
+ * server's GetMetrics handler, which rejects longer ranges with a 400.
+ */
+const AGENT_METRICS_MAX_RANGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+const RFC3339_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
+
+function parseAgentMetricsTime(field: "start_time" | "end_time", value: string): number {
+  const ms = RFC3339_TIMESTAMP.test(value) ? Date.parse(value) : Number.NaN;
+  if (Number.isNaN(ms)) {
+    throw new Error(`${field} is invalid: expected an RFC3339 timestamp such as '2026-10-14T00:00:00Z', got '${value}'.`);
+  }
+  return ms;
+}
+
+/**
+ * Fail fast on ranges the server would reject with a 400. `harness_list` only attaches
+ * `diagnosticHint` on 404, so a clear error here beats a round trip. Missing filters are
+ * reported earlier by the required-filter check, so non-string values are skipped.
+ */
+function validateAgentMetricsRange(input: Record<string, unknown>): void {
+  if (typeof input.start_time !== "string" || typeof input.end_time !== "string") return;
+  const start = parseAgentMetricsTime("start_time", input.start_time);
+  const end = parseAgentMetricsTime("end_time", input.end_time);
+  if (start > end) {
+    throw new Error("start_time must not be after end_time.");
+  }
+  if (end - start > AGENT_METRICS_MAX_RANGE_MS) {
+    throw new Error("The range between start_time and end_time exceeds the 14 day retention window; use a shorter range.");
+  }
 }
 
 /**
@@ -496,6 +544,79 @@ export const gitopsToolset: ToolsetDefinition = {
               },
             ],
           } satisfies ParamsSchema,
+        },
+      },
+    },
+    {
+      resourceType: "gitops_agent_metrics",
+      displayName: "GitOps Agent Metrics",
+      description:
+        "Time series of metric samples reported by a GitOps agent over an explicit time range (read-only).\n" +
+        "Use to tune and troubleshoot agent behavior. Each item: collectedAt, receivedAt, source, values (map of metric name to value).\n\n" +
+        "REQUIRED FILTERS: agent_id, start_time, end_time (RFC3339 UTC, e.g. '2026-10-14T00:00:00Z').\n" +
+        "RANGE LIMITS: start_time must not be after end_time and the span is at most 14 days (checked before the request is sent). " +
+        "The range is matched on receivedAt, not collectedAt.\n" +
+        "RESULT SIZE: samples are returned newest first and the server caps the result at 50,000 rows. " +
+        "When the cap is hit the oldest samples are dropped and the result has truncated=true — narrow the window or filter by source. " +
+        "Prefer short windows (hours). The endpoint is not paginated: page/size are ignored and the 'page' field in the output is only a harness_list label.\n" +
+        "OPTIONAL FILTER: source — restrict samples to one metrics source (e.g. 'gitops-agent', 'argocd-repo-server'; not a closed set). " +
+        "Omit to return samples from all sources.\n\n" +
+        "SCOPE BEHAVIOR:\n" +
+        "- Account-level agent: resource_scope='account' — omit org_id and project_id\n" +
+        "- Org-level agent: resource_scope='org' — pass org_id only\n" +
+        "- Project-level agent: resource_scope='project' (default) — pass org_id and project_id\n\n" +
+        "IDENTIFIERS: agent_id is the RAW identifier (e.g. 'myagent'). Do NOT add a scope prefix: " +
+        "'org.myagent' silently returns an empty result and the server strips 'account.'.\n\n" +
+        "EMPTY RESULT: can mean no samples in the range, the agent is not reporting, or the agent-metrics feature flag is off for the account.\n\n" +
+        "EXAMPLE:\n" +
+        "harness_list(resource_type='gitops_agent_metrics', resource_scope='account', filters={agent_id:'myagent', start_time:'2026-10-14T00:00:00Z', end_time:'2026-10-14T06:00:00Z'})",
+      toolset: "gitops",
+      scope: "project",
+      scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
+      identifierFields: ["agent_id"],
+      diagnosticHint:
+        "If the result is empty: confirm agent_id is the raw identifier (no 'org.' prefix), resource_scope matches where the agent was registered, " +
+        "the agent is connected and reporting (harness_get on gitops_agent), and the agent-metrics feature flag is enabled for the account " +
+        "(when the flag is off the server returns an empty result, not an error).",
+      listFilterFields: [
+        {
+          name: "agent_id",
+          description: "Raw GitOps agent identifier, no scope prefix (required). E.g. 'myagent', not 'org.myagent'.",
+          required: true,
+        },
+        {
+          name: "start_time",
+          description: "Range start, RFC3339 UTC (required). E.g. '2026-10-14T00:00:00Z'. Must not be after end_time.",
+          required: true,
+        },
+        {
+          name: "end_time",
+          description: "Range end, RFC3339 UTC (required). E.g. '2026-10-14T06:00:00Z'. Span from start_time is at most 14 days.",
+          required: true,
+        },
+        {
+          name: "source",
+          description: "Restrict samples to a single metrics source (optional; omit for all sources). E.g. 'gitops-agent', 'argocd-repo-server'.",
+        },
+      ],
+      compactItem: compactAgentMetricsItem,
+      operations: {
+        list: {
+          method: "GET",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/metrics",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { agent_id: "agentIdentifier" },
+          queryParams: {
+            start_time: "startTime",
+            end_time: "endTime",
+            source: "source",
+          },
+          preflight: async ({ input }) => validateAgentMetricsRange(input),
+          responseExtractor: agentMetricsListExtract,
+          description:
+            "List agent metric samples between start_time and end_time (both required, RFC3339 UTC, max 14-day span). " +
+            "Not paginated; newest first, capped at 50,000 rows (truncated=true when hit). Each item carries values as a map of metric name to value.",
         },
       },
     },
