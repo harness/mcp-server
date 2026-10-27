@@ -11,6 +11,7 @@ import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { compactItems } from "../../src/utils/compact.js";
+import { normalizeHarnessListPayload } from "../../src/utils/response-formatter.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -93,6 +94,185 @@ describe("gitops_agent", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// gitops_agent_metrics
+// ---------------------------------------------------------------------------
+
+describe("gitops_agent_metrics", () => {
+  let registry: Registry;
+
+  const range = {
+    start_time: "2026-10-14T00:00:00Z",
+    end_time: "2026-10-14T06:00:00Z",
+  };
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("list: GET with raw agent_id in path and startTime/endTime/source query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      content: [{ collectedAt: "2026-10-14T00:01:00Z", source: "agent", values: { cpu: 1 } }],
+      totalItems: 1,
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent_metrics", "list", {
+      agent_id: "myagent",
+      ...range,
+      source: "agent",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/gitops/api/v1/agents/myagent/metrics");
+    expect(call.params.startTime).toBe("2026-10-14T00:00:00Z");
+    expect(call.params.endTime).toBe("2026-10-14T06:00:00Z");
+    expect(call.params.source).toBe("agent");
+  });
+
+  it("list: omits source query param when not provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent_metrics", "list", { agent_id: "myagent", ...range });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.source).toBeUndefined();
+  });
+
+  it("list: passthrough response normalizes content to items and total", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      content: [{ collectedAt: "2026-10-14T00:01:00Z", values: { cpu: 1 } }],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "gitops_agent_metrics", "list", {
+      agent_id: "myagent",
+      ...range,
+    });
+    const normalized = normalizeHarnessListPayload(result) as { items: unknown[]; total: number };
+
+    expect(normalized.items).toEqual([{ collectedAt: "2026-10-14T00:01:00Z", values: { cpu: 1 } }]);
+    expect(normalized.total).toBe(1);
+  });
+
+  it.each([
+    ["agent_id", { ...range }],
+    ["start_time", { agent_id: "myagent", end_time: range.end_time }],
+    ["end_time", { agent_id: "myagent", start_time: range.start_time }],
+  ])("list: rejects a missing %s filter and sends no request", async (missing, input) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_agent_metrics", "list", input),
+    ).rejects.toThrow(new RegExp(`Missing required filter\\(s\\) for listing gitops_agent_metrics: ${missing}`));
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("declares agent_id, start_time and end_time as required filters and source as optional", () => {
+    const fields = registry.getResource("gitops_agent_metrics").listFilterFields ?? [];
+    const required = fields.filter((f) => typeof f !== "string" && f.required).map((f) => (f as { name: string }).name);
+    const names = fields.map((f) => (typeof f === "string" ? f : f.name));
+    expect(required).toEqual(["agent_id", "start_time", "end_time"]);
+    expect(names).toContain("source");
+  });
+
+  it("is read-only: only list is declared, with read risk", () => {
+    const def = registry.getResource("gitops_agent_metrics");
+    expect(Object.keys(def.operations)).toEqual(["list"]);
+    expect(def.operations.list?.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
+  });
+
+  it("list uses compactItem, not skipCompact", () => {
+    const resource = registry.getResource("gitops_agent_metrics");
+    expect(resource.operations.list?.skipCompact).toBeFalsy();
+    expect(resource.compactItem).toBeTypeOf("function");
+  });
+
+  it("compactItem keeps timestamps, source and values and drops extras", () => {
+    const compactFn = registry.getResource("gitops_agent_metrics").compactItem;
+    const [slim] = compactItems(
+      [
+        {
+          collectedAt: "2026-10-14T00:01:00Z",
+          receivedAt: "2026-10-14T00:01:02Z",
+          source: "agent",
+          reporterStartedAt: "2026-10-13T23:00:00Z",
+          values: { cpu: 1, mem: 2 },
+          accountIdentifier: "acct",
+          junk: true,
+        },
+      ],
+      compactFn,
+    ) as Array<Record<string, unknown>>;
+
+    expect(slim).toEqual({
+      collectedAt: "2026-10-14T00:01:00Z",
+      receivedAt: "2026-10-14T00:01:02Z",
+      source: "agent",
+      reporterStartedAt: "2026-10-13T23:00:00Z",
+      values: { cpu: 1, mem: 2 },
+    });
+  });
+});
+
+describe("gitops_agent_metrics scope behavior", () => {
+  const range = {
+    start_time: "2026-10-14T00:00:00Z",
+    end_time: "2026-10-14T06:00:00Z",
+  };
+
+  function dispatchList(
+    registry: Registry,
+    client: HarnessClient,
+    scopeInput: Record<string, unknown>,
+  ) {
+    return registry.dispatch(client, "gitops_agent_metrics", "list", {
+      agent_id: "myagent",
+      ...range,
+      ...scopeInput,
+    });
+  }
+
+  it("list: account scope sends no orgIdentifier or projectIdentifier", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await dispatchList(registry, client, { resource_scope: "account" });
+
+    const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("list: org scope sends orgIdentifier only", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await dispatchList(registry, client, { resource_scope: "org", org_id: "my-org" });
+
+    const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBe("my-org");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("list: project scope sends both orgIdentifier and projectIdentifier", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await dispatchList(registry, client, { org_id: "my-org", project_id: "my-project" });
+
+    const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBe("my-org");
+    expect(call.params.projectIdentifier).toBe("my-project");
   });
 });
 
@@ -1508,6 +1688,7 @@ describe("gitops toolset filtering", () => {
       "gitops_applicationset",
       "gitops_repo_credential",
       "gitops_cluster_link",
+      "gitops_agent_metrics",
     ];
 
     for (const e of expected) {
@@ -1644,11 +1825,18 @@ describe("gitops pagination", () => {
 // ---------------------------------------------------------------------------
 
 describe("gitops supportedScopes", () => {
-  const multiScopeResources = [
+  const listableMultiScopeResources = [
     "gitops_agent",
     "gitops_cluster",
     "gitops_repository",
     "gitops_repo_credential",
+  ] as const;
+
+  // gitops_agent_metrics requires filters on list, so the filter-less account-scope list test below
+  // can't cover it; its scope behavior is covered in "gitops_agent_metrics scope behavior".
+  const multiScopeResources = [
+    ...listableMultiScopeResources,
+    "gitops_agent_metrics",
   ] as const;
 
   it.each(multiScopeResources)("declares account/org/project supportedScopes for %s", (resourceType) => {
@@ -1657,7 +1845,7 @@ describe("gitops supportedScopes", () => {
     expect(registry.getSupportedScopes(resourceType)).toEqual(["account", "org", "project"]);
   });
 
-  it.each(multiScopeResources)(
+  it.each(listableMultiScopeResources)(
     "accepts explicit resource_scope account for %s list without scope validation error",
     async (resourceType) => {
       const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
