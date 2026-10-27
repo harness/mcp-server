@@ -2330,6 +2330,30 @@ export function autoCreateLogExtract(raw: unknown): Record<string, unknown> {
 }
 
 /**
+ * Server-side row cap for the agent metrics range endpoint
+ * (`maxAgentMetricsListLimit` in the GitOps server DAL). Rows are returned newest
+ * first, so hitting the cap silently drops the oldest samples in the window.
+ */
+export const AGENT_METRICS_MAX_ROWS = 50_000;
+
+/**
+ * GetMetrics → harness_list shape. The endpoint returns `{ content: [...] }`, is not
+ * paginated, and returns an empty body (no `content`) when the metrics feature flag is off.
+ * Adds a `note` (page/size are ignored) and `truncated` when the server row cap was reached.
+ */
+export function agentMetricsListExtract(raw: unknown): Record<string, unknown> {
+  const note =
+    `Not paginated: page/size are ignored; all samples in the range are returned, newest first (server cap ${AGENT_METRICS_MAX_ROWS} rows).`;
+  const content = isRecord(raw) && Array.isArray(raw.content) ? raw.content : [];
+  return {
+    items: content,
+    total: content.length,
+    ...(content.length >= AGENT_METRICS_MAX_ROWS ? { truncated: true } : {}),
+    note,
+  };
+}
+
+/**
  * Project a `TimelineEventResponse` to its five documented fields, dropping the
  * empty `actor` the backend emits for system-generated events.
  *

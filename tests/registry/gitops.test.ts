@@ -12,6 +12,7 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { compactItems } from "../../src/utils/compact.js";
 import { normalizeHarnessListPayload } from "../../src/utils/response-formatter.js";
+import { AGENT_METRICS_MAX_ROWS } from "../../src/registry/extractors.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -144,7 +145,7 @@ describe("gitops_agent_metrics", () => {
     expect(call.params.source).toBeUndefined();
   });
 
-  it("list: passthrough response normalizes content to items and total", async () => {
+  it("list: extracts content to items and total with a not-paginated note", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       content: [{ collectedAt: "2026-10-14T00:01:00Z", values: { cpu: 1 } }],
     });
@@ -154,10 +155,105 @@ describe("gitops_agent_metrics", () => {
       agent_id: "myagent",
       ...range,
     });
-    const normalized = normalizeHarnessListPayload(result) as { items: unknown[]; total: number };
+    const normalized = normalizeHarnessListPayload(result) as {
+      items: unknown[];
+      total: number;
+      note: string;
+      truncated?: boolean;
+    };
 
     expect(normalized.items).toEqual([{ collectedAt: "2026-10-14T00:01:00Z", values: { cpu: 1 } }]);
     expect(normalized.total).toBe(1);
+    expect(normalized.note).toMatch(/Not paginated/);
+    expect(normalized.truncated).toBeUndefined();
+  });
+
+  it("list: an empty body (feature flag off) yields no items and still carries the note", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({}));
+
+    const result = (await registry.dispatch(client, "gitops_agent_metrics", "list", {
+      agent_id: "myagent",
+      ...range,
+    })) as { items: unknown[]; total: number; note: string; truncated?: boolean };
+
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.note).toMatch(/Not paginated/);
+    expect(result.truncated).toBeUndefined();
+  });
+
+  it("list: flags truncated when the server row cap is reached", async () => {
+    const rows = Array.from({ length: AGENT_METRICS_MAX_ROWS }, (_, i) => ({ collectedAt: `row-${i}` }));
+    const client = makeClient(vi.fn().mockResolvedValue({ content: rows }));
+
+    const result = (await registry.dispatch(client, "gitops_agent_metrics", "list", {
+      agent_id: "myagent",
+      ...range,
+    })) as { items: unknown[]; total: number; truncated?: boolean };
+
+    expect(result.total).toBe(AGENT_METRICS_MAX_ROWS);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("list: does not flag truncated one row below the cap", async () => {
+    const rows = Array.from({ length: AGENT_METRICS_MAX_ROWS - 1 }, (_, i) => ({ collectedAt: `row-${i}` }));
+    const client = makeClient(vi.fn().mockResolvedValue({ content: rows }));
+
+    const result = (await registry.dispatch(client, "gitops_agent_metrics", "list", {
+      agent_id: "myagent",
+      ...range,
+    })) as { truncated?: boolean };
+
+    expect(result.truncated).toBeUndefined();
+  });
+
+  it.each([
+    [
+      "start_time after end_time",
+      { start_time: "2026-10-14T06:00:00Z", end_time: "2026-10-14T00:00:00Z" },
+      /start_time must not be after end_time/,
+    ],
+    [
+      "a span of 14 days plus one second",
+      { start_time: "2026-10-01T00:00:00Z", end_time: "2026-10-15T00:00:01Z" },
+      /exceeds the 14 day retention window/,
+    ],
+    [
+      "a non-RFC3339 start_time",
+      { start_time: "yesterday", end_time: "2026-10-14T06:00:00Z" },
+      /start_time is invalid/,
+    ],
+    [
+      "a date-only end_time",
+      { start_time: "2026-10-14T00:00:00Z", end_time: "2026-10-14" },
+      /end_time is invalid/,
+    ],
+    [
+      "a start_time without a timezone",
+      { start_time: "2026-10-14T00:00:00", end_time: "2026-10-14T06:00:00Z" },
+      /start_time is invalid/,
+    ],
+  ])("list: rejects %s and sends no request", async (_label, times, message) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_agent_metrics", "list", { agent_id: "myagent", ...times }),
+    ).rejects.toThrow(message);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: allows a span of exactly 14 days and offset timestamps", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent_metrics", "list", {
+      agent_id: "myagent",
+      start_time: "2026-10-01T00:00:00Z",
+      end_time: "2026-10-15T05:30:00+05:30",
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -211,11 +307,11 @@ describe("gitops_agent_metrics", () => {
       compactFn,
     ) as Array<Record<string, unknown>>;
 
+    // reporterStartedAt is only returned by the latest-values endpoint, not the range endpoint.
     expect(slim).toEqual({
       collectedAt: "2026-10-14T00:01:00Z",
       receivedAt: "2026-10-14T00:01:02Z",
       source: "agent",
-      reporterStartedAt: "2026-10-13T23:00:00Z",
       values: { cpu: 1, mem: 2 },
     });
   });
@@ -273,6 +369,20 @@ describe("gitops_agent_metrics scope behavior", () => {
     const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
     expect(call.params.orgIdentifier).toBe("my-org");
     expect(call.params.projectIdentifier).toBe("my-project");
+  });
+
+  it("list: without resource_scope, org/project set only in config send no scope query params", async () => {
+    const registry = new Registry(
+      makeConfig({ HARNESS_TOOLSETS: "gitops", HARNESS_ORG: "config-org", HARNESS_PROJECT: "config-project" }),
+    );
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await dispatchList(registry, client, {});
+
+    const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 });
 
