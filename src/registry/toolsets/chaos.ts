@@ -98,7 +98,7 @@ import {
   descRunExperiment, descStopExperiment, descDeleteExperiment,
   descEnableProbe, descVerifyProbe,
   descCreateFromTemplate,
-  descListRevisions, descGetVariables, descGetYaml, descCompareRevisions,
+  descListRevisions, descListExperimentTemplateRevisions, descGetVariables, descGetYaml, descCompareRevisions,
   descRunLoadtest, descStopLoadtest, descCheckK8sHealth,
   descEnableGuardRule,
   descGetProbeTemplateVariables,
@@ -285,8 +285,8 @@ function compactExperimentTemplate(item: Record<string, unknown>): Record<string
 function compactK8sInfra(item: Record<string, unknown>): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
   for (const key of [
-    "identity", "name", "environmentID", "infraID", "status",
-    "isChaosEnabled", "infraType", "infraScope", "openInHarness",
+    "identity", "name", "description", "tags", "environmentID", "infraID", "status",
+    "isChaosEnabled", "infraType", "infraScope", "createdAt", "updatedAt", "openInHarness",
   ]) {
     if (item[key] !== undefined) slim[key] = item[key];
   }
@@ -1235,8 +1235,11 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId" },
           queryParams: { run_id: "experimentRunId", notify_id: "notifyId" },
-          // Without run_id or notify_id the backend drops the run filter and returns
-          // one arbitrary run of the experiment, or 500 when the experiment has none.
+          // OpenAPI marks both experimentRunId and notifyId required. The handler
+          // (GetExperimentDetails) applies experimentRunId when set, otherwise
+          // notifyId, and only omits the run filter when both are empty. Either
+          // id selects one run. Both empty returns an arbitrary run, or an error
+          // when the experiment has none.
           preflight: async ({ input }) => {
             if (!input.run_id && !input.notify_id) {
               throw new Error(
@@ -1908,13 +1911,13 @@ export const chaosToolset: ToolsetDefinition = {
             if (!infraRef && b.infra_id) {
               const envId = b.environment_id as string | undefined;
               const infraId = b.infra_id as string;
-              if (envId && !infraId.startsWith(`${envId}/`)) {
-                infraRef = `${envId}/${infraId}`;
-              } else {
+              if (infraId.includes("/")) {
                 infraRef = infraId;
+              } else if (envId) {
+                infraRef = `${envId}/${infraId}`;
               }
             }
-            if (!infraRef) {
+            if (!infraRef || !infraRef.includes("/")) {
               throw new Error(
                 "Missing required field infra_ref for chaos_experiment_template.create_from_template. " +
                 "Pass infra_ref as environmentID/infraID, or pass infra_id and environment_id.",
@@ -1924,6 +1927,9 @@ export const chaosToolset: ToolsetDefinition = {
               name: b.name,
               identity: b.identity,
               infraRef,
+              // Snake-case alias so the required-field check, which reads the built
+              // body, sees infra_ref. The launch API reads infraRef.
+              infra_ref: infraRef,
               importType: (b.import_type as string) ?? "LOCAL",
               ...(b.description ? { description: b.description } : {}),
               ...(b.tags ? { tags: b.tags } : {}),
@@ -1942,7 +1948,7 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "project_id", type: "string", required: false, description: descProjectIdBody },
               { name: "name", type: "string", required: true, description: descExperimentName },
               { name: "identity", type: "string", required: true, description: descExperimentIdentity },
-              { name: "infra_ref", type: "string", required: false, description: descInfraRef },
+              { name: "infra_ref", type: "string", required: true, description: descInfraRef },
               { name: "infra_id", type: "string", required: false, description: descInfraIdCreate },
               { name: "environment_id", type: "string", required: false, description: descEnvironmentIdCreate },
               { name: "description", type: "string", required: false, description: descExperimentDescription },
@@ -1962,7 +1968,7 @@ export const chaosToolset: ToolsetDefinition = {
             limit: "limit",
           },
           responseExtractor: passthrough,
-          actionDescription: descListRevisions,
+          actionDescription: descListExperimentTemplateRevisions,
         },
         get_variables: {
           method: "GET",
@@ -3070,6 +3076,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["infra_id"],
+      compactItem: compactK8sInfra,
       diagnosticHint:
         "Returns only infrastructures that are ready to run chaos experiments (chaos-enabled AND ACTIVE). " +
         "Empty result usually means no chaos infrastructure is installed/connected for this project/environment yet — " +
@@ -3085,7 +3092,7 @@ export const chaosToolset: ToolsetDefinition = {
           resourceType: "chaos_experiment",
           relationship: "used_by",
           description:
-            "The infraID/identity returned here is the infra_ref/infra selector when creating or running an experiment.",
+            "Launch uses environmentID/infraID from this list as infra_ref. A bare infraID is not enough.",
         },
       ],
       listFilterFields: [

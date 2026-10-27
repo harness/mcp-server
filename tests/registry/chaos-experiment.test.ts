@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
+import { compactItems } from "../../src/utils/compact.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -131,6 +132,23 @@ describe("chaos_experiment list/get", () => {
     expect(result.openInHarness).toBe(
       "https://app.harness.io/ng/account/test-account/module/chaos/orgs/templatescopetest/projects/templatescopetest/experiments/exp-1/runs",
     );
+    expect(mockRequest.mock.calls[0][0].params.notifyId).toBe("notify-1");
+    expect(mockRequest.mock.calls[0][0].params.experimentRunId).toBeUndefined();
+  });
+
+  it("chaos_experiment_run get: accepts run_id alone", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "exp-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment_run", "get", {
+      experiment_id: "exp-1",
+      run_id: "run-1",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    expect(mockRequest.mock.calls[0][0].params.experimentRunId).toBe("run-1");
+    expect(mockRequest.mock.calls[0][0].params.notifyId).toBeUndefined();
   });
 
   it("chaos_experiment_run get: rejects a call that omits run_id and notify_id", async () => {
@@ -639,7 +657,19 @@ describe("chaos_enabled_infrastructure list", () => {
 
   it("list: targets the chaos-enabled endpoint and extracts infras/total", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
-      infras: [{ infraID: "k8s-1", name: "prod-cluster", status: "ACTIVE", isChaosEnabled: true }],
+      infras: [{
+        identity: "id-1",
+        infraID: "k8s-1",
+        name: "prod-cluster",
+        description: "ready cluster",
+        tags: ["prod"],
+        environmentID: "demoash",
+        status: "ACTIVE",
+        isChaosEnabled: true,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-02T00:00:00Z",
+        droppedField: "nope",
+      }],
       pagination: { page: 0, limit: 15 },
       totalNoOfInfrastructures: 1,
     });
@@ -648,7 +678,7 @@ describe("chaos_enabled_infrastructure list", () => {
     const result = (await registry.dispatch(client, "chaos_enabled_infrastructure", "list", {
       project_id: "PM_Signoff",
       org_id: "default",
-    })) as { items: unknown[]; total: number };
+    })) as { items: Array<Record<string, unknown>>; total: number };
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
@@ -656,6 +686,36 @@ describe("chaos_enabled_infrastructure list", () => {
     expect(call.params).toMatchObject({ organizationIdentifier: "default", projectIdentifier: "PM_Signoff" });
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(1);
+  });
+
+  it("list: compact keeps environmentID, infraID, description, tags, and timestamps", () => {
+    const row = {
+      identity: "id-1",
+      infraID: "k8s-1",
+      name: "prod-cluster",
+      description: "ready cluster",
+      tags: ["prod"],
+      environmentID: "demoash",
+      status: "ACTIVE",
+      isChaosEnabled: true,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-02T00:00:00Z",
+      droppedField: "nope",
+    };
+    for (const resourceType of ["chaos_enabled_infrastructure", "chaos_k8s_infrastructure"] as const) {
+      const compactFn = registry.getResource(resourceType).compactItem;
+      const [slim] = compactItems([row], compactFn) as Record<string, unknown>[];
+      expect(slim).toMatchObject({
+        identity: "id-1",
+        infraID: "k8s-1",
+        environmentID: "demoash",
+        description: "ready cluster",
+        tags: ["prod"],
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-02T00:00:00Z",
+      });
+      expect(slim).not.toHaveProperty("droppedField");
+    }
   });
 
   it("list: uppercases infra_type, sends infra_scope/is_ai_enabled in body, env as query param", async () => {
@@ -848,6 +908,16 @@ describe("chaos_experiment_template create_from_template", () => {
       project_id: "proj1",
       org_id: "default",
     })).rejects.toThrow(/infra/);
+
+    await expect(registry.dispatchExecute(client, "chaos_experiment_template", "create_from_template", {
+      template_id: "tmpl1",
+      hub_identity: "my-hub",
+      name: "exp1",
+      identity: "exp1",
+      infra_id: "gcpootbprobe",
+      project_id: "proj1",
+      org_id: "default",
+    })).rejects.toThrow(/infra_ref/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
