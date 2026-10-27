@@ -3080,13 +3080,13 @@ export const chaosToolset: ToolsetDefinition = {
       diagnosticHint:
         "Returns only infrastructures that are ready to run chaos experiments (chaos-enabled AND ACTIVE). " +
         "Empty result usually means no chaos infrastructure is installed/connected for this project/environment yet — " +
-        "register/connect one, or use chaos_k8s_infrastructure to see infra that exist but are not chaos-enabled.",
+        "register/connect one. chaos_k8s_infrastructure lists every status in one environment and requires filters.environment_id.",
       relatedResources: [
         {
           resourceType: "chaos_k8s_infrastructure",
           relationship: "alternative",
           description:
-            "Full K8s infra inventory (all statuses, chaos-enabled or not) plus get + check_health. Use chaos_enabled_infrastructure only to pick a ready-to-use infra.",
+            "Infrastructures in one environment, including ones that are not chaos-enabled, plus get and check_health. filters.environment_id is required. Use chaos_enabled_infrastructure when no environment is known.",
         },
         {
           resourceType: "chaos_experiment",

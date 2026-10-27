@@ -81,9 +81,6 @@ importers:
       '@types/node':
         specifier: ^22.13.5
         version: 22.19.12
-      sharp:
-        specifier: '>=0.35.5'
-        version: 0.35.5(@types/node@22.19.12)
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -1627,7 +1624,8 @@ snapshots:
       - '@types/node'
     optional: true
 
-  '@img/colour@1.1.0': {}
+  '@img/colour@1.1.0':
+    optional: true
 
   '@img/sharp-darwin-arm64@0.35.5':
     optionalDependencies:
@@ -2129,7 +2127,8 @@ snapshots:
 
   depd@2.0.0: {}
 
-  detect-libc@2.1.2: {}
+  detect-libc@2.1.2:
+    optional: true
 
   dotenv@17.3.1: {}
 
@@ -2617,7 +2616,8 @@ snapshots:
 
   semver@7.7.4: {}
 
-  semver@7.8.5: {}
+  semver@7.8.5:
+    optional: true
 
   send@1.2.1:
     dependencies:
@@ -2683,6 +2683,7 @@ snapshots:
       '@img/sharp-win32-ia32': 0.35.5
       '@img/sharp-win32-x64': 0.35.5
       '@types/node': 22.19.12
+    optional: true
 
   shebang-command@2.0.0:
     dependencies:

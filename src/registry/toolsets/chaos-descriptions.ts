@@ -841,7 +841,7 @@ Returns infrastructure details including identity, infraID, name, environmentID,
 Use chaos_environment list first to get an environmentId, then pass it here to scope to that environment.
 WHEN TO USE THIS vs chaos_k8s_infrastructure:
 - Use chaos_enabled_infrastructure when the goal is to PICK an infrastructure to run a chaos experiment, or to count/list ONLY infra that can actually run experiments (correct totals).
-- Use chaos_k8s_infrastructure for the FULL inventory in one environment (including not-yet-chaos-enabled and INACTIVE/PENDING infra). That list requires filters.environment_id. It also has get and check_health. Its pagination spans all platform infra in that environment, not just chaos-ready ones.
+- Use chaos_k8s_infrastructure for every status in one environment (including not-yet-chaos-enabled and INACTIVE/PENDING infra). That list requires filters.environment_id. It also has get and check_health. Its pagination spans all platform infra in that environment, not just chaos-ready ones. A project-wide list with no environment is chaos_enabled_infrastructure.
 Supports list only. Filter by environment_id, infra_type (KubernetesV2/All query the V2 chaos store; Kubernetes returns legacy V1), infra_scope, is_ai_enabled, and search. There is no status filter because results are always ACTIVE.`;
 
 export const descListChaosEnabledInfra = `List Kubernetes chaos infrastructures that are ready to run experiments (chaos-enabled AND status=ACTIVE).
