@@ -104,6 +104,17 @@ describe("compactItems", () => {
     expect(result[0].openInHarness).toBe("https://app.harness.io/ng/pipelines/p1");
   });
 
+  it("keeps SCS list marker fields _summary, _message, and _result (#1030)", () => {
+    const items = [
+      { id: "art1", name: "nginx" },
+      { _summary: { total: 1, by_type: { CONTAINER: 1 } } },
+      { _result: "EMPTY", _message: "No CVEs found." },
+    ];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[1]).toEqual({ _summary: { total: 1, by_type: { CONTAINER: 1 } } });
+    expect(result[2]).toEqual({ _result: "EMPTY", _message: "No CVEs found." });
+  });
+
   it("passes through non-object items unchanged", () => {
     const items = ["string", 42, null];
     expect(compactItems(items)).toEqual(["string", 42, null]);

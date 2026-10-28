@@ -964,6 +964,43 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("create: rejects prompt lists over 10 entries or entries over 500 characters (#1112)", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const longEntry = "x".repeat(501);
+    const elevenEntries = Array.from({ length: 11 }, (_, i) => `signal-${i}`);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o",
+        project_id: "p",
+        body: {
+          ...ruleBody,
+          spec: {
+            faults: ["pod-delete"],
+            prompt: { do: [longEntry], outcome: ["hypothesis"] },
+          },
+        },
+      }),
+    ).rejects.toThrow(/at most 500 characters/);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o",
+        project_id: "p",
+        body: {
+          ...ruleBody,
+          spec: {
+            faults: ["pod-delete"],
+            prompt: { do: elevenEntries, outcome: ["hypothesis"] },
+          },
+        },
+      }),
+    ).rejects.toThrow(/at most 10 entries/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("create: keeps a caller-supplied dataSource and an empty description", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);

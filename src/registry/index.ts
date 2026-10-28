@@ -1126,9 +1126,17 @@ export class Registry {
               const rawValue = itemRecord[pathParamName];
               if (rawValue !== undefined && typeof rawValue !== "object") {
                 itemLinkParams[pathParamName] = String(rawValue);
-              } else if (itemRecord.identifier !== undefined && typeof itemRecord.identifier !== "object") {
+              } else if (
+                !itemLinkParams[pathParamName] &&
+                itemRecord.identifier !== undefined &&
+                typeof itemRecord.identifier !== "object"
+              ) {
                 itemLinkParams[pathParamName] = String(itemRecord.identifier);
-              } else if (itemRecord.name !== undefined && typeof itemRecord.name !== "object") {
+              } else if (
+                !itemLinkParams[pathParamName] &&
+                itemRecord.name !== undefined &&
+                typeof itemRecord.name !== "object"
+              ) {
                 itemLinkParams[pathParamName] = String(itemRecord.name);
               } else {
                 // Check for nested wrapper objects (e.g., connector.identifier, service.identifier)

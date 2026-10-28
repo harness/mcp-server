@@ -2400,3 +2400,39 @@ describe("scs_sbom download dispatch", () => {
     ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
+
+// ─── SCS supply-chain deep links align with pathParams (#1030) ───────────────
+
+describe("SCS artifact deep links (#1030)", () => {
+  const artifactDeepLinkTypes = [
+    "artifact_security",
+    "scs_artifact_remediation",
+    "scs_chain_of_custody",
+  ] as const;
+
+  for (const resourceType of artifactDeepLinkTypes) {
+    it(`${resourceType} deepLinkTemplate uses {artifact} matching pathParams artifact_id`, () => {
+      const res = findResource(resourceType);
+      expect(res.deepLinkTemplate).toContain("{artifact}");
+      expect(res.deepLinkTemplate).not.toContain("{artifactId}");
+      const getSpec = res.operations.get;
+      const listSpec = res.operations.list;
+      const pathParams = getSpec?.pathParams ?? listSpec?.pathParams;
+      expect(pathParams?.artifact_id).toBe("artifact");
+    });
+  }
+
+  it("scs_chain_of_custody get resolves artifact id in openInHarness", async () => {
+    const request = vi.fn().mockResolvedValue({ events: [] });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const result = (await registry.dispatch(makeClient(request), "scs_chain_of_custody", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      artifact_id: "artifact-uuid-99",
+    })) as Record<string, unknown>;
+
+    const link = result.openInHarness as string;
+    expect(link).toContain("/supply-chain/artifacts/artifact-uuid-99");
+    expect(link).not.toMatch(/\{artifact(Id)?\}/);
+  });
+});
