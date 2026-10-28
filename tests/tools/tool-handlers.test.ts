@@ -19,7 +19,9 @@ vi.mock("../../src/utils/log-resolver.js", () => ({
   resolveLogDownloadUrl: vi.fn().mockResolvedValue("https://storage.example.com/logs.zip?signed=1"),
 }));
 vi.mock("../../src/utils/log-prefix.js", () => ({
-  buildLogPrefixFromExecution: vi.fn().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123"),
+  buildLogPrefixFromExecution: vi.fn().mockResolvedValue({
+    prefix: "acct1/pipeline/my-pipe/42/-exec-123",
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -472,7 +474,9 @@ describe("harness_get — execution_log", () => {
     // Reset to default behavior each test
     resolveLogContentMock.mockReset().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE");
     resolveLogDownloadUrlMock.mockReset().mockResolvedValue("https://storage.example.com/logs.zip?signed=1");
-    buildLogPrefixMock.mockReset().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123");
+    buildLogPrefixMock.mockReset().mockResolvedValue({
+      prefix: "acct1/pipeline/my-pipe/42/-exec-123",
+    });
 
     server = makeMcpServer();
     // Include both pipelines (for execution) and logs (for execution_log)
@@ -492,7 +496,11 @@ describe("harness_get — execution_log", () => {
     const data = parseResult(result) as { log_content: string };
     expect(data.log_content).toContain("mvn clean install");
     expect(data.log_content).toContain("BUILD FAILURE");
-    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+    expect(resolveLogContentMock).toHaveBeenCalledWith(
+      client,
+      "acct1/pipeline/my-pipe/42/-exec-123",
+      { commandUnitNames: undefined },
+    );
     expect(buildLogPrefixMock).not.toHaveBeenCalled();
   });
 
@@ -525,7 +533,11 @@ describe("harness_get — execution_log", () => {
       "exec-123",
       expect.objectContaining({ execution_id: "exec-123" }),
     );
-    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+    expect(resolveLogContentMock).toHaveBeenCalledWith(
+      client,
+      "acct1/pipeline/my-pipe/42/-exec-123",
+      { commandUnitNames: undefined },
+    );
   });
 
   it("auto-builds prefix from execution_id when provided in params", async () => {
@@ -542,7 +554,28 @@ describe("harness_get — execution_log", () => {
       "exec-123",
       expect.objectContaining({ resource_type: "execution_log" }),
     );
-    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+    expect(resolveLogContentMock).toHaveBeenCalledWith(
+      client,
+      "acct1/pipeline/my-pipe/42/-exec-123",
+      { commandUnitNames: undefined },
+    );
+  });
+
+  it("forwards unitProgresses commandUnitNames from graph resolution", async () => {
+    buildLogPrefixMock.mockResolvedValueOnce({
+      prefix: "acct1/pipeline/my-pipe/42/-exec-123",
+      commandUnitNames: ["Initialize", "Execute"],
+    });
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      params: { execution_id: "exec-123", step_id: "step-1" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(resolveLogContentMock).toHaveBeenCalledWith(
+      client,
+      "acct1/pipeline/my-pipe/42/-exec-123",
+      { commandUnitNames: ["Initialize", "Execute"] },
+    );
   });
 
   it("does not override explicit execution_id with resource_id", async () => {
@@ -618,7 +651,11 @@ describe("harness_get — execution_log", () => {
     });
     expect(result.isError).toBeUndefined();
     // Should use the explicit prefix directly, not buildLogPrefix
-    expect(resolveLogContentMock).toHaveBeenCalledWith(client, "explicit/log/prefix/key");
+    expect(resolveLogContentMock).toHaveBeenCalledWith(
+      client,
+      "explicit/log/prefix/key",
+      { commandUnitNames: undefined },
+    );
     expect(buildLogPrefixMock).not.toHaveBeenCalled();
   });
 

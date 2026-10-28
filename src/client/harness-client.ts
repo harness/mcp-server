@@ -32,6 +32,66 @@ function serializeRequestBody(body: unknown): string | undefined {
   return typeof body === "string" ? body : JSON.stringify(body);
 }
 
+function formatByteLimitMessage(actualBytes: number, maxBytes: number): string {
+  return (
+    `Response too large (${Math.round(actualBytes / 1024 / 1024)}MB). ` +
+    `Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`
+  );
+}
+
+/**
+ * Read a binary response with an optional hard size cap.
+ * Prefer Content-Length short-circuit (no body buffer) when present; otherwise
+ * stream and abort once the cap is exceeded so oversized logs cannot OOM the process.
+ */
+async function readResponseBuffer(response: Response, maxBytes?: number): Promise<ArrayBuffer> {
+  if (maxBytes == null) {
+    return response.arrayBuffer();
+  }
+
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new HarnessApiError(formatByteLimitMessage(contentLength, maxBytes), 413);
+  }
+
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > maxBytes) {
+      throw new HarnessApiError(formatByteLimitMessage(buffer.byteLength, maxBytes), 413);
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new HarnessApiError(formatByteLimitMessage(total, maxBytes), 413);
+      }
+      chunks.push(value);
+    }
+  } catch (err) {
+    await reader.cancel().catch(() => undefined);
+    throw err;
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged.buffer;
+}
+
 function getHeaderValue(headers: Record<string, string>, headerName: string): string | undefined {
   const normalizedName = headerName.toLowerCase();
   for (const [key, value] of Object.entries(headers)) {
@@ -511,9 +571,11 @@ export class HarnessClient {
           }
         }
 
-        // Binary response mode — return raw ArrayBuffer (used for ZIP downloads)
+        // Binary response mode — return raw ArrayBuffer (used for log/blob downloads).
+        // When maxResponseBytes is set, Content-Length short-circuits and streaming
+        // enforces a hard cap so oversized bodies never fully buffer into the heap.
         if (options.responseType === "buffer") {
-          const buffer = await response.arrayBuffer();
+          const buffer = await readResponseBuffer(response, options.maxResponseBytes);
           log.debug("Binary response", { bytes: buffer.byteLength });
           return buffer as T;
         }

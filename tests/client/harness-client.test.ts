@@ -1442,4 +1442,89 @@ describe("HarnessClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe("request — buffer maxResponseBytes", () => {
+    it("rejects before buffering when Content-Length exceeds the cap", async () => {
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const headers = new Headers({ "content-length": String(5 * 1024 * 1024) });
+      fetchSpy.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers,
+        body: { cancel, getReader: () => ({ read: async () => ({ done: true }), cancel }) },
+        arrayBuffer: async () => {
+          throw new Error("arrayBuffer should not be called when Content-Length exceeds cap");
+        },
+        text: async () => "",
+      } as unknown as Response);
+
+      const client = new HarnessClient(makeConfig());
+      await expect(
+        client.request({
+          path: "/gateway/log-service/blob",
+          responseType: "buffer",
+          maxResponseBytes: 2 * 1024 * 1024,
+        }),
+      ).rejects.toMatchObject({
+        name: "HarnessApiError",
+        statusCode: 413,
+        message: expect.stringMatching(/too large/i),
+      });
+      expect(cancel).toHaveBeenCalled();
+    });
+
+    it("streams and aborts when body exceeds the cap without Content-Length", async () => {
+      const chunk = new Uint8Array(1024).fill(1);
+      let reads = 0;
+      const cancel = vi.fn().mockResolvedValue(undefined);
+      const reader = {
+        read: async () => {
+          reads += 1;
+          if (reads <= 3) return { done: false as const, value: chunk };
+          return { done: true as const };
+        },
+        cancel,
+      };
+      fetchSpy.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: { getReader: () => reader, cancel },
+        arrayBuffer: async () => new ArrayBuffer(0),
+        text: async () => "",
+      } as unknown as Response);
+
+      const client = new HarnessClient(makeConfig());
+      await expect(
+        client.request({
+          path: "/gateway/log-service/blob",
+          responseType: "buffer",
+          maxResponseBytes: 2048,
+        }),
+      ).rejects.toMatchObject({
+        name: "HarnessApiError",
+        statusCode: 413,
+        message: expect.stringMatching(/too large/i),
+      });
+      expect(cancel).toHaveBeenCalled();
+    });
+
+    it("returns the buffer when under the cap", async () => {
+      const payload = new Uint8Array([1, 2, 3, 4]);
+      fetchSpy.mockResolvedValue(
+        new Response(payload, {
+          status: 200,
+          headers: { "Content-Length": "4" },
+        }),
+      );
+
+      const client = new HarnessClient(makeConfig());
+      const buf = await client.request<ArrayBuffer>({
+        path: "/gateway/log-service/blob",
+        responseType: "buffer",
+        maxResponseBytes: 1024,
+      });
+      expect(new Uint8Array(buf)).toEqual(payload);
+    });
+  });
 });

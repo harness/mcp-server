@@ -26,7 +26,7 @@ describe("buildLogPrefixFromExecution", () => {
       mockClient, mockRegistry, "exec-123", { org_id: "org1", project_id: "proj1" },
     );
 
-    expect(result).toBe("acct1/pipeline/my-pipe/42/-exec-123");
+    expect(result.prefix).toBe("acct1/pipeline/my-pipe/42/-exec-123");
   });
 
   it("returns simplified prefix when shouldUseSimplifiedKey is absent (default)", async () => {
@@ -41,7 +41,7 @@ describe("buildLogPrefixFromExecution", () => {
       mockClient, mockRegistry, "exec-456", {},
     );
 
-    expect(result).toBe("acct1/pipeline/my-pipe/7/-exec-456");
+    expect(result.prefix).toBe("acct1/pipeline/my-pipe/7/-exec-456");
   });
 
   it("returns standard prefix when shouldUseSimplifiedKey is false", async () => {
@@ -59,7 +59,7 @@ describe("buildLogPrefixFromExecution", () => {
       mockClient, mockRegistry, "exec-789", {},
     );
 
-    expect(result).toBe(
+    expect(result.prefix).toBe(
       "accountId:acct1/orgId:myorg/projectId:myproj/pipelineId:legacy-pipe/runSequence:10/level0:pipeline",
     );
   });
@@ -77,7 +77,7 @@ describe("buildLogPrefixFromExecution", () => {
       mockClient, mockRegistry, "exec-abc", { org_id: "fallback-org", project_id: "fallback-proj" },
     );
 
-    expect(result).toBe(
+    expect(result.prefix).toBe(
       "accountId:acct1/orgId:fallback-org/projectId:fallback-proj/pipelineId:legacy-pipe/runSequence:3/level0:pipeline",
     );
   });
@@ -105,7 +105,7 @@ describe("buildLogPrefixFromExecution", () => {
       mockClient, mockRegistry, "exec-123", { org_id: "org1", project_id: "proj1" },
     );
 
-    expect(result).toBe("accountId:acct1/orgId:org1/projectId:proj1/pipelineId:my-pipe/runSequence:42/level0:pipeline");
+    expect(result.prefix).toBe("accountId:acct1/orgId:org1/projectId:proj1/pipelineId:my-pipe/runSequence:42/level0:pipeline");
   });
 
   it("uses the matching step logBaseKey when a step target is provided", async () => {
@@ -145,7 +145,7 @@ describe("buildLogPrefixFromExecution", () => {
       },
     );
 
-    expect(result).toBe(
+    expect(result.prefix).toBe(
       "accountId:acct1/orgId:test-org/projectId:test-project/pipelineId:sample-pipeline/runSequence:931/level0:pipeline/level1:stages/level2:build_stage/level3:spec/level4:execution/level5:steps/level6:run_tests",
     );
   });
@@ -210,7 +210,39 @@ describe("buildLogPrefixFromExecution", () => {
     );
 
     // Should pick the deepest (longest) logBaseKey — the step node
-    expect(result).toBe("acct1/stages/build_stage/steps/run_tests");
+    expect(result.prefix).toBe("acct1/stages/build_stage/steps/run_tests");
+  });
+
+  it("returns unitProgresses names with the matched node logBaseKey", async () => {
+    dispatchMock.mockResolvedValue({
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "my-pipe",
+        runSequence: 42,
+        shouldUseSimplifiedKey: true,
+      },
+      executionGraph: {
+        nodeMap: {
+          stepNode: {
+            uuid: "step-uuid",
+            identifier: "shell_script",
+            baseFqn: "pipeline.stages.deploy.spec.execution.steps.shell_script",
+            logBaseKey: "acct1/stages/deploy/steps/shell_script",
+            unitProgresses: [
+              { unitName: "Initialize" },
+              { unitName: "Execute" },
+              { unitName: "  " },
+            ],
+          },
+        },
+      },
+    });
+
+    const result = await buildLogPrefixFromExecution(
+      mockClient, mockRegistry, "exec-123", { step_id: "step-uuid" },
+    );
+
+    expect(result.prefix).toBe("acct1/stages/deploy/steps/shell_script");
+    expect(result.commandUnitNames).toEqual(["Initialize", "Execute"]);
   });
 
   it("falls back to synthesized prefix when no node has a logBaseKey", async () => {
@@ -237,7 +269,7 @@ describe("buildLogPrefixFromExecution", () => {
     );
 
     // No logBaseKey in any node — should fall back to synthesized prefix
-    expect(result).toBe("acct1/pipeline/my-pipe/42/-exec-123");
+    expect(result.prefix).toBe("acct1/pipeline/my-pipe/42/-exec-123");
   });
 
   it("prefers step target logBaseKey over fallback when step_id is provided", async () => {
@@ -275,7 +307,7 @@ describe("buildLogPrefixFromExecution", () => {
     const result = await buildLogPrefixFromExecution(
       mockClient, mockRegistry, "exec-1", { step_id: "step-a-uuid" },
     );
-    expect(result).toBe("acct1/stages/build/steps/step_a");
+    expect(result.prefix).toBe("acct1/stages/build/steps/step_a");
   });
 
   it("prefers stage target logBaseKey when stage_id is provided but not step_id", async () => {
@@ -307,7 +339,7 @@ describe("buildLogPrefixFromExecution", () => {
     const result = await buildLogPrefixFromExecution(
       mockClient, mockRegistry, "exec-1", { stage_id: "stage-1" },
     );
-    expect(result).toBe("acct1/stages/deploy");
+    expect(result.prefix).toBe("acct1/stages/deploy");
   });
 
   it("fallback picks deepest key among multiple nodes with logBaseKeys", async () => {
@@ -329,7 +361,7 @@ describe("buildLogPrefixFromExecution", () => {
     const result = await buildLogPrefixFromExecution(
       mockClient, mockRegistry, "exec-1", {},
     );
-    expect(result).toBe("key/deepest/path/here");
+    expect(result.prefix).toBe("key/deepest/path/here");
   });
 
   it("fallback works with single node in nodeMap", async () => {
@@ -349,7 +381,7 @@ describe("buildLogPrefixFromExecution", () => {
     const result = await buildLogPrefixFromExecution(
       mockClient, mockRegistry, "exec-1", {},
     );
-    expect(result).toBe("log/only");
+    expect(result.prefix).toBe("log/only");
   });
 
   it("fallback returns synthesized prefix when nodeMap is empty", async () => {
@@ -367,7 +399,7 @@ describe("buildLogPrefixFromExecution", () => {
     const result = await buildLogPrefixFromExecution(
       mockClient, mockRegistry, "exec-1", {},
     );
-    expect(result).toBe("acct1/pipeline/pipe/1/-exec-1");
+    expect(result.prefix).toBe("acct1/pipeline/pipe/1/-exec-1");
   });
 
   it("handles flat execution object (no pipelineExecutionSummary wrapper)", async () => {
@@ -381,6 +413,6 @@ describe("buildLogPrefixFromExecution", () => {
       mockClient, mockRegistry, "exec-flat", {},
     );
 
-    expect(result).toBe("acct1/pipeline/flat-pipe/5/-exec-flat");
+    expect(result.prefix).toBe("acct1/pipeline/flat-pipe/5/-exec-flat");
   });
 });
