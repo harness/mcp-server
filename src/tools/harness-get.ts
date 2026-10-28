@@ -101,6 +101,9 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
             // we resolve via execution_id. Explicit prefix falls back to Execute only.
             let commandUnitNames: string[] | undefined;
             let logKeys: string[] | undefined;
+            // GET /blob reads one exact key; without a step the resolved key is a
+            // pipeline/stage prefix whose own blob is empty, so use the zip download.
+            let downloadFallback = false;
             if (!prefix) {
               // Auto-build prefix from execution_id if available
               const executionId = asString(input.execution_id);
@@ -111,9 +114,16 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               prefix = resolved.prefix;
               commandUnitNames = resolved.commandUnitNames;
               logKeys = resolved.logKeys;
+              downloadFallback = !asString(input.step_id);
             }
-            if (isTrue(input.return_download_url)) {
+            if (isTrue(input.return_download_url) || downloadFallback) {
               const downloadUrl = await resolveLogDownloadUrl(client, prefix);
+              if (!isTrue(input.return_download_url)) {
+                return jsonResult({
+                  download_url: downloadUrl,
+                  note: "No step_id given, so returning a zip of all logs under this execution. Pass step_id (and stage_id) to get that step's log text inline.",
+                });
+              }
               return jsonResult({ download_url: downloadUrl });
             }
             const logText = await resolveLogContent(client, prefix, { commandUnitNames, logKeys });
