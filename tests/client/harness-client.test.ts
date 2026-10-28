@@ -882,7 +882,7 @@ describe("HarnessClient", () => {
       }
     });
 
-    describe("problem+json (RFC 7807) errors", () => {
+    describe("FME 422 problem+json errors (error-parsers.ts)", () => {
       const reject = async (body: unknown, status = 422, init: { path?: string; stream?: boolean } = {}) => {
         fetchSpy.mockResolvedValue(new Response(JSON.stringify(body), {
           status,
@@ -968,12 +968,12 @@ describe("HarnessClient", () => {
       });
 
       it("falls back to title when detail is blank", async () => {
-        const err = await reject({ title: "Bad Request", detail: "   ", status: 400 }, 400);
-        expect(err.message).toBe("Bad Request");
+        const err = await reject({ title: "Unprocessable", detail: "   ", status: 422 });
+        expect(err.message).toBe("Unprocessable");
       });
 
       it("prefers an explicit message over detail and title", async () => {
-        const err = await reject({ message: "explicit", detail: "d", title: "t" }, 400);
+        const err = await reject({ message: "explicit", detail: "d", title: "t" });
         expect(err.message).toBe("explicit");
       });
 
@@ -983,12 +983,12 @@ describe("HarnessClient", () => {
         expect(err.message).not.toContain("https://developer.harness.io");
       });
 
-      it("keeps `details` truncation at 400 chars and still appends errors[]", async () => {
+      it("ignores generic `details` and reports only the parsed policy errors", async () => {
         const err = await reject({
           ...governance([{ title: "P", detail: "D" }]),
           details: "x".repeat(900),
         });
-        expect(err.message).toBe(`Governance error — ${"x".repeat(400)}…; P: D`);
+        expect(err.message).toBe("Governance error — P: D");
       });
 
       it("truncates very large errors[] output with its own larger cap", async () => {
@@ -996,7 +996,6 @@ describe("HarnessClient", () => {
         const tail = err.message.replace("Governance error — ", "");
         expect(tail.length).toBe(2001);
         expect(tail.endsWith("…")).toBe(true);
-        expect(tail.length).toBeGreaterThan(400);
       });
 
       it("keeps the first policies intact when later ones push past the cap", async () => {
@@ -1011,28 +1010,30 @@ describe("HarnessClient", () => {
         expect(err.message).toBe("Governance error — Stream policy: denied");
       });
 
-      it("surfaces errors[] on a non-governance 400 validation response", async () => {
-        const err = await reject({
-          title: "Bad Request", status: 400, detail: "Validation failed",
-          errors: [{ title: "name", detail: "must not be blank" }],
-        }, 400);
-        expect(err.message).toBe("Validation failed — name: must not be blank");
+      it("does not apply to other statuses on FME paths", async () => {
+        const err = await reject(governance([{ title: "P", detail: "D" }]), 400);
+        expect(err.message).not.toContain("P: D");
       });
 
-      it("does not duplicate when `details` already matches the message", async () => {
-        const err = await reject({ detail: "Same text", details: "Same text", status: 400 }, 400);
+      it("does not apply to non-FME paths", async () => {
+        const err = await reject(governance([{ title: "P", detail: "D" }]), 422, { path: "/ng/api/connectors" });
+        expect(err.message).not.toContain("P: D");
+      });
+
+      it("returns just the message when there are no errors[] entries", async () => {
+        const err = await reject({ detail: "Same text", details: "Same text", status: 422 });
         expect(err.message).toBe("Same text");
       });
     });
 
-    it("surfaces `errors[]` alongside a standard `message` body", async () => {
+    it("leaves standard `message` bodies on non-FME paths untouched by errors[]", async () => {
       fetchSpy.mockResolvedValue(new Response(
         JSON.stringify({ message: "Invalid request", errors: [{ title: "field", detail: "required" }] }),
         { status: 400 },
       ));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
       await expect(client.request({ path: "/ng/api/connectors" })).rejects.toMatchObject({
-        message: "Invalid request — field: required",
+        message: "Invalid request",
       });
     });
 
