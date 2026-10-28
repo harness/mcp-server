@@ -98,7 +98,7 @@ import {
   descRunExperiment, descStopExperiment, descDeleteExperiment,
   descEnableProbe, descVerifyProbe,
   descCreateFromTemplate,
-  descListRevisions, descGetVariables, descGetYaml, descCompareRevisions,
+  descListRevisions, descListExperimentTemplateRevisions, descGetVariables, descGetYaml, descCompareRevisions,
   descRunLoadtest, descStopLoadtest, descCheckK8sHealth,
   descEnableGuardRule,
   descGetProbeTemplateVariables,
@@ -222,6 +222,14 @@ const CUSTOM_DISCOVERY_AGENT = "custom-discovery-agent";
 /** Chaos scope override — Chaos REST API uses organizationIdentifier (not orgIdentifier). */
 const CHAOS_SCOPE = { org: "organizationIdentifier" } as const;
 
+/** template_id and hub_identity are required on every experiment-template call except list and list_revisions. */
+const experimentTemplateParams = {
+  fields: [
+    { name: "template_id", required: true, description: "Template identity. Pass as resource_id or params.template_id." },
+    { name: "hub_identity", required: true, description: "hubIdentity from the same list row. Pass as params.hub_identity." },
+  ],
+} satisfies ParamsSchema;
+
 /** Unwrap single-item response from get-chaos-component-variable endpoint. */
 const chaosComponentVarExtract = (raw: unknown): unknown => {
   const r = raw as { items?: Array<{ name: string; variables: unknown[] }> };
@@ -255,6 +263,30 @@ function compactDiscoveredAgent(item: Record<string, unknown>): Record<string, u
     "identity", "name", "description", "tags", "environmentIdentifier",
     "serviceCount", "networkMapCount", "installationType",
     "createdAt", "updatedAt", "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
+// Generic compact drops hubIdentity, environmentID, and infraID (they do not
+// match the *Id / *Identifier whitelist). Later gets need those exact fields.
+function compactExperimentTemplate(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "identity", "name", "description", "tags", "hubIdentity",
+    "revision", "infraType", "isDefault", "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
+function compactK8sInfra(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "identity", "name", "description", "tags", "environmentID", "infraID", "status",
+    "isChaosEnabled", "infraType", "infraScope", "createdAt", "updatedAt", "openInHarness",
   ]) {
     if (item[key] !== undefined) slim[key] = item[key];
   }
@@ -1203,6 +1235,19 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId" },
           queryParams: { run_id: "experimentRunId", notify_id: "notifyId" },
+          // OpenAPI marks both experimentRunId and notifyId required. The handler
+          // (GetExperimentDetails) applies experimentRunId when set, otherwise
+          // notifyId, and only omits the run filter when both are empty. Either
+          // id selects one run. Both empty returns an arbitrary run, or an error
+          // when the experiment has none.
+          preflight: async ({ input }) => {
+            if (!input.run_id && !input.notify_id) {
+              throw new Error(
+                "Missing required param for chaos_experiment_run.get: run_id or notify_id. " +
+                "Read experimentRunID or notifyID from harness_get resource_type=chaos_experiment.",
+              );
+            }
+          },
           responseExtractor: passthrough,
           description: descGetExperimentRun,
         },
@@ -1794,6 +1839,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["template_id"],
+      compactItem: compactExperimentTemplate,
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentity },
         { name: "infrastructure_type", description: descInfraType },
@@ -1835,6 +1881,7 @@ export const chaosToolset: ToolsetDefinition = {
             hub_identity: "hubIdentity",
             revision: "revision",
           },
+          paramsSchema: experimentTemplateParams,
           responseExtractor: passthrough,
           description: descGetExperimentTemplate,
         },
@@ -1844,6 +1891,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { template_id: "templateId" },
           queryParams: { hub_identity: "hubIdentity" },
+          paramsSchema: experimentTemplateParams,
           responseExtractor: passthrough,
           description: descDeleteExperimentTemplate,
         },
@@ -1855,28 +1903,39 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { template_id: "templateId" },
           queryParams: { hub_identity: "hubIdentity", revision: "revision" },
-          bodyBuilder: (input) => {
+          paramsSchema: experimentTemplateParams,
+          injectAccountInBody: true,
+          bodyBuilder: (input, config) => {
             const b = coerceBody(input);
             let infraRef = b.infra_ref as string | undefined;
             if (!infraRef && b.infra_id) {
               const envId = b.environment_id as string | undefined;
               const infraId = b.infra_id as string;
-              if (envId && !infraId.startsWith(`${envId}/`)) {
-                infraRef = `${envId}/${infraId}`;
-              } else {
+              if (infraId.includes("/")) {
                 infraRef = infraId;
+              } else if (envId) {
+                infraRef = `${envId}/${infraId}`;
               }
+            }
+            if (!infraRef || !infraRef.includes("/")) {
+              throw new Error(
+                "Missing required field infra_ref for chaos_experiment_template.create_from_template. " +
+                "Pass infra_ref as environmentID/infraID, or pass infra_id and environment_id.",
+              );
             }
             return {
               name: b.name,
               identity: b.identity,
               infraRef,
+              // Snake-case alias so the required-field check, which reads the built
+              // body, sees infra_ref. The launch API reads infraRef.
+              infra_ref: infraRef,
               importType: (b.import_type as string) ?? "LOCAL",
               ...(b.description ? { description: b.description } : {}),
               ...(b.tags ? { tags: b.tags } : {}),
               accountIdentifier: b.account_id ?? input.account_id,
-              organizationIdentifier: b.org_id ?? input.org_id,
-              projectIdentifier: b.project_id ?? input.project_id,
+              organizationIdentifier: b.org_id ?? input.org_id ?? config.HARNESS_ORG,
+              projectIdentifier: b.project_id ?? input.project_id ?? config.HARNESS_PROJECT,
             };
           },
           responseExtractor: passthrough,
@@ -1889,7 +1948,7 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "project_id", type: "string", required: false, description: descProjectIdBody },
               { name: "name", type: "string", required: true, description: descExperimentName },
               { name: "identity", type: "string", required: true, description: descExperimentIdentity },
-              { name: "infra_ref", type: "string", required: false, description: descInfraRef },
+              { name: "infra_ref", type: "string", required: true, description: descInfraRef },
               { name: "infra_id", type: "string", required: false, description: descInfraIdCreate },
               { name: "environment_id", type: "string", required: false, description: descEnvironmentIdCreate },
               { name: "description", type: "string", required: false, description: descExperimentDescription },
@@ -1909,7 +1968,8 @@ export const chaosToolset: ToolsetDefinition = {
             limit: "limit",
           },
           responseExtractor: passthrough,
-          actionDescription: descListRevisions,
+          // ListExperimentTemplateQuery.Validate does not require hubIdentity.
+          actionDescription: descListExperimentTemplateRevisions,
         },
         get_variables: {
           method: "GET",
@@ -1920,6 +1980,7 @@ export const chaosToolset: ToolsetDefinition = {
             hub_identity: "hubIdentity",
             revision: "revision",
           },
+          paramsSchema: experimentTemplateParams,
           responseExtractor: passthrough,
           actionDescription: descGetVariables,
         },
@@ -1932,6 +1993,7 @@ export const chaosToolset: ToolsetDefinition = {
             hub_identity: "hubIdentity",
             revision: "revision",
           },
+          paramsSchema: experimentTemplateParams,
           responseExtractor: passthrough,
           actionDescription: descGetYaml,
         },
@@ -1945,6 +2007,13 @@ export const chaosToolset: ToolsetDefinition = {
             revision1: "revision1",
             revision2: "revision2",
           },
+          paramsSchema: {
+            fields: [
+              ...experimentTemplateParams.fields,
+              { name: "revision1", required: true, description: "First revision to compare." },
+              { name: "revision2", required: true, description: "Second revision to compare." },
+            ],
+          } satisfies ParamsSchema,
           responseExtractor: passthrough,
           actionDescription: descCompareRevisions,
         },
@@ -2862,7 +2931,8 @@ export const chaosToolset: ToolsetDefinition = {
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
-      identifierFields: ["infra_id"],
+      identifierFields: ["identity"],
+      compactItem: compactK8sInfra,
       deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/infrastructures/{infraId}",
       diagnosticHint: "An infrastructure can only create chaos experiments when status is ACTIVE and isChaosEnabled is true. Filter out any infrastructure that does not meet both conditions.",
       relatedResources: [
@@ -2871,7 +2941,12 @@ export const chaosToolset: ToolsetDefinition = {
         { resourceType: "chaos_enabled_infrastructure", relationship: "child", description: "After install completes, the registered infra appears here once status=ACTIVE and isChaosEnabled=true." },
       ],
       listFilterFields: [
-        { name: "environment_id", description: descEnvironmentId },
+        // OpenAPI marks environmentIdentifier optional on POST /rest/v2/infrastructures.
+        // Chaos manager forwards it to k8s-ifs ListInfra, which always calls
+        // harness.ListInfraURL. An empty environment returns "missing envID",
+        // wrapped as HTTP 500 "failed to generate list harness infrastructure url,
+        // missing envID". A list with no environment is chaos_enabled_infrastructure.
+        { name: "environment_id", description: descEnvironmentId, required: true },
         { name: "status", description: descK8sInfraStatus, enum: ["ACTIVE", "INACTIVE", "PENDING", "All"] },
         { name: "infra_type", description: descInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows", "CloudFoundry", "Container"] },
         { name: "include_legacy_infra", description: descIncludeLegacyInfra, type: "boolean" },
@@ -2906,9 +2981,27 @@ export const chaosToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/kubernetes/infra/{infraId}`,
+          path: `${CHAOS}/rest/v2/infrastructure/{identity}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { infra_id: "infraId" },
+          // Path value is the row's identity. Create allows infraID to differ.
+          // identity wins when both are set. infra_id is only a fallback when identity was not sent.
+          pathParams: { identity: "identity" },
+          pathBuilder: (input) => {
+            const id = input.identity ?? input.infra_id;
+            if (!id) {
+              throw new Error(
+                "Missing required field identity for chaos_k8s_infrastructure.get. " +
+                "Pass the list row's identity as resource_id. Do not substitute infraID.",
+              );
+            }
+            return `${CHAOS}/rest/v2/infrastructure/${encodeURIComponent(String(id))}`;
+          },
+          queryParams: { environment_id: "environmentIdentifier" },
+          paramsSchema: {
+            fields: [
+              { name: "environment_id", required: true, description: "environmentID from the same list row. Pass as params.environment_id." },
+            ],
+          } satisfies ParamsSchema,
           responseExtractor: passthrough,
           description: descGetK8sInfra,
         },
@@ -2981,9 +3074,27 @@ export const chaosToolset: ToolsetDefinition = {
       executeActions: {
         check_health: {
           method: "GET",
+          // Published OpenAPI operationId testLegacyKubernetesChaosInfraConnection:
+          // GET /rest/kubernetes/infra/{id}/health
+          // (graphql/server/apidocs/all/openapi.yaml and rest_router.go
+          // GET /kubernetes/infra/:id/health). There is no
+          // /rest/kubernetes/infra/health/{id} route.
+          // The segment is infraID. Create allows that to differ from identity.
+          // harness_execute writes resource_id onto identity, so identity is the
+          // fallback only when infra_id is omitted. When both are set, infraID wins.
           path: `${CHAOS}/rest/kubernetes/infra/{infraId}/health`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { infra_id: "infraId" },
+          pathBuilder: (input) => {
+            const id = optionalText(input.infra_id) ?? optionalText(input.identity);
+            if (!id) {
+              throw new Error(
+                "Missing required field infra_id for chaos_k8s_infrastructure.check_health. " +
+                "Pass the list row's infraID as infra_id. resource_id (identity) is used only when infra_id is omitted.",
+              );
+            }
+            return `${CHAOS}/rest/kubernetes/infra/${encodeURIComponent(id)}/health`;
+          },
           responseExtractor: passthrough,
           actionDescription: descCheckK8sHealth,
           bodySchema: { description: descBodyNoBody, fields: [] },
@@ -3000,22 +3111,23 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["infra_id"],
+      compactItem: compactK8sInfra,
       diagnosticHint:
         "Returns only infrastructures that are ready to run chaos experiments (chaos-enabled AND ACTIVE). " +
         "Empty result usually means no chaos infrastructure is installed/connected for this project/environment yet — " +
-        "register/connect one, or use chaos_k8s_infrastructure to see infra that exist but are not chaos-enabled.",
+        "register/connect one. chaos_k8s_infrastructure lists every status in one environment and requires filters.environment_id.",
       relatedResources: [
         {
           resourceType: "chaos_k8s_infrastructure",
           relationship: "alternative",
           description:
-            "Full K8s infra inventory (all statuses, chaos-enabled or not) plus get + check_health. Use chaos_enabled_infrastructure only to pick a ready-to-use infra.",
+            "One environment, including infrastructures that are not ready to run an experiment, plus get and check_health. filters.environment_id is required: an empty environment returns HTTP 500 missing envID. This is not a project-wide inventory. Use chaos_enabled_infrastructure when no environment is known.",
         },
         {
           resourceType: "chaos_experiment",
           relationship: "used_by",
           description:
-            "The infraID/identity returned here is the infra_ref/infra selector when creating or running an experiment.",
+            "Launch uses environmentID/infraID from this list as infra_ref. A bare infraID is not enough.",
         },
       ],
       listFilterFields: [
@@ -3394,7 +3506,7 @@ export const chaosToolset: ToolsetDefinition = {
             description: "No body required. Fault template identified by path parameter.",
             fields: [
               { name: "template_identity", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
+              { name: "hub_identity", type: "string", required: false, description: descHubIdentity },
             ],
           },
         },
