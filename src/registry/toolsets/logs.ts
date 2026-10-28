@@ -9,7 +9,7 @@ export const logsToolset: ToolsetDefinition = {
     {
       resourceType: "execution_log",
       displayName: "Execution Log",
-      description: "Pipeline execution logs. Log content is prepared asynchronously, then returned as readable text by default. Set return_download_url=true to get only a signed download URL. Pass prefix or execution_id; with execution_id, also pass step_id (and stage_id when known) so logs are scoped to one step. When a Harness execution URL includes step/stage query params, those values resolve the matching step log. For failed-run analysis prefer harness_diagnose with include_logs=true.",
+      description: "Pipeline execution logs. Log content is prepared asynchronously, then returned as readable text by default (GET /blob, capped at 2MB with Content-Length short-circuit). Set return_download_url=true to get only a signed download URL. Pass prefix or execution_id; with execution_id, also pass step_id (and stage_id when known) so logs are scoped to one step and command-unit fallbacks use that step's unitProgresses. An explicit prefix alone falls back only to `-commandUnit:Execute` if the base key is empty. When a Harness execution URL includes step/stage query params, those values resolve the matching step log. For failed-run analysis prefer harness_diagnose with include_logs=true (passes full unitProgresses).",
       toolset: "logs",
       scope: "project",
       identifierFields: ["prefix"],
@@ -32,12 +32,12 @@ export const logsToolset: ToolsetDefinition = {
               {
                 name: "prefix",
                 required: false,
-                description: "Log prefix. Use this or execution_id.",
+                description: "Log prefix / logBaseKey. Use this or execution_id. With prefix alone, empty/404 base keys fall back only to `-commandUnit:Execute` (no unitProgresses).",
               },
               {
                 name: "execution_id",
                 required: false,
-                description: "Execution identifier used to resolve the log prefix",
+                description: "Execution identifier used to resolve the log prefix from the graph (also supplies unitProgresses for command-unit blob fallbacks)",
               },
               {
                 name: "step_id",

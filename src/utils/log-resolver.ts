@@ -1,5 +1,6 @@
 import { gunzipSync, inflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../client/harness-client.js";
+import { HarnessApiError } from "./errors.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("log-resolver");
@@ -44,20 +45,37 @@ export function commandUnitLogKey(baseKey: string, unitName: string): string {
 /**
  * Ordered keys to try for GET /blob: base logBaseKey first, then up to
  * {@link MAX_COMMAND_UNIT_FALLBACKS} command-unit variants.
+ *
+ * Prefers `unitProgresses` names, then always keeps a slot for default
+ * {@link DEFAULT_COMMAND_UNIT_NAMES} (`Execute`) inside the cap when not
+ * already listed — so a long unit list cannot crowd out Execute.
  */
 export function blobKeysToTry(baseKey: string, commandUnitNames?: string[]): string[] {
   if (baseKey.includes("-commandUnit:")) return [baseKey];
 
-  const keys = [baseKey];
+  const fromGraph: string[] = [];
   const seen = new Set<string>();
-  for (const raw of [...(commandUnitNames ?? []), ...DEFAULT_COMMAND_UNIT_NAMES]) {
-    if (keys.length >= 1 + MAX_COMMAND_UNIT_FALLBACKS) break;
+  for (const raw of commandUnitNames ?? []) {
     const name = raw.trim();
     if (!name || seen.has(name)) continue;
     seen.add(name);
-    keys.push(commandUnitLogKey(baseKey, name));
+    fromGraph.push(name);
   }
-  return keys;
+
+  const defaults = DEFAULT_COMMAND_UNIT_NAMES.filter((n) => !seen.has(n));
+  // Reserve room for defaults (e.g. Execute) so they are never dropped by the cap.
+  const graphSlots = Math.max(0, MAX_COMMAND_UNIT_FALLBACKS - defaults.length);
+  const units = [...fromGraph.slice(0, graphSlots), ...defaults].slice(
+    0,
+    MAX_COMMAND_UNIT_FALLBACKS,
+  );
+
+  return [baseKey, ...units.map((name) => commandUnitLogKey(baseKey, name))];
+}
+
+/** Only empty bodies and 404s should advance to the next blob key. */
+function shouldTryNextBlobKey(err: unknown): boolean {
+  return err instanceof HarnessApiError && err.statusCode === 404;
 }
 
 interface BlobResponse {
@@ -477,15 +495,19 @@ async function fetchAndParseBlob(
   signal?: AbortSignal,
 ): Promise<string> {
   log.debug("Requesting log blob", { key });
+  // maxResponseBytes short-circuits on Content-Length and caps while streaming so
+  // oversized blobs never fully buffer (see harness-client readResponseBuffer).
   const arrayBuf = await client.request<ArrayBuffer>({
     method: "GET",
     path: "/gateway/log-service/blob",
     params: { key },
     signal,
     responseType: "buffer",
+    maxResponseBytes: maxBytes,
     retryPolicy: "safe",
   });
 
+  // Defense in depth for clients/mocks that ignore maxResponseBytes.
   if (arrayBuf.byteLength > maxBytes) {
     throw new Error(
       `Log file too large (${Math.round(arrayBuf.byteLength / 1024 / 1024)}MB). Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`,
@@ -508,11 +530,16 @@ async function fetchAndParseBlob(
 /**
  * Resolve execution log content from the Harness log-service.
  *
- * Uses GET /blob (single log key)
+ * Uses GET /blob (single log key). Response size is capped via
+ * `maxResponseBytes` (Content-Length short-circuit + streamed hard cap).
  *
- * If the step `logBaseKey` returns empty, tries up to
- * {@link MAX_COMMAND_UNIT_FALLBACKS} `${key}-commandUnit:<name>` variants
- * (default name `Execute`). No extra calls when the base key has content.
+ * If the step `logBaseKey` returns empty/404, tries up to
+ * {@link MAX_COMMAND_UNIT_FALLBACKS} `${key}-commandUnit:<name>` variants.
+ * Pass `commandUnitNames` from the execution graph (`unitProgresses`) when
+ * available — `harness_diagnose` and `harness_get` (via execution_id graph
+ * lookup) do this. Callers that omit it (e.g. `harness_get` with an explicit
+ * prefix only) fall back to the default unit name `Execute`. No extra calls
+ * when the base key has content.
  *
  * For a signed zip download URL only, use {@link resolveLogDownloadUrl}.
  *
@@ -529,7 +556,7 @@ export async function resolveLogContent(
   if (signal?.aborted) throw new Error("Log download cancelled");
 
   const keys = blobKeysToTry(key, options?.commandUnitNames);
-  let lastError: unknown;
+  let lastMissingError: unknown;
   let sawEmpty = false;
 
   for (let i = 0; i < keys.length; i++) {
@@ -553,11 +580,12 @@ export async function resolveLogContent(
         remaining: keys.length - i - 1,
       });
     } catch (err) {
-      // Oversized blob means the key exists — do not fall through to other keys.
-      if (err instanceof Error && /too large/i.test(err.message)) throw err;
-      lastError = err;
-      // Base key missing/error — still try command-unit keys (UI often uses those).
-      log.debug("Log blob fetch failed, trying next key if any", {
+      // Empty body already handled above. Only 404 (wrong/missing key) advances
+      // to the next candidate. Rate limits, auth, 5xx, and size errors stop —
+      // the HTTP client already retries retryable statuses per request.
+      if (!shouldTryNextBlobKey(err)) throw err;
+      lastMissingError = err;
+      log.debug("Log blob key not found, trying next key if any", {
         key: candidate,
         error: err instanceof Error ? err.message : String(err),
         remaining: keys.length - i - 1,
@@ -565,6 +593,6 @@ export async function resolveLogContent(
     }
   }
 
-  if (!sawEmpty && lastError) throw lastError;
+  if (!sawEmpty && lastMissingError) throw lastMissingError;
   return "(empty log output)";
 }

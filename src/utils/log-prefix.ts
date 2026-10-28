@@ -7,6 +7,25 @@ interface ExecGraphNode {
   identifier?: string;
   baseFqn?: string;
   logBaseKey?: string;
+  unitProgresses?: Array<{ unitName?: string }>;
+}
+
+/** Result of resolving a log key from an execution graph. */
+export interface ResolvedExecutionLogKey {
+  prefix: string;
+  /**
+   * Command-unit names from the matched node's `unitProgresses`.
+   * Passed to {@link resolveLogContent} so GET /blob can fall back beyond
+   * the default `Execute` unit when the base logBaseKey is empty.
+   */
+  commandUnitNames?: string[];
+}
+
+function commandUnitNamesFromNode(node: ExecGraphNode): string[] | undefined {
+  const names = node.unitProgresses
+    ?.map((u) => u.unitName?.trim())
+    .filter((n): n is string => !!n);
+  return names?.length ? names : undefined;
 }
 
 function collectStageCandidates(
@@ -42,52 +61,65 @@ function isStageMatch(node: ExecGraphNode, stageCandidates: Set<string>): boolea
   return false;
 }
 
-function findNodeLogBaseKey(
+function findNodeLogKey(
   nodeMap: Record<string, ExecGraphNode>,
   input: Record<string, unknown>,
-): string | undefined {
+): ResolvedExecutionLogKey | undefined {
   const stepTarget = asString(input.step_id);
   const stageCandidates = collectStageCandidates(nodeMap, input);
+
+  const fromNode = (node: ExecGraphNode): ResolvedExecutionLogKey | undefined => {
+    if (!node.logBaseKey) return undefined;
+    return {
+      prefix: node.logBaseKey,
+      commandUnitNames: commandUnitNamesFromNode(node),
+    };
+  };
 
   if (stepTarget) {
     for (const [nodeId, node] of Object.entries(nodeMap)) {
       if (!matchesTarget(nodeId, node, stepTarget)) continue;
       if (!isStageMatch(node, stageCandidates)) continue;
-      if (node.logBaseKey) return node.logBaseKey;
+      const resolved = fromNode(node);
+      if (resolved) return resolved;
     }
   }
 
   for (const target of stageCandidates) {
     for (const [nodeId, node] of Object.entries(nodeMap)) {
       if (!matchesTarget(nodeId, node, target)) continue;
-      if (node.logBaseKey) return node.logBaseKey;
+      const resolved = fromNode(node);
+      if (resolved) return resolved;
     }
   }
 
   for (const [nodeId, node] of Object.entries(nodeMap)) {
     if (!matchesTarget(nodeId, node, "pipeline")) continue;
     if (node.baseFqn !== "pipeline") continue;
-    if (node.logBaseKey) return node.logBaseKey;
+    const resolved = fromNode(node);
+    if (resolved) return resolved;
   }
 
   // Last resort: no specific step/stage targeted and no pipeline-level key found.
   // Pick any node that has a logBaseKey — prefer the deepest (longest) key which
   // typically corresponds to the main execution step rather than a wrapper stage.
-  let bestKey: string | undefined;
+  let best: ResolvedExecutionLogKey | undefined;
   for (const node of Object.values(nodeMap)) {
     if (!node.logBaseKey) continue;
-    if (!bestKey || node.logBaseKey.length > bestKey.length) {
-      bestKey = node.logBaseKey;
+    if (!best || node.logBaseKey.length > best.prefix.length) {
+      best = fromNode(node);
     }
   }
-  return bestKey;
+  return best;
 }
 
 /**
  * Build a log-service prefix from execution metadata.
  *
  * Fetches the execution, extracts pipelineIdentifier / runSequence / accountId,
- * and returns the appropriate prefix format based on `shouldUseSimplifiedKey`:
+ * and returns the appropriate prefix format based on `shouldUseSimplifiedKey`.
+ * When the key comes from a graph node, also returns that node's
+ * `unitProgresses` names for command-unit blob fallbacks.
  *
  * Simplified: {accountId}/pipeline/{pipelineId}/{runSequence}/-{executionId}
  * Standard:   accountId:{accountId}/orgId:{orgId}/projectId:{projectId}/pipelineId:{pipelineId}/runSequence:{seq}/level0:pipeline
@@ -97,7 +129,7 @@ export async function buildLogPrefixFromExecution(
   registry: Registry,
   executionId: string,
   input: Record<string, unknown>,
-): Promise<string> {
+): Promise<ResolvedExecutionLogKey> {
   const execution = await registry.dispatch(client, "execution", "get", {
     ...input,
     execution_id: executionId,
@@ -112,8 +144,8 @@ export async function buildLogPrefixFromExecution(
   const runSequence = asNumber(pes.runSequence);
 
   if (nodeMap) {
-    const logBaseKey = findNodeLogBaseKey(nodeMap, input);
-    if (logBaseKey) return logBaseKey;
+    const resolved = findNodeLogKey(nodeMap, input);
+    if (resolved) return resolved;
   }
 
   if (!pipelineId || runSequence == null) {
@@ -128,11 +160,16 @@ export async function buildLogPrefixFromExecution(
   const useSimplified = pes.shouldUseSimplifiedKey !== false;
 
   if (useSimplified) {
-    return `${client.account}/pipeline/${pipelineId}/${runSequence}/-${executionId}`;
+    return {
+      prefix: `${client.account}/pipeline/${pipelineId}/${runSequence}/-${executionId}`,
+    };
   }
 
   // Standard format requires org and project identifiers
   const orgId = asString(pes.orgIdentifier) ?? asString(input.org_id) ?? "";
   const projectId = asString(pes.projectIdentifier) ?? asString(input.project_id) ?? "";
-  return `accountId:${client.account}/orgId:${orgId}/projectId:${projectId}/pipelineId:${pipelineId}/runSequence:${runSequence}/level0:pipeline`;
+  return {
+    prefix:
+      `accountId:${client.account}/orgId:${orgId}/projectId:${projectId}/pipelineId:${pipelineId}/runSequence:${runSequence}/level0:pipeline`,
+  };
 }

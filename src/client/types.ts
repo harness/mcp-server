@@ -61,6 +61,12 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** JSON, binary download, or a bounded batch of JSON SSE data events. */
   responseType?: "json" | "buffer" | "sse";
+  /**
+   * When `responseType` is `"buffer"`, reject before / while reading if the
+   * body would exceed this many bytes. Checks `Content-Length` first (avoids
+   * buffering oversized payloads), then enforces a hard cap while streaming.
+   */
+  maxResponseBytes?: number;
   /** Required for responseType=sse. The caller owns the batch policy. */
   sseLimits?: JsonEventStreamLimits;
   /** Product backend — when "fme", skips Harness-specific auth/headers/params. */

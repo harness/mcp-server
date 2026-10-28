@@ -71,6 +71,7 @@ describe("resolveLogContent", () => {
         path: "/gateway/log-service/blob",
         params: { key: "acct/pipeline/p1/1/-exec1" },
         responseType: "buffer",
+        maxResponseBytes: 2 * 1024 * 1024,
         retryPolicy: "safe",
       }),
     );
@@ -167,17 +168,41 @@ describe("resolveLogContent", () => {
     expect(keys).toEqual(["base", "base-commandUnit:CustomUnit"]);
   });
 
-  it("caps command-unit fallbacks at 3 after empty base", async () => {
+  it("caps command-unit fallbacks at 3 and always reserves Execute", async () => {
     const requestFn = vi.fn().mockResolvedValue(new ArrayBuffer(0));
     await resolveLogContent(makeClient(requestFn), "base", {
       commandUnitNames: ["A", "B", "C", "D", "E"],
     });
-    expect(requestFn).toHaveBeenCalledTimes(4); // base + 3 units
+    const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
+    expect(keys).toEqual([
+      "base",
+      "base-commandUnit:A",
+      "base-commandUnit:B",
+      "base-commandUnit:Execute",
+    ]);
   });
 
-  it("propagates HTTP errors when every key fetch fails", async () => {
+  it("falls through on 404 to the next key", async () => {
+    const requestFn = vi
+      .fn()
+      .mockRejectedValueOnce(new HarnessApiError("Not Found", 404))
+      .mockResolvedValueOnce(Buffer.from("from execute unit").buffer);
+
+    const result = await resolveLogContent(makeClient(requestFn), "base");
+    expect(result).toContain("from execute unit");
+    expect(requestFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not fall through on rate-limit or server errors", async () => {
+    const requestFn = vi.fn().mockRejectedValue(new HarnessApiError("Too Many Requests", 429));
+    await expect(resolveLogContent(makeClient(requestFn), "prefix")).rejects.toThrow(/Too Many Requests|429/);
+    expect(requestFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates HTTP errors when every key fetch returns 404", async () => {
     const requestFn = vi.fn().mockRejectedValue(new HarnessApiError("Not Found", 404));
     await expect(resolveLogContent(makeClient(requestFn), "prefix")).rejects.toThrow(/Not Found|404/);
+    expect(requestFn).toHaveBeenCalledTimes(2); // base + Execute
   });
 
   it("throws when log file exceeds max size", async () => {
@@ -185,6 +210,7 @@ describe("resolveLogContent", () => {
     await expect(
       resolveLogContent(makeClient(requestFn), "prefix", { maxLogSizeBytes: 1024 }),
     ).rejects.toThrow(/too large/);
+    expect(requestFn).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -195,6 +221,24 @@ describe("blobKeysToTry / commandUnitLogKey", () => {
 
   it("does not double-append when key already has commandUnit", () => {
     expect(blobKeysToTry("base-commandUnit:Execute")).toEqual(["base-commandUnit:Execute"]);
+  });
+
+  it("reserves Execute inside the fallback cap when unit list is long", () => {
+    expect(blobKeysToTry("base", ["A", "B", "C", "D", "E"])).toEqual([
+      "base",
+      "base-commandUnit:A",
+      "base-commandUnit:B",
+      "base-commandUnit:Execute",
+    ]);
+  });
+
+  it("does not duplicate Execute when already listed in unitProgresses", () => {
+    expect(blobKeysToTry("base", ["Execute", "A", "B", "C"])).toEqual([
+      "base",
+      "base-commandUnit:Execute",
+      "base-commandUnit:A",
+      "base-commandUnit:B",
+    ]);
   });
 });
 
