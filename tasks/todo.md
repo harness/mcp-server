@@ -974,3 +974,40 @@ Validation: pnpm audit reports zero vulnerabilities. Typecheck, build, docs, shr
 Delivery: push `chore/version-3.2.36` and open a PR against `main`.
 
 Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
+
+## Owned-entity counts undercounted on IDP catalog lists (2026-10-28)
+
+- [x] Confirm the true owned-entity population for a team against the catalog API.
+- [x] Trace where the count is lost between the API response and the tool result.
+- [x] Publish the header-reported population total on the opted-in list endpoints.
+- [x] Stop dropping the HQL engine's truncation signal.
+- [x] Add regression tests and pin the blast radius of the opt-in.
+- [x] Validate typecheck, full suite, standards, build, and docs.
+
+Plan: `/v1/entities` returns a bare JSON array and reports the size of the matching
+population only in `X-Total-Elements`. The client discarded response headers, so the
+list extractor could only report `total = items.length` with no `has_more` — a page of
+20 out of 507 looked like a complete answer of 20, and the only way to get a real count
+was blind pagination plus summing (which undercounted). Fix: an opt-in
+`onResponseHeaders` callback on `RequestOptions`, a `headerPagination` flag on
+`EndpointSpec`, and `registry/pagination.ts::applyHeaderPagination` to fold the
+header-derived `total`/`page`/`page_size`/`has_more` into the result.
+
+Review:
+- Population total verified four independent ways before changing anything; 507 is the
+  correct owned count for the team that was being reported as 418.
+- Root cause was at the tool boundary, not in the catalog service or the agent's
+  reasoning — the number the agent needed was present in a header we threw away.
+- The fix is opt-in per endpoint. Only `idp_entity.list` and `idp_workflow.list` (both
+  `/v1/entities`) set `headerPagination`; a test asserts that inventory exactly, and
+  another proves a non-opted-in resource (`template`) never receives the callback and
+  keeps its body-provided total. `applyHeaderPagination` also refuses to overwrite a
+  body total that already differs from the page length, so body-paginated endpoints are
+  unaffected even if they opt in later.
+- Secondary defect: `hqlRunExtract` dropped the engine's `truncated` flag, and
+  `hqlRunBody` only requested stats when a timeout/max_results happened to be passed —
+  so on the common call a truncated prefix was indistinguishable from a full result.
+  `include_stats: true` is now always sent, and `truncated` is passed through with an
+  explicit warning not to count or aggregate a prefix.
+- Validation: `pnpm typecheck` clean; `pnpm test` 4206/4206 across 186 files;
+  `pnpm standards:check` 79/79; `pnpm build` clean; `pnpm docs:check` up to date.

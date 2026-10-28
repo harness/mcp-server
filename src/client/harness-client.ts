@@ -571,6 +571,16 @@ export class HarnessClient {
           }
         }
 
+        // Hand response headers to the caller before the body is read — some
+        // list endpoints report the population size only in `x-total-elements`.
+        if (options.onResponseHeaders) {
+          const responseHeaders: Record<string, string> = {};
+          response.headers.forEach((value, key) => {
+            responseHeaders[key.toLowerCase()] = value;
+          });
+          options.onResponseHeaders(responseHeaders);
+        }
+
         // Binary response mode — return raw ArrayBuffer (used for log/blob downloads).
         // When maxResponseBytes is set, Content-Length short-circuits and streaming
         // enforces a hard cap so oversized bodies never fully buffer into the heap.

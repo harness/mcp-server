@@ -7,6 +7,7 @@ import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType, appendAgentTypeQuery } from "../utils/deep-links.js";
+import { applyHeaderPagination } from "./pagination.js";
 import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
 import { assertListScopeResolved } from "./list-filter-utils.js";
@@ -911,6 +912,9 @@ export class Registry {
     const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers, ...resolvedRoute?.headers };
 
+    // Populated by the client only when spec.headerPagination is set.
+    let responseHeaders: Record<string, string> = {};
+
     const requestOpts = {
       method: resolvedMethod,
       path,
@@ -925,6 +929,7 @@ export class Registry {
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
       ...(!spec.pathBuilder && !resolvedRoute ? { tracing: { route: spec.path } } : {}),
       ...(spec.timeoutMs != null ? { timeoutMs: spec.timeoutMs } : {}),
+      ...(spec.headerPagination ? { onResponseHeaders: (h: Record<string, string>) => { responseHeaders = h; } } : {}),
       signal,
     };
 
@@ -958,6 +963,13 @@ export class Registry {
 
     // Extract response
     let result = spec.responseExtractor ? spec.responseExtractor(raw, input) : raw;
+
+    // Opt-in (spec.headerPagination): replace a page-length `total` with the
+    // population size the API reported in headers, so counting questions are
+    // not answered from a single page.
+    if (spec.headerPagination) {
+      result = applyHeaderPagination(result, responseHeaders);
+    }
 
     // Tag ELK/Mongo data source on the response when fallback is active
     if (dataSource && result && typeof result === "object" && !Array.isArray(result)) {
