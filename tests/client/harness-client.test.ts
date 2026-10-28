@@ -882,6 +882,185 @@ describe("HarnessClient", () => {
       }
     });
 
+    describe("FME 422 problem+json errors (error-parsers.ts)", () => {
+      const reject = async (body: unknown, status = 422, init: { path?: string; stream?: boolean } = {}) => {
+        fetchSpy.mockResolvedValue(new Response(JSON.stringify(body), {
+          status,
+          headers: { "content-type": "application/problem+json" },
+        }));
+        const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+        const path = init.path ?? "/fme/api/v4/feature-flags";
+        try {
+          if (init.stream) await client.requestStream({ path, method: "POST", body: {} });
+          else await client.request({ path, method: "POST", body: {} });
+          expect.fail("should have thrown");
+        } catch (err) {
+          return err as HarnessApiError;
+        }
+        throw new Error("unreachable");
+      };
+
+      const governance = (errors: unknown) => ({
+        type: "https://developer.harness.io/docs/api-reference/errors#governance-error",
+        status: 422,
+        title: "Governance Policy Violation",
+        errorType: "governanceError",
+        detail: "Governance error",
+        errors,
+      });
+
+      it("surfaces governance policy title and deny message from errors[]", async () => {
+        const err = await reject(governance([
+          { errorType: "governancePolicy", title: "FME Flag 2 owners min", detail: "Feature flags must have at least 2 owners. Current user owner count: 0" },
+        ]));
+        expect(err.message).toBe(
+          "Governance error — FME Flag 2 owners min: Feature flags must have at least 2 owners. Current user owner count: 0",
+        );
+        expect(err.statusCode).toBe(422);
+      });
+
+      it("lists every policy violation when several are returned", async () => {
+        const err = await reject(governance([
+          { title: "Policy A", detail: "deny A" },
+          { title: "Policy B", detail: "deny B" },
+        ]));
+        expect(err.message).toBe("Governance error — Policy A: deny A; Policy B: deny B");
+      });
+
+      it("uses only the title when an entry has no detail", async () => {
+        const err = await reject(governance([{ title: "Only title" }]));
+        expect(err.message).toBe("Governance error — Only title");
+      });
+
+      it("uses only the detail when an entry has no title", async () => {
+        const err = await reject(governance([{ detail: "Only detail" }]));
+        expect(err.message).toBe("Governance error — Only detail");
+      });
+
+      it("does not repeat text when entry title equals detail", async () => {
+        const err = await reject(governance([{ title: "Same", detail: "Same" }]));
+        expect(err.message).toBe("Governance error — Same");
+      });
+
+      it("falls back to entry.message and accepts plain string entries", async () => {
+        const err = await reject(governance([{ message: "from message" }, "plain string"]));
+        expect(err.message).toBe("Governance error — from message; plain string");
+      });
+
+      it("ignores empty, blank, and non-object entries", async () => {
+        const err = await reject(governance([{}, { title: "  ", detail: "" }, "  ", null, 42]));
+        expect(err.message).toBe("Governance error");
+      });
+
+      it("ignores errors when it is not an array", async () => {
+        const err = await reject(governance({ title: "nope" }));
+        expect(err.message).toBe("Governance error");
+      });
+
+      it("handles an empty errors array", async () => {
+        const err = await reject(governance([]));
+        expect(err.message).toBe("Governance error");
+      });
+
+      it("falls back to title when detail is missing", async () => {
+        const err = await reject({ title: "Governance Policy Violation", status: 422 });
+        expect(err.message).toBe("Governance Policy Violation");
+      });
+
+      it("falls back to title when detail is blank", async () => {
+        const err = await reject({ title: "Unprocessable", detail: "   ", status: 422 });
+        expect(err.message).toBe("Unprocessable");
+      });
+
+      it("prefers an explicit message over detail and title", async () => {
+        const err = await reject({ message: "explicit", detail: "d", title: "t" });
+        expect(err.message).toBe("explicit");
+      });
+
+      it("no longer dumps raw JSON when only detail/title are present", async () => {
+        const err = await reject(governance([{ title: "P", detail: "D" }]));
+        expect(err.message).not.toContain("{");
+        expect(err.message).not.toContain("https://developer.harness.io");
+      });
+
+      it("still applies generic `details` after the parsed policy errors", async () => {
+        const err = await reject({
+          ...governance([{ title: "P", detail: "D" }]),
+          details: "x".repeat(900),
+        });
+        expect(err.message).toBe(`Governance error — P: D; ${"x".repeat(400)}…`);
+      });
+
+      it("still applies responseMessages after the parsed policy errors", async () => {
+        const err = await reject({
+          ...governance([{ title: "P", detail: "D" }]),
+          responseMessages: [{ message: "extra context" }],
+        });
+        expect(err.message).toBe("Governance error — P: D; extra context");
+      });
+
+      it("keeps a usable body.message instead of detail", async () => {
+        const err = await reject({ ...governance([{ title: "P", detail: "D" }]), message: "Explicit message" });
+        expect(err.message).toBe("Explicit message — P: D");
+      });
+
+      it("replaces a junk (HTML) body.message with detail", async () => {
+        const err = await reject({ ...governance([{ title: "P", detail: "D" }]), message: "<html><body>Blocked</body></html>" });
+        expect(err.message).toBe("Governance error — P: D");
+      });
+
+      it("caps a very large detail message", async () => {
+        const err = await reject({ title: "t", detail: "m".repeat(5000), errors: [] });
+        expect(err.message.length).toBe(401);
+        expect(err.message.endsWith("…")).toBe(true);
+      });
+
+      it("truncates very large errors[] output with its own larger cap", async () => {
+        const err = await reject(governance([{ title: "P", detail: "y".repeat(5000) }]));
+        const tail = err.message.replace("Governance error — ", "");
+        expect(tail.length).toBe(2001);
+        expect(tail.endsWith("…")).toBe(true);
+      });
+
+      it("keeps the first policies intact when later ones push past the cap", async () => {
+        const entries = Array.from({ length: 100 }, (_, i) => ({ title: `Policy ${i}`, detail: "deny ".repeat(10) }));
+        const err = await reject(governance(entries));
+        expect(err.message).toContain("Policy 0: deny");
+        expect(err.message.endsWith("…")).toBe(true);
+      });
+
+      it("surfaces errors[] on requestStream errors too", async () => {
+        const err = await reject(governance([{ title: "Stream policy", detail: "denied" }]), 422, { stream: true });
+        expect(err.message).toBe("Governance error — Stream policy: denied");
+      });
+
+      it("does not apply to other statuses on FME paths", async () => {
+        const err = await reject(governance([{ title: "P", detail: "D" }]), 400);
+        expect(err.message).not.toContain("P: D");
+      });
+
+      it("does not apply to non-FME paths", async () => {
+        const err = await reject(governance([{ title: "P", detail: "D" }]), 422, { path: "/ng/api/connectors" });
+        expect(err.message).not.toContain("P: D");
+      });
+
+      it("returns just the message when there are no errors[] entries", async () => {
+        const err = await reject({ detail: "Same text", details: "Same text", status: 422 });
+        expect(err.message).toBe("Same text");
+      });
+    });
+
+    it("leaves standard `message` bodies on non-FME paths untouched by errors[]", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({ message: "Invalid request", errors: [{ title: "field", detail: "required" }] }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+      await expect(client.request({ path: "/ng/api/connectors" })).rejects.toMatchObject({
+        message: "Invalid request",
+      });
+    });
+
     it("surfaces `details` on requestStream errors", async () => {
       fetchSpy.mockResolvedValue(new Response(
         JSON.stringify({
