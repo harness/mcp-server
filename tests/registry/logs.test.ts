@@ -27,10 +27,11 @@ describe("execution_log registry contract", () => {
   const def = registry.getResource("execution_log");
   const getSpec = def.operations.get!;
 
-  it("keeps POST /gateway/log-service/blob/download with prefix query", () => {
-    expect(getSpec.method).toBe("POST");
-    expect(getSpec.path).toBe("/gateway/log-service/blob/download");
-    expect(getSpec.queryParams).toEqual({ prefix: "prefix" });
+  it("uses GET /gateway/log-service/blob with prefix mapped to key", () => {
+    expect(getSpec.method).toBe("GET");
+    expect(getSpec.path).toBe("/gateway/log-service/blob");
+    // Tool field "prefix" is sent as log-service query param "key"
+    expect(getSpec.queryParams).toEqual({ prefix: "key" });
   });
 
   it("documents log identifiers on get paramsSchema", () => {
