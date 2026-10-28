@@ -8,9 +8,9 @@ export interface ErrorParserContext {
 
 /** What a parser contributes to the final error message. */
 export interface ParsedApiError {
-  /** Replaces the generic message when set. */
+  /** Replaces the message only when the body has no usable `message` of its own. */
   message?: string;
-  /** Appended after the message as " — <detail>". */
+  /** Appended after the message as " — <detail>", before the generic detail fields. */
   detail?: string;
 }
 
@@ -25,8 +25,18 @@ export interface ErrorParser {
   parse(body: Record<string, unknown>, ctx: ErrorParserContext): ParsedApiError | undefined;
 }
 
-/** Cap for the per-policy text so a large response cannot flood the MCP error. */
+/** Caps so a large response cannot flood the MCP error. */
 export const MAX_FME_ERRORS_CHARS = 2000;
+export const MAX_FME_MESSAGE_CHARS = 400;
+
+/** Truncate to `max` chars with an ellipsis, without splitting a surrogate pair. */
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let end = max;
+  const last = text.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+  return `${text.slice(0, end)}…`;
+}
 
 function nonEmptyString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -38,12 +48,15 @@ function nonEmptyString(value: unknown): string | undefined {
  * FME API 422 responses are RFC 7807 `application/problem+json`:
  * `{ title, detail, errors: [{ title, detail }] }` with no `message` field.
  * For governance failures, `errors[]` holds the policy name and deny message.
+ * `body.message` is intentionally not read: the client already vets it (HTML/JS junk
+ * check) and only uses this parser's message when it has no usable one.
  */
 export const fmeUnprocessableEntityParser: ErrorParser = {
   name: "fme-422",
   match: ({ path, status }) => path.startsWith("/fme/") && status === 422,
   parse(body) {
-    const message = nonEmptyString(body.message) ?? nonEmptyString(body.detail) ?? nonEmptyString(body.title);
+    const rawMessage = nonEmptyString(body.detail) ?? nonEmptyString(body.title);
+    const message = rawMessage && truncate(rawMessage, MAX_FME_MESSAGE_CHARS);
 
     const lines: string[] = [];
     for (const entry of Array.isArray(body.errors) ? body.errors : []) {
@@ -58,11 +71,10 @@ export const fmeUnprocessableEntityParser: ErrorParser = {
       }
     }
 
-    let detail = lines.join("; ");
-    if (detail.length > MAX_FME_ERRORS_CHARS) detail = `${detail.slice(0, MAX_FME_ERRORS_CHARS)}…`;
+    const detail = truncate(lines.join("; "), MAX_FME_ERRORS_CHARS);
 
     if (!message && !detail) return undefined;
-    return { message, detail: detail || undefined };
+    return { message: message || undefined, detail: detail || undefined };
   },
 };
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   ERROR_PARSERS,
   fmeUnprocessableEntityParser,
+  MAX_FME_MESSAGE_CHARS,
   runErrorParsers,
   type ErrorParser,
 } from "../../src/client/error-parsers.js";
@@ -39,8 +40,9 @@ describe("fmeUnprocessableEntityParser.parse", () => {
       .toBe("A: a; B: b");
   });
 
-  it("prefers message, then detail, then title", () => {
-    expect(parse({ message: "m", detail: "d", title: "t" })?.message).toBe("m");
+  it("prefers detail, then title, and never reads body.message", () => {
+    expect(parse({ message: "m", detail: "d", title: "t" })?.message).toBe("d");
+    expect(parse({ message: "m" })).toBeUndefined();
     expect(parse({ detail: "d", title: "t" })?.message).toBe("d");
     expect(parse({ detail: " ", title: "t" })?.message).toBe("t");
   });
@@ -73,6 +75,17 @@ describe("fmeUnprocessableEntityParser.parse", () => {
 
   it("returns only detail when there is no message-like field but errors exist", () => {
     expect(parse({ errors: [{ title: "P", detail: "D" }] })).toEqual({ message: undefined, detail: "P: D" });
+  });
+
+  it("caps an oversized message at 400 chars plus an ellipsis", () => {
+    const message = parse({ detail: "m".repeat(5000) })?.message ?? "";
+    expect(message.length).toBe(MAX_FME_MESSAGE_CHARS + 1);
+    expect(message.endsWith("…")).toBe(true);
+  });
+
+  it("does not split a surrogate pair when truncating", () => {
+    const detail = parse({ detail: "a".repeat(MAX_FME_MESSAGE_CHARS - 1) + "😀😀" })?.message ?? "";
+    expect(detail).toBe("a".repeat(MAX_FME_MESSAGE_CHARS - 1) + "…");
   });
 
   it("caps oversized policy text at 2000 chars plus an ellipsis", () => {

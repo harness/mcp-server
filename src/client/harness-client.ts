@@ -269,15 +269,13 @@ function enrichErrorMessage(
   path: string,
   status: number,
 ): string {
-  // API-specific parsers (see error-parsers.ts) take over for the statuses they register for.
+  // API-specific parsers (see error-parsers.ts) refine the message and detail for the
+  // statuses they register for. Generic enrichments below still run on top.
   const custom = runErrorParsers(parsed, { path, status });
-  if (custom) {
-    const base = custom.message ?? rawMessage;
-    return custom.detail ? `${base} — ${custom.detail}` : base;
-  }
-
-  const detail = collectErrorDetail(parsed, rawMessage);
-  let message = detail ? `${rawMessage} — ${detail}` : rawMessage;
+  const base = custom?.message && isGarbageMessage(typeof parsed.message === "string" ? parsed.message : undefined) ? custom.message : rawMessage;
+  const generic = collectErrorDetail(parsed, base);
+  const detail = [custom?.detail, generic].filter(Boolean).join("; ");
+  let message = detail ? `${base} — ${detail}` : base;
   for (const { pathPrefix, field } of ERROR_FIELD_ENRICHMENTS) {
     const value = parsed[field];
     if (path.startsWith(pathPrefix) && typeof value === "string" && value) {

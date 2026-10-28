@@ -983,12 +983,36 @@ describe("HarnessClient", () => {
         expect(err.message).not.toContain("https://developer.harness.io");
       });
 
-      it("ignores generic `details` and reports only the parsed policy errors", async () => {
+      it("still applies generic `details` after the parsed policy errors", async () => {
         const err = await reject({
           ...governance([{ title: "P", detail: "D" }]),
           details: "x".repeat(900),
         });
+        expect(err.message).toBe(`Governance error — P: D; ${"x".repeat(400)}…`);
+      });
+
+      it("still applies responseMessages after the parsed policy errors", async () => {
+        const err = await reject({
+          ...governance([{ title: "P", detail: "D" }]),
+          responseMessages: [{ message: "extra context" }],
+        });
+        expect(err.message).toBe("Governance error — P: D; extra context");
+      });
+
+      it("keeps a usable body.message instead of detail", async () => {
+        const err = await reject({ ...governance([{ title: "P", detail: "D" }]), message: "Explicit message" });
+        expect(err.message).toBe("Explicit message — P: D");
+      });
+
+      it("replaces a junk (HTML) body.message with detail", async () => {
+        const err = await reject({ ...governance([{ title: "P", detail: "D" }]), message: "<html><body>Blocked</body></html>" });
         expect(err.message).toBe("Governance error — P: D");
+      });
+
+      it("caps a very large detail message", async () => {
+        const err = await reject({ title: "t", detail: "m".repeat(5000), errors: [] });
+        expect(err.message.length).toBe(401);
+        expect(err.message.endsWith("…")).toBe(true);
       });
 
       it("truncates very large errors[] output with its own larger cap", async () => {

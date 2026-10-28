@@ -175,6 +175,7 @@ All Zod schemas in tool handlers must:
 | Error handling changes | `src/utils/errors.ts` |
 | Config changes | `src/config.ts` (Zod schema + `Config` type) |
 | HTTP client changes | `src/client/harness-client.ts` |
+| API-specific error shapes (new APIs) | Register an `ErrorParser` in `src/client/error-parsers.ts`, gated by path and status. Prefer this over inline checks in `parseApiError` or new `ERROR_FIELD_ENRICHMENTS` entries |
 | OAuth proxy / broker HTTP routes | `src/utils/oauth-proxy.ts`, `src/utils/oauth-broker.ts` |
 | OAuth token vault backends | `src/utils/oauth-proxy-vault.ts`, `src/utils/oauth-proxy-redis-vault.ts` |
 
