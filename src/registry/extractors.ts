@@ -832,7 +832,7 @@ export function runbookListExtract(raw: unknown): unknown {
     .slice(0, MAX_LISTED_RUNBOOKS)
     .map((r) => {
       const { runbookId, displayName, description } = r as Record<string, unknown>;
-      return { serviceId: runbookId, displayName, description };
+      return { runbookId, displayName, description };
     });
   return { items, total, truncated: total > items.length };
 }
@@ -841,7 +841,7 @@ export function runbookGetExtract(raw: unknown): unknown {
   if (!isRecord(raw)) return raw;
   const { runbookId, inputs, ...rest } = raw;
   return {
-    serviceId: runbookId,
+    runbookId,
     ...rest,
     inputs: Array.isArray(inputs)
       ? inputs.map((i) => {
@@ -853,10 +853,10 @@ export function runbookGetExtract(raw: unknown): unknown {
 }
 
 export function runbookRunExtract(raw: unknown): unknown {
-  if (!isRecord(raw) || typeof raw.scriptRunId !== "string") {
-    throw new Error("Runbook execution did not return a scriptRunId");
+  if (!isRecord(raw) || typeof raw.runbookExecutionId !== "string") {
+    throw new Error("Runbook execution did not return a runbookExecutionId");
   }
-  return { scriptRunId: raw.scriptRunId, status: raw.status ?? "PENDING" };
+  return { runbookExecutionId: raw.runbookExecutionId, status: raw.status ?? "PENDING" };
 }
 
 export function runbookExecutionListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
