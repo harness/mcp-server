@@ -523,6 +523,7 @@ describe("harness_get — execution_log", () => {
     const result = await server.call("harness_get", {
       resource_type: "execution_log",
       resource_id: "exec-123",
+      params: { step_id: "step-1" },
     });
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { log_content: string };
@@ -543,7 +544,7 @@ describe("harness_get — execution_log", () => {
   it("auto-builds prefix from execution_id when provided in params", async () => {
     const result = await server.call("harness_get", {
       resource_type: "execution_log",
-      params: { execution_id: "exec-123" },
+      params: { execution_id: "exec-123", step_id: "step-1" },
     });
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { log_content: string };
@@ -575,6 +576,26 @@ describe("harness_get — execution_log", () => {
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
       { commandUnitNames: ["Initialize", "Execute"] },
+    );
+  });
+
+  it("forwards exact logKeys from graph resolution", async () => {
+    buildLogPrefixMock.mockResolvedValueOnce({
+      prefix: "acct1/steps/helm",
+      logKeys: ["acct1/steps/helm-commandUnit:Fetch Files", "acct1/steps/helm-commandUnit:Install / Upgrade"],
+    });
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      params: { execution_id: "exec-123", step_id: "helm" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(resolveLogContentMock).toHaveBeenCalledWith(
+      client,
+      "acct1/steps/helm",
+      {
+        commandUnitNames: undefined,
+        logKeys: ["acct1/steps/helm-commandUnit:Fetch Files", "acct1/steps/helm-commandUnit:Install / Upgrade"],
+      },
     );
   });
 
@@ -620,11 +641,35 @@ describe("harness_get — execution_log", () => {
     expect(data.error).toContain("prefix or execution_id is required");
   });
 
+  it("falls back to the zip download URL when execution_id has no step_id", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      params: { execution_id: "exec-123", stage_id: "deploy" },
+    });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { download_url: string; note: string };
+    expect(data.download_url).toBe("https://storage.example.com/logs.zip?signed=1");
+    expect(data.note).toContain("step_id");
+    expect(resolveLogDownloadUrlMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+    expect(resolveLogContentMock).not.toHaveBeenCalled();
+  });
+
+  it("omits the fallback note when return_download_url is true without step_id", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      return_download_url: true,
+      params: { execution_id: "exec-123" },
+    });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data).toEqual({ download_url: "https://storage.example.com/logs.zip?signed=1" });
+  });
+
   it("returns errorResult when resolveLogContent throws", async () => {
     resolveLogContentMock.mockRejectedValueOnce(new Error("Log blob not ready after 3 attempts (status: queued)"));
     const result = await server.call("harness_get", {
       resource_type: "execution_log",
       resource_id: "some-exec-id",
+      params: { step_id: "step-1" },
     });
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
