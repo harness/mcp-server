@@ -15,11 +15,18 @@ const DEFAULT_POLL_INTERVAL_MS = 3000;
 // maxLogSizeBytes.
 const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024; // 2 MB
 /**
- * Max extra GET /blob calls after an empty base logBaseKey, for
- * `-commandUnit:<name>` keys (UI path for CD ShellScript etc.).
- * Happy path stays 1 request; fallbacks run only when the base key is empty.
+ * Max extra GET /blob calls after an empty base logBaseKey, one per
+ * command-unit key (CD steps write each unit — Fetch Files, Prepare,
+ * Install / Upgrade, … — to its own key). All of them are fetched and merged
+ * so the failing unit is never dropped. Happy path stays 1 request; unit keys
+ * are fetched only when the base key is empty.
  */
-const MAX_COMMAND_UNIT_FALLBACKS = 3;
+const MAX_COMMAND_UNIT_KEYS = 10;
+/**
+ * Cap on the summed size of all unit blobs merged for one step. Each blob is
+ * still capped at `maxLogSizeBytes`; this bounds the worst case across units.
+ */
+const MAX_MERGED_LOG_SIZE_MULTIPLIER = 4;
 /** Default unit name used by Harness UI for script/command steps. */
 const DEFAULT_COMMAND_UNIT_NAMES = ["Execute"];
 
@@ -30,10 +37,16 @@ export interface LogResolveOptions {
   maxLogSizeBytes?: number;
   /**
    * Command-unit names from the execution graph (`unitProgresses`).
-   * Tried as `${logBaseKey}-commandUnit:${name}` only if the base key
-   * returns empty. Caps at {@link MAX_COMMAND_UNIT_FALLBACKS}.
+   * Fetched as `${logBaseKey}-commandUnit:${name}` only if the base key
+   * returns empty and no exact {@link logKeys} are known.
    */
   commandUnitNames?: string[];
+  /**
+   * Exact log keys from the node's `executableResponses[*].*.logKeys`.
+   * Preferred over {@link commandUnitNames} because `unitProgresses` can list
+   * fewer units than were actually logged.
+   */
+  logKeys?: string[];
 }
 
 /** Build UI-style command-unit blob key from a step logBaseKey. */
@@ -43,34 +56,49 @@ export function commandUnitLogKey(baseKey: string, unitName: string): string {
 }
 
 /**
- * Ordered keys to try for GET /blob: base logBaseKey first, then up to
- * {@link MAX_COMMAND_UNIT_FALLBACKS} command-unit variants.
+ * Ordered keys for GET /blob: base logBaseKey first, then every command-unit
+ * key (capped at {@link MAX_COMMAND_UNIT_KEYS}).
  *
- * Prefers `unitProgresses` names, then always keeps a slot for default
- * {@link DEFAULT_COMMAND_UNIT_NAMES} (`Execute`) inside the cap when not
- * already listed — so a long unit list cannot crowd out Execute.
+ * Unit keys come from exact graph `logKeys` when available; otherwise from
+ * `unitProgresses` names plus the default {@link DEFAULT_COMMAND_UNIT_NAMES}
+ * (`Execute`), which is always kept inside the cap.
  */
-export function blobKeysToTry(baseKey: string, commandUnitNames?: string[]): string[] {
+export function blobKeysToTry(
+  baseKey: string,
+  commandUnitNames?: string[],
+  logKeys?: string[],
+): string[] {
   if (baseKey.includes("-commandUnit:")) return [baseKey];
 
-  const fromGraph: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of commandUnitNames ?? []) {
-    const name = raw.trim();
-    if (!name || seen.has(name)) continue;
-    seen.add(name);
-    fromGraph.push(name);
+  const seen = new Set<string>([baseKey]);
+  const unitKeys: string[] = [];
+  const add = (key: string) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    unitKeys.push(key);
+  };
+
+  if (logKeys?.length) {
+    for (const raw of logKeys) {
+      const key = raw.trim();
+      if (key) add(key);
+    }
+    return [baseKey, ...unitKeys.slice(0, MAX_COMMAND_UNIT_KEYS)];
   }
 
-  const defaults = DEFAULT_COMMAND_UNIT_NAMES.filter((n) => !seen.has(n));
+  const names = new Set<string>();
+  for (const raw of commandUnitNames ?? []) {
+    const name = raw.trim();
+    if (name) names.add(name);
+  }
+  const defaults = DEFAULT_COMMAND_UNIT_NAMES.filter((n) => !names.has(n));
   // Reserve room for defaults (e.g. Execute) so they are never dropped by the cap.
-  const graphSlots = Math.max(0, MAX_COMMAND_UNIT_FALLBACKS - defaults.length);
-  const units = [...fromGraph.slice(0, graphSlots), ...defaults].slice(
-    0,
-    MAX_COMMAND_UNIT_FALLBACKS,
-  );
+  const graphSlots = Math.max(0, MAX_COMMAND_UNIT_KEYS - defaults.length);
+  for (const name of [...[...names].slice(0, graphSlots), ...defaults]) {
+    add(commandUnitLogKey(baseKey, name));
+  }
 
-  return [baseKey, ...units.map((name) => commandUnitLogKey(baseKey, name))];
+  return [baseKey, ...unitKeys];
 }
 
 /** Only empty bodies and 404s should advance to the next blob key. */
@@ -488,7 +516,8 @@ export async function resolveLogDownloadUrl(
   return rewriteDownloadUrlIfNeeded(client, blobLink);
 }
 
-async function fetchAndParseBlob(
+/** GET /blob for one key; returns the decompressed raw text ("" when empty). */
+async function fetchBlobText(
   client: HarnessClient,
   key: string,
   maxBytes: number,
@@ -509,9 +538,7 @@ async function fetchAndParseBlob(
 
   // Defense in depth for clients/mocks that ignore maxResponseBytes.
   if (arrayBuf.byteLength > maxBytes) {
-    throw new Error(
-      `Log file too large (${Math.round(arrayBuf.byteLength / 1024 / 1024)}MB). Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`,
-    );
+    throw logTooLargeError(arrayBuf.byteLength, maxBytes);
   }
 
   const buf = Buffer.from(arrayBuf);
@@ -522,24 +549,30 @@ async function fetchAndParseBlob(
   });
 
   if (buf.length === 0) return "";
+  return decompressBlob(buf);
+}
 
-  const parsed = parseLogLines(decompressBlob(buf));
-  return parsed.trim();
+function logTooLargeError(bytes: number, maxBytes: number): Error {
+  return new Error(
+    `Log file too large (${Math.round(bytes / 1024 / 1024)}MB). Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`,
+  );
 }
 
 /**
  * Resolve execution log content from the Harness log-service.
  *
- * Uses GET /blob (single log key). Response size is capped via
+ * Uses GET /blob (single log key per request). Response size is capped via
  * `maxResponseBytes` (Content-Length short-circuit + streamed hard cap).
  *
- * If the step `logBaseKey` returns empty/404, tries up to
- * {@link MAX_COMMAND_UNIT_FALLBACKS} `${key}-commandUnit:<name>` variants.
- * Pass `commandUnitNames` from the execution graph (`unitProgresses`) when
- * available — `harness_diagnose` and `harness_get` (via execution_id graph
- * lookup) do this. Callers that omit it (e.g. `harness_get` with an explicit
- * prefix only) fall back to the default unit name `Execute`. No extra calls
- * when the base key has content.
+ * If the step `logBaseKey` has content (e.g. CI steps) it is returned after a
+ * single request. Otherwise every command-unit key is fetched and merged in
+ * timestamp order — the same content the zip download contains — so a CD step
+ * whose error is in a later unit (e.g. Helm "Install / Upgrade" after
+ * "Fetch Files") is not reduced to its first non-empty unit.
+ *
+ * Unit keys come from `logKeys` (exact, from the graph) or `commandUnitNames`
+ * (`unitProgresses`); callers passing neither (e.g. `harness_get` with an
+ * explicit prefix only) fall back to the default unit name `Execute`.
  *
  * For a signed zip download URL only, use {@link resolveLogDownloadUrl}.
  *
@@ -551,45 +584,61 @@ export async function resolveLogContent(
   options?: LogResolveOptions,
 ): Promise<string> {
   const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
+  const maxMergedBytes = maxBytes * MAX_MERGED_LOG_SIZE_MULTIPLIER;
   const signal = options?.signal;
 
   if (signal?.aborted) throw new Error("Log download cancelled");
 
-  const keys = blobKeysToTry(key, options?.commandUnitNames);
+  const [baseKey, ...unitKeys] = blobKeysToTry(key, options?.commandUnitNames, options?.logKeys);
   let lastMissingError: unknown;
   let sawEmpty = false;
 
-  for (let i = 0; i < keys.length; i++) {
-    const candidate = keys[i]!;
+  /** Raw blob text, or "" when the key is empty or missing (404). */
+  const fetchKey = async (candidate: string): Promise<string> => {
     if (signal?.aborted) throw new Error("Log download cancelled");
     try {
-      const text = await fetchAndParseBlob(client, candidate, maxBytes, signal);
-      if (text) {
-        if (i > 0) {
-          log.info("Resolved logs via command-unit blob key after empty base key", {
-            baseKey: key,
-            key: candidate,
-            attempt: i + 1,
-          });
-        }
-        return text;
-      }
+      const raw = await fetchBlobText(client, candidate, maxBytes, signal);
+      if (raw.trim()) return raw;
       sawEmpty = true;
-      log.debug("Log blob empty, trying next key if any", {
-        key: candidate,
-        remaining: keys.length - i - 1,
-      });
+      log.debug("Log blob empty", { key: candidate });
     } catch (err) {
-      // Empty body already handled above. Only 404 (wrong/missing key) advances
-      // to the next candidate. Rate limits, auth, 5xx, and size errors stop —
-      // the HTTP client already retries retryable statuses per request.
+      // Only 404 (wrong/missing key) is skipped. Rate limits, auth, 5xx, and
+      // size errors stop — the HTTP client already retries retryable statuses.
       if (!shouldTryNextBlobKey(err)) throw err;
       lastMissingError = err;
-      log.debug("Log blob key not found, trying next key if any", {
+      log.debug("Log blob key not found", {
         key: candidate,
         error: err instanceof Error ? err.message : String(err),
-        remaining: keys.length - i - 1,
       });
+    }
+    return "";
+  };
+
+  const baseRaw = await fetchKey(baseKey!);
+  if (baseRaw) {
+    const text = parseLogLines(baseRaw).trim();
+    if (text) return text;
+  }
+
+  const unitRaws: string[] = [];
+  let mergedBytes = 0;
+  for (const candidate of unitKeys) {
+    const raw = await fetchKey(candidate);
+    if (!raw) continue;
+    mergedBytes += Buffer.byteLength(raw);
+    if (mergedBytes > maxMergedBytes) throw logTooLargeError(mergedBytes, maxMergedBytes);
+    unitRaws.push(raw);
+  }
+
+  if (unitRaws.length > 0) {
+    const text = parseLogLines(unitRaws.join("\n")).trim();
+    if (text) {
+      log.info("Resolved logs by merging command-unit blob keys", {
+        baseKey: key,
+        keysFetched: unitKeys.length,
+        keysWithContent: unitRaws.length,
+      });
+      return text;
     }
   }
 

@@ -578,6 +578,26 @@ describe("harness_get — execution_log", () => {
     );
   });
 
+  it("forwards exact logKeys from graph resolution", async () => {
+    buildLogPrefixMock.mockResolvedValueOnce({
+      prefix: "acct1/steps/helm",
+      logKeys: ["acct1/steps/helm-commandUnit:Fetch Files", "acct1/steps/helm-commandUnit:Install / Upgrade"],
+    });
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      params: { execution_id: "exec-123", step_id: "helm" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(resolveLogContentMock).toHaveBeenCalledWith(
+      client,
+      "acct1/steps/helm",
+      {
+        commandUnitNames: undefined,
+        logKeys: ["acct1/steps/helm-commandUnit:Fetch Files", "acct1/steps/helm-commandUnit:Install / Upgrade"],
+      },
+    );
+  });
+
   it("does not override explicit execution_id with resource_id", async () => {
     const result = await server.call("harness_get", {
       resource_type: "execution_log",

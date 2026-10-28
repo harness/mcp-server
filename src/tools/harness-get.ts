@@ -97,9 +97,10 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         if (resourceType === "execution_log") {
           try {
             let prefix = asString(input.prefix);
-            // unitProgresses from the execution graph — only available when we
-            // resolve via execution_id. Explicit prefix falls back to Execute only.
+            // unitProgresses / logKeys from the execution graph — only available when
+            // we resolve via execution_id. Explicit prefix falls back to Execute only.
             let commandUnitNames: string[] | undefined;
+            let logKeys: string[] | undefined;
             if (!prefix) {
               // Auto-build prefix from execution_id if available
               const executionId = asString(input.execution_id);
@@ -109,12 +110,13 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               const resolved = await buildLogPrefixFromExecution(client, registry, executionId, input);
               prefix = resolved.prefix;
               commandUnitNames = resolved.commandUnitNames;
+              logKeys = resolved.logKeys;
             }
             if (isTrue(input.return_download_url)) {
               const downloadUrl = await resolveLogDownloadUrl(client, prefix);
               return jsonResult({ download_url: downloadUrl });
             }
-            const logText = await resolveLogContent(client, prefix, { commandUnitNames });
+            const logText = await resolveLogContent(client, prefix, { commandUnitNames, logKeys });
             return jsonResult({ log_content: logText });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
