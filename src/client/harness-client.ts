@@ -219,6 +219,8 @@ const ERROR_FIELD_ENRICHMENTS: Array<{ pathPrefix: string; field: string }> = [
 ];
 
 const MAX_ERROR_DETAIL_CHARS = 400;
+/** Separate, larger budget for per-entry `errors[]` (e.g. governance policy denials) so they are not cut off. */
+const MAX_ERROR_ENTRIES_CHARS = 2000;
 
 /** Preserve standard Harness errors; adapt Vibe's nested BFF envelope only on Vibe paths. */
 function parseApiError(body: string, path: string): Record<string, unknown> & { message?: string; code?: string | number; correlationId?: string } {
@@ -226,7 +228,11 @@ function parseApiError(body: string, path: string): Record<string, unknown> & { 
   try { raw = JSON.parse(body); } catch { return {}; }
   if (!isRecord(raw)) return {};
   const nested = path.startsWith("/vibe/v1/") && isRecord(raw.error) ? raw.error : {};
-  const message = typeof raw.message === "string" ? raw.message : nested.message;
+  // RFC 7807 problem+json (e.g. FME API) carries `detail`/`title` instead of `message`.
+  const problemMessage = typeof raw.detail === "string" && raw.detail.trim()
+    ? raw.detail
+    : typeof raw.title === "string" ? raw.title : undefined;
+  const message = typeof raw.message === "string" ? raw.message : nested.message ?? problemMessage;
   const code = raw.code ?? nested.code;
   return {
     ...raw,
@@ -255,11 +261,28 @@ function collectErrorDetail(parsed: Record<string, unknown>, message: string): s
     if (entry && typeof entry === "object") add((entry as Record<string, unknown>).message);
   }
 
-  if (extras.length === 0) return undefined;
   const detail = extras.join("; ");
-  return detail.length > MAX_ERROR_DETAIL_CHARS
+  const capped = detail.length > MAX_ERROR_DETAIL_CHARS
     ? `${detail.slice(0, MAX_ERROR_DETAIL_CHARS)}…`
     : detail;
+
+  // Per-entry errors (problem+json `errors[]`, e.g. governance policy violations): "title: detail".
+  const entries: string[] = [];
+  for (const entry of Array.isArray(parsed.errors) ? parsed.errors : []) {
+    if (typeof entry === "string") {
+      if (entry.trim()) entries.push(entry.trim());
+    } else if (isRecord(entry)) {
+      const title = typeof entry.title === "string" ? entry.title.trim() : "";
+      const text = typeof entry.detail === "string" ? entry.detail.trim()
+        : typeof entry.message === "string" ? entry.message.trim() : "";
+      const line = title && text && title !== text ? `${title}: ${text}` : title || text;
+      if (line) entries.push(line);
+    }
+  }
+  let entryText = entries.join("; ");
+  if (entryText.length > MAX_ERROR_ENTRIES_CHARS) entryText = `${entryText.slice(0, MAX_ERROR_ENTRIES_CHARS)}…`;
+
+  return [capped, entryText].filter(Boolean).join("; ") || undefined;
 }
 
 function enrichErrorMessage(
