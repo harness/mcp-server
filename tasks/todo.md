@@ -950,6 +950,12 @@ Delivery: push `chore/version-3.2.35` and open a PR against `main`.
 
 Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
 
+## Version 3.2.37
+
+- [ ] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [ ] Validate release metadata, shrinkwrap consistency, types, build, and docs.
+- [ ] Commit, push, tag, and create the GitHub release.
+
 ## GitHub security alerts #102–110 and container vulnerability gate
 
 - [x] Inspect failed Trivy scan: OpenSSL/libssl3, body-parser, and Zod.
