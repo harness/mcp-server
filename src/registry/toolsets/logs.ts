@@ -16,14 +16,17 @@ export const logsToolset: ToolsetDefinition = {
       diagnosticHint: "Logs may still be preparing after a run. Retry when the execution has finished, pass step_id with execution_id, or set return_download_url=true. For failures use harness_diagnose with include_logs=true.",
       operations: {
         get: {
-          method: "POST",
-          path: "/gateway/log-service/blob/download",
+          // Log text uses GET /blob (single key). return_download_url still uses
+          // POST /blob/download via resolveLogDownloadUrl in the tool handler.
+          method: "GET",
+          path: "/gateway/log-service/blob",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            prefix: "prefix",
+            // inputKey → queryKey: registry field "prefix" maps to log-service `key`
+            prefix: "key",
           },
           responseExtractor: passthrough,
-          description: "Fetch execution logs by prefix or execution_id. Returns log text, or a download URL when return_download_url=true.",
+          description: "Fetch execution logs by prefix or execution_id. Returns log text via GET /blob, or a download URL when return_download_url=true.",
           paramsSchema: {
             fields: [
               {
