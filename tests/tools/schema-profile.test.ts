@@ -78,6 +78,13 @@ describe("HARNESS_SCHEMA_MODE", () => {
     expect(worst[1], `${worst[0]} is ${worst[1]}B`).toBeLessThanOrEqual(COMPACT_PER_TOOL_BUDGET_BYTES);
   });
 
+  it("treats an omitted HARNESS_SCHEMA_MODE as compact on Registry", () => {
+    const { HARNESS_SCHEMA_MODE: _mode, ...configWithoutSchemaMode } = makeConfig("compact");
+    const registry = new Registry(configWithoutSchemaMode as Config);
+    expect(registry.compactSchemas).toBe(true);
+    expect(registry.schemaProfile).toBe("compact");
+  });
+
   it("compact mode does not inline long enums", () => {
     const longest = (node: unknown): number => {
       if (Array.isArray(node)) return Math.max(0, ...node.map(longest));
