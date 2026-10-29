@@ -148,6 +148,8 @@ export const runbooksToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "runbook_id", required: true, description: "Runbook runbookId" },
         { name: "cursor", description: "paginationToken from the previous page" },
+        { name: "started_after", description: "Only runs started at or after this ISO-8601 timestamp, e.g. 2026-05-01T00:00:00Z" },
+        { name: "started_before", description: "Only runs started at or before this ISO-8601 timestamp" },
       ],
       operations: {
         list: {
@@ -155,7 +157,12 @@ export const runbooksToolset: ToolsetDefinition = {
           path: EXECUTIONS_PATH,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { runbook_id: "runbookId" },
-          queryParams: { cursor: "cursor", size: "pageSize" },
+          queryParams: {
+            cursor: "cursor",
+            size: "pageSize",
+            started_after: "startedAfter",
+            started_before: "startedBefore",
+          },
           responseExtractor: runbookExecutionListExtract,
           skipCompact: true,
           description: "List recent runs of a runbook, newest first (filters.runbook_id required)",

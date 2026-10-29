@@ -277,6 +277,26 @@ describe("runbook_execution", () => {
     expect(data.pagination.next_cursor).toBeUndefined();
   });
 
+  it("passes the start-time window and keeps runbookName on each run", async () => {
+    mockRequest.mockResolvedValue({
+      results: [{ runbookExecutionId: "run-3", runbookName: "Restart service", status: "SUCCESS" }],
+      hasMoreResults: false,
+    });
+    const result = await server.call("harness_list", {
+      resource_type: "runbook_execution",
+      filters: {
+        runbook_id: RUNBOOK_ID,
+        started_after: "2026-05-01T00:00:00Z",
+        started_before: "2026-05-02T00:00:00Z",
+      },
+    });
+    const opts = optsOf(mockRequest.mock.calls[0]!);
+    expect(opts.params.startedAfter).toBe("2026-05-01T00:00:00Z");
+    expect(opts.params.startedBefore).toBe("2026-05-02T00:00:00Z");
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]).toMatchObject({ runbookName: "Restart service" });
+  });
+
   it("returns next_cursor when more results remain", async () => {
     mockRequest.mockResolvedValue({ results: [], nextPageCursor: "next", hasMoreResults: true });
     const result = await server.call("harness_list", {
