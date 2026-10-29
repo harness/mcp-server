@@ -959,9 +959,18 @@ Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh 
 
 ## Version 3.2.37
 
-- [ ] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
-- [ ] Validate release metadata, shrinkwrap consistency, types, build, and docs.
-- [ ] Commit, push, tag, and create the GitHub release.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release metadata, shrinkwrap consistency, types, build, and docs.
+- [x] Commit, push, tag, and create the GitHub release.
+
+## Version 3.2.38
+
+- [x] Fetch github/main and create chore/version-3.2.38 from it.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.38` and open a PR against `main`.
+
+Validation: 11 release/workflow tests passed; shrinkwrap consistency, typecheck, fresh build, docs check, and diff check passed.
 
 ## GitHub security alerts #102–110 and container vulnerability gate
 
