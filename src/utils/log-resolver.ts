@@ -1,4 +1,6 @@
-import { gunzipSync, inflateRawSync } from "node:zlib";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { createGunzip, gunzipSync, inflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "./errors.js";
 import { createLogger } from "./logger.js";
@@ -9,11 +11,15 @@ const log = createLogger("log-resolver");
 // maxPollAttempts is exhausted. Tests override maxPollAttempts.
 const DEFAULT_POLL_ATTEMPTS = 5;
 const DEFAULT_POLL_INTERVAL_MS = 3000;
-// Tightened from 10 MB to 2 MB. Diagnose callers truncate output to a few
-// hundred lines anyway; buffering 10 MB per concurrent log fetch into the V8
-// heap contributed to production OOMs. Callers needing more can still pass
-// maxLogSizeBytes.
-const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024; // 2 MB
+/**
+ * After streaming GET /blob (gzip/plain with a sliding window; zip buffered
+ * with a high wire safety cap), keep only this many trailing decompressed
+ * bytes per key. Replaces the old 2MB hard reject so large unit logs still
+ * yield a useful tail. Override via {@link LogResolveOptions.maxLogSizeBytes}.
+ */
+const DEFAULT_BLOB_TAIL_BYTES = 500 * 1024; // 500 KB
+/** Absolute compressed-size safety limit while buffering a ZIP /blob body. */
+const ABSOLUTE_ZIP_WIRE_BYTES = 32 * 1024 * 1024;
 /**
  * Max extra GET /blob calls after an empty base logBaseKey, one per
  * command-unit key. When over the cap, the **last** keys are kept (failures
@@ -36,6 +42,10 @@ export interface LogResolveOptions {
   signal?: AbortSignal;
   maxPollAttempts?: number;
   pollIntervalMs?: number;
+  /**
+   * Max trailing decompressed bytes kept per GET /blob after streaming
+   * (default 500KB). Not a wire reject — oversized blobs are tailed, not thrown.
+   */
   maxLogSizeBytes?: number;
   /**
    * Command-unit names from the execution graph (`unitProgresses`).
@@ -461,14 +471,16 @@ function extractZipEntriesFromLocalHeaders(buf: Buffer): ZipEntry[] {
 }
 
 /**
- * Decompress a downloaded blob — handles gzip, zip, or plain text.
+ * Decompress a fully-buffered blob — handles gzip, zip, or plain text.
+ * Callers should pass {@link takeUtf8Tail} afterward when only a trailing window is needed.
  */
 function decompressBlob(buf: Buffer): string {
   if (buf.length === 0) return "";
 
   // Gzip
   if (buf[0] === GZIP_MAGIC_0 && buf[1] === GZIP_MAGIC_1) {
-    const decompressed = gunzipSync(buf, { maxOutputLength: DEFAULT_MAX_LOG_BYTES * 10 });
+    // Allow large inflate then tail — streaming path is preferred for gzip GET /blob.
+    const decompressed = gunzipSync(buf, { maxOutputLength: ABSOLUTE_ZIP_WIRE_BYTES });
     return decompressed.toString("utf-8");
   }
 
@@ -482,6 +494,168 @@ function decompressBlob(buf: Buffer): string {
 
   // Plain text
   return buf.toString("utf-8");
+}
+
+/** Sliding window of the last `maxBytes` of a byte stream. */
+class ByteTail {
+  private chunks: Buffer[] = [];
+  private size = 0;
+
+  constructor(private readonly maxBytes: number) {}
+
+  push(chunk: Buffer): void {
+    if (chunk.length === 0) return;
+    if (chunk.length >= this.maxBytes) {
+      this.chunks = [chunk.subarray(chunk.length - this.maxBytes)];
+      this.size = this.maxBytes;
+      return;
+    }
+    this.chunks.push(chunk);
+    this.size += chunk.length;
+    while (this.size > this.maxBytes && this.chunks.length > 0) {
+      const overflow = this.size - this.maxBytes;
+      const head = this.chunks[0]!;
+      if (head.length <= overflow) {
+        this.chunks.shift();
+        this.size -= head.length;
+      } else {
+        this.chunks[0] = head.subarray(overflow);
+        this.size = this.maxBytes;
+        break;
+      }
+    }
+  }
+
+  toUtf8(): string {
+    if (this.size === 0) return "";
+    return takeUtf8Tail(Buffer.concat(this.chunks, this.size), this.size);
+  }
+}
+
+/** Decode a byte window as UTF-8, dropping a leading partial multi-byte char if needed. */
+function takeUtf8Tail(buf: Buffer, maxBytes: number): string {
+  const slice = buf.length > maxBytes ? buf.subarray(buf.length - maxBytes) : buf;
+  let start = 0;
+  while (start < slice.length && start < 4 && (slice[start]! & 0xc0) === 0x80) start++;
+  return slice.subarray(start).toString("utf-8");
+}
+
+async function readAtLeast(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  minBytes: number,
+): Promise<Buffer> {
+  const parts: Buffer[] = [];
+  let total = 0;
+  while (total < minBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    parts.push(Buffer.from(value));
+    total += value.byteLength;
+  }
+  return parts.length ? Buffer.concat(parts, total) : Buffer.alloc(0);
+}
+
+async function readRemaining(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: Buffer,
+  maxTotal: number,
+): Promise<Buffer> {
+  const parts: Buffer[] = prefix.length ? [prefix] : [];
+  let total = prefix.length;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    total += value.byteLength;
+    if (total > maxTotal) {
+      await reader.cancel().catch(() => undefined);
+      throw logTooLargeError(total, maxTotal);
+    }
+    parts.push(Buffer.from(value));
+  }
+  return parts.length ? Buffer.concat(parts, total) : Buffer.alloc(0);
+}
+
+function webReaderToNodeReadable(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: Buffer,
+): Readable {
+  let prefixSent = prefix.length === 0;
+  return new Readable({
+    async read() {
+      try {
+        if (!prefixSent) {
+          prefixSent = true;
+          this.push(prefix);
+          return;
+        }
+        const { done, value } = await reader.read();
+        if (done) {
+          this.push(null);
+          return;
+        }
+        this.push(value && value.byteLength ? Buffer.from(value) : Buffer.alloc(0));
+      } catch (err) {
+        this.destroy(err instanceof Error ? err : new Error(String(err)));
+      }
+    },
+  });
+}
+
+async function streamGunzipToTail(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: Buffer,
+  tailBytes: number,
+): Promise<string> {
+  const tail = new ByteTail(tailBytes);
+  const gunzip = createGunzip();
+  gunzip.on("data", (chunk: Buffer) => tail.push(chunk));
+  await pipeline(webReaderToNodeReadable(reader, prefix), gunzip);
+  return tail.toUtf8();
+}
+
+async function streamPlainToTail(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: Buffer,
+  tailBytes: number,
+): Promise<string> {
+  const tail = new ByteTail(tailBytes);
+  tail.push(prefix);
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    tail.push(Buffer.from(value));
+  }
+  return tail.toUtf8();
+}
+
+/**
+ * Stream a GET /blob Response body: sliding 500KB (or `tailBytes`) for gzip/plain;
+ * ZIP is buffered up to {@link ABSOLUTE_ZIP_WIRE_BYTES} then decompressed and tailed.
+ */
+async function streamBlobResponseToText(response: Response, tailBytes: number): Promise<string> {
+  if (!response.body) {
+    const buf = Buffer.from(await response.arrayBuffer());
+    if (buf.length === 0) return "";
+    return takeUtf8Tail(Buffer.from(decompressBlob(buf), "utf-8"), tailBytes);
+  }
+
+  const reader = response.body.getReader();
+  const peeked = await readAtLeast(reader, 4);
+  if (peeked.length === 0) return "";
+
+  if (peeked[0] === GZIP_MAGIC_0 && peeked[1] === GZIP_MAGIC_1) {
+    return streamGunzipToTail(reader, peeked, tailBytes);
+  }
+
+  if (peeked.length >= 4 && peeked.readUInt32LE(0) === ZIP_MAGIC) {
+    const full = await readRemaining(reader, peeked, ABSOLUTE_ZIP_WIRE_BYTES);
+    return takeUtf8Tail(Buffer.from(decompressBlob(full), "utf-8"), tailBytes);
+  }
+
+  return streamPlainToTail(reader, peeked, tailBytes);
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -561,40 +735,33 @@ export async function resolveLogDownloadUrl(
   return rewriteDownloadUrlIfNeeded(client, blobLink);
 }
 
-/** GET /blob for one key; returns the decompressed raw text ("" when empty). */
+/**
+ * GET /blob for one key via {@link HarnessClient.requestStream}.
+ * Streams the body and keeps only the last `tailBytes` of decompressed text
+ * (default 500KB) — no 2MB wire hard-reject.
+ */
 async function fetchBlobText(
   client: HarnessClient,
   key: string,
-  maxBytes: number,
+  tailBytes: number,
   signal?: AbortSignal,
 ): Promise<string> {
-  log.debug("Requesting log blob", { key });
-  // maxResponseBytes short-circuits on Content-Length and caps while streaming so
-  // oversized blobs never fully buffer (see harness-client readResponseBuffer).
-  const arrayBuf = await client.request<ArrayBuffer>({
+  log.debug("Requesting log blob (stream)", { key, tailBytes });
+  const response = await client.requestStream({
     method: "GET",
     path: "/gateway/log-service/blob",
     params: { key },
     signal,
-    responseType: "buffer",
-    maxResponseBytes: maxBytes,
     retryPolicy: "safe",
   });
 
-  // Defense in depth for clients/mocks that ignore maxResponseBytes.
-  if (arrayBuf.byteLength > maxBytes) {
-    throw logTooLargeError(arrayBuf.byteLength, maxBytes);
-  }
-
-  const buf = Buffer.from(arrayBuf);
-  log.debug("Downloaded blob", {
-    bytes: buf.length,
-    magic: buf.length >= 4 ? buf.subarray(0, 4).toString("hex") : "empty",
+  const text = await streamBlobResponseToText(response, tailBytes);
+  log.debug("Streamed blob tail", {
     key,
+    tailChars: text.length,
+    magic: text.length >= 4 ? Buffer.from(text.slice(0, 4)).toString("hex") : "empty",
   });
-
-  if (buf.length === 0) return "";
-  return decompressBlob(buf);
+  return text;
 }
 
 function logTooLargeError(bytes: number, maxBytes: number): Error {
@@ -606,8 +773,9 @@ function logTooLargeError(bytes: number, maxBytes: number): Error {
 /**
  * Resolve execution log content from the Harness log-service.
  *
- * Uses GET /blob (single log key per request). Response size is capped via
- * `maxResponseBytes` (Content-Length short-circuit + streamed hard cap).
+ * Uses GET /blob (single log key per request) via a streamed body read. Each
+ * blob keeps only the last {@link LogResolveOptions.maxLogSizeBytes} (default
+ * 500KB) of decompressed text — oversized units are tailed, not rejected.
  *
  * If the step `logBaseKey` has content (e.g. CI steps) it is returned after a
  * single request. Otherwise command-unit keys are resolved from `logKeys` or
@@ -628,7 +796,7 @@ export async function resolveLogContent(
   key: string,
   options?: LogResolveOptions,
 ): Promise<string> {
-  const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
+  const tailBytes = options?.maxLogSizeBytes ?? DEFAULT_BLOB_TAIL_BYTES;
   const mode: LogResolveMode = options?.mode ?? "full";
   const snippetLines = options?.snippetLines ?? DEFAULT_SNIPPET_LINES;
   const signal = options?.signal;
@@ -643,7 +811,7 @@ export async function resolveLogContent(
   const fetchKey = async (candidate: string): Promise<string> => {
     if (signal?.aborted) throw new Error("Log download cancelled");
     try {
-      const raw = await fetchBlobText(client, candidate, maxBytes, signal);
+      const raw = await fetchBlobText(client, candidate, tailBytes, signal);
       if (raw.trim()) return raw;
       sawEmpty = true;
       log.debug("Log blob empty", { key: candidate });

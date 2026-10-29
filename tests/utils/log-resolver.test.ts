@@ -10,13 +10,32 @@ import { gzipSync, deflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 
+function toBlobResponse(result: unknown): Response {
+  if (result instanceof Response) return result;
+  if (result instanceof ArrayBuffer) {
+    return new Response(Buffer.from(result), { status: 200 });
+  }
+  if (Buffer.isBuffer(result)) {
+    return new Response(result, { status: 200 });
+  }
+  if (typeof result === "string") {
+    return new Response(result, { status: 200 });
+  }
+  return new Response("", { status: 200 });
+}
+
 function makeClient(
   requestFn: (...args: unknown[]) => unknown,
   overrides?: Partial<Pick<HarnessClient, "baseURL" | "requestStream" | "account">>,
 ): HarnessClient {
+  const request = vi.fn().mockImplementation(requestFn);
+  const requestStream = vi.fn().mockImplementation(async (opts: unknown) => {
+    const result = await requestFn(opts);
+    return toBlobResponse(result);
+  });
   return {
-    request: requestFn,
-    requestStream: vi.fn().mockResolvedValue(new Response("", { status: 200 })),
+    request,
+    requestStream,
     account: "test-account",
     baseURL: "https://custom.harness.example/gateway",
     ...overrides,
@@ -57,32 +76,34 @@ describe("resolveLogContent", () => {
   it("GETs /blob with key and returns plain text log content", async () => {
     const logText = "line 1\nline 2\nline 3";
     const requestFn = vi.fn().mockResolvedValue(Buffer.from(logText).buffer);
+    const client = makeClient(requestFn);
 
-    const result = await resolveLogContent(
-      makeClient(requestFn),
-      "acct/pipeline/p1/1/-exec1",
-    );
+    const result = await resolveLogContent(client, "acct/pipeline/p1/1/-exec1");
 
     expect(result).toContain("line 1");
     expect(result).toContain("line 2");
     expect(result).toContain("line 3");
-    expect(requestFn).toHaveBeenCalledWith(
+    expect(client.requestStream).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "GET",
         path: "/gateway/log-service/blob",
         params: { key: "acct/pipeline/p1/1/-exec1" },
-        responseType: "buffer",
-        maxResponseBytes: 2 * 1024 * 1024,
         retryPolicy: "safe",
       }),
+    );
+    expect((client.requestStream as ReturnType<typeof vi.fn>).mock.calls[0]![0]).not.toHaveProperty(
+      "maxResponseBytes",
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("does not call /blob/download", async () => {
     const requestFn = vi.fn().mockResolvedValue(Buffer.from("ok").buffer);
-    await resolveLogContent(makeClient(requestFn), "prefix");
-    const paths = requestFn.mock.calls.map((c) => (c[0] as { path: string }).path);
+    const client = makeClient(requestFn);
+    await resolveLogContent(client, "prefix");
+    const paths = (client.requestStream as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => (c[0] as { path: string }).path,
+    );
     expect(paths).toEqual(["/gateway/log-service/blob"]);
   });
 
@@ -345,12 +366,32 @@ describe("resolveLogContent", () => {
     expect(requestFn).toHaveBeenCalledTimes(2); // base + Execute
   });
 
-  it("throws when log file exceeds max size", async () => {
-    const requestFn = vi.fn().mockResolvedValue(new ArrayBuffer(2048));
-    await expect(
-      resolveLogContent(makeClient(requestFn), "prefix", { maxLogSizeBytes: 1024 }),
-    ).rejects.toThrow(/too large/);
+  it("keeps only the last maxLogSizeBytes of a streamed plain blob", async () => {
+    // Unique marker at the end so we can assert the sliding tail kept it.
+    const head = "H".repeat(2000);
+    const tail = "TAIL_MARKER_OK";
+    const buf = Buffer.from(head + tail);
+    const requestFn = vi.fn().mockResolvedValue(buf);
+    const result = await resolveLogContent(makeClient(requestFn), "prefix", {
+      maxLogSizeBytes: 100,
+    });
+    expect(result.endsWith("TAIL_MARKER_OK")).toBe(true);
+    expect(Buffer.byteLength(result, "utf-8")).toBeLessThanOrEqual(100);
     expect(requestFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("streams gzip and keeps a trailing byte window", async () => {
+    const head = "G".repeat(3000);
+    const marker = "GZIP_TAIL_OK";
+    const gzipped = gzipSync(Buffer.from(head + marker));
+    const requestFn = vi.fn().mockResolvedValue(
+      gzipped.buffer.slice(gzipped.byteOffset, gzipped.byteOffset + gzipped.byteLength),
+    );
+    const result = await resolveLogContent(makeClient(requestFn), "prefix", {
+      maxLogSizeBytes: 64,
+    });
+    expect(result).toContain("GZIP_TAIL_OK");
+    expect(Buffer.byteLength(result, "utf-8")).toBeLessThanOrEqual(64);
   });
 });
 
