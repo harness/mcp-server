@@ -30,7 +30,7 @@ const MAX_COMMAND_UNIT_KEYS = 10;
 /** Default unit name used by Harness UI for script/command steps. */
 const DEFAULT_COMMAND_UNIT_NAMES = ["Execute"];
 /** Default diagnose / snippet tail when callers omit {@link LogResolveOptions.snippetLines}. */
-const DEFAULT_SNIPPET_LINES = 120;
+const DEFAULT_SNIPPET_LINES = 200;
 /** Per-unit line budget in `full` mode before soft-trimming the overall result. */
 const DEFAULT_FULL_UNIT_LINES = 500;
 /** Soft overall line budget for labeled `full` mode (trim earliest sections). */
@@ -64,7 +64,7 @@ export interface LogResolveOptions {
    * labeled sections for every non-empty unit (harness_get). Default `full`.
    */
   mode?: LogResolveMode;
-  /** Tail line count for `snippet` mode (and safety trim). Default 120. */
+  /** Tail line count for `snippet` mode (and safety trim). Default 200. */
   snippetLines?: number;
   /**
    * From `unitProgresses` entries with failed/error status. Snippet mode tries
