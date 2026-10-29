@@ -46,6 +46,7 @@ export interface JsonEventStreamLimits {
 
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** Absolute route path only; encode identifiers and pass query values through params. */
   path: string;
   /** Scalar or string[] (repeated query keys, e.g. `inputSetIdentifiers=a&inputSetIdentifiers=b`). */
   params?: Record<string, string | number | boolean | string[] | undefined>;

@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ResourceDefinition, ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
 import { passthrough } from "../extractors.js";
@@ -158,7 +159,7 @@ function teamDetailPathBuilder(input: Record<string, unknown>, _config: PathBuil
       : aspect === "developers"
         ? "developers"
         : "integration_filters";
-  return `${SEI}/v2/teams/${encodeURIComponent(teamRefId)}/${suffix}`;
+  return `${SEI}/v2/teams/${encodePathSegment(teamRefId)}/${suffix}`;
 }
 
 function orgTreeDetailPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
@@ -175,7 +176,7 @@ function orgTreeDetailPathBuilder(input: Record<string, unknown>, _config: PathB
           : aspect === "integrations"
             ? "integrations"
             : "teams";
-  return `${SEI}/v2/org-trees/${encodeURIComponent(orgTreeId)}/${suffix}`;
+  return `${SEI}/v2/org-trees/${encodePathSegment(orgTreeId)}/${suffix}`;
 }
 
 function baPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {

@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type {
   BodyFieldSpec,
   BodySchema,
@@ -249,10 +250,10 @@ const resolveVariableSetScopePrefix = (
   }
 
   if (useProject && org && project) {
-    return `/iacm/api/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
+    return `/iacm/api/orgs/${encodePathSegment(org)}/projects/${encodePathSegment(project)}`;
   }
   if (useOrg && org) {
-    return `/iacm/api/orgs/${encodeURIComponent(org)}`;
+    return `/iacm/api/orgs/${encodePathSegment(org)}`;
   }
   return "/iacm/api";
 };
@@ -277,7 +278,7 @@ const variableSetItemPath = (
       'Missing required field "variable_set_id" for iacm_variable_set. Pass it via params or as resource_id.',
     );
   }
-  return `${variableSetCollectionPath(input, config)}/${encodeURIComponent(id)}`;
+  return `${variableSetCollectionPath(input, config)}/${encodePathSegment(id)}`;
 };
 
 const providerCreatePath = (input: Record<string, unknown>): string => {
@@ -288,7 +289,7 @@ const providerCreatePath = (input: Record<string, unknown>): string => {
       'Missing required field "type" for iacm_provider create. Pass it in body.type (e.g. "aws", "terraform").',
     );
   }
-  return `/iacm/api/providers/${encodeURIComponent(type)}`;
+  return `/iacm/api/providers/${encodePathSegment(type)}`;
 };
 
 const providerCreateBody = (input: Record<string, unknown>): Record<string, unknown> => {
@@ -308,9 +309,9 @@ const providerVersionPath = (input: Record<string, unknown>): string => {
     );
   }
   if (input.version) {
-    return `/iacm/api/providers/${encodeURIComponent(id)}/version/${encodeURIComponent(String(input.version))}`;
+    return `/iacm/api/providers/${encodePathSegment(id)}/version/${encodePathSegment(String(input.version))}`;
   }
-  return `/iacm/api/providers/${encodeURIComponent(id)}/version`;
+  return `/iacm/api/providers/${encodePathSegment(id)}/version`;
 };
 
 const providerVersionBody = (input: Record<string, unknown>): Record<string, unknown> => {

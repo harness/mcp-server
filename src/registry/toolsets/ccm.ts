@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec, BodySchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
 import { parseCustomWindow, parseTimeInput } from "../../utils/ccm-time.js";
@@ -414,18 +415,6 @@ function compactTimeseriesStat(item: Record<string, unknown>): Record<string, un
 }
 
 // ---------------------------------------------------------------------------
-// GraphQL endpoint path helper
-// ---------------------------------------------------------------------------
-
-function gqlPath(input: Record<string, unknown>): string {
-  const accountId = input.account_id as string | undefined;
-  if (accountId) {
-    return `/ccm/api/graphql?accountIdentifier=${accountId}&routingId=${accountId}`;
-  }
-  return "/ccm/api/graphql";
-}
-
-// ---------------------------------------------------------------------------
 // AI Budgets (Lightwing AI governance) — /lw/api/accounts/{accountId}/ai-governance
 // ---------------------------------------------------------------------------
 
@@ -436,7 +425,7 @@ function requireAiBudgetId(input: Record<string, unknown>, key: string, label: s
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`${key} is required — ${label}`);
   }
-  return value.trim();
+  return encodePathSegment(value.trim());
 }
 
 function aiGovernanceBase(_input: Record<string, unknown>, config: PathBuilderConfig): string {
@@ -445,7 +434,7 @@ function aiGovernanceBase(_input: Record<string, unknown>, config: PathBuilderCo
   if (!accountId) {
     throw new Error("Harness account ID is required for AI governance APIs");
   }
-  return `/lw/api/accounts/${accountId}/ai-governance`;
+  return `/lw/api/accounts/${encodePathSegment(accountId)}/ai-governance`;
 }
 
 function aiBudgetPath(suffix: string | ((input: Record<string, unknown>) => string)) {
@@ -2219,7 +2208,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
             if ((input.value_type as string) === "business_mapping") {
               const sub = input.value_sub_type as string | undefined;
               if (sub) {
-                return `/ccm/api/business-mapping/${encodeURIComponent(sub)}`;
+                return `/ccm/api/business-mapping/${encodePathSegment(sub)}`;
               }
               return "/ccm/api/business-mapping";
             }
@@ -2445,7 +2434,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
             const accountId = (input.account_id as string) ?? config.HARNESS_ACCOUNT_ID ?? "";
             input.account_id = accountId;
             const aspect = (input.aspect as string) || "coverage";
-            const base = `/lw/co/api/accounts/${accountId}`;
+            const base = `/lw/co/api/accounts/${encodePathSegment(accountId)}`;
             switch (aspect) {
               case "coverage": return `${base}/v1/detail/compute_coverage`;
               case "savings": return `${base}/v1/detail/savings`;
@@ -2456,7 +2445,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
                 if (!cloudAccountId) {
                   throw new Error("cloud_account_id is required for aspect=estimated_savings");
                 }
-                return `${base}/v2/setup/${cloudAccountId}/estimated_savings`;
+                return `${base}/v2/setup/${encodePathSegment(cloudAccountId)}/estimated_savings`;
               }
               default: return `${base}/v1/detail/compute_coverage`;
             }
@@ -2753,7 +2742,7 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
             const base = aiGovernanceBase(input, config);
             const budgetId = input.budget_id;
             if (typeof budgetId === "string" && budgetId.trim() !== "") {
-              return `${base}/policies/${budgetId.trim()}/override/requests`;
+              return `${base}/policies/${encodePathSegment(budgetId.trim())}/override/requests`;
             }
             return `${base}/me/budgets/override/requests`;
           },

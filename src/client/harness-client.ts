@@ -736,12 +736,12 @@ export class HarnessClient {
   private buildUrl(options: RequestOptions): string {
     const baseUrl = (options.baseUrl ?? this.baseUrl).replace(/\/$/, "");
     let path = options.path;
-    const queryIndex = path.indexOf("?");
-    const pathQuery = queryIndex === -1 ? "" : path.slice(queryIndex + 1);
-    if (queryIndex !== -1) {
-      path = path.slice(0, queryIndex);
+    // Paths are routes only: query values belong in options.params. Reject URL
+    // normalization syntax before fetch can reinterpret the intended endpoint.
+    if (!path.startsWith("/") || path.startsWith("//") || /[?#\\\u0000-\u0020\u007f]/u.test(path) ||
+        path.split("/").some((segment) => /^(?:\.|%2e){1,2}$/i.test(segment))) {
+      throw new Error("Invalid request path: use encoded path segments and options.params for query values");
     }
-    const pathParams = new URLSearchParams(pathQuery);
 
     const basePath = new URL(baseUrl).pathname.replace(/\/$/, "");
     if (basePath && basePath !== "/" && path.startsWith(`${basePath}/`)) {
@@ -763,16 +763,14 @@ export class HarnessClient {
       }
     }
 
-    for (const key of pathParams.keys()) {
-      params.delete(key);
-    }
-    for (const [key, value] of pathParams) {
-      params.append(key, value);
-    }
-
     if (options.params) {
       for (const [key, value] of Object.entries(options.params)) {
         if (value === undefined || value === "") continue;
+        if (options.product !== "fme" && ["accountIdentifier", "routingId", "accountID"].includes(key)) {
+          if (Array.isArray(value) || String(value) !== this.resolveAccountId()) {
+            throw new Error(`Cannot override account scoping parameter "${key}"`);
+          }
+        }
         if (Array.isArray(value)) {
           for (const item of value) {
             if (item !== undefined && item !== "") {

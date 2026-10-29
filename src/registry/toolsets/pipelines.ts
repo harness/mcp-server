@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputV1Extract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
 import { asRecord, asString } from "../../utils/type-guards.js";
@@ -383,7 +384,7 @@ async function preparePipelineRetry({ client, input, registry, signal }: Preflig
     const projectId = asString(input.project_id) ?? registry.projectId;
     const raw = await client.request<unknown>({
       method: "GET",
-      path: `/pipeline/api/pipeline/execute/${executionId}/retryStages`,
+      path: `/pipeline/api/pipeline/execute/${encodePathSegment(executionId)}/retryStages`,
       params: {
         pipelineIdentifier: String(input.pipeline_id),
         ...(orgId ? { orgIdentifier: orgId } : {}),

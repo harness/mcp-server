@@ -50,6 +50,46 @@ describe("HarnessClient", () => {
   });
 
   describe("request — URL building", () => {
+    describe.each(["request", "requestStream"] as const)("%s path boundary", (method) => {
+      it.each([
+        "/ng/api/projects?accountIdentifier=OTHER&routingId=OTHER",
+        "/ng/api/projects#fragment", "/ng/api/../user/currentUser",
+        "/ng/api/./projects", "/ng/api/%2e%2E/projects", "/ng/api/.%2e/projects",
+        "/ng/api/%2E/projects", "/ng/api/..\\user/currentUser",
+        "/ng/api/proj\nect", "//other.example/path", "https://other.example/path",
+      ])("rejects ambiguous route %j before fetch", async (path) => {
+        const client = new HarnessClient(makeConfig());
+        await expect(client[method]({ path })).rejects.toThrow(/Invalid request path/);
+        expect(fetchSpy).not.toHaveBeenCalled();
+      });
+
+      it.each(["accountIdentifier", "routingId", "accountID"])("rejects replacement of %s", async (key) => {
+        const client = new HarnessClient(makeConfig());
+        for (const value of ["OTHER", ["test-account", "OTHER"]]) {
+          await expect(client[method]({ path: "/ng/api/projects", params: { [key]: value } }))
+            .rejects.toThrow(/Cannot override account/);
+        }
+        expect(fetchSpy).not.toHaveBeenCalled();
+      });
+
+      it("uses the request-scoped identity for scope validation", async () => {
+        const client = new HarnessClient(makeConfig({ HARNESS_MCP_MODE: "oauth", HARNESS_API_KEY: undefined }));
+        client.setAccountIdResolver(() => "session-account");
+        client.setBearerTokenResolver(() => "session-token");
+        await expect(client[method]({ path: "/ng/api/projects", params: { routingId: "test-account" } }))
+          .rejects.toThrow(/Cannot override account/);
+        expect(fetchSpy).not.toHaveBeenCalled();
+        fetchSpy.mockResolvedValue(new Response("{}", { status: 200 }));
+        await client[method]({ path: "/ng/api/projects", params: { routingId: "session-account" } });
+        const url = new URL(String(fetchSpy.mock.calls[0][0]));
+        expect(url.searchParams.getAll("routingId")).toEqual(["session-account"]);
+        expect(url.searchParams.getAll("accountIdentifier")).toEqual(["session-account"]);
+        expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
+          "Harness-Account": "session-account", Authorization: "Bearer session-token",
+        });
+      });
+    });
+
     it("builds URL with accountIdentifier and custom params", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: "ok" }), { status: 200 }));
       const client = new HarnessClient(makeConfig());
@@ -76,13 +116,14 @@ describe("HarnessClient", () => {
       expect(url.searchParams.get("routingId")).toBe("test-account");
     });
 
-    it("merges query params already present in requestStream path", async () => {
+    it("serializes streaming query params separately from the path", async () => {
       fetchSpy.mockResolvedValue(new Response("ok", { status: 200 }));
       const client = new HarnessClient(makeConfig({ HARNESS_BASE_URL: "https://myhost.harness.io/gateway" }));
 
       await client.requestStream({
         method: "GET",
-        path: "/gateway/log-service/some/blob/path?token=abc",
+        path: "/gateway/log-service/some/blob/path",
+        params: { token: "abc" },
       });
 
       const urlString = fetchSpy.mock.calls[0][0] as string;

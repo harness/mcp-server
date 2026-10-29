@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { HarnessClientInterface, ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
 import { isRecord } from "../../utils/type-guards.js";
@@ -39,7 +40,7 @@ function requiredPathPart(input: Record<string, unknown>, field: string): string
   if (value === undefined || value === "") {
     throw new Error(`Missing required field "${field}" for pull_request.`);
   }
-  return encodeURIComponent(String(value));
+  return encodePathSegment(String(value));
 }
 
 function toFiniteNumber(value: unknown): number | undefined {
@@ -266,7 +267,7 @@ async function resolvePrReviewerCreate({ client, input, signal }: PreflightConte
     try {
       raw = await client.request<unknown>({
         method: "GET",
-        path: `/ng/api/user/aggregate/${encodeURIComponent(uidOrEmail)}`,
+        path: `/ng/api/user/aggregate/${encodePathSegment(uidOrEmail)}`,
         signal,
       });
     } catch {

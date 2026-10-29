@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type {
   ToolsetDefinition,
   ParamsSchema,
@@ -880,8 +881,8 @@ export const gitopsToolset: ToolsetDefinition = {
               );
             }
             return (
-              `/gitops/api/v1/agents/${encodeURIComponent(agentId)}` +
-              `/appprojectsmapping/${encodeURIComponent(argoproject)}`
+              `/gitops/api/v1/agents/${encodePathSegment(agentId)}` +
+              `/appprojectsmapping/${encodePathSegment(argoproject)}`
             );
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
