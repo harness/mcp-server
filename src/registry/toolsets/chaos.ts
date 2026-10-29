@@ -274,8 +274,21 @@ function stringList(value: unknown): string[] | undefined {
   return String(value).split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-// "absent" leaves the stored link unchanged. "clear" is an explicit empty
-// object and removes the link on update. A complete object sets the link.
+const LINKED_DISCOVERED_SERVICE_KEYS = new Set([
+  "agent_id", "agentId",
+  "environment_id", "environmentId",
+  "external_id", "externalId",
+]);
+
+function valueIsSet(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  return true;
+}
+
+// "absent" leaves the stored link unchanged. "clear" is {} or the three known
+// id fields all blank, with no other key set, and removes the link on update.
+// A discovered-service record or a typo such as agentID is not a clear.
 function linkedDiscoveredService(value: unknown): "absent" | "clear" | Record<string, string> {
   if (value == null) return "absent";
   if (typeof value !== "object" || Array.isArray(value)) return "absent";
@@ -283,7 +296,10 @@ function linkedDiscoveredService(value: unknown): "absent" | "clear" | Record<st
   const agentId = optionalText(linked.agent_id ?? linked.agentId);
   const environmentId = optionalText(linked.environment_id ?? linked.environmentId);
   const externalId = optionalText(linked.external_id ?? linked.externalId);
-  if (!agentId && !environmentId && !externalId) return "clear";
+  const unrecognized = Object.keys(linked).some(
+    (key) => !LINKED_DISCOVERED_SERVICE_KEYS.has(key) && valueIsSet(linked[key]),
+  );
+  if (!agentId && !environmentId && !externalId && !unrecognized) return "clear";
   if (!agentId || !environmentId || !externalId) {
     const missing = [
       !agentId ? "agent_id" : "",
@@ -470,7 +486,7 @@ function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> 
   if (typeof b.spec !== "object" || b.spec == null || Array.isArray(b.spec)) {
     throw new Error("spec must be an object.");
   }
-  const spec = b.spec as Record<string, unknown>;
+  const spec: Record<string, unknown> = { ...(b.spec as Record<string, unknown>) };
   const dataSource = riskRuleDataSource(spec.dataSource);
   if (!Array.isArray(spec.faults) || spec.faults.length === 0) {
     throw new Error("spec.faults must list at least one chaos fault that can prove the risk (e.g. pod-network-latency).");
@@ -482,7 +498,13 @@ function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> 
   riskRulePromptList(prompt.do, "spec.prompt.do", true);
   riskRulePromptList(prompt.dont, "spec.prompt.dont", false);
   riskRulePromptList(prompt.outcome, "spec.prompt.outcome", true);
-  if (spec.includeInPassiveScan != null && typeof spec.includeInPassiveScan !== "boolean") {
+  // The list filter is include_in_passive_scan. Accept that key inside spec and
+  // send the camelCase field the API stores. Null is not a boolean.
+  if ("include_in_passive_scan" in spec) {
+    spec.includeInPassiveScan = spec.include_in_passive_scan;
+    delete spec.include_in_passive_scan;
+  }
+  if (spec.includeInPassiveScan !== undefined && typeof spec.includeInPassiveScan !== "boolean") {
     throw new Error("spec.includeInPassiveScan must be a boolean. Omit it to leave the rule out of the passive scan.");
   }
   return {
@@ -2766,7 +2788,14 @@ export const chaosToolset: ToolsetDefinition = {
             const infrastructureId = optionalText(b.infrastructure_id ?? b.infrastructureId);
             const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const tags = stringList(b.tags);
-            const linked = linkedDiscoveredServiceBody(b.linked_discovered_service ?? b.linkedDiscoveredService, true);
+            // A present linkedDiscoveredService is validated for a CodeRepository
+            // service. An empty object is an unlink on every service type, so a
+            // Kubernetes update must not send it. Only the custom discovery agent
+            // may clear the link.
+            const linked = linkedDiscoveredServiceBody(
+              b.linked_discovered_service ?? b.linkedDiscoveredService,
+              optionalText(agentId) === CUSTOM_DISCOVERY_AGENT,
+            );
             assertChaosServiceInfrastructure(optionalText(agentId), environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
@@ -4736,7 +4765,6 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "custom_only", description: descRiskRuleCustomOnly, type: "boolean" },
         { name: "data_source", description: descRiskRuleDataSource },
         { name: "include_in_passive_scan", description: descRiskRuleIncludeInPassiveScan, type: "boolean" },
-        { name: "include_all_scope", description: descRiskIncludeAllScope, type: "boolean" },
       ],
       relatedResources: [
         { resourceType: "scanned_risk", relationship: "flags", description: "Risk rules flag scanned risks during a scan. Use scanned_risk with risk_rule_id=<this rule's identity> to find findings produced by this rule." },
@@ -4757,7 +4785,6 @@ export const chaosToolset: ToolsetDefinition = {
             custom_only: "customOnly",
             data_source: "dataSource",
             include_in_passive_scan: "includeInPassiveScan",
-            include_all_scope: "includeAllScope",
           },
           defaultQueryParams: { page: "0", limit: "15" },
           responseExtractor: chaosPageExtract,

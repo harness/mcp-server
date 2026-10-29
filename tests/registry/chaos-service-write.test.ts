@@ -511,6 +511,38 @@ describe("chaos_service update", () => {
     expect(body.linkedDiscoveredService).toEqual({});
   });
 
+  it("does not send an empty link on a service that is not a code repository", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "svc-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_service", "update", {
+      ...REQUIRED,
+      probes: [],
+      linked_discovered_service: {},
+    });
+
+    const body = mockRequest.mock.calls[0][0].body as Record<string, unknown>;
+    expect(body.agentId).toBe("agent-1");
+    expect(body.linkedDiscoveredService).toBeUndefined();
+  });
+
+  it("does not clear the link when the object is a discovered service record", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "chaos_service", "update", {
+      identity: "svc-1",
+      org_id: "o",
+      project_id: "p",
+      name: "svc-1",
+      external_service_id: "ext-1",
+      agent_id: "custom-discovery-agent",
+      probes: [],
+      linked_discovered_service: { id: "hce:Deployment:frontend" },
+    })).rejects.toThrow(/agent_id, environment_id, external_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("leaves the link unchanged when the update omits linked_discovered_service", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ identity: "svc-1" });
     const client = makeClient(mockRequest);

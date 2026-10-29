@@ -277,7 +277,7 @@ describe("chaos_risk_rule list/get", () => {
       tags: "category:resource",
       is_system: true,
       data_source: "manifest",
-      include_all_scope: false,
+      include_all_scope: true,
     });
 
     const params = mockRequest.mock.calls[0][0].params;
@@ -287,7 +287,7 @@ describe("chaos_risk_rule list/get", () => {
     expect(params.tags).toBe("category:resource");
     expect(params.isSystem).toBe(true);
     expect(params.dataSource).toBe("manifest");
-    expect(params.includeAllScope).toBe(false);
+    expect(params.includeAllScope).toBeUndefined();
     expect(params.organizationIdentifier).toBeUndefined();
     expect(params.projectIdentifier).toBeUndefined();
   });
@@ -905,6 +905,8 @@ describe("chaos_risk_rule create/update/delete", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("PUT");
     expect(call.path).toBe(`/chaos/manager/api/v3/risk-rules/${identity}`);
+    expect(call.params.organizationIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
     expect(call.body.identity).toBeUndefined();
     expect(call.body).toMatchObject({ name: ruleBody.name, spec: { dataSource: ["SourceCode"] } });
   });
@@ -920,6 +922,8 @@ describe("chaos_risk_rule create/update/delete", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/chaos/manager/api/v3/risk-rules/code-x-rule");
+    expect(call.params.organizationIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 
   it("update: throws locally when a required field or a fault is missing", async () => {
@@ -1028,6 +1032,38 @@ describe("chaos_risk_rule create/update/delete", () => {
         body: { ...ruleBody, spec: { ...ruleBody.spec, includeInPassiveScan: "yes" } },
       }),
     ).rejects.toThrow(/includeInPassiveScan/);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { ...ruleBody.spec, includeInPassiveScan: null } },
+      }),
+    ).rejects.toThrow(/includeInPassiveScan/);
+
+    await registry.dispatch(client, "chaos_risk_rule", "create", {
+      org_id: "o", project_id: "p",
+      body: { ...ruleBody, spec: { ...ruleBody.spec, include_in_passive_scan: true } },
+    });
+    const mapped = mockRequest.mock.calls[1][0].body.spec;
+    expect(mapped.includeInPassiveScan).toBe(true);
+    expect(mapped.include_in_passive_scan).toBeUndefined();
+  });
+
+  it("keeps configured org and project off every operation", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+    const { identity, ...body } = ruleBody;
+
+    await registry.dispatch(client, "chaos_risk_rule", "list", {});
+    await registry.dispatch(client, "chaos_risk_rule", "get", { identity });
+    await registry.dispatch(client, "chaos_risk_rule", "create", { body: ruleBody });
+    await registry.dispatch(client, "chaos_risk_rule", "update", { identity, body });
+    await registry.dispatch(client, "chaos_risk_rule", "delete", { identity });
+
+    for (const call of mockRequest.mock.calls) {
+      expect(call[0].params.organizationIdentifier).toBeUndefined();
+      expect(call[0].params.projectIdentifier).toBeUndefined();
+    }
   });
 
   it("declares write risk levels: create and update low_write, delete destructive", () => {
