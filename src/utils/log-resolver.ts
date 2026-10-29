@@ -16,19 +16,21 @@ const DEFAULT_POLL_INTERVAL_MS = 3000;
 const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024; // 2 MB
 /**
  * Max extra GET /blob calls after an empty base logBaseKey, one per
- * command-unit key (CD steps write each unit — Fetch Files, Prepare,
- * Install / Upgrade, … — to its own key). All of them are fetched and merged
- * so the failing unit is never dropped. Happy path stays 1 request; unit keys
- * are fetched only when the base key is empty.
+ * command-unit key. When over the cap, the **last** keys are kept (failures
+ * and the last unit that logged tend to be late). Happy path stays 1 request;
+ * unit keys are fetched only when the base key is empty.
  */
 const MAX_COMMAND_UNIT_KEYS = 10;
-/**
- * Cap on the summed size of all unit blobs merged for one step. Each blob is
- * still capped at `maxLogSizeBytes`; this bounds the worst case across units.
- */
-const MAX_MERGED_LOG_SIZE_MULTIPLIER = 4;
 /** Default unit name used by Harness UI for script/command steps. */
 const DEFAULT_COMMAND_UNIT_NAMES = ["Execute"];
+/** Default diagnose / snippet tail when callers omit {@link LogResolveOptions.snippetLines}. */
+const DEFAULT_SNIPPET_LINES = 120;
+/** Per-unit line budget in `full` mode before soft-trimming the overall result. */
+const DEFAULT_FULL_UNIT_LINES = 500;
+/** Soft overall line budget for labeled `full` mode (trim earliest sections). */
+const DEFAULT_FULL_TOTAL_LINES = 2000;
+
+export type LogResolveMode = "snippet" | "full";
 
 export interface LogResolveOptions {
   signal?: AbortSignal;
@@ -47,6 +49,13 @@ export interface LogResolveOptions {
    * fewer units than were actually logged.
    */
   logKeys?: string[];
+  /**
+   * `snippet` — last non-empty unit only (diagnose). `full` — labeled sections
+   * for every non-empty unit (harness_get). Default `full`.
+   */
+  mode?: LogResolveMode;
+  /** Tail line count for `snippet` mode (and safety trim). Default 120. */
+  snippetLines?: number;
 }
 
 /** Build UI-style command-unit blob key from a step logBaseKey. */
@@ -56,8 +65,8 @@ export function commandUnitLogKey(baseKey: string, unitName: string): string {
 }
 
 /**
- * Ordered keys for GET /blob: base logBaseKey first, then every command-unit
- * key (capped at {@link MAX_COMMAND_UNIT_KEYS}).
+ * Ordered keys for GET /blob: base logBaseKey first, then command-unit keys
+ * (capped at {@link MAX_COMMAND_UNIT_KEYS}, keeping the **last** keys when over).
  *
  * Unit keys come from exact graph `logKeys` when available; otherwise from
  * `unitProgresses` names plus the default {@link DEFAULT_COMMAND_UNIT_NAMES}
@@ -83,22 +92,58 @@ export function blobKeysToTry(
       const key = raw.trim();
       if (key) add(key);
     }
-    return [baseKey, ...unitKeys.slice(0, MAX_COMMAND_UNIT_KEYS)];
+    return [baseKey, ...unitKeys.slice(-MAX_COMMAND_UNIT_KEYS)];
   }
 
-  const names = new Set<string>();
+  const names: string[] = [];
+  const nameSeen = new Set<string>();
   for (const raw of commandUnitNames ?? []) {
     const name = raw.trim();
-    if (name) names.add(name);
+    if (!name || nameSeen.has(name)) continue;
+    nameSeen.add(name);
+    names.push(name);
   }
-  const defaults = DEFAULT_COMMAND_UNIT_NAMES.filter((n) => !names.has(n));
-  // Reserve room for defaults (e.g. Execute) so they are never dropped by the cap.
+  const defaults = DEFAULT_COMMAND_UNIT_NAMES.filter((n) => !nameSeen.has(n));
+  // Keep the last graph names + defaults (Execute) so late units are not dropped.
   const graphSlots = Math.max(0, MAX_COMMAND_UNIT_KEYS - defaults.length);
-  for (const name of [...[...names].slice(0, graphSlots), ...defaults]) {
+  for (const name of [...names.slice(-graphSlots), ...defaults]) {
     add(commandUnitLogKey(baseKey, name));
   }
 
   return [baseKey, ...unitKeys];
+}
+
+/** Extract a human label from a blob key for section headers. */
+export function commandUnitLabel(key: string): string {
+  const marker = "-commandUnit:";
+  const idx = key.indexOf(marker);
+  return idx >= 0 ? key.slice(idx + marker.length) : "step";
+}
+
+/** Keep the last `n` lines of text (diagnose-style tail). */
+export function tailLogLines(text: string, n: number): string {
+  if (n <= 0) return text;
+  const lines = text.split("\n");
+  if (lines.length <= n) return text;
+  return `... (${lines.length - n} lines omitted) ...\n` + lines.slice(-n).join("\n");
+}
+
+function formatUnitSection(key: string, body: string): string {
+  return `--- commandUnit: ${commandUnitLabel(key)} ---\n${body}`;
+}
+
+/** Soft-trim labeled sections so total lines stay under `maxLines` (drop from the start). */
+function softTrimSections(sections: string[], maxLines: number): string {
+  let combined = sections.join("\n\n");
+  let lines = combined.split("\n");
+  if (lines.length <= maxLines) return combined;
+  while (sections.length > 1 && lines.length > maxLines) {
+    sections.shift();
+    combined = sections.join("\n\n");
+    lines = combined.split("\n");
+  }
+  if (lines.length <= maxLines) return combined;
+  return tailLogLines(combined, maxLines);
 }
 
 /** Only empty bodies and 404s should advance to the next blob key. */
@@ -565,14 +610,14 @@ function logTooLargeError(bytes: number, maxBytes: number): Error {
  * `maxResponseBytes` (Content-Length short-circuit + streamed hard cap).
  *
  * If the step `logBaseKey` has content (e.g. CI steps) it is returned after a
- * single request. Otherwise every command-unit key is fetched and merged in
- * timestamp order — the same content the zip download contains — so a CD step
- * whose error is in a later unit (e.g. Helm "Install / Upgrade" after
- * "Fetch Files") is not reduced to its first non-empty unit.
+ * single request. Otherwise command-unit keys are resolved from `logKeys` or
+ * `commandUnitNames` (else `Execute`):
  *
- * Unit keys come from `logKeys` (exact, from the graph) or `commandUnitNames`
- * (`unitProgresses`); callers passing neither (e.g. `harness_get` with an
- * explicit prefix only) fall back to the default unit name `Execute`.
+ * - **snippet** (diagnose): walk unit keys from the end, skip empty/404, return
+ *   the last unit that logged (labeled + tailed). Covers late failures and
+ *   early failures where later units never ran.
+ * - **full** (harness_get): fetch non-empty units as labeled sections with a
+ *   soft overall line budget (no hard merge-size throw).
  *
  * For a signed zip download URL only, use {@link resolveLogDownloadUrl}.
  *
@@ -584,7 +629,8 @@ export async function resolveLogContent(
   options?: LogResolveOptions,
 ): Promise<string> {
   const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
-  const maxMergedBytes = maxBytes * MAX_MERGED_LOG_SIZE_MULTIPLIER;
+  const mode: LogResolveMode = options?.mode ?? "full";
+  const snippetLines = options?.snippetLines ?? DEFAULT_SNIPPET_LINES;
   const signal = options?.signal;
 
   if (signal?.aborted) throw new Error("Log download cancelled");
@@ -617,28 +663,40 @@ export async function resolveLogContent(
   const baseRaw = await fetchKey(baseKey!);
   if (baseRaw) {
     const text = parseLogLines(baseRaw).trim();
-    if (text) return text;
-  }
-
-  const unitRaws: string[] = [];
-  let mergedBytes = 0;
-  for (const candidate of unitKeys) {
-    const raw = await fetchKey(candidate);
-    if (!raw) continue;
-    mergedBytes += Buffer.byteLength(raw);
-    if (mergedBytes > maxMergedBytes) throw logTooLargeError(mergedBytes, maxMergedBytes);
-    unitRaws.push(raw);
-  }
-
-  if (unitRaws.length > 0) {
-    const text = parseLogLines(unitRaws.join("\n")).trim();
     if (text) {
-      log.info("Resolved logs by merging command-unit blob keys", {
+      return mode === "snippet" ? tailLogLines(text, snippetLines) : text;
+    }
+  }
+
+  if (mode === "snippet") {
+    for (let i = unitKeys.length - 1; i >= 0; i--) {
+      const candidate = unitKeys[i]!;
+      const raw = await fetchKey(candidate);
+      if (!raw) continue;
+      const text = parseLogLines(raw).trim();
+      if (!text) continue;
+      log.info("Resolved logs via last non-empty command-unit key", {
+        baseKey: key,
+        key: candidate,
+      });
+      return formatUnitSection(candidate, tailLogLines(text, snippetLines));
+    }
+  } else {
+    const sections: string[] = [];
+    for (const candidate of unitKeys) {
+      const raw = await fetchKey(candidate);
+      if (!raw) continue;
+      const text = parseLogLines(raw).trim();
+      if (!text) continue;
+      sections.push(formatUnitSection(candidate, tailLogLines(text, DEFAULT_FULL_UNIT_LINES)));
+    }
+    if (sections.length > 0) {
+      log.info("Resolved logs as labeled command-unit sections", {
         baseKey: key,
         keysFetched: unitKeys.length,
-        keysWithContent: unitRaws.length,
+        keysWithContent: sections.length,
       });
-      return text;
+      return softTrimSections(sections, DEFAULT_FULL_TOTAL_LINES);
     }
   }
 

@@ -155,7 +155,7 @@ describe("resolveLogContent", () => {
     expect(requestFn).toHaveBeenCalledTimes(1);
   });
 
-  it("fetches every unitProgresses key plus default Execute when base is empty", async () => {
+  it("full mode returns labeled sections for every non-empty unitProgresses key", async () => {
     const requestFn = vi
       .fn()
       .mockResolvedValueOnce(new ArrayBuffer(0))
@@ -164,14 +164,17 @@ describe("resolveLogContent", () => {
 
     const result = await resolveLogContent(makeClient(requestFn), "base", {
       commandUnitNames: ["CustomUnit"],
+      mode: "full",
     });
+    expect(result).toContain("--- commandUnit: CustomUnit ---");
     expect(result).toContain("from unitProgresses");
+    expect(result).toContain("--- commandUnit: Execute ---");
     expect(result).toContain("from execute");
     const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
     expect(keys).toEqual(["base", "base-commandUnit:CustomUnit", "base-commandUnit:Execute"]);
   });
 
-  it("merges all command units so a failure in a later unit is not dropped (Helm deploy)", async () => {
+  it("snippet mode returns the last non-empty unit so a late Helm failure is not dropped", async () => {
     const base = "acct/pipeline/p1/7/-exec/stage/-helmDeployment";
     const line = (time: string, out: string) =>
       JSON.stringify({ level: "INFO", time, out });
@@ -195,17 +198,65 @@ describe("resolveLogContent", () => {
     });
 
     const result = await resolveLogContent(makeClient(requestFn), base, {
-      logKeys: Object.keys(units),
+      logKeys: Object.keys(units).filter((k) => k !== base),
+      mode: "snippet",
+      snippetLines: 50,
     });
 
-    expect(result.split("\n")).toEqual([
-      "[2026-10-20T10:00:01Z] info: Fetching values.yaml",
-      "[2026-10-20T10:00:02Z] info: Initializing helm client",
-      "[2026-10-20T10:00:03Z] info: Rendering chart",
-      '[2026-10-20T10:00:04Z] info: ConfigMap in version "v1" cannot be handled as a ConfigMap',
-    ]);
-    // Base key once, then each unit key once — no duplicates.
-    expect(requestFn).toHaveBeenCalledTimes(7);
+    expect(result).toContain("--- commandUnit: Install / Upgrade ---");
+    expect(result).toContain('ConfigMap in version "v1" cannot be handled as a ConfigMap');
+    expect(result).not.toContain("Fetching values.yaml");
+    // base + Wrap Up (empty) + Wait (empty) + Install (hit) — stop early
+    expect(requestFn).toHaveBeenCalledTimes(4);
+  });
+
+  it("snippet mode finds an early failure when later units never logged", async () => {
+    const requestFn = vi
+      .fn()
+      .mockResolvedValueOnce(new ArrayBuffer(0)) // base
+      .mockResolvedValueOnce(new ArrayBuffer(0)) // Wrap (from end)
+      .mockResolvedValueOnce(Buffer.from("prepare failed here").buffer); // Prepare
+
+    const result = await resolveLogContent(makeClient(requestFn), "base", {
+      logKeys: [
+        "base-commandUnit:Fetch Files",
+        "base-commandUnit:Prepare",
+        "base-commandUnit:Wrap Up",
+      ],
+      mode: "snippet",
+    });
+    expect(result).toContain("--- commandUnit: Prepare ---");
+    expect(result).toContain("prepare failed here");
+    expect(requestFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("full mode returns labeled sections for all non-empty Helm units", async () => {
+    const base = "acct/pipeline/p1/7/-exec/stage/-helmDeployment";
+    const line = (time: string, out: string) =>
+      JSON.stringify({ level: "INFO", time, out });
+    const units: Record<string, string> = {
+      [base]: "",
+      [`${base}-commandUnit:Fetch Files`]: line("2026-10-20T10:00:01Z", "Fetching values.yaml"),
+      [`${base}-commandUnit:Install / Upgrade`]: line(
+        "2026-10-20T10:00:04Z",
+        'ConfigMap in version "v1" cannot be handled as a ConfigMap',
+      ),
+      [`${base}-commandUnit:Wrap Up`]: "",
+    };
+    const requestFn = vi.fn(async (opts: unknown) => {
+      const key = (opts as { params: { key: string } }).params.key;
+      const buf = Buffer.from(units[key] ?? "");
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    });
+
+    const result = await resolveLogContent(makeClient(requestFn), base, {
+      logKeys: Object.keys(units).filter((k) => k !== base),
+      mode: "full",
+    });
+    expect(result).toContain("--- commandUnit: Fetch Files ---");
+    expect(result).toContain("--- commandUnit: Install / Upgrade ---");
+    expect(result).toContain("Fetching values.yaml");
+    expect(result).toContain("ConfigMap");
   });
 
   it("prefers exact logKeys over unitProgresses names", async () => {
@@ -217,22 +268,27 @@ describe("resolveLogContent", () => {
     await resolveLogContent(makeClient(requestFn), "base", {
       commandUnitNames: ["FromProgress"],
       logKeys: ["base", "base-commandUnit:Exact", "base-commandUnit:Exact"],
+      mode: "full",
     });
     const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
     expect(keys).toEqual(["base", "base-commandUnit:Exact"]);
   });
 
-  it("caps command-unit keys at 10 and always reserves Execute", async () => {
+  it("caps command-unit keys at 10 from the end and always reserves Execute", async () => {
     const requestFn = vi.fn().mockResolvedValue(new ArrayBuffer(0));
     const names = Array.from({ length: 15 }, (_, i) => `U${i}`);
-    await resolveLogContent(makeClient(requestFn), "base", { commandUnitNames: names });
+    await resolveLogContent(makeClient(requestFn), "base", {
+      commandUnitNames: names,
+      mode: "full",
+    });
     const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
     expect(keys).toHaveLength(11);
     expect(keys[0]).toBe("base");
+    expect(keys.slice(1, 10)).toEqual(names.slice(-9).map((n) => `base-commandUnit:${n}`));
     expect(keys.at(-1)).toBe("base-commandUnit:Execute");
   });
 
-  it("skips a 404 unit key and still merges the others", async () => {
+  it("full mode skips a 404 unit key and still returns the others", async () => {
     const requestFn = vi
       .fn()
       .mockResolvedValueOnce(new ArrayBuffer(0))
@@ -242,9 +298,12 @@ describe("resolveLogContent", () => {
 
     const result = await resolveLogContent(makeClient(requestFn), "base", {
       logKeys: ["base-commandUnit:A", "base-commandUnit:B", "base-commandUnit:C"],
+      mode: "full",
     });
     expect(result).toContain("unit A");
     expect(result).toContain("unit C");
+    expect(result).toContain("--- commandUnit: A ---");
+    expect(result).toContain("--- commandUnit: C ---");
   });
 
   it("stops on a rate-limit while fetching unit keys", async () => {
@@ -257,23 +316,10 @@ describe("resolveLogContent", () => {
     await expect(
       resolveLogContent(makeClient(requestFn), "base", {
         logKeys: ["base-commandUnit:A", "base-commandUnit:B", "base-commandUnit:C"],
+        mode: "full",
       }),
     ).rejects.toThrow(/Too Many Requests|429/);
     expect(requestFn).toHaveBeenCalledTimes(3);
-  });
-
-  it("throws when merged unit logs exceed 4x the per-blob limit", async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValueOnce(new ArrayBuffer(0))
-      .mockResolvedValue(Buffer.from("x".repeat(900)).buffer);
-
-    await expect(
-      resolveLogContent(makeClient(requestFn), "base", {
-        maxLogSizeBytes: 1000,
-        logKeys: ["base-1", "base-2", "base-3", "base-4", "base-5"],
-      }),
-    ).rejects.toThrow(/too large/);
   });
 
   it("falls through on 404 to the next key", async () => {
@@ -317,11 +363,11 @@ describe("blobKeysToTry / commandUnitLogKey", () => {
     expect(blobKeysToTry("base-commandUnit:Execute")).toEqual(["base-commandUnit:Execute"]);
   });
 
-  it("reserves Execute inside the cap when unit list is long", () => {
+  it("keeps the last unit names inside the cap and reserves Execute", () => {
     const names = Array.from({ length: 12 }, (_, i) => `U${i}`);
     const keys = blobKeysToTry("base", names);
     expect(keys).toHaveLength(11);
-    expect(keys.slice(1, 10)).toEqual(names.slice(0, 9).map((n) => `base-commandUnit:${n}`));
+    expect(keys.slice(1, 10)).toEqual(names.slice(-9).map((n) => `base-commandUnit:${n}`));
     expect(keys[10]).toBe("base-commandUnit:Execute");
   });
 

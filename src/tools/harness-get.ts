@@ -126,7 +126,11 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               }
               return jsonResult({ download_url: downloadUrl });
             }
-            const logText = await resolveLogContent(client, prefix, { commandUnitNames, logKeys });
+            const logText = await resolveLogContent(client, prefix, {
+              commandUnitNames,
+              logKeys,
+              mode: "full",
+            });
             return jsonResult({ log_content: logText });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

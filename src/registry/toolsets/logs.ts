@@ -9,7 +9,7 @@ export const logsToolset: ToolsetDefinition = {
     {
       resourceType: "execution_log",
       displayName: "Execution Log",
-      description: "Pipeline execution logs. Log content is prepared asynchronously, then returned as readable text by default (GET /blob, capped at 2MB with Content-Length short-circuit). Set return_download_url=true to get only a signed download URL. Pass prefix or execution_id; with execution_id, also pass step_id (and stage_id when known) so logs are scoped to one step. When the base logBaseKey is empty, every command-unit key is fetched and merged (prefer exact keys from executableResponses logKeys, else unitProgresses names, capped). An explicit prefix alone falls back only to `-commandUnit:Execute` if the base key is empty. When a Harness execution URL includes step/stage query params, those values resolve the matching step log. For failed-run analysis prefer harness_diagnose with include_logs=true (passes logKeys and unitProgresses).",
+      description: "Pipeline execution logs. Log content is prepared asynchronously, then returned as readable text by default (GET /blob, capped at 2MB with Content-Length short-circuit). Set return_download_url=true to get only a signed download URL. Pass prefix or execution_id; with execution_id, also pass step_id (and stage_id when known) so logs are scoped to one step. When the base logBaseKey is empty, unit keys come from executableResponses logKeys (else unitProgresses / Execute): harness_get returns labeled sections for non-empty units; harness_diagnose uses snippet mode (last non-empty unit, tailed). An explicit prefix alone falls back only to `-commandUnit:Execute` if the base key is empty. When a Harness execution URL includes step/stage query params, those values resolve the matching step log. For failed-run analysis prefer harness_diagnose with include_logs=true.",
       toolset: "logs",
       scope: "project",
       identifierFields: ["prefix"],
@@ -26,7 +26,7 @@ export const logsToolset: ToolsetDefinition = {
             prefix: "key",
           },
           responseExtractor: passthrough,
-          description: "Fetch execution logs by prefix or execution_id. Returns log text via GET /blob (merging command-unit keys when the base key is empty), or a download URL when return_download_url=true.",
+          description: "Fetch execution logs by prefix or execution_id. Returns labeled command-unit log text via GET /blob when the base key is empty, or a download URL when return_download_url=true.",
           paramsSchema: {
             fields: [
               {
@@ -37,7 +37,7 @@ export const logsToolset: ToolsetDefinition = {
               {
                 name: "execution_id",
                 required: false,
-                description: "Execution identifier used to resolve the log prefix from the graph (also supplies executableResponses logKeys and unitProgresses for command-unit blob merge)",
+                description: "Execution identifier used to resolve the log prefix from the graph (also supplies executableResponses logKeys and unitProgresses for command-unit blob selection)",
               },
               {
                 name: "step_id",

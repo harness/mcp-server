@@ -485,7 +485,10 @@ async function resolveDiagnoseLog(
     signal: options.signal,
     commandUnitNames: options.commandUnitNames,
     logKeys: options.logKeys,
+    mode: "snippet",
+    snippetLines: options.logSnippetLines,
   });
+  // Safety: resolver already tails in snippet mode; re-apply if over budget.
   return truncateLog(logText, options.logSnippetLines);
 }
 

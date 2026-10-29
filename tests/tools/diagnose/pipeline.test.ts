@@ -428,6 +428,7 @@ describe("pipelineHandler", () => {
     expect(contentMock).toHaveBeenCalledWith(expect.anything(), "log/helm", expect.objectContaining({
       commandUnitNames: ["Fetch Files"],
       logKeys: ["log/helm-commandUnit:Fetch Files", "log/helm-commandUnit:Install / Upgrade"],
+      mode: "snippet",
     }));
   });
 
