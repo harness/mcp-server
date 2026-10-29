@@ -20,3 +20,23 @@ export function logKeysFromNode(node: {
   }
   return keys.size ? [...keys] : undefined;
 }
+
+/**
+ * Unit names whose `unitProgresses[].status` looks failed/errored.
+ * Used by snippet mode to fetch that unit's blob before reverse last-non-empty.
+ */
+export function failedUnitNamesFromNode(node: {
+  unitProgresses?: Array<{ unitName?: string; status?: string }> | null;
+}): string[] | undefined {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const unit of node.unitProgresses ?? []) {
+    const name = unit.unitName?.trim();
+    const status = unit.status?.trim() ?? "";
+    if (!name || seen.has(name)) continue;
+    if (!/fail|error/i.test(status)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names.length ? names : undefined;
+}

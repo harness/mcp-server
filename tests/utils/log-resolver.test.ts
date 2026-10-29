@@ -4,8 +4,9 @@ import {
   commandUnitLogKey,
   resolveLogContent,
   resolveLogDownloadUrl,
+  snippetUnitKeyOrder,
 } from "../../src/utils/log-resolver.js";
-import { logKeysFromNode } from "../../src/utils/log-keys.js";
+import { failedUnitNamesFromNode, logKeysFromNode } from "../../src/utils/log-keys.js";
 import { gzipSync, deflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
@@ -251,6 +252,27 @@ describe("resolveLogContent", () => {
     expect(requestFn).toHaveBeenCalledTimes(3);
   });
 
+  it("snippet mode prefers a failed unitProgresses unit over a later non-empty unit", async () => {
+    const requestFn = vi
+      .fn()
+      .mockResolvedValueOnce(new ArrayBuffer(0)) // base
+      .mockResolvedValueOnce(Buffer.from("prepare is the real failure").buffer);
+
+    const result = await resolveLogContent(makeClient(requestFn), "base", {
+      logKeys: [
+        "base-commandUnit:Fetch Files",
+        "base-commandUnit:Prepare",
+        "base-commandUnit:Wrap Up",
+      ],
+      failedUnitNames: ["Prepare"],
+      mode: "snippet",
+    });
+    expect(result).toContain("--- commandUnit: Prepare ---");
+    expect(result).toContain("prepare is the real failure");
+    const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
+    expect(keys).toEqual(["base", "base-commandUnit:Prepare"]);
+  });
+
   it("full mode returns labeled sections for all non-empty Helm units", async () => {
     const base = "acct/pipeline/p1/7/-exec/stage/-helmDeployment";
     const line = (time: string, out: string) =>
@@ -430,7 +452,7 @@ describe("blobKeysToTry / commandUnitLogKey", () => {
   });
 });
 
-describe("logKeysFromNode", () => {
+describe("logKeysFromNode / failedUnitNamesFromNode", () => {
   it("collects de-duplicated keys across executableResponses variants", () => {
     expect(
       logKeysFromNode({
@@ -447,6 +469,30 @@ describe("logKeysFromNode", () => {
   it("returns undefined when the node has no log keys", () => {
     expect(logKeysFromNode({})).toBeUndefined();
     expect(logKeysFromNode({ executableResponses: [{ task: {} }] })).toBeUndefined();
+  });
+
+  it("collects failed/error unit names from unitProgresses status", () => {
+    expect(
+      failedUnitNamesFromNode({
+        unitProgresses: [
+          { unitName: "Fetch Files", status: "Success" },
+          { unitName: "Prepare", status: "Failed" },
+          { unitName: "Wrap Up", status: "Expired" },
+          { unitName: "Install / Upgrade", status: "Error" },
+        ],
+      }),
+    ).toEqual(["Prepare", "Install / Upgrade"]);
+    expect(failedUnitNamesFromNode({ unitProgresses: [{ unitName: "Execute", status: "Success" }] })).toBeUndefined();
+  });
+
+  it("orders snippet keys with failed units before reverse last-non-empty", () => {
+    expect(
+      snippetUnitKeyOrder(
+        "base",
+        ["base-commandUnit:A", "base-commandUnit:B", "base-commandUnit:C"],
+        ["B"],
+      ),
+    ).toEqual(["base-commandUnit:B", "base-commandUnit:C", "base-commandUnit:A"]);
   });
 });
 

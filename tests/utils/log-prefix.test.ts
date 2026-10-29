@@ -274,6 +274,32 @@ describe("buildLogPrefixFromExecution", () => {
     ]);
   });
 
+  it("returns failed unitProgresses names with the matched node", async () => {
+    dispatchMock.mockResolvedValue({
+      pipelineExecutionSummary: { pipelineIdentifier: "my-pipe", runSequence: 42 },
+      executionGraph: {
+        nodeMap: {
+          stepNode: {
+            uuid: "step-uuid",
+            identifier: "helm",
+            baseFqn: "pipeline.stages.deploy.spec.execution.steps.helm",
+            logBaseKey: "acct1/steps/helm",
+            unitProgresses: [
+              { unitName: "Fetch Files", status: "Success" },
+              { unitName: "Install / Upgrade", status: "Failed" },
+            ],
+          },
+        },
+      },
+    });
+
+    const result = await buildLogPrefixFromExecution(
+      mockClient, mockRegistry, "exec-123", { step_id: "step-uuid" },
+    );
+
+    expect(result.failedUnitNames).toEqual(["Install / Upgrade"]);
+  });
+
   it("falls back to synthesized prefix when no node has a logBaseKey", async () => {
     dispatchMock.mockResolvedValue({
       pipelineExecutionSummary: {

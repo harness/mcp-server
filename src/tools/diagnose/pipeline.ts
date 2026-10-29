@@ -5,7 +5,7 @@ import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
 import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
 import { resolveLogContent, resolveLogDownloadUrl } from "../../utils/log-resolver.js";
-import { logKeysFromNode } from "../../utils/log-keys.js";
+import { failedUnitNamesFromNode, logKeysFromNode } from "../../utils/log-keys.js";
 import { TERMINAL_STATUSES } from "../../utils/poll-execution.js";
 import { classifyFailure } from "../../utils/diagnose-triage.js";
 
@@ -103,6 +103,8 @@ interface FailedNodeDetail {
   command_unit_names?: string[];
   /** Exact log keys from executableResponses — preferred GET /blob unit keys. */
   log_keys?: string[];
+  /** unitProgresses names with failed/error status — snippet fetch preference. */
+  failed_unit_names?: string[];
   delegate?: string;
   script_context?: {
     name?: string;
@@ -267,6 +269,7 @@ function findFailedNodes(nodeMap: Record<string, ExecGraphNode>): FailedNodeDeta
       log_key: node.logBaseKey,
       command_unit_names: commandUnitNamesFromNode(node),
       log_keys: logKeysFromNode(node),
+      failed_unit_names: failedUnitNamesFromNode(node),
       delegate,
     };
 
@@ -475,6 +478,7 @@ async function resolveDiagnoseLog(
     logSnippetLines: number;
     commandUnitNames?: string[];
     logKeys?: string[];
+    failedUnitNames?: string[];
   },
 ): Promise<unknown> {
   if (options.returnDownloadUrl) {
@@ -485,6 +489,7 @@ async function resolveDiagnoseLog(
     signal: options.signal,
     commandUnitNames: options.commandUnitNames,
     logKeys: options.logKeys,
+    failedUnitNames: options.failedUnitNames,
     mode: "snippet",
     snippetLines: options.logSnippetLines,
   });
@@ -684,6 +689,7 @@ export const pipelineHandler: DiagnoseHandler = {
                 logSnippetLines,
                 commandUnitNames: fn.command_unit_names,
                 logKeys: fn.log_keys,
+                failedUnitNames: fn.failed_unit_names,
               });
               return { key, value: logValue };
             } catch (err) {
@@ -765,6 +771,7 @@ export const pipelineHandler: DiagnoseHandler = {
             logSnippetLines,
             commandUnitNames: commandUnitNamesFromNode(requestedNode),
             logKeys: logKeysFromNode(requestedNode),
+            failedUnitNames: failedUnitNamesFromNode(requestedNode),
           });
           diagnostic.requested_step_log = {
             step_id: requestedStepId,
@@ -839,6 +846,7 @@ export const pipelineHandler: DiagnoseHandler = {
             logSnippetLines,
             commandUnitNames: commandUnitNamesFromNode(bestNode),
             logKeys: logKeysFromNode(bestNode),
+            failedUnitNames: failedUnitNamesFromNode(bestNode),
           });
           diagnostic.requested_step_log = {
             step_id: bestNodeId,
@@ -899,6 +907,7 @@ export const pipelineHandler: DiagnoseHandler = {
                 logSnippetLines,
                 commandUnitNames: commandUnitNamesFromNode(node),
                 logKeys: logKeysFromNode(node),
+                failedUnitNames: failedUnitNamesFromNode(node),
               });
               return { nodeId, logValue };
             } catch (err) {

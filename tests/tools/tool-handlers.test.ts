@@ -499,7 +499,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
-      { commandUnitNames: undefined, logKeys: undefined, mode: "full" },
+      { commandUnitNames: undefined, logKeys: undefined, failedUnitNames: undefined, mode: "full" },
     );
     expect(buildLogPrefixMock).not.toHaveBeenCalled();
   });
@@ -537,7 +537,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
-      { commandUnitNames: undefined, logKeys: undefined, mode: "full" },
+      { commandUnitNames: undefined, logKeys: undefined, failedUnitNames: undefined, mode: "full" },
     );
   });
 
@@ -558,7 +558,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
-      { commandUnitNames: undefined, logKeys: undefined, mode: "full" },
+      { commandUnitNames: undefined, logKeys: undefined, failedUnitNames: undefined, mode: "full" },
     );
   });
 
@@ -575,7 +575,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
-      { commandUnitNames: ["Initialize", "Execute"], logKeys: undefined, mode: "full" },
+      { commandUnitNames: ["Initialize", "Execute"], logKeys: undefined, failedUnitNames: undefined, mode: "full" },
     );
   });
 
@@ -595,6 +595,7 @@ describe("harness_get — execution_log", () => {
       {
         commandUnitNames: undefined,
         logKeys: ["acct1/steps/helm-commandUnit:Fetch Files", "acct1/steps/helm-commandUnit:Install / Upgrade"],
+        failedUnitNames: undefined,
         mode: "full",
       },
     );
@@ -700,7 +701,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "explicit/log/prefix/key",
-      { commandUnitNames: undefined, logKeys: undefined, mode: "full" },
+      { commandUnitNames: undefined, logKeys: undefined, failedUnitNames: undefined, mode: "full" },
     );
     expect(buildLogPrefixMock).not.toHaveBeenCalled();
   });

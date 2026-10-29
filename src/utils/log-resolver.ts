@@ -60,12 +60,17 @@ export interface LogResolveOptions {
    */
   logKeys?: string[];
   /**
-   * `snippet` — last non-empty unit only (diagnose). `full` — labeled sections
-   * for every non-empty unit (harness_get). Default `full`.
+   * `snippet` — prefer failed units then last non-empty (diagnose). `full` —
+   * labeled sections for every non-empty unit (harness_get). Default `full`.
    */
   mode?: LogResolveMode;
   /** Tail line count for `snippet` mode (and safety trim). Default 120. */
   snippetLines?: number;
+  /**
+   * From `unitProgresses` entries with failed/error status. Snippet mode tries
+   * these keys first (then reverse last-non-empty).
+   */
+  failedUnitNames?: string[];
 }
 
 /** Build UI-style command-unit blob key from a step logBaseKey. */
@@ -140,6 +145,46 @@ export function tailLogLines(text: string, n: number): string {
 
 function formatUnitSection(key: string, body: string): string {
   return `--- commandUnit: ${commandUnitLabel(key)} ---\n${body}`;
+}
+
+/**
+ * Map failed unit names to blob keys. Prefers matches already in `unitKeys`,
+ * otherwise synthesizes `${base}-commandUnit:${name}` so a failed unit missing
+ * from a truncated logKeys list is still tried.
+ */
+export function failedUnitKeysToTry(
+  baseKey: string,
+  unitKeys: string[],
+  failedUnitNames?: string[],
+): string[] {
+  if (!failedUnitNames?.length) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of failedUnitNames) {
+    const name = raw.trim();
+    if (!name) continue;
+    const synthesized = commandUnitLogKey(baseKey, name);
+    const match =
+      unitKeys.find((k) => k === synthesized) ??
+      unitKeys.find((k) => k.endsWith(`-commandUnit:${name}`)) ??
+      synthesized;
+    if (seen.has(match)) continue;
+    seen.add(match);
+    out.push(match);
+  }
+  return out;
+}
+
+/** Snippet fetch order: failed units first, then remaining keys from the end. */
+export function snippetUnitKeyOrder(
+  baseKey: string,
+  unitKeys: string[],
+  failedUnitNames?: string[],
+): string[] {
+  const failed = failedUnitKeysToTry(baseKey, unitKeys, failedUnitNames);
+  const failedSet = new Set(failed);
+  const restReversed = [...unitKeys].reverse().filter((k) => !failedSet.has(k));
+  return [...failed, ...restReversed];
 }
 
 /** Soft-trim labeled sections so total lines stay under `maxLines` (drop from the start). */
@@ -781,9 +826,10 @@ function logTooLargeError(bytes: number, maxBytes: number): Error {
  * single request. Otherwise command-unit keys are resolved from `logKeys` or
  * `commandUnitNames` (else `Execute`):
  *
- * - **snippet** (diagnose): walk unit keys from the end, skip empty/404, return
- *   the last unit that logged (labeled + tailed). Covers late failures and
- *   early failures where later units never ran.
+ * - **snippet** (diagnose): prefer `failedUnitNames` from graph status, else
+ *   walk unit keys from the end; skip empty/404; return first hit (labeled +
+ *   tailed). Covers marked failures, late failures, and early failures where
+ *   later units never ran.
  * - **full** (harness_get): fetch non-empty units as labeled sections with a
  *   soft overall line budget (no hard merge-size throw).
  *
@@ -837,15 +883,17 @@ export async function resolveLogContent(
   }
 
   if (mode === "snippet") {
-    for (let i = unitKeys.length - 1; i >= 0; i--) {
-      const candidate = unitKeys[i]!;
+    const order = snippetUnitKeyOrder(baseKey!, unitKeys, options?.failedUnitNames);
+    const failedSet = new Set(failedUnitKeysToTry(baseKey!, unitKeys, options?.failedUnitNames));
+    for (const candidate of order) {
       const raw = await fetchKey(candidate);
       if (!raw) continue;
       const text = parseLogLines(raw).trim();
       if (!text) continue;
-      log.info("Resolved logs via last non-empty command-unit key", {
+      log.info("Resolved logs via command-unit key", {
         baseKey: key,
         key: candidate,
+        reason: failedSet.has(candidate) ? "failed_unit_status" : "last_non_empty",
       });
       return formatUnitSection(candidate, tailLogLines(text, snippetLines));
     }
