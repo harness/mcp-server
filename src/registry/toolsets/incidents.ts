@@ -6,6 +6,38 @@ import { projectRelatedActivity } from "./related-activities.js";
 import { isRecord } from "../../utils/type-guards.js";
 
 /**
+ * Project a single item cited by a root-cause theory (a deploy, PR, ticket,
+ * link, etc.). This is a different, simpler shape than the generic
+ * `relatedActivities` edges projected by `projectRelatedActivity` below — the
+ * backend DTOs are unrelated even though the field name collides.
+ */
+function projectTheoryRelatedActivity(a: unknown): unknown {
+  if (!isRecord(a)) return a;
+  const out: Record<string, unknown> = {};
+  if (typeof a.type === "string") out.type = a.type;
+  if (typeof a.displayId === "string") out.displayId = a.displayId;
+  if (typeof a.url === "string") out.url = a.url;
+  return out;
+}
+
+/**
+ * Project a cited item the backend couldn't link or check, echoing the
+ * `{type, id}` reference the caller sent alongside the reason.
+ */
+function projectRelatedActivityIssue(i: unknown): unknown {
+  if (!isRecord(i)) return i;
+  const out: Record<string, unknown> = {};
+  if (isRecord(i.reference)) {
+    const ref: Record<string, unknown> = {};
+    if (typeof i.reference.type === "string") ref.type = i.reference.type;
+    if (typeof i.reference.id === "string") ref.id = i.reference.id;
+    out.reference = ref;
+  }
+  if (typeof i.reason === "string") out.reason = i.reason;
+  return out;
+}
+
+/**
  * Project a single root-cause theory to its stable, agent-relevant fields,
  * dropping any backend-internal keys the API may add.
  */
@@ -17,6 +49,9 @@ function projectRootCauseTheory(t: unknown): unknown {
   if (typeof t.status === "string") out.status = t.status;
   if (typeof t.confidence === "number") out.confidence = t.confidence;
   if (typeof t.aiGenerated === "boolean") out.aiGenerated = t.aiGenerated;
+  if (Array.isArray(t.relatedActivities) && t.relatedActivities.length > 0) {
+    out.relatedActivities = t.relatedActivities.map(projectTheoryRelatedActivity);
+  }
   return out;
 }
 
@@ -110,6 +145,10 @@ function addRootCauseTheoryExtract(raw: unknown): unknown {
   const out: Record<string, unknown> = {};
   if (raw.theory !== undefined) out.theory = projectRootCauseTheory(raw.theory);
   if (typeof raw.created === "boolean") out.created = raw.created;
+  for (const key of ["notLinked", "unverified"] as const) {
+    const issues = raw[key];
+    if (Array.isArray(issues) && issues.length > 0) out[key] = issues.map(projectRelatedActivityIssue);
+  }
   return out;
 }
 
@@ -173,14 +212,49 @@ const incidentUpdateSchema: BodySchema = {
 };
 
 const addRootCauseTheorySchema: BodySchema = {
-  description: "Human-authored root-cause theory to add (AddRootCauseTheoryRequest)",
+  description: "Root-cause theory to add (AddRootCauseTheoryRequest)",
   fields: [
     { name: "message", type: "string", required: true, description: "The root-cause theory text" },
     {
       name: "status",
       type: "string",
       required: false,
-      description: "Initial theory status: INVESTIGATING (default) or CONFIRMED",
+      description: "Initial theory status: INVESTIGATING (default), CONFIRMED, or RULED_OUT",
+    },
+    {
+      name: "confidence",
+      type: "number",
+      required: false,
+      description:
+        "Integer from 0 to 100. When omitted, CONFIRMED defaults to 95; INVESTIGATING and RULED_OUT default to 80",
+    },
+    {
+      name: "relatedActivities",
+      type: "array",
+      required: false,
+      description:
+        "Items the theory cites, shown as links under it. Each is checked against the incident's project; "
+        + "any that can't be found are returned in notLinked and the theory is still added. The items on a "
+        + "CONFIRMED theory are recorded as the incident's cause.",
+      itemType: "object",
+      fields: [
+        {
+          name: "type",
+          type: "string",
+          required: true,
+          description: "DEPLOY, PR, INCIDENT, ALERT, CHANGE, BUILD, FF, FLAG_CHANGE, TICKET or LINK. For an item "
+            + "cited by web URL the type is a hint: the URL decides how it's stored",
+        },
+        {
+          name: "id",
+          type: "string",
+          required: true,
+          description: "The item's public ID (e.g. DEPL-12). For a PR, its web URL or "
+            + "<repository identifier>#<PR number> for a repository in the incident's project's Harness Code "
+            + "(e.g. checkout-service#42). Anything else, such as a pipeline execution, build, feature flag, "
+            + "ticket or status page, by its web URL",
+        },
+      ],
     },
   ],
 };
@@ -338,11 +412,19 @@ export const incidentsToolset: ToolsetDefinition = {
           bodySchema: addRootCauseTheorySchema,
           responseExtractor: addRootCauseTheoryExtract,
           actionDescription:
-            "Add a human-authored root-cause theory to an incident. If a theory with the same message already "
-            + "exists, no duplicate is created: the existing theory is returned with created=false and its status "
-            + "is left unchanged. The response's theory.id identifies the theory for later status changes. The "
-            + "response does not include rootCauseTheoriesSha, and a successful add (created=true) changes it, so "
-            + "call harness_get before confirming, ruling out, or undoing a theory.",
+            "Add a root-cause theory to an incident. Authorship is decided from the caller's Harness credential, "
+            + "not a body field: the theory is AI-generated only when that credential is the project's bound "
+            + "Agent Account service account. Every other caller, including another agent, is recorded as "
+            + "human-authored. status applies to a theory being created. Sending RULED_OUT here does not rule "
+            + "out a theory that already exists; use rule_out_root_cause_theory for that. If a theory with the "
+            + "same message already exists, no duplicate is created: the cited items are added to the existing "
+            + "theory, which is returned with created=false and its status and confidence left unchanged. Cited "
+            + "items that weren't found are returned in notLinked and aren't linked; those that couldn't be "
+            + "checked, have no activity in the incident's project, or whose URL isn't the cited type are "
+            + "returned in unverified and are linked as cited. The response's theory.id identifies the theory "
+            + "for later status changes. The response does not include rootCauseTheoriesSha, and an add that "
+            + "changes the theories (a new theory, or new citations on an existing one) changes it, so call "
+            + "harness_get before confirming, ruling out, or undoing a theory.",
         },
         confirm_root_cause_theory: rootCauseTheoryStatusAction(
           "confirm",

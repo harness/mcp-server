@@ -72,6 +72,11 @@ describe("incident resource definition", () => {
     const description = def.executeActions?.add_root_cause_theory?.actionDescription;
     expect(description).toContain("rootCauseTheoriesSha");
     expect(description).toContain("call harness_get before confirming");
+    expect(description).toContain("bound Agent Account service account");
+    expect(description).toContain("not a body field");
+    expect(description).toContain("RULED_OUT");
+    expect(description).toContain("rule_out_root_cause_theory");
+    expect(description).toContain("status and confidence left unchanged");
   });
 
   it.each(["create", "update"] as const)("names the severity option ids in the %s body schema", (op) => {
@@ -385,6 +390,30 @@ describe("incident — harness_get", () => {
     expect(data.rootCauseTheoriesSha).toBe("sha-1");
   });
 
+  it("keeps the evidence cited on a root-cause theory", async () => {
+    mockRequest.mockResolvedValueOnce({
+      prettyId: "INC-42",
+      rootCauseTheories: [{
+        id: "theory-1",
+        message: "bad deploy",
+        status: "CONFIRMED",
+        confidence: 90,
+        aiGenerated: true,
+        relatedActivities: [{ type: "DEPLOY", displayId: "DEP-7", url: "https://example.com/dep-7", internal: "x" }],
+      }],
+    });
+    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.rootCauseTheories).toEqual([{
+      id: "theory-1",
+      message: "bad deploy",
+      status: "CONFIRMED",
+      confidence: 90,
+      aiGenerated: true,
+      relatedActivities: [{ type: "DEPLOY", displayId: "DEP-7", url: "https://example.com/dep-7" }],
+    }]);
+  });
+
   it("keeps the full summary in the detail view", async () => {
     const long = "x".repeat(1500);
     mockRequest.mockResolvedValueOnce({ prettyId: "INC-42", summary: long });
@@ -574,6 +603,105 @@ describe("incident — harness_execute (add_root_cause_theory)", () => {
     expect(result.isError).toBe(true);
     expect((parseResult(result) as { error: string }).error).toContain("message");
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("posts confidence, RULED_OUT status, and relatedActivities straight through", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: {
+        message: "bad deploy",
+        status: "RULED_OUT",
+        confidence: 80,
+        relatedActivities: [
+          { type: "DEPLOY", id: "DEP-7" },
+          { type: "PR", id: "checkout-service#42" },
+        ],
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.body).toEqual({
+      message: "bad deploy",
+      status: "RULED_OUT",
+      confidence: 80,
+      relatedActivities: [
+        { type: "DEPLOY", id: "DEP-7" },
+        { type: "PR", id: "checkout-service#42" },
+      ],
+    });
+  });
+
+  it("projects relatedActivities on the returned theory and drops backend-internal keys", async () => {
+    mockRequest.mockResolvedValueOnce({
+      theory: {
+        id: "theory-1",
+        message: "bad deploy",
+        status: "INVESTIGATING",
+        confidence: 80,
+        aiGenerated: true,
+        relatedActivities: [{ type: "DEPLOY", displayId: "DEP-7", url: "https://example.com/dep-7", internal: "x" }],
+      },
+      created: true,
+    });
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { message: "bad deploy" },
+    });
+    expect(parseResult(result)).toEqual({
+      theory: {
+        id: "theory-1",
+        message: "bad deploy",
+        status: "INVESTIGATING",
+        confidence: 80,
+        aiGenerated: true,
+        relatedActivities: [{ type: "DEPLOY", displayId: "DEP-7", url: "https://example.com/dep-7" }],
+      },
+      created: true,
+    });
+  });
+
+  it("keeps notLinked and unverified citations and drops backend-internal keys", async () => {
+    mockRequest.mockResolvedValueOnce({
+      theory: { id: "theory-1", message: "bad deploy", status: "INVESTIGATING", confidence: 80, aiGenerated: true },
+      created: false,
+      notLinked: [{ reference: { type: "DEPLOY", id: "DEP-404", internal: "x" }, reason: "not found", code: 1 }],
+      unverified: [{ reference: { type: "PR", id: "https://github.com/acme/app/pull/9" }, reason: "no activity" }],
+    });
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { message: "bad deploy" },
+    });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.created).toBe(false);
+    expect(data.notLinked).toEqual([{ reference: { type: "DEPLOY", id: "DEP-404" }, reason: "not found" }]);
+    expect(data.unverified).toEqual([
+      { reference: { type: "PR", id: "https://github.com/acme/app/pull/9" }, reason: "no activity" },
+    ]);
+  });
+
+  it("omits relatedActivities, notLinked, and unverified when the backend returns none", async () => {
+    mockRequest.mockResolvedValueOnce({
+      theory: { id: "theory-1", message: "db", status: "INVESTIGATING", confidence: 0, aiGenerated: false },
+      created: true,
+      notLinked: [],
+      unverified: [],
+    });
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { message: "db" },
+    });
+    const data = parseResult(result) as { theory: Record<string, unknown> };
+    expect(data.theory).not.toHaveProperty("relatedActivities");
+    expect(data).not.toHaveProperty("notLinked");
+    expect(data).not.toHaveProperty("unverified");
   });
 });
 
