@@ -13,6 +13,11 @@ const log = createLogger("harness-client");
 
 const HARNESS_MCP_USER_AGENT = `harness-mcp-server/${getVersion()}`;
 
+// Keep aliases used by registry scopeParams under the same account boundary.
+const ACCOUNT_SCOPE_QUERY_KEYS = new Set([
+  "accountIdentifier", "routingId", "accountID", "accountId", "account_id", "account_identifier",
+]);
+
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const TRANSIENT_NETWORK_CODES = new Set(["EAI_AGAIN", "ECONNRESET", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"]);
 const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
@@ -766,8 +771,14 @@ export class HarnessClient {
     if (options.params) {
       for (const [key, value] of Object.entries(options.params)) {
         if (value === undefined || value === "") continue;
-        if (options.product !== "fme" && ["accountIdentifier", "routingId", "accountID"].includes(key)) {
-          if (Array.isArray(value) || String(value) !== this.resolveAccountId()) {
+        if (options.product !== "fme" && ACCOUNT_SCOPE_QUERY_KEYS.has(key)) {
+          // The public global template catalog has its own account. Permit only
+          // its single-template GET; routing and authentication stay session-bound.
+          const isGlobalTemplateRead = key === "accountIdentifier"
+            && value === "__GLOBAL_TEMPLATES_ACCOUNT_ID__"
+            && options.method === "GET"
+            && /^\/template\/api\/templates\/[^/]+$/.test(path);
+          if (!isGlobalTemplateRead && (Array.isArray(value) || String(value) !== this.resolveAccountId())) {
             throw new Error(`Cannot override account scoping parameter "${key}"`);
           }
         }

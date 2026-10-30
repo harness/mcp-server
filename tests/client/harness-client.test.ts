@@ -63,7 +63,7 @@ describe("HarnessClient", () => {
         expect(fetchSpy).not.toHaveBeenCalled();
       });
 
-      it.each(["accountIdentifier", "routingId", "accountID"])("rejects replacement of %s", async (key) => {
+      it.each(["accountIdentifier", "routingId", "accountID", "accountId", "account_id", "account_identifier"])("rejects replacement of %s", async (key) => {
         const client = new HarnessClient(makeConfig());
         for (const value of ["OTHER", ["test-account", "OTHER"]]) {
           await expect(client[method]({ path: "/ng/api/projects", params: { [key]: value } }))
@@ -88,6 +88,19 @@ describe("HarnessClient", () => {
           "Harness-Account": "session-account", Authorization: "Bearer session-token",
         });
       });
+    });
+
+    it.each([
+      ["PUT", "/template/api/templates/template", "accountIdentifier"],
+      ["GET", "/ng/api/projects", "accountIdentifier"],
+      ["GET", "/template/api/templates/template/extra", "accountIdentifier"],
+      ["GET", "/template/api/templates/template", "routingId"],
+      ["GET", "/template/api/templates/template", "accountId"],
+    ] as const)("does not extend global catalog exception to %s %s %s", async (method, path, key) => {
+      const client = new HarnessClient(makeConfig());
+      await expect(client.request({ method, path, params: { [key]: "__GLOBAL_TEMPLATES_ACCOUNT_ID__" } }))
+        .rejects.toThrow(/Cannot override account/);
+      expect(fetchSpy).not.toHaveBeenCalled();
     });
 
     it("builds URL with accountIdentifier and custom params", async () => {

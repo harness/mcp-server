@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import type { Config } from "../../src/config.js";
 import { HarnessClient } from "../../src/client/harness-client.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolResult } from "../../src/utils/response-formatter.js";
+import { registerGetTool } from "../../src/tools/harness-get.js";
 import type { EndpointSpec } from "../../src/registry/types.js";
 import { ALL_TOOLSET_NAMES, Registry } from "../../src/registry/index.js";
 import { encodePathSegment } from "../../src/utils/path.js";
@@ -34,7 +37,7 @@ describe("shared path segment encoding", () => {
     expect(() => encodePathSegment(value)).toThrow(/Path segment/);
   });
 
-  it.each([attack, "%2e", ".%2E", "%2e%2e", "release..stable", "日本語", ""])('encodes literal input %j once', (value) => {
+  it.each([attack, "%2e", ".%2E", "%2e%2e", "../x", "..hidden", "release..stable", "日本語", ""])('encodes literal input %j once', (value) => {
     expect(encodePathSegment(value)).toBe(encodeURIComponent(value));
   });
 
@@ -224,6 +227,32 @@ describe("registry paths through the real HTTP client", () => {
     expect(init?.method).toBe(method);
     return { url, init: init! };
   }
+
+  it.each([true, "true"])("reads the global template catalog through harness_get with global=%j", async (global) => {
+    let handler!: (args: Record<string, unknown>) => Promise<ToolResult>;
+    const server = { registerTool: (_name: string, _schema: unknown, callback: typeof handler) => { handler = callback; } };
+    registerGetTool(server as unknown as McpServer, registry, realClient());
+    const result = await handler({ resource_type: "template", resource_id: "helmDeployAction", params: { global, version_label: "1.0.8" } });
+    expect(result.isError).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [requestUrl, init] = fetchMock.mock.calls[0]!;
+    const url = new URL(String(requestUrl));
+    expect(url.pathname).toBe("/template/api/templates/helmDeployAction");
+    expect(url.searchParams.getAll("accountIdentifier")).toEqual(["__GLOBAL_TEMPLATES_ACCOUNT_ID__"]);
+    expect(url.searchParams.getAll("routingId")).toEqual([config.HARNESS_ACCOUNT_ID]);
+    expect(url.searchParams.get("versionLabel")).toBe("1.0.8");
+    expect(init?.method).toBe("GET");
+    expect(init?.headers).toMatchObject({ "Harness-Account": config.HARNESS_ACCOUNT_ID, "x-api-key": config.HARNESS_API_KEY });
+  });
+
+  it("pins every account alias declared by the registry", async () => {
+    const aliases = new Set(registry.getAllResourceTypes().map((type) => registry.getResource(type).scopeParams?.account).filter((key): key is string => Boolean(key)));
+    expect(aliases.has("accountId")).toBe(true);
+    for (const key of aliases) {
+      await expect(realClient().request({ path: "/ng/api/projects", params: { [key]: "other-account" } })).rejects.toThrow(/Cannot override account/);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
   describe.each([
     "id?accountIdentifier=other&routingId=other",
