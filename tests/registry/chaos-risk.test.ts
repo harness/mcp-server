@@ -892,6 +892,19 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest.mock.calls[0][0].body.confirmNewRule).toBeUndefined();
   });
 
+  it("create: accepts the shortest and longest identities the API accepts", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    for (const identity of ["a", "a".repeat(64)]) {
+      await registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p", body: { ...ruleBody, identity },
+      });
+    }
+
+    expect(mockRequest.mock.calls.map((c) => c[0].body.identity)).toEqual(["a", "a".repeat(64)]);
+  });
+
   it("create: sends confirmNewRule only when the user accepts a new rule", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -908,7 +921,7 @@ describe("chaos_risk_rule create/update/delete", () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
 
-    for (const identity of ["code-Outbound_Call", "has space", "a".repeat(65)]) {
+    for (const identity of ["code-Outbound_Call", "has space", "a".repeat(65), "-", "-retry", "retry-"]) {
       await expect(
         registry.dispatch(client, "chaos_risk_rule", "create", {
           org_id: "o", project_id: "p", body: { ...ruleBody, identity },
@@ -967,7 +980,7 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: accepts ApplicationManifest when the identity uses the k8s- prefix", async () => {
+  it("create: accepts an ApplicationManifest identity with no prefix", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -975,13 +988,13 @@ describe("chaos_risk_rule create/update/delete", () => {
       org_id: "o", project_id: "p",
       body: {
         ...ruleBody,
-        identity: "k8s-missing-pdb",
+        identity: "missing-pdb",
         spec: { ...ruleBody.spec, dataSource: ["ApplicationManifest"] },
       },
     });
 
     const body = mockRequest.mock.calls[0][0].body;
-    expect(body.identity).toBe("k8s-missing-pdb");
+    expect(body.identity).toBe("missing-pdb");
     expect(body.spec.dataSource).toEqual(["ApplicationManifest"]);
   });
 
@@ -1063,6 +1076,19 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(params.dataSource).toBe("SourceCode");
     expect(params.isSystem).toBeUndefined();
     expect(params.customOnly).toBeUndefined();
+  });
+
+  it("list: the description names the filters by their input keys, not the API names", () => {
+    const list = registry.getResource("chaos_risk_rule").operations.list!;
+    const queryParams = list.queryParams as Record<string, string>;
+
+    for (const [input, api] of Object.entries(queryParams)) {
+      if (input === api) continue;
+      expect(list.description).not.toMatch(new RegExp(`\\b${api}\\b`));
+    }
+    for (const filter of ["data_source", "is_system", "custom_only", "include_in_passive_scan"]) {
+      expect(list.description).toContain(filter);
+    }
   });
 
   it("create: keeps spec.includeInPassiveScan and rejects a non-boolean", async () => {

@@ -433,7 +433,7 @@ const RISK_RULE_BODY_FIELDS: BodyFieldSpec[] = [
 
 const RISK_RULE_DATA_SOURCES = ["SourceCode", "ApplicationManifest"] as const;
 const DEFAULT_RISK_RULE_DATA_SOURCE = "SourceCode";
-const RISK_RULE_IDENTITY_RE = /^[a-z0-9-]{1,64}$/;
+const RISK_RULE_IDENTITY_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const RISK_RULE_PROMPT_LIST_LIMIT = 10;
 const RISK_RULE_PROMPT_ENTRY_LIMIT = 500;
 
@@ -2786,9 +2786,6 @@ export const chaosToolset: ToolsetDefinition = {
             const b = coerceBody(input);
             const externalServiceId = b.external_service_id ?? b.externalServiceId;
             const agentId = b.agent_id ?? b.agentId;
-            const environmentId = optionalText(b.environment_id ?? b.environmentId);
-            const infrastructureId = optionalText(b.infrastructure_id ?? b.infrastructureId);
-            const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const tags = stringList(b.tags);
             // A present linkedDiscoveredService is validated for a CodeRepository
             // service. An empty object is an unlink on every service type, so a
@@ -2798,6 +2795,14 @@ export const chaosToolset: ToolsetDefinition = {
               b.linked_discovered_service ?? b.linkedDiscoveredService,
               optionalText(agentId) === CUSTOM_DISCOVERY_AGENT,
             );
+            // hce-saas stores the environment and infrastructure sent with an
+            // unlink, so values resupplied from harness_get would keep the
+            // workload's Kubernetes mapping on the code-repository service.
+            const clearsLink = linked.linkedDiscoveredService !== undefined
+              && Object.keys(linked.linkedDiscoveredService as object).length === 0;
+            const environmentId = clearsLink ? undefined : optionalText(b.environment_id ?? b.environmentId);
+            const infrastructureId = clearsLink ? undefined : optionalText(b.infrastructure_id ?? b.infrastructureId);
+            const infrastructureType = clearsLink ? undefined : optionalText(b.infrastructure_type ?? b.infrastructureType);
             assertChaosServiceInfrastructure(optionalText(agentId), environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
@@ -4811,7 +4816,7 @@ export const chaosToolset: ToolsetDefinition = {
             }
             if (typeof b.identity !== "string" || !RISK_RULE_IDENTITY_RE.test(b.identity)) {
               throw new Error(
-                `identity must match ${RISK_RULE_IDENTITY_RE.source} (lowercase letters, digits and hyphens, no required prefix), e.g. retry-without-backoff.`,
+                `identity must match ${RISK_RULE_IDENTITY_RE.source} (1-64 lowercase letters, digits and hyphens, starting and ending with a letter or digit, no required prefix), e.g. retry-without-backoff.`,
               );
             }
             return {

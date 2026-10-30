@@ -511,6 +511,33 @@ describe("chaos_service update", () => {
     expect(body.linkedDiscoveredService).toEqual({});
   });
 
+  it("drops resupplied environment and infrastructure when the update clears the link", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "svc-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_service", "update", {
+      identity: "svc-1",
+      org_id: "o",
+      project_id: "p",
+      name: "svc-1",
+      external_service_id: "ext-1",
+      agent_id: "custom-discovery-agent",
+      environment_id: "test",
+      infrastructure_id: "test27",
+      infrastructure_type: "KubernetesV2",
+      probes: [],
+      linked_discovered_service: {},
+    });
+
+    const body = mockRequest.mock.calls[0][0].body as Record<string, unknown>;
+    expect(body.linkedDiscoveredService).toEqual({});
+    expect(body).not.toHaveProperty("environmentId");
+    expect(body).not.toHaveProperty("environment_id");
+    expect(body).not.toHaveProperty("infrastructureId");
+    expect(body).not.toHaveProperty("infrastructure_id");
+    expect(body).not.toHaveProperty("infrastructureType");
+  });
+
   it("does not send an empty link on a service that is not a code repository", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ identity: "svc-1" });
     const client = makeClient(mockRequest);
