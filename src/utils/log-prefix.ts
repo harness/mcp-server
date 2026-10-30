@@ -1,6 +1,7 @@
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Registry } from "../registry/index.js";
 import { asRecord, asString, asNumber } from "./type-guards.js";
+import { logKeysFromNode } from "./log-keys.js";
 
 interface ExecGraphNode {
   uuid?: string;
@@ -8,6 +9,7 @@ interface ExecGraphNode {
   baseFqn?: string;
   logBaseKey?: string;
   unitProgresses?: Array<{ unitName?: string }>;
+  executableResponses?: Array<Record<string, { logKeys?: string[] } | undefined>>;
 }
 
 /** Result of resolving a log key from an execution graph. */
@@ -19,6 +21,8 @@ export interface ResolvedExecutionLogKey {
    * the default `Execute` unit when the base logBaseKey is empty.
    */
   commandUnitNames?: string[];
+  /** Exact log keys from the matched node's `executableResponses`. */
+  logKeys?: string[];
 }
 
 function commandUnitNamesFromNode(node: ExecGraphNode): string[] | undefined {
@@ -73,6 +77,7 @@ function findNodeLogKey(
     return {
       prefix: node.logBaseKey,
       commandUnitNames: commandUnitNamesFromNode(node),
+      logKeys: logKeysFromNode(node),
     };
   };
 

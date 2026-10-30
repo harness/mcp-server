@@ -1,5 +1,12 @@
 # Harness MCP Server — Task Tracking
 
+## qs comma serialization denial of service (alert #111)
+
+- [x] Raise the qs security minimum to 6.16.1; pnpm resolves 6.17.0. The npm shrinkwrap already resolves patched 6.16.1 and needs no change.
+- [x] Verify the advisory payload, audit, dependency consistency, types, and tests.
+
+Validation: six hostile serialization checks and a normal serialization control passed; pnpm audit reports zero vulnerabilities. Typecheck, build, docs check, shrinkwrap consistency, and diff check passed. The first unrestricted full suite completed with 186 files passing and one failing: the pre-existing untracked path-security.test.ts (132 failures; 4,296 tests passed). A rerun after a server interruption also hit the schema-description test's 20-second timeout (185 files and 4,295 tests passed). Untracked path-security work was preserved.
+
 ## AI Evals MCP exposure boundary (2026-10-14)
 
 ### Plan
@@ -949,6 +956,21 @@ Validation: 184 test files / 4,228 tests passed with `--maxWorkers=2 --testTimeo
 Delivery: push `chore/version-3.2.35` and open a PR against `main`.
 
 Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
+
+## Version 3.2.37
+
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release metadata, shrinkwrap consistency, types, build, and docs.
+- [x] Commit, push, tag, and create the GitHub release.
+
+## Version 3.2.38
+
+- [x] Fetch github/main and create chore/version-3.2.38 from it.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.38` and open a PR against `main`.
+
+Validation: 11 release/workflow tests passed; shrinkwrap consistency, typecheck, fresh build, docs check, and diff check passed.
 
 ## GitHub security alerts #102–110 and container vulnerability gate
 
