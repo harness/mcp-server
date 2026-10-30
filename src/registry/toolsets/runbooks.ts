@@ -9,7 +9,7 @@ import {
 } from "../extractors.js";
 
 const RUNBOOKS_PATH = "/gateway/ir/tp/api/v1/mc/runbooks";
-/** The runbook id contains `::` and `/`; the registry percent-encodes it into this one segment. */
+/** The runbook id is a UUID; it travels in this one path segment. */
 const RUNBOOK_PATH = `${RUNBOOKS_PATH}/{runbookId}`;
 const EXECUTIONS_PATH = `${RUNBOOK_PATH}/executions`;
 
