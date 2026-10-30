@@ -879,11 +879,36 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: rejects an identity that does not match code-<failure-mode>", async () => {
+  it("create: accepts a slug identity with no prefix", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "create", {
+      org_id: "o", project_id: "p",
+      body: { ...ruleBody, identity: "retry-without-backoff" },
+    });
+
+    expect(mockRequest.mock.calls[0][0].body.identity).toBe("retry-without-backoff");
+    expect(mockRequest.mock.calls[0][0].body.confirmNewRule).toBeUndefined();
+  });
+
+  it("create: sends confirmNewRule only when the user accepts a new rule", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "create", {
+      org_id: "o", project_id: "p",
+      body: { ...ruleBody, identity: "retry-without-backoff", confirmNewRule: true },
+    });
+
+    expect(mockRequest.mock.calls[0][0].body.confirmNewRule).toBe(true);
+  });
+
+  it("create: rejects an identity that is not a lowercase slug", async () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
 
-    for (const identity of ["outbound-call-without-timeout", "code-Outbound_Call", "code-ab", `code-${"a".repeat(61)}`]) {
+    for (const identity of ["code-Outbound_Call", "has space", "a".repeat(65)]) {
       await expect(
         registry.dispatch(client, "chaos_risk_rule", "create", {
           org_id: "o", project_id: "p", body: { ...ruleBody, identity },
@@ -942,14 +967,38 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: rejects a dataSource other than SourceCode and a prompt missing do or outcome", async () => {
+  it("create: accepts ApplicationManifest when the identity uses the k8s- prefix", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "create", {
+      org_id: "o", project_id: "p",
+      body: {
+        ...ruleBody,
+        identity: "k8s-missing-pdb",
+        spec: { ...ruleBody.spec, dataSource: ["ApplicationManifest"] },
+      },
+    });
+
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.identity).toBe("k8s-missing-pdb");
+    expect(body.spec.dataSource).toEqual(["ApplicationManifest"]);
+  });
+
+  it("create: rejects an unknown dataSource and a prompt missing do or outcome", async () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
 
     await expect(
       registry.dispatch(client, "chaos_risk_rule", "create", {
         org_id: "o", project_id: "p",
-        body: { ...ruleBody, spec: { ...ruleBody.spec, dataSource: ["ApplicationManifest"] } },
+        body: { ...ruleBody, spec: { ...ruleBody.spec, dataSource: ["Logs"] } },
+      }),
+    ).rejects.toThrow(/spec\.dataSource/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { ...ruleBody.spec, dataSource: ["SourceCode", "ApplicationManifest"] } },
       }),
     ).rejects.toThrow(/spec\.dataSource/);
     await expect(

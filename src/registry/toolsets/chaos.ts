@@ -431,22 +431,24 @@ const RISK_RULE_BODY_FIELDS: BodyFieldSpec[] = [
   { name: "spec", type: "object", required: true, description: descRiskRuleSpec },
 ];
 
-const RISK_RULE_IDENTITY_RE = /^code-[a-z0-9-]{3,60}$/;
-const RISK_RULE_DATA_SOURCE = "SourceCode";
+const RISK_RULE_DATA_SOURCES = ["SourceCode", "ApplicationManifest"] as const;
+const DEFAULT_RISK_RULE_DATA_SOURCE = "SourceCode";
+const RISK_RULE_IDENTITY_RE = /^[a-z0-9-]{1,64}$/;
 const RISK_RULE_PROMPT_LIST_LIMIT = 10;
 const RISK_RULE_PROMPT_ENTRY_LIMIT = 500;
 
-/** Custom rules are SourceCode-only; an omitted dataSource defaults to that. */
+function isRiskRuleDataSource(value: unknown): value is (typeof RISK_RULE_DATA_SOURCES)[number] {
+  return typeof value === "string" && (RISK_RULE_DATA_SOURCES as readonly string[]).includes(value);
+}
+
+/** An omitted dataSource defaults to SourceCode. ApplicationManifest must be set explicitly. */
 function riskRuleDataSource(value: unknown): string[] {
-  const dataSource = value ?? [RISK_RULE_DATA_SOURCE];
-  if (
-    !Array.isArray(dataSource) ||
-    dataSource.length !== 1 ||
-    dataSource[0] !== RISK_RULE_DATA_SOURCE
-  ) {
-    throw new Error('spec.dataSource must be exactly ["SourceCode"]. Custom rules are SourceCode-only.');
+  const dataSource = value ?? [DEFAULT_RISK_RULE_DATA_SOURCE];
+  const source = Array.isArray(dataSource) && dataSource.length === 1 ? dataSource[0] : undefined;
+  if (!isRiskRuleDataSource(source)) {
+    throw new Error('spec.dataSource must be exactly ["SourceCode"] or ["ApplicationManifest"].');
   }
-  return dataSource;
+  return [source];
 }
 
 /**
@@ -477,7 +479,7 @@ function riskRulePromptList(value: unknown, field: string, required: boolean): v
   }
 }
 
-/** Builds the mutable part of a custom risk rule; spec.dataSource defaults to SourceCode. */
+/** Builds the mutable part of a custom risk rule; an omitted spec.dataSource defaults to SourceCode. */
 function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> {
   const missing = ["name", "severity", "category", "spec"].filter((k) => b[k] == null || b[k] === "");
   if (missing.length > 0) {
@@ -4805,14 +4807,18 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const b = coerceBody(input);
             if (!b.identity) {
-              throw new Error("Missing required field: identity. Use code-<failure-mode>, e.g. code-outbound-call-without-timeout.");
+              throw new Error("Missing required field: identity. Use a lowercase slug, e.g. retry-without-backoff.");
             }
             if (typeof b.identity !== "string" || !RISK_RULE_IDENTITY_RE.test(b.identity)) {
               throw new Error(
-                `identity must match ${RISK_RULE_IDENTITY_RE.source} (lowercase letters, digits and hyphens), e.g. code-outbound-call-without-timeout.`,
+                `identity must match ${RISK_RULE_IDENTITY_RE.source} (lowercase letters, digits and hyphens, no required prefix), e.g. retry-without-backoff.`,
               );
             }
-            return { identity: b.identity, ...buildRiskRuleBody(b) };
+            return {
+              identity: b.identity,
+              ...buildRiskRuleBody(b),
+              ...(b.confirmNewRule === true ? { confirmNewRule: true } : {}),
+            };
           },
           responseExtractor: passthrough,
           description: descCreateRiskRule,
@@ -4820,6 +4826,7 @@ export const chaosToolset: ToolsetDefinition = {
             description: descBodyRiskRuleCreate,
             fields: [
               { name: "identity", type: "string", required: true, description: descRiskRuleIdentity },
+              { name: "confirmNewRule", type: "boolean", required: false, description: "Set true only after the user has seen a 409 matches list and still wants a new rule." },
               ...RISK_RULE_BODY_FIELDS,
             ],
           },
