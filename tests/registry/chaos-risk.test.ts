@@ -892,6 +892,19 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(mockRequest.mock.calls[0][0].body.confirmNewRule).toBeUndefined();
   });
 
+  it("create: accepts the shortest and longest identities the API accepts", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    for (const identity of ["a", "a".repeat(64)]) {
+      await registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p", body: { ...ruleBody, identity },
+      });
+    }
+
+    expect(mockRequest.mock.calls.map((c) => c[0].body.identity)).toEqual(["a", "a".repeat(64)]);
+  });
+
   it("create: sends confirmNewRule only when the user accepts a new rule", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -908,7 +921,7 @@ describe("chaos_risk_rule create/update/delete", () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
 
-    for (const identity of ["code-Outbound_Call", "has space", "a".repeat(65)]) {
+    for (const identity of ["code-Outbound_Call", "has space", "a".repeat(65), "-", "-retry", "retry-"]) {
       await expect(
         registry.dispatch(client, "chaos_risk_rule", "create", {
           org_id: "o", project_id: "p", body: { ...ruleBody, identity },
@@ -922,9 +935,10 @@ describe("chaos_risk_rule create/update/delete", () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
     const { identity, ...body } = ruleBody;
+    const updateBody = { ...body, spec: { ...ruleBody.spec, dataSource: ["SourceCode"] } };
 
     await registry.dispatch(client, "chaos_risk_rule", "update", {
-      identity, org_id: "o", project_id: "p", body,
+      identity, org_id: "o", project_id: "p", body: updateBody,
     });
 
     const call = mockRequest.mock.calls[0][0];
@@ -951,6 +965,60 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("update: an ApplicationManifest body that omits spec.dataSource fails locally", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const { identity, ...body } = ruleBody;
+    const manifestSpec = {
+      includeInPassiveScan: true,
+      faults: ["pod-delete"],
+      prompt: {
+        do: ["Deployment has no matching PodDisruptionBudget"],
+        outcome: ["pod-delete stays within the disruption budget"],
+      },
+    };
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "update", {
+        identity,
+        org_id: "o",
+        project_id: "p",
+        body: {
+          ...body,
+          description: "A deployment has no PodDisruptionBudget.",
+          tags: ["manifest"],
+          spec: manifestSpec,
+        },
+      }),
+    ).rejects.toThrow(/spec\.dataSource/);
+    expect(mockRequest).not.toHaveBeenCalled();
+
+    await registry.dispatch(client, "chaos_risk_rule", "update", {
+      identity,
+      org_id: "o",
+      project_id: "p",
+      body: {
+        ...body,
+        description: "A deployment has no PodDisruptionBudget.",
+        tags: ["manifest"],
+        spec: { ...manifestSpec, dataSource: ["ApplicationManifest"] },
+      },
+    });
+    expect(mockRequest.mock.calls[0][0].body.spec.dataSource).toEqual(["ApplicationManifest"]);
+
+    const rule = registry.getResource("chaos_risk_rule");
+    expect(rule.description).toContain(
+      "the chaos faults (spec.faults) that prove the risk for SourceCode and ApplicationManifest rules",
+    );
+    const update = rule.operations.update!;
+    expect(update.description).toContain(
+      "resupply the current description, tags, spec.dataSource and spec.includeInPassiveScan",
+    );
+    expect(update.bodySchema?.description).toContain(
+      "resupply the current spec.dataSource and spec.includeInPassiveScan",
+    );
+  });
+
   it("update: throws locally when a required field or a fault is missing", async () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
@@ -961,13 +1029,14 @@ describe("chaos_risk_rule create/update/delete", () => {
     ).rejects.toThrow(/severity/);
     await expect(
       registry.dispatch(client, "chaos_risk_rule", "update", {
-        identity, org_id: "o", project_id: "p", body: { ...ruleBody, spec: { ...ruleBody.spec, faults: [] } },
+        identity, org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { ...ruleBody.spec, dataSource: ["SourceCode"], faults: [] } },
       }),
     ).rejects.toThrow(/spec.faults/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: accepts ApplicationManifest when the identity uses the k8s- prefix", async () => {
+  it("create: accepts an ApplicationManifest identity with no prefix", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -975,13 +1044,13 @@ describe("chaos_risk_rule create/update/delete", () => {
       org_id: "o", project_id: "p",
       body: {
         ...ruleBody,
-        identity: "k8s-missing-pdb",
+        identity: "missing-pdb",
         spec: { ...ruleBody.spec, dataSource: ["ApplicationManifest"] },
       },
     });
 
     const body = mockRequest.mock.calls[0][0].body;
-    expect(body.identity).toBe("k8s-missing-pdb");
+    expect(body.identity).toBe("missing-pdb");
     expect(body.spec.dataSource).toEqual(["ApplicationManifest"]);
   });
 
@@ -1065,6 +1134,19 @@ describe("chaos_risk_rule create/update/delete", () => {
     expect(params.customOnly).toBeUndefined();
   });
 
+  it("list: the description names the filters by their input keys, not the API names", () => {
+    const list = registry.getResource("chaos_risk_rule").operations.list!;
+    const queryParams = list.queryParams as Record<string, string>;
+
+    for (const [input, api] of Object.entries(queryParams)) {
+      if (input === api) continue;
+      expect(list.description).not.toMatch(new RegExp(`\\b${api}\\b`));
+    }
+    for (const filter of ["data_source", "is_system", "custom_only", "include_in_passive_scan"]) {
+      expect(list.description).toContain(filter);
+    }
+  });
+
   it("create: keeps spec.includeInPassiveScan and rejects a non-boolean", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -1106,7 +1188,10 @@ describe("chaos_risk_rule create/update/delete", () => {
     await registry.dispatch(client, "chaos_risk_rule", "list", {});
     await registry.dispatch(client, "chaos_risk_rule", "get", { identity });
     await registry.dispatch(client, "chaos_risk_rule", "create", { body: ruleBody });
-    await registry.dispatch(client, "chaos_risk_rule", "update", { identity, body });
+    await registry.dispatch(client, "chaos_risk_rule", "update", {
+      identity,
+      body: { ...body, spec: { ...body.spec, dataSource: ["SourceCode"] } },
+    });
     await registry.dispatch(client, "chaos_risk_rule", "delete", { identity });
 
     for (const call of mockRequest.mock.calls) {

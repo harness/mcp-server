@@ -433,7 +433,7 @@ const RISK_RULE_BODY_FIELDS: BodyFieldSpec[] = [
 
 const RISK_RULE_DATA_SOURCES = ["SourceCode", "ApplicationManifest"] as const;
 const DEFAULT_RISK_RULE_DATA_SOURCE = "SourceCode";
-const RISK_RULE_IDENTITY_RE = /^[a-z0-9-]{1,64}$/;
+const RISK_RULE_IDENTITY_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const RISK_RULE_PROMPT_LIST_LIMIT = 10;
 const RISK_RULE_PROMPT_ENTRY_LIMIT = 500;
 
@@ -441,9 +441,13 @@ function isRiskRuleDataSource(value: unknown): value is (typeof RISK_RULE_DATA_S
   return typeof value === "string" && (RISK_RULE_DATA_SOURCES as readonly string[]).includes(value);
 }
 
-/** An omitted dataSource defaults to SourceCode. ApplicationManifest must be set explicitly. */
-function riskRuleDataSource(value: unknown): string[] {
-  const dataSource = value ?? [DEFAULT_RISK_RULE_DATA_SOURCE];
+/**
+ * Validates spec.dataSource. Create passes defaultWhenOmitted so a missing
+ * value becomes SourceCode. Update does not: an omitted value is rejected
+ * so an ApplicationManifest rule is not rewritten to SourceCode.
+ */
+function riskRuleDataSource(value: unknown, defaultWhenOmitted: boolean): string[] {
+  const dataSource = value ?? (defaultWhenOmitted ? [DEFAULT_RISK_RULE_DATA_SOURCE] : undefined);
   const source = Array.isArray(dataSource) && dataSource.length === 1 ? dataSource[0] : undefined;
   if (!isRiskRuleDataSource(source)) {
     throw new Error('spec.dataSource must be exactly ["SourceCode"] or ["ApplicationManifest"].');
@@ -479,8 +483,11 @@ function riskRulePromptList(value: unknown, field: string, required: boolean): v
   }
 }
 
-/** Builds the mutable part of a custom risk rule; an omitted spec.dataSource defaults to SourceCode. */
-function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> {
+/** Builds the mutable part of a custom risk rule. defaultDataSource is create-only. */
+function buildRiskRuleBody(
+  b: Record<string, unknown>,
+  options: { defaultDataSource?: boolean } = {},
+): Record<string, unknown> {
   const missing = ["name", "severity", "category", "spec"].filter((k) => b[k] == null || b[k] === "");
   if (missing.length > 0) {
     throw new Error(`Missing required field(s): ${missing.join(", ")}.`);
@@ -489,7 +496,7 @@ function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> 
     throw new Error("spec must be an object.");
   }
   const spec: Record<string, unknown> = { ...(b.spec as Record<string, unknown>) };
-  const dataSource = riskRuleDataSource(spec.dataSource);
+  const dataSource = riskRuleDataSource(spec.dataSource, options.defaultDataSource === true);
   if (!Array.isArray(spec.faults) || spec.faults.length === 0) {
     throw new Error("spec.faults must list at least one chaos fault that can prove the risk (e.g. pod-network-latency).");
   }
@@ -2786,9 +2793,6 @@ export const chaosToolset: ToolsetDefinition = {
             const b = coerceBody(input);
             const externalServiceId = b.external_service_id ?? b.externalServiceId;
             const agentId = b.agent_id ?? b.agentId;
-            const environmentId = optionalText(b.environment_id ?? b.environmentId);
-            const infrastructureId = optionalText(b.infrastructure_id ?? b.infrastructureId);
-            const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const tags = stringList(b.tags);
             // A present linkedDiscoveredService is validated for a CodeRepository
             // service. An empty object is an unlink on every service type, so a
@@ -2798,6 +2802,14 @@ export const chaosToolset: ToolsetDefinition = {
               b.linked_discovered_service ?? b.linkedDiscoveredService,
               optionalText(agentId) === CUSTOM_DISCOVERY_AGENT,
             );
+            // hce-saas stores the environment and infrastructure sent with an
+            // unlink, so values resupplied from harness_get would keep the
+            // workload's Kubernetes mapping on the code-repository service.
+            const clearsLink = linked.linkedDiscoveredService !== undefined
+              && Object.keys(linked.linkedDiscoveredService as object).length === 0;
+            const environmentId = clearsLink ? undefined : optionalText(b.environment_id ?? b.environmentId);
+            const infrastructureId = clearsLink ? undefined : optionalText(b.infrastructure_id ?? b.infrastructureId);
+            const infrastructureType = clearsLink ? undefined : optionalText(b.infrastructure_type ?? b.infrastructureType);
             assertChaosServiceInfrastructure(optionalText(agentId), environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
@@ -4811,12 +4823,12 @@ export const chaosToolset: ToolsetDefinition = {
             }
             if (typeof b.identity !== "string" || !RISK_RULE_IDENTITY_RE.test(b.identity)) {
               throw new Error(
-                `identity must match ${RISK_RULE_IDENTITY_RE.source} (lowercase letters, digits and hyphens, no required prefix), e.g. retry-without-backoff.`,
+                `identity must match ${RISK_RULE_IDENTITY_RE.source} (1-64 lowercase letters, digits and hyphens, starting and ending with a letter or digit, no required prefix), e.g. retry-without-backoff.`,
               );
             }
             return {
               identity: b.identity,
-              ...buildRiskRuleBody(b),
+              ...buildRiskRuleBody(b, { defaultDataSource: true }),
               ...(b.confirmNewRule === true ? { confirmNewRule: true } : {}),
             };
           },
