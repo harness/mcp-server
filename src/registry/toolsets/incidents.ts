@@ -225,7 +225,8 @@ const addRootCauseTheorySchema: BodySchema = {
       name: "confidence",
       type: "number",
       required: false,
-      description: "Confidence level (0-100); defaults based on status when omitted",
+      description:
+        "Integer from 0 to 100. When omitted, CONFIRMED defaults to 95; INVESTIGATING and RULED_OUT default to 80",
     },
     {
       name: "relatedActivities",
@@ -411,16 +412,19 @@ export const incidentsToolset: ToolsetDefinition = {
           bodySchema: addRootCauseTheorySchema,
           responseExtractor: addRootCauseTheoryExtract,
           actionDescription:
-            "Add a root-cause theory to an incident. Calls authenticated as the project's configured Agent "
-            + "Account are recorded as AI-generated; other callers are recorded as human-authored. If a theory "
-            + "with the same message already exists, no duplicate is created: the cited items are added to the "
-            + "existing theory, which is returned with created=false and its status left unchanged. Cited items "
-            + "that weren't found are returned in notLinked and aren't linked; those that couldn't be checked, "
-            + "have no activity in the incident's project, or whose URL isn't the cited type are returned in "
-            + "unverified and are linked as cited. The response's theory.id identifies the theory for later "
-            + "status changes. The response does not include rootCauseTheoriesSha, and an add that changes the "
-            + "theories (a new theory, or new citations on an existing one) changes it, so call harness_get "
-            + "before confirming, ruling out, or undoing a theory.",
+            "Add a root-cause theory to an incident. Authorship is decided from the caller's Harness credential, "
+            + "not a body field: the theory is AI-generated only when that credential is the project's bound "
+            + "Agent Account service account. Every other caller, including another agent, is recorded as "
+            + "human-authored. status applies to a theory being created. Sending RULED_OUT here does not rule "
+            + "out a theory that already exists; use rule_out_root_cause_theory for that. If a theory with the "
+            + "same message already exists, no duplicate is created: the cited items are added to the existing "
+            + "theory, which is returned with created=false and its status and confidence left unchanged. Cited "
+            + "items that weren't found are returned in notLinked and aren't linked; those that couldn't be "
+            + "checked, have no activity in the incident's project, or whose URL isn't the cited type are "
+            + "returned in unverified and are linked as cited. The response's theory.id identifies the theory "
+            + "for later status changes. The response does not include rootCauseTheoriesSha, and an add that "
+            + "changes the theories (a new theory, or new citations on an existing one) changes it, so call "
+            + "harness_get before confirming, ruling out, or undoing a theory.",
         },
         confirm_root_cause_theory: rootCauseTheoryStatusAction(
           "confirm",

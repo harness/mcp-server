@@ -72,6 +72,11 @@ describe("incident resource definition", () => {
     const description = def.executeActions?.add_root_cause_theory?.actionDescription;
     expect(description).toContain("rootCauseTheoriesSha");
     expect(description).toContain("call harness_get before confirming");
+    expect(description).toContain("bound Agent Account service account");
+    expect(description).toContain("not a body field");
+    expect(description).toContain("RULED_OUT");
+    expect(description).toContain("rule_out_root_cause_theory");
+    expect(description).toContain("status and confidence left unchanged");
   });
 
   it.each(["create", "update"] as const)("names the severity option ids in the %s body schema", (op) => {
