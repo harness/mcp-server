@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract, fmeExperimentResultExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
@@ -274,7 +275,7 @@ function resolveNativeOnlyEnvironmentRoute(
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
     };
   }
-  const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_environment"));
+  const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_environment"));
   return {
     path: `/fme/api/v4/environments/${environmentId}`,
     product: "harness" as const,
@@ -554,7 +555,7 @@ function resolveNativeOnlyDefinitionRoute(
     };
   }
 
-  const flagName = encodeURIComponent(
+  const flagName = encodePathSegment(
     requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"),
   );
   requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition");
@@ -643,7 +644,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_environment");
             if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/environments/ws/${encodeURIComponent(mode.workspaceId)}` };
+              return { path: `/internal/api/v2/environments/ws/${encodePathSegment(mode.workspaceId)}` };
             }
             return { path: "/fme/api/v4/environments", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
@@ -739,7 +740,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
             if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}` };
+              return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}` };
             }
             return { path: "/fme/api/v4/feature-flags", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
@@ -760,9 +761,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
             if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
+              return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}` };
             }
             return { path: `/fme/api/v4/feature-flags/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
@@ -778,7 +779,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             if (mode.mode === "harness_native") {
               return { path: "/fme/api/v4/feature-flags", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/trafficTypes/${encodeURIComponent(requireFmeIdentifier(input, "traffic_type_id", "fme_feature_flag"))}` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/trafficTypes/${encodePathSegment(requireFmeIdentifier(input, "traffic_type_id", "fme_feature_flag"))}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", traffic_type_id: "trafficTypeId" },
@@ -819,9 +820,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
             if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
+              return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}` };
             }
             return { path: `/fme/api/v4/feature-flags/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
@@ -834,7 +835,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
             if (mode.mode === "harness_native") {
               return {
                 path: `/fme/api/v4/feature-flags/${flagName}`,
@@ -843,7 +844,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 headers: { "Content-Type": "application/merge-patch+json" },
               };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
@@ -893,8 +894,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           methodBuilder: (input) => (isFmeHarnessNativeSelected(input, "fme_feature_flag") ? "POST" : "PUT"),
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_feature_flag"));
             if (mode.mode === "harness_native") {
               return {
                 path: `/fme/api/v4/feature-flag-definitions/${flagName}/kill`,
@@ -902,7 +903,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
               };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}/kill` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}/environments/${environmentId}/kill` };
           },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
@@ -929,8 +930,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           methodBuilder: (input) => (isFmeHarnessNativeSelected(input, "fme_feature_flag") ? "POST" : "PUT"),
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_feature_flag"));
             if (mode.mode === "harness_native") {
               return {
                 path: `/fme/api/v4/feature-flag-definitions/${flagName}/restore`,
@@ -938,7 +939,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
               };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}/restore` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}/environments/${environmentId}/restore` };
           },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
@@ -964,8 +965,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}/reallocate",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_feature_flag"));
             if (mode.mode === "harness_native") {
               return {
                 path: `/fme/api/v4/feature-flag-definitions/${flagName}/reallocate`,
@@ -973,7 +974,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
               };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}/reallocate` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}/environments/${environmentId}/reallocate` };
           },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
@@ -999,7 +1000,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/archive",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
             if (mode.mode === "harness_native") {
               return {
                 path: `/fme/api/v4/feature-flags/${flagName}/archive`,
@@ -1007,7 +1008,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
               };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/archive` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}/archive` };
           },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
@@ -1028,7 +1029,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/unarchive",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
             if (mode.mode === "harness_native") {
               return {
                 path: `/fme/api/v4/feature-flags/${flagName}/unarchive`,
@@ -1036,7 +1037,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
               };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/unarchive` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}/unarchive` };
           },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
@@ -1085,12 +1086,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
             if (mode.mode === "harness_native") {
               return { path: `/fme/api/v4/feature-flag-definitions/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: {
@@ -1108,12 +1109,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
             if (mode.mode === "harness_native") {
               return { path: `/fme/api/v4/feature-flag-definitions/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: {
@@ -1134,8 +1135,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
-            const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
+            const flagName = encodePathSegment(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
             if (mode.mode === "harness_native") {
               return {
                 path: `/fme/api/v4/feature-flag-definitions/${flagName}`,
@@ -1144,7 +1145,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 headers: { "Content-Type": "application/merge-patch+json" },
               };
             }
-            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
+            return { path: `/internal/api/v2/splits/ws/${encodePathSegment(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: {
@@ -1249,7 +1250,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_rollout_status");
             if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/rolloutStatuses/ws/${encodeURIComponent(mode.workspaceId)}` };
+              return { path: `/internal/api/v2/rolloutStatuses/ws/${encodePathSegment(mode.workspaceId)}` };
             }
             return { path: "/fme/api/v4/rollout-statuses", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
@@ -1286,7 +1287,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment.list: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
               );
             }
-            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}` };
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodePathSegment(mode.workspaceId)}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -1302,8 +1303,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment.get: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
               );
             }
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment"));
-            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment"));
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodePathSegment(mode.workspaceId)}/${segmentName}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -1319,7 +1320,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment.create: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
               );
             }
-            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/trafficTypes/${encodeURIComponent(requireFmeIdentifier(input, "traffic_type_id", "fme_rule_based_segment"))}` };
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodePathSegment(mode.workspaceId)}/trafficTypes/${encodePathSegment(requireFmeIdentifier(input, "traffic_type_id", "fme_rule_based_segment"))}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
@@ -1343,8 +1344,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment.delete: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
               );
             }
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment"));
-            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment"));
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodePathSegment(mode.workspaceId)}/${segmentName}` };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
@@ -1377,8 +1378,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment_definition.list: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment_definition instead.",
               );
             }
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
-            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/environments/${environmentId}` };
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodePathSegment(mode.workspaceId)}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", environment_id: "environmentId" },
@@ -1395,9 +1396,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment_definition.update: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment_definition instead.",
               );
             }
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment_definition"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
-            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}/environments/${environmentId}` };
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment_definition"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodePathSegment(mode.workspaceId)}/${segmentName}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName", environment_id: "environmentId" },
@@ -1417,8 +1418,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment_definition.enable: Harness-native (org_id/project_id) mode is not supported on this deprecated resource, and fme_segment_definition has no enable equivalent either — pass environment_id/segment_name (legacy contract) instead.",
               );
             }
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment_definition"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment_definition"));
             return { path: `/internal/api/v2/rule-based-segments/${environmentId}/${segmentName}` };
           },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
@@ -1437,8 +1438,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment_definition.disable: Harness-native (org_id/project_id) mode is not supported on this deprecated resource, and fme_segment_definition has no disable equivalent either — pass environment_id/segment_name (legacy contract) instead.",
               );
             }
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment_definition"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment_definition"));
             return { path: `/internal/api/v2/rule-based-segments/${environmentId}/${segmentName}` };
           },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
@@ -1460,8 +1461,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_rule_based_segment_definition.change_request: Harness-native (org_id/project_id) mode is not supported on this deprecated resource, and fme_segment_definition has no change_request equivalent either — pass workspace_id (deprecated) instead.",
               );
             }
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
-            return { path: `/internal/api/v2/changeRequests/ws/${encodeURIComponent(mode.workspaceId)}/environments/${environmentId}` };
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
+            return { path: `/internal/api/v2/changeRequests/ws/${encodePathSegment(mode.workspaceId)}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", environment_id: "environmentId" },
@@ -1501,7 +1502,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_traffic_type");
             if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/trafficTypes/ws/${encodeURIComponent(mode.workspaceId)}` };
+              return { path: `/internal/api/v2/trafficTypes/ws/${encodePathSegment(mode.workspaceId)}` };
             }
             return { path: "/fme/api/v4/traffic-types", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
@@ -1534,8 +1535,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_identity.create: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass traffic_type_id/environment_id (current contract) instead.",
               );
             }
-            const trafficTypeId = encodeURIComponent(requireFmeIdentifier(input, "traffic_type_id", "fme_identity"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_identity"));
+            const trafficTypeId = encodePathSegment(requireFmeIdentifier(input, "traffic_type_id", "fme_identity"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_identity"));
             return { path: `/internal/api/v2/trafficTypes/${trafficTypeId}/environments/${environmentId}/identities` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
@@ -1576,9 +1577,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_identity.update: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass traffic_type_id/environment_id (current contract) instead.",
               );
             }
-            const trafficTypeId = encodeURIComponent(requireFmeIdentifier(input, "traffic_type_id", "fme_identity"));
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_identity"));
-            const key = encodeURIComponent(requireFmeIdentifier(input, "key", "fme_identity"));
+            const trafficTypeId = encodePathSegment(requireFmeIdentifier(input, "traffic_type_id", "fme_identity"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_identity"));
+            const key = encodePathSegment(requireFmeIdentifier(input, "key", "fme_identity"));
             return { path: `/internal/api/v2/trafficTypes/${trafficTypeId}/environments/${environmentId}/identities/${key}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
@@ -1621,7 +1622,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_standard_segment.list: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
               );
             }
-            return { path: `/internal/api/v2/segments/ws/${encodeURIComponent(mode.workspaceId)}` };
+            return { path: `/internal/api/v2/segments/ws/${encodePathSegment(mode.workspaceId)}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -1637,8 +1638,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_standard_segment.get: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
               );
             }
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_standard_segment"));
-            return { path: `/internal/api/v2/segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_standard_segment"));
+            return { path: `/internal/api/v2/segments/ws/${encodePathSegment(mode.workspaceId)}/${segmentName}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -1682,7 +1683,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment");
             applyFmeSegmentTypeQuery(input, "get");
-            const segmentName = encodeURIComponent(
+            const segmentName = encodePathSegment(
               requireFmeIdentifier(input, "segment_name", "fme_segment"),
             );
             return { path: `/fme/api/v4/segments/${segmentName}` };
@@ -1699,7 +1700,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment");
             applyFmeSegmentTypeQuery(input, "delete");
-            const segmentName = encodeURIComponent(
+            const segmentName = encodePathSegment(
               requireFmeIdentifier(input, "segment_name", "fme_segment"),
             );
             return { path: `/fme/api/v4/segments/${segmentName}` };
@@ -1743,7 +1744,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment");
             applyFmeSegmentTypeQuery(input, "update");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment"));
             return {
               path: `/fme/api/v4/segments/${segmentName}`,
               headers: { "Content-Type": "application/merge-patch+json" },
@@ -1803,7 +1804,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment_definition");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
             return { path: `/fme/api/v4/segment-definitions/${segmentName}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -1816,7 +1817,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment_definition");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
             return { path: `/fme/api/v4/segment-definitions/${segmentName}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
@@ -1835,7 +1836,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment_definition");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
             return { path: `/fme/api/v4/segment-definitions/${segmentName}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
@@ -1855,7 +1856,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment_definition");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
             return { path: `/fme/api/v4/segment-definitions/${segmentName}` };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
@@ -1871,7 +1872,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment_definition");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
             requireFmeIdentifier(input, "environment_id", "fme_segment_definition");
             return { path: `/fme/api/v4/segment-definitions/${segmentName}/keys` };
           },
@@ -1886,7 +1887,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment_definition");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
             requireFmeIdentifier(input, "environment_id", "fme_segment_definition");
             return { path: `/fme/api/v4/segment-definitions/${segmentName}/keys` };
           },
@@ -1904,7 +1905,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment_definition");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
             requireFmeIdentifier(input, "environment_id", "fme_segment_definition");
             return { path: `/fme/api/v4/segment-definitions/${segmentName}/keys/remove` };
           },
@@ -1971,7 +1972,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_metric");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "metric_id", "fme_metric"));
             return { path: `/fme/api/v4/metrics/${id}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -2013,7 +2014,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_metric");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "metric_id", "fme_metric"));
             return { path: `/fme/api/v4/metrics/${id}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
@@ -2059,7 +2060,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_metric");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "metric_id", "fme_metric"));
             return { path: `/fme/api/v4/metrics/${id}` };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
@@ -2124,7 +2125,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
             return { path: `/fme/api/v4/experiments/${id}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -2172,7 +2173,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
             return { path: `/fme/api/v4/experiments/${id}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
@@ -2207,7 +2208,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
             return { path: `/fme/api/v4/experiments/${id}` };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
@@ -2237,7 +2238,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
             return { path: `/fme/api/v4/experiments/${id}/settings` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -2252,7 +2253,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
             return { path: `/fme/api/v4/experiments/${id}/settings` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
@@ -2279,7 +2280,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
             return { path: `/fme/api/v4/experiments/${id}/settings` };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
@@ -2309,7 +2310,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
             return { path: `/fme/api/v4/experiments/${id}/alerting` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -2323,7 +2324,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
             return { path: `/fme/api/v4/experiments/${id}/alerting` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
@@ -2366,7 +2367,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment_result");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_result"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment_result"));
             return { path: `/fme/api/v4/experiments/${id}/metric-results` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -2437,7 +2438,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_event_type");
-            const id = encodeURIComponent(requireFmeIdentifier(input, "event_type_id", "fme_event_type"));
+            const id = encodePathSegment(requireFmeIdentifier(input, "event_type_id", "fme_event_type"));
             return { path: `/fme/api/v4/event-types/${id}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -2473,8 +2474,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_segment_keys.list: Harness-native (org_id/project_id) mode not supported — use fme_segment_definition execute list_keys instead.",
               );
             }
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_keys"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_keys"));
             return { path: `/internal/api/v2/segments/${environmentId}/${segmentName}/keys` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -2495,8 +2496,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "fme_segment_keys.update: Harness-native (org_id/project_id) mode not supported — use fme_segment_definition execute add_keys/remove_keys instead.",
               );
             }
-            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_keys"));
+            const environmentId = encodePathSegment(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
+            const segmentName = encodePathSegment(requireFmeIdentifier(input, "segment_name", "fme_segment_keys"));
             return { path: `/internal/api/v2/segments/${environmentId}/${segmentName}/upload` };
           },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },

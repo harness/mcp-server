@@ -1594,7 +1594,7 @@ describe("Registry", () => {
       registriesRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
     });
 
-    it("create: exact path is POST /har/api/v1/registry?space_ref=test-account%2Fdefault%2Ftest-project%2F%2B", async () => {
+    it("create: POST registry with a separate raw space_ref query value", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "my-docker" } });
       const client = makeClient(mockRequest);
 
@@ -1610,7 +1610,8 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("POST");
       // space_ref must include the trailing /+ sentinel
-      expect(call.path).toBe("/har/api/v1/registry?space_ref=test-account%2Fdefault%2Ftest-project%2F%2B");
+      expect(call.path).toBe("/har/api/v1/registry");
+      expect(call.params.space_ref).toBe("test-account/default/test-project/+");
     });
 
     it("create: parentRef is auto-derived from config scope and not required from agent", async () => {
@@ -1637,8 +1638,7 @@ describe("Registry", () => {
       });
 
       const call = mockRequest.mock.calls[0][0];
-      expect(call.path).toContain("custom-org");
-      expect(call.path).toContain("custom-proj");
+      expect(call.params.space_ref).toBe("test-account/custom-org/custom-proj/+");
       expect(call.body.parentRef).toBe("test-account/custom-org/custom-proj");
     });
 

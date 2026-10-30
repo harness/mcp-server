@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 /**
  * Scheduled observability-evaluation control plane.
  *
@@ -69,12 +70,12 @@ function scopeOrThrow(input: JsonRecord, config: PathBuilderConfig): { org: stri
 
 function base(input: JsonRecord, config: PathBuilderConfig): string {
   const { org, project } = scopeOrThrow(input, config);
-  return `${AI}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
+  return `${AI}/orgs/${encodePathSegment(org)}/projects/${encodePathSegment(project)}`;
 }
 
 function configPath(input: JsonRecord, config: PathBuilderConfig): string {
   const evalId = requireUuid(input.eval_id, "eval_id");
-  return `${base(input, config)}/online-eval-configs/${encodeURIComponent(evalId)}`;
+  return `${base(input, config)}/online-eval-configs/${encodePathSegment(evalId)}`;
 }
 
 function observabilityEvalExtract(raw: unknown): unknown {
@@ -304,7 +305,7 @@ async function validateOnlineConfigWrite(ctx: PreflightContext, isUpdate: boolea
     ? await getAiEvalsResource(
       ctx,
       input,
-      `${base(input, { HARNESS_ORG: ctx.registry.orgId, HARNESS_PROJECT: ctx.registry.projectId })}/online-eval-configs/${encodeURIComponent(evalId!)}`,
+      `${base(input, { HARNESS_ORG: ctx.registry.orgId, HARNESS_PROJECT: ctx.registry.projectId })}/online-eval-configs/${encodePathSegment(evalId!)}`,
       `eval_id=${evalId}`,
     )
     : undefined;

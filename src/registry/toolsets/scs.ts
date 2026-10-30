@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
 import { scsCleanExtract, scsListExtract } from "../extractors.js";
 import { HarnessApiError } from "../../utils/errors.js";
@@ -1231,7 +1232,7 @@ export const scsToolset: ToolsetDefinition = {
               const cfg = config as Record<string, string | undefined>;
               const org = (input.org_id as string) || cfg.HARNESS_ORG || "";
               const project = (input.project_id as string) || cfg.HARNESS_PROJECT || "";
-              return `${SCS}/v1/orgs/${org}/projects/${project}/artifacts/${artifactId}/component/overview`;
+              return `${SCS}/v1/orgs/${encodePathSegment(org)}/projects/${encodePathSegment(project)}/artifacts/${encodePathSegment(artifactId)}/component/overview`;
             }
             // Account-scoped fallback: enrichment data only
             return `${SCS}/v1/components/details`;
@@ -1300,7 +1301,7 @@ export const scsToolset: ToolsetDefinition = {
               const cfg = config as Record<string, string | undefined>;
               const org = (input.org_id as string) || cfg.HARNESS_ORG || "";
               const project = (input.project_id as string) || cfg.HARNESS_PROJECT || "";
-              return `${SCS}/v1/orgs/${org}/projects/${project}/artifacts/${artifactId}/component/vulnerabilities`;
+              return `${SCS}/v1/orgs/${encodePathSegment(org)}/projects/${encodePathSegment(project)}/artifacts/${encodePathSegment(artifactId)}/component/vulnerabilities`;
             }
             return `${SCS}/v1/components/vulnerabilities`;
           },

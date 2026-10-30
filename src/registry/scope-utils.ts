@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../utils/path.js";
 import type { PathBuilderConfig, ResourceScope } from "./types.js";
 
 /** Standard scope guidance (matches gitops, connectors, services toolsets). */
@@ -24,21 +25,21 @@ export function templateV1BasePathFromScope(
   }
   if (requestedScope === "org") {
     if (!org) throw new Error("resource_scope \"org\" requires org_id or HARNESS_ORG.");
-    return `/v1/orgs/${encodeURIComponent(org)}/templates`;
+    return `/v1/orgs/${encodePathSegment(org)}/templates`;
   }
   if (requestedScope === "project") {
     if (!org) throw new Error("resource_scope \"project\" requires org_id or HARNESS_ORG.");
     if (!project) throw new Error("resource_scope \"project\" requires project_id or HARNESS_PROJECT.");
-    return `/v1/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/templates`;
+    return `/v1/orgs/${encodePathSegment(org)}/projects/${encodePathSegment(project)}/templates`;
   }
 
   const inputOrg = input.org_id as string | undefined;
   const inputProject = input.project_id as string | undefined;
   if (inputOrg && inputProject) {
-    return `/v1/orgs/${encodeURIComponent(inputOrg)}/projects/${encodeURIComponent(inputProject)}/templates`;
+    return `/v1/orgs/${encodePathSegment(inputOrg)}/projects/${encodePathSegment(inputProject)}/templates`;
   }
   if (inputOrg) {
-    return `/v1/orgs/${encodeURIComponent(inputOrg)}/templates`;
+    return `/v1/orgs/${encodePathSegment(inputOrg)}/templates`;
   }
   return "/v1/templates";
 }

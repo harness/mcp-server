@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../utils/path.js";
 /**
  * Shared response extractors for Harness API responses.
  * Used across all toolset definitions — eliminates per-file duplication.
@@ -853,7 +854,7 @@ export async function runtimeInputTemplatePreflight({
   try {
     const raw = await client.request<unknown>({
       method: "GET",
-      path: `/pipeline/api/pipelines/${encodeURIComponent(pipelineId)}`,
+      path: `/pipeline/api/pipelines/${encodePathSegment(pipelineId)}`,
       params: pipelineDefinitionGetParams(input, registry),
       signal,
     });
@@ -2090,13 +2091,13 @@ function requireReleaseAndPhase(input: Record<string, unknown>): { releaseId: st
 
 export function releaseExecutionPhaseOutputPath(input: Record<string, unknown>): string {
   const { releaseId, phaseId } = requireReleaseAndPhase(input);
-  const enc = encodeURIComponent;
+  const enc = encodePathSegment;
   return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/output`;
 }
 
 export function releaseExecutionPhaseInputPath(input: Record<string, unknown>): string {
   const { releaseId, phaseId } = requireReleaseAndPhase(input);
-  const enc = encodeURIComponent;
+  const enc = encodePathSegment;
   return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/input`;
 }
 
@@ -2108,7 +2109,7 @@ export function releaseExecutionActivityOutputPath(input: Record<string, unknown
       "activity_identifier is required — pass via params on harness_get (from harness_list release_execution_activity)",
     );
   }
-  const enc = encodeURIComponent;
+  const enc = encodePathSegment;
   return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/activity/${enc(activityId)}/output`;
 }
 

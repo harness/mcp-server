@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../utils/path.js";
 import { randomUUID } from "node:crypto";
 import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -740,7 +741,7 @@ export class Registry {
               `Missing required field "${inputKey}" for ${def.resourceType}.${scopeHint}`,
             );
           }
-          path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
+          path = path.replace(`{${pathPlaceholder}}`, encodePathSegment(String(value)));
         }
       }
     }

@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
 import { ngExtract, harListExtract, passthrough } from "../extractors.js";
 
@@ -54,9 +55,14 @@ function harSpaceRef(input: Record<string, unknown>, config: PathBuilderConfig):
   return `${account}/${org}/${project}`;
 }
 
+function harSpacePath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  return [config.HARNESS_ACCOUNT_ID ?? "", (input.org_id as string) || config.HARNESS_ORG || "",
+    (input.project_id as string) || config.HARNESS_PROJECT || ""].map(encodePathSegment).join("/");
+}
+
 function harRegistryRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
   const registry = input.registry_id as string;
-  return `${harSpaceRef(input, config)}/${registry}`;
+  return `${harSpacePath(input, config)}/${encodePathSegment(registry)}`;
 }
 
 export const registriesToolset: ToolsetDefinition = {
@@ -86,7 +92,7 @@ export const registriesToolset: ToolsetDefinition = {
           method: "GET",
           path: "/har/api/v1/spaces",
           pathBuilder: (input, config) =>
-            `/har/api/v1/spaces/${harSpaceRef(input, config)}/+/registries`,
+            `/har/api/v1/spaces/${harSpacePath(input, config)}/+/registries`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "search_term",
@@ -112,11 +118,11 @@ export const registriesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/har/api/v1/registry",
           // HAR create requires space_ref=<accountId>/<orgId>/<projectId>/+
-          pathBuilder: (input, config) =>
-            `/har/api/v1/registry?space_ref=${encodeURIComponent(`${harSpaceRef(input, config)}/+`)}`,
+          queryParams: { space_ref: "space_ref" },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input, config) => {
+            input.space_ref = `${harSpaceRef(input, config)}/+`;
             const body = ((input.body ?? {}) as Record<string, unknown>);
             return {
               ...body,
@@ -193,7 +199,7 @@ export const registriesToolset: ToolsetDefinition = {
           path: "/har/api/v1/registry",
           pathBuilder: (input, config) => {
             const artifact = input.artifact_id as string;
-            return `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifact/${artifact}/+/versions`;
+            return `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifact/${encodePathSegment(artifact)}/+/versions`;
           },
           pathParams: {
             registry_id: "registryIdentifier",
@@ -224,7 +230,7 @@ export const registriesToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => {
             const artifact = input.artifact_id as string;
             const version = input.version as string;
-            return `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifact/${artifact}/+/version/${version}/files`;
+            return `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifact/${encodePathSegment(artifact)}/+/version/${encodePathSegment(version)}/files`;
           },
           pathParams: {
             registry_id: "registryIdentifier",
