@@ -184,6 +184,7 @@ import {
   descBodyRiskRuleCreate, descBodyRiskRuleUpdate,
   descRiskRuleIdentity, descRiskRuleName, descRiskRuleDescription, descRiskRuleTags,
   descRiskRuleSeverity, descRiskRuleCategory, descRiskRuleSpec, descRiskRuleCustomOnly,
+  descRiskRuleIncludeInPassiveScan,
   descListRiskScans, descGetRiskScan, descCreateRiskScan, descUpdateRiskScan, descDeleteRiskScan,
   descRetryRiskScan, descAbortRiskScan,
   descSubmitRiskScanFindings, descBodySubmitRiskScanFindings, descRiskScanFindings, descRiskScanDetectionMethod,
@@ -305,13 +306,32 @@ function stringList(value: unknown): string[] | undefined {
   return String(value).split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-function linkedDiscoveredService(value: unknown): Record<string, string> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+const LINKED_DISCOVERED_SERVICE_KEYS = new Set([
+  "agent_id", "agentId",
+  "environment_id", "environmentId",
+  "external_id", "externalId",
+]);
+
+function valueIsSet(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  return true;
+}
+
+// "absent" leaves the stored link unchanged. "clear" is {} or the three known
+// id fields all blank, with no other key set, and removes the link on update.
+// A discovered-service record or a typo such as agentID is not a clear.
+function linkedDiscoveredService(value: unknown): "absent" | "clear" | Record<string, string> {
+  if (value == null) return "absent";
+  if (typeof value !== "object" || Array.isArray(value)) return "absent";
   const linked = value as Record<string, unknown>;
   const agentId = optionalText(linked.agent_id ?? linked.agentId);
   const environmentId = optionalText(linked.environment_id ?? linked.environmentId);
   const externalId = optionalText(linked.external_id ?? linked.externalId);
-  if (!agentId && !environmentId && !externalId) return undefined;
+  const unrecognized = Object.keys(linked).some(
+    (key) => !LINKED_DISCOVERED_SERVICE_KEYS.has(key) && valueIsSet(linked[key]),
+  );
+  if (!agentId && !environmentId && !externalId && !unrecognized) return "clear";
   if (!agentId || !environmentId || !externalId) {
     const missing = [
       !agentId ? "agent_id" : "",
@@ -323,6 +343,13 @@ function linkedDiscoveredService(value: unknown): Record<string, string> | undef
     );
   }
   return { agentId, environmentId, externalId };
+}
+
+function linkedDiscoveredServiceBody(value: unknown, allowClear: boolean): Record<string, unknown> {
+  const linked = linkedDiscoveredService(value);
+  if (linked === "absent" || (linked === "clear" && !allowClear)) return {};
+  if (linked === "clear") return { linkedDiscoveredService: {} };
+  return { linkedDiscoveredService: linked };
 }
 
 /**
@@ -434,22 +461,24 @@ const RISK_RULE_BODY_FIELDS: BodyFieldSpec[] = [
   { name: "spec", type: "object", required: true, description: descRiskRuleSpec },
 ];
 
-const RISK_RULE_IDENTITY_RE = /^code-[a-z0-9-]{3,60}$/;
-const RISK_RULE_DATA_SOURCE = "SourceCode";
+const RISK_RULE_DATA_SOURCES = ["SourceCode", "ApplicationManifest"] as const;
+const DEFAULT_RISK_RULE_DATA_SOURCE = "SourceCode";
+const RISK_RULE_IDENTITY_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 const RISK_RULE_PROMPT_LIST_LIMIT = 10;
 const RISK_RULE_PROMPT_ENTRY_LIMIT = 500;
 
-/** Custom rules are SourceCode-only; an omitted dataSource defaults to that. */
+function isRiskRuleDataSource(value: unknown): value is (typeof RISK_RULE_DATA_SOURCES)[number] {
+  return typeof value === "string" && (RISK_RULE_DATA_SOURCES as readonly string[]).includes(value);
+}
+
+/** An omitted dataSource defaults to SourceCode. ApplicationManifest must be set explicitly. */
 function riskRuleDataSource(value: unknown): string[] {
-  const dataSource = value ?? [RISK_RULE_DATA_SOURCE];
-  if (
-    !Array.isArray(dataSource) ||
-    dataSource.length !== 1 ||
-    dataSource[0] !== RISK_RULE_DATA_SOURCE
-  ) {
-    throw new Error('spec.dataSource must be exactly ["SourceCode"]. Custom rules are SourceCode-only.');
+  const dataSource = value ?? [DEFAULT_RISK_RULE_DATA_SOURCE];
+  const source = Array.isArray(dataSource) && dataSource.length === 1 ? dataSource[0] : undefined;
+  if (!isRiskRuleDataSource(source)) {
+    throw new Error('spec.dataSource must be exactly ["SourceCode"] or ["ApplicationManifest"].');
   }
-  return dataSource;
+  return [source];
 }
 
 /**
@@ -480,7 +509,7 @@ function riskRulePromptList(value: unknown, field: string, required: boolean): v
   }
 }
 
-/** Builds the mutable part of a custom risk rule; spec.dataSource defaults to SourceCode. */
+/** Builds the mutable part of a custom risk rule; an omitted spec.dataSource defaults to SourceCode. */
 function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> {
   const missing = ["name", "severity", "category", "spec"].filter((k) => b[k] == null || b[k] === "");
   if (missing.length > 0) {
@@ -489,7 +518,7 @@ function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> 
   if (typeof b.spec !== "object" || b.spec == null || Array.isArray(b.spec)) {
     throw new Error("spec must be an object.");
   }
-  const spec = b.spec as Record<string, unknown>;
+  const spec: Record<string, unknown> = { ...(b.spec as Record<string, unknown>) };
   const dataSource = riskRuleDataSource(spec.dataSource);
   if (!Array.isArray(spec.faults) || spec.faults.length === 0) {
     throw new Error("spec.faults must list at least one chaos fault that can prove the risk (e.g. pod-network-latency).");
@@ -501,6 +530,15 @@ function buildRiskRuleBody(b: Record<string, unknown>): Record<string, unknown> 
   riskRulePromptList(prompt.do, "spec.prompt.do", true);
   riskRulePromptList(prompt.dont, "spec.prompt.dont", false);
   riskRulePromptList(prompt.outcome, "spec.prompt.outcome", true);
+  // The list filter is include_in_passive_scan. Accept that key inside spec and
+  // send the camelCase field the API stores. Null is not a boolean.
+  if ("include_in_passive_scan" in spec) {
+    spec.includeInPassiveScan = spec.include_in_passive_scan;
+    delete spec.include_in_passive_scan;
+  }
+  if (spec.includeInPassiveScan !== undefined && typeof spec.includeInPassiveScan !== "boolean") {
+    throw new Error("spec.includeInPassiveScan must be a boolean. Omit it to leave the rule out of the passive scan.");
+  }
   return {
     name: b.name,
     ...(b.description != null ? { description: b.description } : {}),
@@ -2758,7 +2796,7 @@ export const chaosToolset: ToolsetDefinition = {
             const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const onboardingId = optionalText(b.onboarding_id ?? b.onboardingId);
             const tags = stringList(b.tags);
-            const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            const linked = linkedDiscoveredServiceBody(b.linked_discovered_service ?? b.linkedDiscoveredService, false);
             assertChaosServiceInfrastructure(agentId, environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
@@ -2782,7 +2820,7 @@ export const chaosToolset: ToolsetDefinition = {
               ...(infrastructureId ? { infrastructureId, infrastructure_id: infrastructureId } : {}),
               ...(infrastructureType ? { infrastructureType } : {}),
               ...(onboardingId ? { onboardingId } : {}),
-              ...(linked ? { linkedDiscoveredService: linked } : {}),
+              ...linked,
               ...(probes && probes.length > 0 ? { probes } : {}),
             };
           },
@@ -2815,11 +2853,23 @@ export const chaosToolset: ToolsetDefinition = {
             const b = coerceBody(input);
             const externalServiceId = b.external_service_id ?? b.externalServiceId;
             const agentId = b.agent_id ?? b.agentId;
-            const environmentId = optionalText(b.environment_id ?? b.environmentId);
-            const infrastructureId = optionalText(b.infrastructure_id ?? b.infrastructureId);
-            const infrastructureType = optionalText(b.infrastructure_type ?? b.infrastructureType);
             const tags = stringList(b.tags);
-            const linked = linkedDiscoveredService(b.linked_discovered_service ?? b.linkedDiscoveredService);
+            // A present linkedDiscoveredService is validated for a CodeRepository
+            // service. An empty object is an unlink on every service type, so a
+            // Kubernetes update must not send it. Only the custom discovery agent
+            // may clear the link.
+            const linked = linkedDiscoveredServiceBody(
+              b.linked_discovered_service ?? b.linkedDiscoveredService,
+              optionalText(agentId) === CUSTOM_DISCOVERY_AGENT,
+            );
+            // hce-saas stores the environment and infrastructure sent with an
+            // unlink, so values resupplied from harness_get would keep the
+            // workload's Kubernetes mapping on the code-repository service.
+            const clearsLink = linked.linkedDiscoveredService !== undefined
+              && Object.keys(linked.linkedDiscoveredService as object).length === 0;
+            const environmentId = clearsLink ? undefined : optionalText(b.environment_id ?? b.environmentId);
+            const infrastructureId = clearsLink ? undefined : optionalText(b.infrastructure_id ?? b.infrastructureId);
+            const infrastructureType = clearsLink ? undefined : optionalText(b.infrastructure_type ?? b.infrastructureType);
             assertChaosServiceInfrastructure(optionalText(agentId), environmentId, infrastructureId);
             const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
               probeId: p.probeId ?? p.probe_id,
@@ -2848,7 +2898,7 @@ export const chaosToolset: ToolsetDefinition = {
               ...(environmentId ? { environmentId, environment_id: environmentId } : {}),
               ...(infrastructureId ? { infrastructureId, infrastructure_id: infrastructureId } : {}),
               ...(infrastructureType ? { infrastructureType } : {}),
-              ...(linked ? { linkedDiscoveredService: linked } : {}),
+              ...linked,
               // Full desired-state replace (hce-saas reconcileProbeMappings):
               // pass an explicit [] straight through (detach all) rather than
               // dropping it, but leave the key absent when the caller omitted it
@@ -4815,7 +4865,9 @@ export const chaosToolset: ToolsetDefinition = {
       displayName: "Chaos Risk Rule",
       description: descChaosRiskRule,
       toolset: "chaos",
-      scope: "project",
+      // Custom rules are stored on the account. Org and project must not be sent,
+      // or the API stores and lists them as project rules.
+      scope: "account",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
       searchAliases: ["risk rule", "risk check", "manifest risk rule", "code risk rule", "source code risk rule", "umbrella risk rule"],
@@ -4827,7 +4879,7 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "is_system", description: descRiskRuleIsSystem, type: "boolean" },
         { name: "custom_only", description: descRiskRuleCustomOnly, type: "boolean" },
         { name: "data_source", description: descRiskRuleDataSource },
-        { name: "include_all_scope", description: descRiskIncludeAllScope, type: "boolean" },
+        { name: "include_in_passive_scan", description: descRiskRuleIncludeInPassiveScan, type: "boolean" },
       ],
       relatedResources: [
         { resourceType: "scanned_risk", relationship: "flags", description: "Risk rules flag scanned risks during a scan. Use scanned_risk with risk_rule_id=<this rule's identity> to find findings produced by this rule." },
@@ -4847,7 +4899,7 @@ export const chaosToolset: ToolsetDefinition = {
             is_system: "isSystem",
             custom_only: "customOnly",
             data_source: "dataSource",
-            include_all_scope: "includeAllScope",
+            include_in_passive_scan: "includeInPassiveScan",
           },
           defaultQueryParams: { page: "0", limit: "15" },
           responseExtractor: chaosPageExtract,
@@ -4868,14 +4920,18 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const b = coerceBody(input);
             if (!b.identity) {
-              throw new Error("Missing required field: identity. Use code-<failure-mode>, e.g. code-outbound-call-without-timeout.");
+              throw new Error("Missing required field: identity. Use a lowercase slug, e.g. retry-without-backoff.");
             }
             if (typeof b.identity !== "string" || !RISK_RULE_IDENTITY_RE.test(b.identity)) {
               throw new Error(
-                `identity must match ${RISK_RULE_IDENTITY_RE.source} (lowercase letters, digits and hyphens), e.g. code-outbound-call-without-timeout.`,
+                `identity must match ${RISK_RULE_IDENTITY_RE.source} (1-64 lowercase letters, digits and hyphens, starting and ending with a letter or digit, no required prefix), e.g. retry-without-backoff.`,
               );
             }
-            return { identity: b.identity, ...buildRiskRuleBody(b) };
+            return {
+              identity: b.identity,
+              ...buildRiskRuleBody(b),
+              ...(b.confirmNewRule === true ? { confirmNewRule: true } : {}),
+            };
           },
           responseExtractor: passthrough,
           description: descCreateRiskRule,
@@ -4883,6 +4939,7 @@ export const chaosToolset: ToolsetDefinition = {
             description: descBodyRiskRuleCreate,
             fields: [
               { name: "identity", type: "string", required: true, description: descRiskRuleIdentity },
+              { name: "confirmNewRule", type: "boolean", required: false, description: "Set true only after the user has seen a 409 matches list and still wants a new rule." },
               ...RISK_RULE_BODY_FIELDS,
             ],
           },
