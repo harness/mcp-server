@@ -408,6 +408,18 @@ export interface EndpointSpec {
    * strip intentional display fields (e.g. `severity`, `requested_by`).
    */
   skipCompact?: boolean;
+  /**
+   * When true, read pagination metadata out of the response headers and publish
+   * it on the result (`total`, `page`, `page_size`, `has_more`).
+   *
+   * Opt-in because it is only correct for endpoints that report the size of the
+   * matching population in headers rather than in the body — Harness v1 list
+   * endpoints such as IDP `GET /v1/entities`, which return a bare JSON array
+   * plus `X-Total-Elements`. Without it a body-only extractor has to report
+   * `total = items.length`, i.e. the page size, and counting questions get
+   * answered from a single page. See `registry/pagination.ts`.
+   */
+  headerPagination?: boolean;
 }
 
 /**

@@ -77,6 +77,11 @@ export interface RequestOptions {
   /** Retry policy from OperationPolicy. When "do_not_retry", transient errors
    *  (5xx, timeouts) throw immediately instead of retrying. */
   retryPolicy?: "safe" | "idempotency_key_required" | "do_not_retry";
+  /** Invoked with the lower-cased response headers of a successful response.
+   *  Several Harness v1 list endpoints (e.g. IDP `/v1/entities`) return a bare
+   *  JSON array and carry the population size only in `x-total-elements`, so
+   *  the body alone cannot distinguish "20 matches" from "page 1 of 507". */
+  onResponseHeaders?: (headers: Record<string, string>) => void;
   /** Internal tracing metadata. Never serialized into HTTP headers/query/body. */
   tracing?: {
     /** API name that produced this concrete request path. */

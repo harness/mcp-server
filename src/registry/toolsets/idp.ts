@@ -309,7 +309,16 @@ export const idpToolset: ToolsetDefinition = {
             favorites: "false",
           },
           responseExtractor: v1ListExtract(),
-          description: "List IDP catalog entities. Defaults: page=0, limit=20 (max 100). If 'limit' is not supplied, paginate by calling repeatedly. Note: workflow entities may include a 'token' field — IGNORE it.",
+          // `/v1/entities` returns a bare array and reports the match count only
+          // in `X-Total-Elements`, so without this `total` would be the page size.
+          headerPagination: true,
+          description:
+            "List IDP catalog entities. Defaults: page=0, limit=20 (max 100). `total` is the number of entities " +
+            "matching the filters across ALL pages, not the number returned on this page (that is `items.length`); " +
+            "`has_more` is true while pages remain. For 'how many …' questions report `total` from a single filtered " +
+            "call (e.g. filters.owner='group:account/<team>') — never sum the rows you happened to page through, and " +
+            "never stop paginating early and present the partial count as the total. Note: workflow entities may " +
+            "include a 'token' field — IGNORE it.",
         },
         get: {
           method: "GET",
@@ -662,7 +671,13 @@ export const idpToolset: ToolsetDefinition = {
             favorites: "false",
           },
           responseExtractor: v1ListExtract(),
-          description: "List IDP self-service workflows. Pins kind=workflow on the underlying /v1/entities call. Defaults: page=0, limit=20 (max 100). If 'limit' is not supplied, paginate by calling repeatedly. Workflow entities may include a 'token' field — IGNORE it.",
+          // Same `/v1/entities` endpoint as idp_entity — see note above.
+          headerPagination: true,
+          description:
+            "List IDP self-service workflows. Pins kind=workflow on the underlying /v1/entities call. Defaults: " +
+            "page=0, limit=20 (max 100). `total` is the number of workflows matching the filters across ALL pages, " +
+            "not the number returned on this page (that is `items.length`); `has_more` is true while pages remain. " +
+            "Workflow entities may include a 'token' field — IGNORE it.",
         },
       },
       executeActions: {
