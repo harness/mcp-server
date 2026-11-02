@@ -824,17 +824,15 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
 };
 
 /** Same cap the in-product investigator applies when it offers runbooks to the model. */
-const MAX_LISTED_RUNBOOKS = 10;
-
 export function runbookListExtract(raw: unknown): unknown {
-  const { items: all, total } = offsetListExtract(raw);
-  const items = all
-    .slice(0, MAX_LISTED_RUNBOOKS)
-    .map((r) => {
+  const { items, total } = offsetListExtract(raw);
+  return {
+    items: items.map((r) => {
       const { runbookId, displayName, description } = r as Record<string, unknown>;
       return { runbookId, displayName, description };
-    });
-  return { items, total, truncated: total > items.length };
+    }),
+    total,
+  };
 }
 
 export function runbookGetExtract(raw: unknown): unknown {

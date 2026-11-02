@@ -147,7 +147,7 @@ export const runbooksToolset: ToolsetDefinition = {
         + "harness_list with filters={runbook_id} lists recent runs of a runbook, newest first.",
       listFilterFields: [
         { name: "runbook_id", required: true, description: "Runbook runbookId" },
-        { name: "cursor", description: "paginationToken from the previous page" },
+        { name: "cursor", description: "Cursor for the next page, taken from the previous response's pagination.next_cursor" },
         { name: "started_after", description: "Only runs started at or after this ISO-8601 timestamp, e.g. 2026-05-01T00:00:00Z" },
         { name: "started_before", description: "Only runs started at or before this ISO-8601 timestamp" },
       ],

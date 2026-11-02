@@ -107,16 +107,18 @@ describe("runbook — harness_list", () => {
     expect(data.total).toBe(1);
   });
 
-  it("caps the list at 10 runbooks and flags truncation", async () => {
+  it("returns every runbook on the page and forwards page and size", async () => {
     const entities = Array.from({ length: 12 }, (_, i) => ({
       runbookId: `rb-${i}`, displayName: `R${i}`, description: "d", exposeToAi: true,
     }));
-    mockRequest.mockResolvedValue({ entities, totalCount: 12 });
-    const result = await server.call("harness_list", { resource_type: "runbook" });
-    const data = parseResult(result) as { items: unknown[]; total: number; truncated: boolean };
-    expect(data.items).toHaveLength(10);
-    expect(data.total).toBe(12);
-    expect(data.truncated).toBe(true);
+    mockRequest.mockResolvedValue({ entities, totalCount: 30 });
+    const result = await server.call("harness_list", { resource_type: "runbook", page: 1, size: 12 });
+    const data = parseResult(result) as { items: unknown[]; total: number };
+    expect(data.items).toHaveLength(12);
+    expect(data.total).toBe(30);
+    const params = optsOf(mockRequest.mock.calls[0]!).params;
+    expect(params.page).toBe(1);
+    expect(params.pageSize).toBe(12);
   });
 
   it("passes activity_id through as the activityId query param", async () => {
