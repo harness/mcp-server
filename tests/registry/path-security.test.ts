@@ -82,7 +82,6 @@ const customRoutes: Array<[string, string, string, Record<string, unknown>]> = [
   ["ai_budget_override_request", "approve", "budget_id", {}],
   ["ai_budget_override_request", "reject", "budget_id", {}],
   ["cost_commitment", "get", "cloud_account_id", { aspect: "estimated_savings" }],
-  ["cost_commitment", "get", "account_id", {}],
   ["scs_component_enrichment", "get", "org_id", { artifact_id: "artifact" }],
   ["scs_component_enrichment", "get", "project_id", { artifact_id: "artifact" }],
   ["scs_component_enrichment", "get", "artifact_id", {}],
@@ -243,6 +242,58 @@ describe("registry paths through the real HTTP client", () => {
     expect(url.searchParams.get("versionLabel")).toBe("1.0.8");
     expect(init?.method).toBe("GET");
     expect(init?.headers).toMatchObject({ "Harness-Account": config.HARNESS_ACCOUNT_ID, "x-api-key": config.HARNESS_API_KEY });
+  });
+
+  describe.each(["single-user", "multi-user", "oauth", "oauth-proxy"] as const)("commitment account in %s mode", (mode) => {
+    it.each([
+      ["coverage", "/v1/detail/compute_coverage"],
+      ["savings", "/v1/detail/savings"],
+      ["utilisation", "/v1/detail/commitment_utilisation"],
+      ["analysis", "/v2/spend/detail"],
+      ["estimated_savings", "/v2/setup/cloud%2Faccount/estimated_savings"],
+      [undefined, "/v1/detail/compute_coverage"],
+      ["unknown", "/v1/detail/compute_coverage"],
+    ])("pins the %j path to the resolved account", async (aspect, suffix) => {
+      const account = mode === "single-user" ? config.HARNESS_ACCOUNT_ID : "session-account";
+      const isOAuth = mode === "oauth" || mode === "oauth-proxy";
+      const sessionConfig = { ...config, HARNESS_MCP_MODE: mode, HARNESS_API_KEY: isOAuth ? undefined : config.HARNESS_API_KEY,
+        HARNESS_MAX_RETRIES: 0, HARNESS_RATE_LIMIT_RPS: 1000 } as Config;
+      const sessionRegistry = new Registry(sessionConfig, { accountIdResolver: () => account });
+      const client = new HarnessClient(sessionConfig);
+      client.setAccountIdResolver(() => account);
+      if (isOAuth) client.setBearerTokenResolver(() => "session-token");
+      let handler!: (args: Record<string, unknown>) => Promise<ToolResult>;
+      const server = { registerTool: (_name: string, _schema: unknown, callback: typeof handler) => { handler = callback; } };
+      registerGetTool(server as unknown as McpServer, sessionRegistry, client);
+      for (const accountId of ["OTHER", attack]) {
+        fetchMock.mockClear();
+        const result = await handler({ resource_type: "cost_commitment", params: {
+          aspect, account_id: accountId, cloud_account_id: "cloud/account", start_date: "2026-10-01", end_date: "2026-10-31",
+        } });
+        expect(result.isError).toBeUndefined();
+        expect(fetchMock).toHaveBeenCalledOnce();
+        const [requestUrl, init] = fetchMock.mock.calls[0]!;
+        const url = new URL(String(requestUrl));
+        expect(url.origin).toBe(config.HARNESS_BASE_URL);
+        expect(url.pathname).toBe(`/lw/co/api/accounts/${account}${suffix}`);
+        expect(url.searchParams.getAll("accountIdentifier")).toEqual([account]);
+        expect(url.searchParams.getAll("routingId")).toEqual([account]);
+        expect(url.searchParams.get("start_date")).toBe("2026-10-01");
+        expect(url.searchParams.get("end_date")).toBe("2026-10-31");
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(init?.body as string)).toEqual({ Service: "Amazon Elastic Compute Cloud - Compute" });
+        expect(init?.headers).toMatchObject({ "Harness-Account": account,
+          ...(isOAuth ? { Authorization: "Bearer session-token" } : { "x-api-key": config.HARNESS_API_KEY }) });
+      }
+    });
+  });
+
+  it("does not fall back to a supplied commitment account when the session account is missing", async () => {
+    const noAccountConfig = { ...config, HARNESS_ACCOUNT_ID: "" };
+    const noAccountRegistry = new Registry(noAccountConfig);
+    await expect(noAccountRegistry.dispatch(new HarnessClient(noAccountConfig), "cost_commitment", "get", { account_id: "OTHER", start_date: "2026-10-01", end_date: "2026-10-31" }))
+      .rejects.toThrow(/Harness account ID is required/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("pins every account alias declared by the registry", async () => {
