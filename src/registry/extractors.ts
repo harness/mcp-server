@@ -15,6 +15,7 @@ import type { PreflightContext } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { toUtcDateString, parseCustomWindow } from "../utils/ccm-time.js";
 import { redactSensitiveFields } from "../utils/redact.js";
+import { buildRunStatus, buildLiveMetrics } from "./loadtest-live.js";
 
 /** Vibe returns unwrapped, mixed-case DTOs. Keep contract fields without forwarding internal metadata. */
 function pickVibeFields(value: unknown, fields: readonly string[]): Record<string, unknown> {
@@ -1669,6 +1670,55 @@ export const chaosLoadTestExtract = (raw: unknown): unknown => {
 export const chaosLoadTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
   const items = (r.items ?? []).map(chaosLoadTestExtract);
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
+/**
+ * ConvertHarResponse (loadTestManager dto.go:920-924) carries the script base64
+ * encoded. chaos_loadtest.create/update take plain text in `script` and encode it
+ * themselves (chaos.ts, descLoadtestScript), so decode here to make the output
+ * chainable without a manual decode step.
+ */
+export const chaosHarConvertExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.scriptContent !== "string") return raw;
+  return {
+    toolType: r.toolType,
+    fileName: r.fileName,
+    script: Buffer.from(r.scriptContent, "base64").toString("utf8"),
+  };
+};
+
+/**
+ * Load test run (LoadTestRunResponse) — passed through as-is (unlike
+ * chaosLoadTestExtract, there is no toolConfig to unwrap here) except for one
+ * mirror: identity -> run_id, so a caller holding a list/get item can chain
+ * straight into chaos_loadtest_run.get / .ai_insights / .generate_ai_insights
+ * without renaming the field itself, matching how chaosLoadTestExtract mirrors
+ * identity -> loadtestId for its own resource.
+ */
+export const chaosLoadTestRunExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const t = raw as Record<string, unknown>;
+  return { run_id: t.identity, ...t };
+};
+
+/** Run status poll view (status, elapsed/total, users, workers, terminal flag) + markdown. See loadtest-live.ts. */
+export const chaosLoadTestRunStatusExtract = (raw: unknown): unknown => buildRunStatus(raw);
+
+/** Live metrics poll view (latency, throughput, errors, saturation, endpoints, series) + markdown. See loadtest-live.ts. */
+export const chaosLoadTestRunLiveMetricsExtract = (raw: unknown, input?: Record<string, unknown>): unknown =>
+  buildLiveMetrics(raw, input ?? {});
+
+/**
+ * Load test run list response: { items, pagination: { totalItems } } -- same
+ * envelope as chaos_loadtest's own list. Projects each item via
+ * chaosLoadTestRunExtract → { items, total }.
+ */
+export const chaosLoadTestRunListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
+  const items = (r.items ?? []).map(chaosLoadTestRunExtract);
   return { items, total: r.pagination?.totalItems ?? items.length };
 };
 

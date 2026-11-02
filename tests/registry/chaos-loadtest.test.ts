@@ -1204,4 +1204,255 @@ describe("chaos_loadtest execute actions", () => {
     expect(call.body.values).toBeUndefined();
     expect(call.body.runtimeValues).toBeUndefined();
   });
+
+  it("estimate_workers: POSTs to the collection-level worker-estimate endpoint, no {loadtestId}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      target_users: 500,
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/worker-estimate");
+    expect(call.body.toolType).toBe("K6");
+    expect(call.body.targetUsers).toBe(500);
+    // Snake-case aliases exist only for bodySchema validation; the wire body
+    // should still be exactly what WorkerEstimateRequest expects.
+    expect(call.body.targetRps).toBeUndefined();
+    expect(call.body.resources).toBeUndefined();
+    expect(call.body.headroom).toBeUndefined();
+  });
+
+  it("estimate_workers: snake_case and camelCase input produce the same wire body", async () => {
+    const client = makeClient();
+    const requests: Array<Record<string, unknown>> = [];
+    const mockRequest = vi.fn().mockImplementation((req) => {
+      requests.push(req);
+      return Promise.resolve({});
+    });
+    (client as unknown as { request: typeof mockRequest }).request = mockRequest;
+
+    await registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+      org_id: "o", project_id: "p",
+      tool_type: "JMeter", target_users: 100, target_rps: 50, headroom: 0.9,
+      resources: { limits: { cpu: "1", memory: "2Gi" } },
+    });
+    await registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+      org_id: "o", project_id: "p",
+      toolType: "JMeter", targetUsers: 100, targetRps: 50, headroom: 0.9,
+      resources: { limits: { cpu: "1", memory: "2Gi" } },
+    });
+
+    const [snakeBody, camelBody] = requests.map((r) => r.body);
+    expect(snakeBody).toEqual(camelBody);
+    expect(snakeBody).toMatchObject({
+      toolType: "JMeter",
+      targetUsers: 100,
+      targetRps: 50,
+      headroom: 0.9,
+      resources: { limits: { cpu: "1", memory: "2Gi" } },
+    });
+  });
+
+  it("estimate_workers: forwards load_test_identity as a query param when set top-level", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+      org_id: "o", project_id: "p",
+      tool_type: "Locust", target_users: 10,
+      load_test_identity: "lt-calibrate-1",
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.loadTestIdentity).toBe("lt-calibrate-1");
+  });
+
+  it("estimate_workers: hoists load_test_identity nested inside `body` (all fields nested together)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+      org_id: "o", project_id: "p",
+      body: { tool_type: "Locust", target_users: 10, load_test_identity: "lt-calibrate-1" },
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.loadTestIdentity).toBe("lt-calibrate-1");
+    expect(call.body.toolType).toBe("Locust");
+  });
+
+  it("estimate_workers: rejects a missing/invalid tool_type", async () => {
+    const client = makeClient();
+    await expect(
+      registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+        org_id: "o", project_id: "p", target_users: 10,
+      }),
+    ).rejects.toThrow(/tool_type is required/);
+
+    await expect(
+      registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+        org_id: "o", project_id: "p", tool_type: "Gatling", target_users: 10,
+      }),
+    ).rejects.toThrow(/tool_type 'Gatling' must be 'Locust', 'JMeter', or 'K6'/);
+  });
+
+  it("estimate_workers: rejects targetUsers <= 0", async () => {
+    const client = makeClient();
+    await expect(
+      registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+        org_id: "o", project_id: "p", tool_type: "K6", target_users: 0,
+      }),
+    ).rejects.toThrow(/target_users must be greater than zero/);
+  });
+
+  it("estimate_workers: rejects a negative targetRps", async () => {
+    const client = makeClient();
+    await expect(
+      registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+        org_id: "o", project_id: "p", tool_type: "K6", target_users: 10, target_rps: -1,
+      }),
+    ).rejects.toThrow(/target_rps must not be negative/);
+  });
+
+  it("estimate_workers: rejects headroom outside (0, 1]", async () => {
+    const client = makeClient();
+    await expect(
+      registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+        org_id: "o", project_id: "p", tool_type: "K6", target_users: 10, headroom: 0,
+      }),
+    ).rejects.toThrow(/headroom must be within \(0, 1\]/);
+
+    await expect(
+      registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+        org_id: "o", project_id: "p", tool_type: "K6", target_users: 10, headroom: 1.5,
+      }),
+    ).rejects.toThrow(/headroom must be within \(0, 1\]/);
+  });
+
+  describe("convert_har", () => {
+    const HAR_TEXT = JSON.stringify({ log: { version: "1.2", entries: [] } });
+    const HAR_B64 = Buffer.from(HAR_TEXT, "utf8").toString("base64");
+
+    it("POSTs to the collection-level convert-har endpoint with scope in the query only", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      await registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+        org_id: "o", project_id: "p",
+        tool_type: "K6",
+        har_content: HAR_B64,
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/convert-har");
+      expect(call.params.organizationIdentifier).toBe("o");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("sends only toolType and harContent on the wire (no snake_case duplicate of the HAR)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      await registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+        org_id: "o", project_id: "p",
+        tool_type: "JMeter",
+        har_content: HAR_B64,
+      });
+      const body = mockRequest.mock.calls[0][0].body;
+      expect(Object.keys(body).sort()).toEqual(["harContent", "toolType"]);
+      expect(JSON.parse(JSON.stringify(body))).toEqual({ toolType: "JMeter", harContent: HAR_B64 });
+    });
+
+    it("base64-encodes raw HAR JSON text and parsed objects; leaves base64 untouched", async () => {
+      const bodies: Array<Record<string, unknown>> = [];
+      const mockRequest = vi.fn().mockImplementation((req) => {
+        bodies.push(req.body);
+        return Promise.resolve({});
+      });
+      const client = makeClient(mockRequest);
+      for (const har_content of [HAR_TEXT, JSON.parse(HAR_TEXT), HAR_B64]) {
+        await registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+          org_id: "o", project_id: "p", tool_type: "Locust", har_content,
+        });
+      }
+      expect(bodies.map((b) => b.harContent)).toEqual([HAR_B64, HAR_B64, HAR_B64]);
+    });
+
+    it("snake_case and camelCase input produce the same wire body", async () => {
+      const bodies: Array<Record<string, unknown>> = [];
+      const mockRequest = vi.fn().mockImplementation((req) => {
+        bodies.push(req.body);
+        return Promise.resolve({});
+      });
+      const client = makeClient(mockRequest);
+      await registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+        org_id: "o", project_id: "p", tool_type: "K6", har_content: HAR_B64,
+      });
+      await registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+        org_id: "o", project_id: "p", toolType: "K6", harContent: HAR_B64,
+      });
+      expect(JSON.parse(JSON.stringify(bodies[0]))).toEqual(JSON.parse(JSON.stringify(bodies[1])));
+    });
+
+    it("accepts the fields nested in a stringified `body`", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      await registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+        org_id: "o", project_id: "p",
+        body: JSON.stringify({ tool_type: "K6", har_content: HAR_B64 }),
+      });
+      expect(mockRequest.mock.calls[0][0].body.harContent).toBe(HAR_B64);
+    });
+
+    it("normalizes tool_type case like the backend does", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      await registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+        org_id: "o", project_id: "p", tool_type: "jmeter", har_content: HAR_B64,
+      });
+      expect(mockRequest.mock.calls[0][0].body.toolType).toBe("JMeter");
+    });
+
+    it("rejects a missing or unsupported tool_type", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+          org_id: "o", project_id: "p", har_content: HAR_B64,
+        }),
+      ).rejects.toThrow(/tool_type is required/);
+      await expect(
+        registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+          org_id: "o", project_id: "p", tool_type: "Gatling", har_content: HAR_B64,
+        }),
+      ).rejects.toThrow(/tool_type 'Gatling' must be 'Locust', 'JMeter', or 'K6'/);
+    });
+
+    it("rejects a missing or blank har_content", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+          org_id: "o", project_id: "p", tool_type: "K6",
+        }),
+      ).rejects.toThrow(/har_content is required/);
+      await expect(
+        registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+          org_id: "o", project_id: "p", tool_type: "K6", har_content: "   ",
+        }),
+      ).rejects.toThrow(/har_content is required/);
+    });
+
+    it("decodes the returned script to plain text so it chains into create", async () => {
+      const script = "import http from 'k6/http';\nexport default function () { http.get('https://x.test'); }\n";
+      const mockRequest = vi.fn().mockResolvedValue({
+        toolType: "K6",
+        scriptContent: Buffer.from(script, "utf8").toString("base64"),
+        fileName: "recorded-flow.js",
+      });
+      const client = makeClient(mockRequest);
+      const result = await registry.dispatchExecute(client, "chaos_loadtest", "convert_har", {
+        org_id: "o", project_id: "p", tool_type: "K6", har_content: HAR_B64,
+      });
+      expect(result).toMatchObject({ toolType: "K6", fileName: "recorded-flow.js", script });
+      expect(result).not.toHaveProperty("scriptContent");
+    });
+  });
 });
