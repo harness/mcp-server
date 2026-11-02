@@ -1,3 +1,4 @@
+import { encodePathSegment } from "./path.js";
 /**
  * Load saved pipeline input sets and build runtime YAML for pipeline execute.
  * Used when callers pass input_set_ids without inline `inputs`, so execution
@@ -121,7 +122,7 @@ async function fetchInputSetPipelineFragment(
 ): Promise<Record<string, unknown> | undefined> {
   const raw = await client.request<unknown>({
     method: "GET",
-    path: `/pipeline/api/inputSets/${encodeURIComponent(inputSetId)}`,
+    path: `/pipeline/api/inputSets/${encodePathSegment(inputSetId)}`,
     params: {
       orgIdentifier: orgId,
       projectIdentifier: projectId,

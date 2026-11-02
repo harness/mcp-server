@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { BodySchema, PathBuilderConfig, ToolsetDefinition } from "../types.js";
 import { ngExtract, passthrough, v1ListExtract } from "../extractors.js";
 import { parse as parseYaml } from "yaml";
@@ -109,7 +110,7 @@ const buildIdpEntityScopePath = (input: Record<string, unknown>, config: PathBui
   if (projectId) input.project_id = projectId;
   else delete input.project_id;
 
-  return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(entityId)}`;
+  return `/v1/entities/${encodePathSegment(scope)}/${encodePathSegment(kind)}/${encodePathSegment(entityId)}`;
 };
 
 const buildIdpEntityMutateBody = (input: Record<string, unknown>): Record<string, unknown> => {

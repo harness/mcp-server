@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import { randomUUID } from "node:crypto";
 import YAML from "yaml";
 import type { ToolsetDefinition, ParamsSchema, BodyFieldSpec } from "../types.js";
@@ -2994,7 +2995,7 @@ export const chaosToolset: ToolsetDefinition = {
                 "Pass the list row's identity as resource_id. Do not substitute infraID.",
               );
             }
-            return `${CHAOS}/rest/v2/infrastructure/${encodeURIComponent(String(id))}`;
+            return `${CHAOS}/rest/v2/infrastructure/${encodePathSegment(String(id))}`;
           },
           queryParams: { environment_id: "environmentIdentifier" },
           paramsSchema: {
@@ -3093,7 +3094,7 @@ export const chaosToolset: ToolsetDefinition = {
                 "Pass the list row's infraID as infra_id. resource_id (identity) is used only when infra_id is omitted.",
               );
             }
-            return `${CHAOS}/rest/kubernetes/infra/${encodeURIComponent(id)}/health`;
+            return `${CHAOS}/rest/kubernetes/infra/${encodePathSegment(id)}/health`;
           },
           responseExtractor: passthrough,
           actionDescription: descCheckK8sHealth,

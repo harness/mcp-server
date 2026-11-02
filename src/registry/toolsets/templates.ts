@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import YAML from "yaml";
 import type { BodySchema, ParamsSchema, PathBuilderConfig, ToolsetDefinition } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract } from "../extractors.js";
@@ -242,9 +243,9 @@ function templateNgDeletePath(input: Record<string, unknown>): string {
   if (!templateId) throw new Error("template_id is required");
   const version = input.version_label as string | undefined;
   if (version) {
-    return `/template/api/templates/${encodeURIComponent(templateId)}/${encodeURIComponent(version)}`;
+    return `/template/api/templates/${encodePathSegment(templateId)}/${encodePathSegment(version)}`;
   }
-  return `/template/api/templates/${encodeURIComponent(templateId)}`;
+  return `/template/api/templates/${encodePathSegment(templateId)}`;
 }
 
 function templateV1GetPath(input: Record<string, unknown>, config: PathBuilderConfig): string {
@@ -255,9 +256,9 @@ function templateV1GetPath(input: Record<string, unknown>, config: PathBuilderCo
     : templateV1BasePathFromScope(input, config);
   const version = input.version_label as string | undefined;
   if (version) {
-    return `${base}/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(version)}`;
+    return `${base}/${encodePathSegment(templateId)}/versions/${encodePathSegment(version)}`;
   }
-  return `${base}/${encodeURIComponent(templateId)}`;
+  return `${base}/${encodePathSegment(templateId)}`;
 }
 
 function templateV1VersionedPath(input: Record<string, unknown>, config: PathBuilderConfig): string {
@@ -266,7 +267,7 @@ function templateV1VersionedPath(input: Record<string, unknown>, config: PathBui
   if (!templateId) throw new Error("template_id is required");
   if (!version) throw new Error("version_label is required");
   const base = templateV1BasePathFromScope(input, config);
-  return `${base}/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(version)}`;
+  return `${base}/${encodePathSegment(templateId)}/versions/${encodePathSegment(version)}`;
 }
 
 function extractV1TemplateMeta(parsed: Record<string, unknown>): {

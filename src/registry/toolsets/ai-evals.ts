@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 /**
  * AI Evals control plane — datasets, evals, runs, metrics, suites, targets, git registration, online eval.
  * Base path: /ai-evals/api/v1/orgs/{org}/projects/{project}/...
@@ -41,7 +42,7 @@ function scopeOrThrow(input: Record<string, unknown>, config: PathBuilderConfig)
 
 function base(input: Record<string, unknown>, config: PathBuilderConfig): string {
   const { org, project } = scopeOrThrow(input, config);
-  return `${AI}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
+  return `${AI}/orgs/${encodePathSegment(org)}/projects/${encodePathSegment(project)}`;
 }
 
 const listQ = { page: "page", size: "limit" };
@@ -79,7 +80,7 @@ function requireUuid(value: unknown, field: string): string {
 function pathSegment(value: unknown, field: string): string {
   const id = nonEmptyString(value);
   if (!id) throw new Error(`${field} must be a non-empty path identifier.`);
-  return encodeURIComponent(id);
+  return encodePathSegment(id);
 }
 
 function promptVersionSegment(value: unknown, field: string): string {
@@ -97,7 +98,7 @@ function normalizePromptVersion(value: unknown): string | undefined {
 }
 
 function uuidPathSegment(input: JsonRecord, field: string): string {
-  return encodeURIComponent(requireUuid(input[field], field));
+  return encodePathSegment(requireUuid(input[field], field));
 }
 
 function datasetPath(input: JsonRecord, config: PathBuilderConfig): string {
@@ -105,8 +106,8 @@ function datasetPath(input: JsonRecord, config: PathBuilderConfig): string {
   if (!datasetId) throw new Error("dataset_id must be a non-empty UUID or dataset identifier.");
   const root = `${base(input, config)}/dataset`;
   return UUID_PATTERN.test(datasetId)
-    ? `${root}/${encodeURIComponent(datasetId)}`
-    : `${root}/by-identifier/${encodeURIComponent(datasetId)}`;
+    ? `${root}/${encodePathSegment(datasetId)}`
+    : `${root}/by-identifier/${encodePathSegment(datasetId)}`;
 }
 
 function preflightScope({ input, registry }: PreflightContext): { org_id: string; project_id: string } {
@@ -184,7 +185,7 @@ export async function getConnector(ctx: PreflightContext, connectorRef: string):
   try {
     const result = await ctx.client.request<unknown>({
       method: "GET",
-      path: `/ng/api/connectors/${encodeURIComponent(connectorRef)}`,
+      path: `/ng/api/connectors/${encodePathSegment(connectorRef)}`,
       params,
       retryPolicy: "safe",
       signal: ctx.signal,
@@ -359,8 +360,8 @@ async function validatePromptReference(
     throw new Error("prompt_version must be a non-empty version (for example, v3) or tag (for example, production).");
   }
   const { org_id, project_id } = preflightScope(ctx);
-  const path = `${AI}/orgs/${encodeURIComponent(org_id)}/projects/${encodeURIComponent(project_id)}` +
-    `/registry/prompts/${encodeURIComponent(promptId)}` +
+  const path = `${AI}/orgs/${encodePathSegment(org_id)}/projects/${encodePathSegment(project_id)}` +
+    `/registry/prompts/${encodePathSegment(promptId)}` +
     (version ? `/versions/${pathSegment(version, "prompt_version")}` : "");
   try {
     await ctx.client.request({
@@ -528,7 +529,7 @@ async function validatePrecomputedData(
     const { org_id, project_id } = preflightScope(ctx);
     const outputResponse = await ctx.client.request<unknown>({
       method: "GET",
-      path: `${AI}/orgs/${encodeURIComponent(org_id)}/projects/${encodeURIComponent(project_id)}/targets/${targetId}/outputs`,
+      path: `${AI}/orgs/${encodePathSegment(org_id)}/projects/${encodePathSegment(project_id)}/targets/${targetId}/outputs`,
       params: { page: 0, limit: 1000 },
       headerBasedScoping: true,
       signal: ctx.signal,
