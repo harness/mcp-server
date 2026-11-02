@@ -56,6 +56,8 @@ describe("HarnessClient", () => {
         "/ng/api/projects#fragment", "/ng/api/../user/currentUser",
         "/ng/api/./projects", "/ng/api/%2e%2E/projects", "/ng/api/.%2e/projects",
         "/ng/api/%2E/projects", "/ng/api/..\\user/currentUser",
+        "/ng/api/..%2Fuser/currentUser", "/ng/api/%2e%2e%2fuser/currentUser",
+        "/ng/api/.%2Fprojects", "/ng/api/foo%2F..%2Fuser",
         "/ng/api/proj\nect", "//other.example/path", "https://other.example/path",
       ])("rejects ambiguous route %j before fetch", async (path) => {
         const client = new HarnessClient(makeConfig());

@@ -200,5 +200,10 @@
 ## Security floor consistency
 - When raising the ip-address override, update `SECURE_IP_ADDRESS_VERSION` and its boundary/linked-install fixtures so the existing security guard checks the new patched floor.
 
+## Account path segments and encoded dot traversal
+- **Issue**: Query-parameter account guards do not cover an account id embedded in the path. `cost_commitment` preferred `params.account_id` over the session account. Separately, `encodeURIComponent("../x")` is `..%2Fx`; WHATWG leaves that segment in place, and a second decode of `%2F` restores traversal.
+- **Fix**: Build the commitment account segment from the session account only, same as AI governance. Reject a segment when it contains a `.` or `..` piece, or when one decode reveals those pieces beside `/` or `\`. Keep literal `%2e%2e` text, which is encoded again and does not become a separator.
+- **Rule**: An account id in a URL path is account scope. Do not take it from tool input. Treat an encoded slash next to `.` or `..` as traversal, and test it through `buildUrl`, not only the encoder.
+
 ## Version-bump Git sequencing
 - If staging or committing fails because the sandbox blocks the Git index, retry with approved escalation and verify the commit succeeded before pushing or creating the PR.

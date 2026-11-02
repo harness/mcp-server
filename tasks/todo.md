@@ -1,5 +1,11 @@
 # Harness MCP Server — Task Tracking
 
+## Pin commitment account and reject encoded traversal
+
+- [x] Keep cost commitment URLs on the session account. Ignore caller `account_id`.
+- [x] Reject path segments that hide `.` or `..` beside a slash, including `%2F` and `%5C`.
+- [x] Cover both through the registry and the real HTTP client.
+
 ## qs comma serialization denial of service (alert #111)
 
 - [x] Raise the qs security minimum to 6.16.1; pnpm resolves 6.17.0. The npm shrinkwrap already resolves patched 6.16.1 and needs no change.
