@@ -52,7 +52,7 @@ function firstRequest(mockRequest: ReturnType<typeof vi.fn>): RequestOptions {
 
 const nativeScope = { org_id: "o1", project_id: "p1" };
 const ENV_ID = "a4cb7d40-67ef-11f1-9ff8-96e3734caedf";
-const NATIVE_ONLY = /Harness-native \(org_id\/project_id\) only/;
+const SCOPE_REQUIRED = /org_id and project_id are required/;
 
 describe("fme_environment remaining native-only ops", () => {
   let registry: Registry;
@@ -81,16 +81,31 @@ describe("fme_environment remaining native-only ops", () => {
   });
 
   it.each(["get", "create", "update", "delete"] as const)(
-    "%s: rejects workspace_id because MCP never had a legacy contract for this op",
+    "%s: rejects a lone workspace_id since org_id/project_id are still required",
     async (operation) => {
       const client = makeClient();
       const input: Record<string, unknown> = { workspace_id: "ws1", environment_id: ENV_ID };
       if (operation === "create" || operation === "update") {
         input.body = { name: "x" };
       }
-      await expect(registry.dispatch(client, "fme_environment", operation, input)).rejects.toThrow(NATIVE_ONLY);
+      await expect(registry.dispatch(client, "fme_environment", operation, input)).rejects.toThrow(SCOPE_REQUIRED);
     },
   );
+
+  it("get: silently ignores a stray workspace_id when org_id/project_id are present", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_environment", "get", {
+      ...nativeScope,
+      workspace_id: "stale-ws",
+      environment_id: ENV_ID,
+    });
+
+    const request = firstRequest(mockRequest);
+    expect(request.method).toBe("GET");
+    expect(request.path).toBe(`/fme/api/v4/environments/${ENV_ID}`);
+  });
 
   it("create: native POST uses isProduction and skips NG body injection", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
