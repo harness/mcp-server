@@ -3,14 +3,14 @@
  * run in flight.
  *
  * Inputs are the loadTestManager responses:
- *   - GET /v1/runs/{identity}                          LoadTestRunResponse (dto.go:486)
- *   - GET /v1/runs/{identity}/metrics/timeseries       TimeseriesChartResponse (visualization_dto.go:18)
+ *   - GET /v1/runs/{identity}                          LoadTestRunResponse
+ *   - GET /v1/runs/{identity}/metrics/timeseries       TimeseriesChartResponse
  *
- * The run's lastMetrics (MetricSnapshotResponse, dto.go:613) is the only place
+ * The run's lastMetrics is the only place
  * the backend exposes per-endpoint stats and per-worker resource usage; the
  * time-series endpoint carries run-wide points only.
  *
- * Backend gaps this module reports rather than papers over:
+ * Backend gaps, reported as-is:
  *   - no p90 anywhere (MetricSnapshot carries p50/p95/p99 only)
  *   - no run-wide max latency on the snapshot DTO; it is derived from the
  *     per-endpoint maxima
@@ -570,7 +570,7 @@ function buildEndpoints(snapshot: Rec | null): { endpoints: Endpoint[]; maxMs: n
       name,
       requests,
       rps: round(num(v.requestsPerSec), 2),
-      // Locust leaves per-endpoint p95/p99 at zero (dto.go:679); a zero percentile is "not reported".
+      // Locust leaves per-endpoint p95/p99 at zero ; a zero percentile is "not reported".
       p50_ms: round(positive(v.medianResponseTime), 1),
       p95_ms: round(positive(v.p95ResponseMs), 1),
       p99_ms: round(positive(v.p99ResponseMs), 1),
