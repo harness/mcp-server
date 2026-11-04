@@ -169,7 +169,8 @@ export type ToolsetName =
   | "vibe"
   | "appsec"
   | "knowledge-graph"
-  | "semantic-layer";
+  | "semantic-layer"
+  | "unified-search";
 
 export type ProductName = "harness" | "fme" | "appsec";
 
