@@ -4,7 +4,11 @@ import type { Config } from "../../config.js";
 import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
 import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
-import { resolveLogContent, resolveLogDownloadUrl } from "../../utils/log-resolver.js";
+import {
+  packageSnippetForDiagnose,
+  resolveLogContent,
+  resolveLogDownloadUrl,
+} from "../../utils/log-resolver.js";
 import { failedUnitNamesFromNode, logKeysFromNode } from "../../utils/log-keys.js";
 import { TERMINAL_STATUSES } from "../../utils/poll-execution.js";
 import { classifyFailure } from "../../utils/diagnose-triage.js";
@@ -449,26 +453,6 @@ function buildExecutionSummary(
   return { summary, failedNodes, childRef };
 }
 
-function tailLines(text: string, n: number): { text: string; truncated: boolean; totalLines: number } {
-  if (n <= 0) return { text, truncated: false, totalLines: text.split("\n").length };
-  const lines = text.split("\n");
-  if (lines.length <= n) return { text, truncated: false, totalLines: lines.length };
-  return {
-    text: `... (${lines.length - n} lines omitted) ...\n` + lines.slice(-n).join("\n"),
-    truncated: true,
-    totalLines: lines.length,
-  };
-}
-
-function truncateLog(raw: unknown, maxLines: number): unknown {
-  if (typeof raw === "string") {
-    const result = tailLines(raw, maxLines);
-    if (!result.truncated) return raw;
-    return { log_snippet: result.text, total_lines: result.totalLines, truncated: true };
-  }
-  return raw;
-}
-
 async function resolveDiagnoseLog(
   client: HarnessClient,
   prefix: string,
@@ -493,8 +477,10 @@ async function resolveDiagnoseLog(
     mode: "snippet",
     snippetLines: options.logSnippetLines,
   });
-  // Safety: resolver already tails in snippet mode; re-apply if over budget.
-  return truncateLog(logText, options.logSnippetLines);
+  // Resolver already line-tails in snippet mode. Package without a second trim
+  // so unit headers / omitted markers survive and total_lines reflects the
+  // pre-trim unit size.
+  return packageSnippetForDiagnose(logText, options.logSnippetLines);
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -724,7 +710,12 @@ export const pipelineHandler: DiagnoseHandler = {
         capped.map((fn) => {
           const key = `${fn.stage}/${fn.step}`;
           const logValue = stepLogs[key];
-          const logSnippet = typeof logValue === "string" ? logValue : undefined;
+          const logSnippet =
+            typeof logValue === "string"
+              ? logValue
+              : isRecord(logValue) && typeof logValue.log_snippet === "string"
+                ? logValue.log_snippet
+                : undefined;
           return classifyFailure(
             {
               stage: fn.stage,

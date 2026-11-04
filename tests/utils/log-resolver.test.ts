@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   blobKeysToTry,
   commandUnitLogKey,
+  packageSnippetForDiagnose,
   resolveLogContent,
   resolveLogDownloadUrl,
   snippetUnitKeyOrder,
@@ -302,6 +303,66 @@ describe("resolveLogContent", () => {
     expect(result).toContain("ConfigMap");
   });
 
+  it("full mode does not soft-trim long early units (diagnose→get escalation)", async () => {
+    const early = Array.from({ length: 800 }, (_, i) => `early-${i}`).join("\n");
+    const late = Array.from({ length: 900 }, (_, i) => `late-${i}`).join("\n");
+    const asAb = (s: string) => {
+      const buf = Buffer.from(s);
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    };
+    const requestFn = vi
+      .fn()
+      .mockResolvedValueOnce(new ArrayBuffer(0))
+      .mockResolvedValueOnce(asAb(early))
+      .mockResolvedValueOnce(asAb(late));
+
+    const result = await resolveLogContent(makeClient(requestFn), "base", {
+      logKeys: ["base-commandUnit:Fetch Files", "base-commandUnit:Install / Upgrade"],
+      mode: "full",
+    });
+
+    expect(result).toContain("early-0");
+    expect(result).toContain("early-799");
+    expect(result).toContain("late-0");
+    expect(result).toContain("late-899");
+    expect(result).not.toContain("lines omitted");
+    // Both units fully present — well above the old 500/2000 soft budgets.
+    expect(result.split("\n").length).toBeGreaterThan(1700);
+  });
+
+  it("rejects plain blob bodies that exceed the compressed wire ceiling", async () => {
+    const huge = Buffer.alloc(250, 0x61);
+    const requestFn = vi.fn().mockResolvedValue(huge);
+    await expect(
+      resolveLogContent(makeClient(requestFn), "prefix", {
+        maxWireBytes: 100,
+        maxLogSizeBytes: 50,
+      }),
+    ).rejects.toThrow(/too large/i);
+  });
+
+  it("aborts a stalled blob body when bodyTimeoutMs elapses", async () => {
+    const requestStream = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("partial-"));
+          // Never close — body hangs until AbortSignal fires on read.
+        },
+      });
+      return new Response(stream, { status: 200 });
+    });
+    const client = {
+      request: vi.fn(),
+      requestStream,
+      account: "test-account",
+      baseURL: "https://custom.harness.example/gateway",
+    } as unknown as HarnessClient;
+
+    await expect(
+      resolveLogContent(client, "prefix", { bodyTimeoutMs: 30 }),
+    ).rejects.toThrow(/timed out|aborted|cancelled/i);
+  });
+
   it("prefers exact logKeys over unitProgresses names", async () => {
     const requestFn = vi
       .fn()
@@ -414,6 +475,46 @@ describe("resolveLogContent", () => {
     });
     expect(result).toContain("GZIP_TAIL_OK");
     expect(Buffer.byteLength(result, "utf-8")).toBeLessThanOrEqual(64);
+  });
+});
+
+describe("packageSnippetForDiagnose", () => {
+  it("preserves pre-tailed snippet markers and reports pre-trim total_lines", () => {
+    const kept = Array.from({ length: 200 }, (_, i) => `line-${1801 + i}`).join("\n");
+    const text = `--- commandUnit: Install / Upgrade ---\n... (1800 lines omitted) ...\n${kept}`;
+    const result = packageSnippetForDiagnose(text, 200);
+    expect(result).toEqual({
+      log_snippet: text,
+      total_lines: 2000,
+      truncated: true,
+    });
+  });
+
+  it("does not double-trim when the omitted marker is already present", () => {
+    const text =
+      "--- commandUnit: Prepare ---\n... (10 lines omitted) ...\nkeep-a\nkeep-b\nkeep-c";
+    const result = packageSnippetForDiagnose(text, 2);
+    expect(result).toEqual({
+      log_snippet: text,
+      total_lines: 13,
+      truncated: true,
+    });
+    expect((result as { log_snippet: string }).log_snippet).toContain("commandUnit: Prepare");
+    expect((result as { log_snippet: string }).log_snippet).toContain("lines omitted");
+  });
+
+  it("applies a single tail when the resolver returned an untrimmed body", () => {
+    const text = Array.from({ length: 100 }, (_, i) => `raw-${i}`).join("\n");
+    const result = packageSnippetForDiagnose(text, 20);
+    expect(result).toMatchObject({ truncated: true, total_lines: 100 });
+    const snippet = (result as { log_snippet: string }).log_snippet;
+    expect(snippet).toContain("lines omitted");
+    expect(snippet).toContain("raw-99");
+    expect(snippet).not.toContain("raw-0");
+  });
+
+  it("returns the raw string when under the line budget", () => {
+    expect(packageSnippetForDiagnose("a\nb\nc", 50)).toBe("a\nb\nc");
   });
 });
 
