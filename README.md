@@ -1622,6 +1622,34 @@ Typical workflow:
 6. `harness_get` on `release_input`, `release_execution_phase_input`, `release_execution_phase_output`, `release_execution_activity_output`, or `release_execution_activity_input` using `release_id` plus `params.phase_identifier` / `params.activity_identifier` / `activity_execution_id` as documented on each resource.
 
 
+### Unified Search
+
+The opt-in `unified-search` toolset (`HARNESS_TOOLSETS=+unified-search`) exposes search-service's unified search: semantic (meaning-based) search over Harness entities such as services, pipelines, environments, projects, organizations and AI SRE incidents. Results cover the caller's account only and are RBAC-filtered by the service. The account needs the semantic search feature flag enabled. Without it the call fails with a 403, which is reported as an error, never as an empty result.
+
+| Resource Type | List | Get | Execute Actions |
+| ------------- | ---- | --- | --------------- |
+| `unified_search` | x | | `search` |
+| `unified_search_source` | | x | |
+
+```text
+# Quick search — harness_search includes unified_search when the toolset is enabled
+harness_search(query="payments service that keeps crashing")
+
+# Shortcut filters
+harness_list(resource_type="unified_search", filters={search_term: "checkout", entity_types: "cd:service,pipeline:pipeline"})
+
+# Full filters (AND/OR/NOT on any metadata field)
+harness_execute(resource_type="unified_search", action="search", body={
+  query: "open sev1 incidents",
+  entity_types: ["aisre:incident"],
+  source_filters: {entities: {predicate: {field: "status", op: "NE", values: [{string_value: "closed"}]}}}
+})
+```
+
+Each hit carries `entity_type`, `name`, `identifier`, `org_id`, `project_id`, `score` and `metadata`. For pipelines, services, environments, projects and organizations it also has `harness_get` arguments, and `harness_get` returns the entity with its UI link. `org_id`/`project_id` are search filters: configured `HARNESS_ORG`/`HARNESS_PROJECT` defaults are not applied. Results are not paginated, `limit` applies per source (max 50), and scores are not comparable across sources. The filter grammar is in the resource's `executeHint` (`harness_describe(resource_type="unified_search")`).
+
+This is separate from the semantic routing providers in [Semantic Search](#semantic-search), which index MCP resource definitions and docs to narrow `harness_search`'s fan-out.
+
 ### Vibe
 
 The default-enabled `vibe` toolset covers the [Vibe Orchestrator BFF contract](tests/fixtures/vibe-bff-openapi.yaml) under `${HARNESS_BASE_URL}/vibe/v1`. It uses the existing Harness connection and account header, without adding account/org/project query parameters or scope fields to request bodies. The team validated the Vibe flow using Harness API-key authentication (PAT/SAT), so no opt-in setting is required for default sessions. The curated OpenAPI documents bearer/session authentication; the server's OAuth mode forwards the current session's bearer token. Automated regressions verify both header paths; gateway authentication remains subject to the target environment's configuration.
@@ -2008,11 +2036,12 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 43 of 47 toolsets are enabled. Four toolsets are opt-in and excluded from the defaults:
+By default, 43 of 48 toolsets are enabled. Five toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
 - **`observability-evaluations`** — Scheduled production-telemetry evaluation rules. Opt-in because it depends on the deployed scoring control plane.
+- **`unified-search`** — Semantic search over Harness entities via search-service. Opt-in because the backend is not deployed on every cluster and is feature-flagged per account (see [Unified Search](#unified-search)).
 - **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions). Opt-in until v3 writes land, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
 
 ### Adding toolsets with `+` prefix
@@ -2089,6 +2118,7 @@ Available toolset names:
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
+| `unified-search` *(opt-in)*        | unified_search, unified_search_source                                                                                                                                                                                                                                                                        |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_git_registration, eval_prompt, online_eval |
 | `observability-evaluations` *(opt-in)* | observability_eval                                                                                                                                                                                                                                                               |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
@@ -2114,7 +2144,7 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 47 Toolsets (43 default) |
+                | 48 Toolsets (43 default) |
                 |  265 Resource Types|
                  +--------+---------+
                           |

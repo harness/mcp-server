@@ -168,7 +168,8 @@ export type ToolsetName =
   | "release-management"
   | "vibe"
   | "knowledge-graph"
-  | "semantic-layer";
+  | "semantic-layer"
+  | "unified-search";
 
 export type ProductName = "harness" | "fme";
 
