@@ -1674,10 +1674,8 @@ export const chaosLoadTestListExtract = (raw: unknown): { items: unknown[]; tota
 };
 
 /**
- * ConvertHarResponse (loadTestManager dto.go:920-924) carries the script base64
- * encoded. chaos_loadtest.create/update take plain text in `script` and encode it
- * themselves (chaos.ts, descLoadtestScript), so decode here to make the output
- * chainable without a manual decode step.
+ * HAR conversion response. The backend returns the script base64-encoded;
+ * decode it so it can be passed straight to chaos_loadtest.create as `script`.
  */
 export const chaosHarConvertExtract = (raw: unknown): unknown => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
@@ -1690,32 +1688,21 @@ export const chaosHarConvertExtract = (raw: unknown): unknown => {
   };
 };
 
-/**
- * Load test run (LoadTestRunResponse) — passed through as-is (unlike
- * chaosLoadTestExtract, there is no toolConfig to unwrap here) except for one
- * mirror: identity -> run_id, so a caller holding a list/get item can chain
- * straight into chaos_loadtest_run.get / .ai_insights / .generate_ai_insights
- * without renaming the field itself, matching how chaosLoadTestExtract mirrors
- * identity -> loadtestId for its own resource.
- */
+/** Load test run — passed through, with identity mirrored to run_id. */
 export const chaosLoadTestRunExtract = (raw: unknown): unknown => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const t = raw as Record<string, unknown>;
   return { run_id: t.identity, ...t };
 };
 
-/** Run status poll view (status, elapsed/total, users, workers, terminal flag) + markdown. See loadtest-live.ts. */
+/** Run status view for polling. See loadtest-live.ts. */
 export const chaosLoadTestRunStatusExtract = (raw: unknown): unknown => buildRunStatus(raw);
 
-/** Live metrics poll view (latency, throughput, errors, saturation, endpoints, series) + markdown. See loadtest-live.ts. */
+/** Live metrics view for polling. See loadtest-live.ts. */
 export const chaosLoadTestRunLiveMetricsExtract = (raw: unknown, input?: Record<string, unknown>): unknown =>
   buildLiveMetrics(raw, input ?? {});
 
-/**
- * Load test run list response: { items, pagination: { totalItems } } -- same
- * envelope as chaos_loadtest's own list. Projects each item via
- * chaosLoadTestRunExtract → { items, total }.
- */
+/** Load test run list: { items, pagination: { totalItems } } → { items, total }. */
 export const chaosLoadTestRunListExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
   const items = (r.items ?? []).map(chaosLoadTestRunExtract);

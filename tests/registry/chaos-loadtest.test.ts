@@ -1218,8 +1218,8 @@ describe("chaos_loadtest execute actions", () => {
     expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/worker-estimate");
     expect(call.body.toolType).toBe("K6");
     expect(call.body.targetUsers).toBe(500);
-    // Snake-case aliases exist only for bodySchema validation; the wire body
-    // should still be exactly what WorkerEstimateRequest expects.
+    expect(JSON.parse(JSON.stringify(call.body))).not.toHaveProperty("tool_type");
+    expect(JSON.parse(JSON.stringify(call.body))).not.toHaveProperty("target_users");
     expect(call.body.targetRps).toBeUndefined();
     expect(call.body.resources).toBeUndefined();
     expect(call.body.headroom).toBeUndefined();
@@ -1331,6 +1331,15 @@ describe("chaos_loadtest execute actions", () => {
   describe("convert_har", () => {
     const HAR_TEXT = JSON.stringify({ log: { version: "1.2", entries: [] } });
     const HAR_B64 = Buffer.from(HAR_TEXT, "utf8").toString("base64");
+
+    it("create flow offers script, HAR, and custom image options", () => {
+      const def = registry.getResource("chaos_loadtest");
+      const desc = def.operations.create!.description ?? "";
+      expect(desc).toContain("(a) Upload script");
+      expect(desc).toContain("(b) Upload HAR");
+      expect(desc).toContain("(c) Using Custom Image");
+      expect(desc).toContain("action='convert_har'");
+    });
 
     it("POSTs to the collection-level convert-har endpoint with scope in the query only", async () => {
       const mockRequest = vi.fn().mockResolvedValue({});

@@ -296,12 +296,8 @@ function compactLoadTest(item: Record<string, unknown>): Record<string, unknown>
   return slim;
 }
 
-/** Compact projection for chaos_loadtest_run list items -- keeps AI-insights
- * status (already trimmed server-side to { status, verdict, headline } by
- * loadTestManager's trimAIInsightsForList even when Ready) and other scalars
- * the generic compactItems() whitelist would otherwise drop: it matches the
- * literal keys "status"/"type", not "aiInsights"/"toolType", and has no
- * pattern for a bare "targetUsers"/"workerCount"/"runSequence". */
+/** Compact projection for chaos_loadtest_run list items — keeps aiInsights,
+ * toolType and the tunables, which the generic compactItems() whitelist drops. */
 function compactLoadTestRun(item: Record<string, unknown>): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
   for (const key of [
@@ -618,10 +614,22 @@ function buildRiskRuleBody(
 }
 
 /**
- * ConvertHarRequest.HarContent must be base64 (loadTestManager dto.go:893-896,
- * DecodedHar). A HAR is a JSON document, so text starting with "{" can never be
- * base64 (the alphabet has no brace); encode that case and send anything else
- * unchanged for the backend to validate.
+ * Adds snake_case copies of required fields so the registry's required-field
+ * check passes. They are non-enumerable, so they are not serialized.
+ */
+function withRequiredFieldAliases(
+  body: Record<string, unknown>,
+  aliases: Record<string, unknown>,
+): Record<string, unknown> {
+  for (const [key, value] of Object.entries(aliases)) {
+    Object.defineProperty(body, key, { value, enumerable: false });
+  }
+  return body;
+}
+
+/**
+ * The backend expects harContent as base64. JSON text (starts with "{") or an
+ * object is encoded here; any other string is sent as-is.
  */
 function encodeHarContent(value: unknown): string {
   if (value !== null && typeof value === "object" && !Array.isArray(value)) {
@@ -3582,33 +3590,20 @@ export const chaosToolset: ToolsetDefinition = {
           actionDescription: descStopLoadtest,
           bodySchema: { description: descBodyNoBody, fields: [] },
         },
-        // Collection-level: no {loadtestId} path segment -- see
-        // chaos_risk.summary_by_service (this file, ~L4348) for the sibling
-        // pattern of a stateless POST action with no path params.
         estimate_workers: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/load-tests/worker-estimate`,
-          // Stateless: EstimateWorkers persists nothing and leaves any stored
-          // load test's worker_count untouched (loadtest_handlers.go:2237,
-          // EstimateWorkers godoc). Every failure is a 400 on the request
-          // shape itself (dto.go:860-871), never a conflict with server
-          // state -- safe to retry.
+          // Stateless: nothing is persisted, so retries are safe.
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { load_test_identity: "loadTestIdentity" },
           bodyBuilder: (input) => {
             const b = coerceBody(input);
 
-            // load_test_identity is a query param (RunScopeQuery.LoadTestIdentity,
-            // query.go:24-27) but is also declared in bodySchema.fields so an LLM
-            // that nests it in `body` still works. Body is built before queryParams
-            // are resolved (index.ts:749-751), so hoist it back onto input here --
-            // mirrors chaos_experiment.run's is_identity hoist (this file, ~L876).
+            // load_test_identity is a query param; accept it inside body too.
             if (input.load_test_identity === undefined && b.load_test_identity !== undefined) {
               (input as Record<string, unknown>).load_test_identity = b.load_test_identity;
             }
 
-            // Mirrors WorkerEstimateRequest.Validate (dto.go:860-871) client-side
-            // so the caller gets an actionable message instead of a raw 400.
             const toolType = (b.tool_type ?? b.toolType) as string | undefined;
             if (!toolType) {
               throw new Error("tool_type is required: 'Locust', 'JMeter', or 'K6'.");
@@ -3627,26 +3622,17 @@ export const chaosToolset: ToolsetDefinition = {
               throw new Error(`target_rps must not be negative, got ${targetRps}.`);
             }
 
-            // (0, 1] -- EstimateWorkers, workerestimate.go:214-215. Zero/omitted
-            // means "use the backend default" and is deliberately let through.
+            // Omitted means the backend default (0.8).
             const headroom = b.headroom as number | undefined;
             if (headroom != null && (typeof headroom !== "number" || !(headroom > 0 && headroom <= 1))) {
               throw new Error(`headroom must be within (0, 1], got ${headroom}.`);
             }
 
-            const body: Record<string, unknown> = {
-              toolType,
-              targetUsers,
-              // Snake-case aliases for the registry's required-field validator,
-              // which checks the built body against bodySchema's snake_case
-              // names (index.ts:823-826) -- mirrors chaos_loadtest.create.
-              tool_type: toolType,
-              target_users: targetUsers,
-            };
+            const body: Record<string, unknown> = { toolType, targetUsers };
             if (targetRps != null) body.targetRps = targetRps;
             if (b.resources != null) body.resources = b.resources;
             if (headroom != null) body.headroom = headroom;
-            return body;
+            return withRequiredFieldAliases(body, { tool_type: toolType, target_users: targetUsers });
           },
           responseExtractor: passthrough,
           actionDescription: descEstimateWorkers,
@@ -3668,21 +3654,16 @@ export const chaosToolset: ToolsetDefinition = {
           } satisfies ParamsSchema,
         },
 
-        // Collection-level and stateless, like estimate_workers: POST
-        // /v1/load-tests/convert-har computes a script and persists nothing
-        // (loadtest_handlers.go:2341-2431), so it is safe to retry.
+        // Stateless: generates a script and persists nothing.
         convert_har: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/load-tests/convert-har`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          // The HAR can be tens of MB; the handler binds scope from the query
-          // (ScopeQuery) and the body carries only toolType + harContent.
+          // Scope is read from the query string; the body is only toolType + harContent.
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const b = coerceBody(input);
 
-            // ConvertHarRequest.Validate (dto.go:899-907) + normalizeToolTypeFilter
-            // (query.go:226-234): the backend matches tool type case-insensitively.
             const rawToolType = (b.tool_type ?? b.toolType) as string | undefined;
             if (!rawToolType) {
               throw new Error("tool_type is required: 'Locust', 'JMeter', or 'K6'.");
@@ -3696,15 +3677,7 @@ export const chaosToolset: ToolsetDefinition = {
 
             const harContent = encodeHarContent(b.har_content ?? b.harContent);
 
-            const body = { toolType, harContent };
-            // The registry's required-field validator reads the built body by
-            // bodySchema's snake_case names (index.ts:823-827). Unlike
-            // estimate_workers, the aliases are non-enumerable so they never reach
-            // the wire: a second copy of the HAR would push the request past
-            // harRequestBodyLimit (loadtest_handlers.go:2457-2460) and be refused.
-            Object.defineProperty(body, "tool_type", { value: toolType, enumerable: false });
-            Object.defineProperty(body, "har_content", { value: harContent, enumerable: false });
-            return body;
+            return withRequiredFieldAliases({ toolType, harContent }, { tool_type: toolType, har_content: harContent });
           },
           responseExtractor: chaosHarConvertExtract,
           actionDescription: descConvertHar,
@@ -3767,10 +3740,6 @@ export const chaosToolset: ToolsetDefinition = {
           method: "GET",
           path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          // required:true on the loadtest_id listFilterField above is enforced by
-          // the registry itself for operation==="list" (index.ts:414-423) --
-          // no preflight needed here, unlike chaos_component_variable.get (whose
-          // operation is "get", where that automatic enforcement doesn't apply).
           pathParams: { loadtest_id: "loadtestId" },
           queryParams: {
             page: "page",
@@ -3802,10 +3771,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { run_id: "runId" },
           queryParams: { load_test_identity: "loadTestIdentity" },
-          // Handler never binds JSON on either verb (GetRunAIInsights/GenerateRunAIInsights,
-          // ai_insights_handlers.go) -- keep the wire body truly empty rather than
-          // letting scope injection add orgIdentifier/projectIdentifier the backend
-          // will never read.
+          // No request body; scope goes on the query string.
           skipScopeBodyInjection: true,
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
@@ -3820,20 +3786,11 @@ export const chaosToolset: ToolsetDefinition = {
         generate_ai_insights: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/runs/{runId}/ai-insights`,
-          // Spends a model call and writes run.aiInsights -- routes.go gives the
-          // POST 'edit' RBAC while the GET above gets only 'view'. Not a safe
-          // retry target: a duplicate request while one is in flight, or after
-          // the analysis is already Ready, is refused with 409 rather than
-          // silently absorbed, so do_not_retry. medium_write rather than run's
-          // high_write -- this queues one bounded analysis call over a finished
-          // run's own already-collected metrics; it does not spend load-runner
-          // infrastructure or send traffic at a target service the way run does.
+          // A repeat request while generating or after Ready returns 409.
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { run_id: "runId" },
           queryParams: { load_test_identity: "loadTestIdentity" },
-          // Handler never binds JSON (GenerateRunAIInsights, ai_insights_handlers.go:77) --
-          // keep the wire body truly empty rather than letting scope injection add
-          // orgIdentifier/projectIdentifier the backend will never read.
+          // No request body; scope goes on the query string.
           skipScopeBodyInjection: true,
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
@@ -3851,8 +3808,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { run_id: "runId" },
           queryParams: { load_test_identity: "loadTestIdentity" },
-          // The extractor output carries a ready-made markdown field; the generic
-          // compactItems() whitelist would strip most of the structured fields.
+          // Compaction would drop most of the structured fields.
           skipCompact: true,
           responseExtractor: chaosLoadTestRunStatusExtract,
           actionDescription: descRunStatus,
@@ -3869,12 +3825,9 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { run_id: "runId" },
           queryParams: { load_test_identity: "loadTestIdentity" },
           skipCompact: true,
-          // The run GET carries the snapshot (percentiles, per-endpoint stats, worker
-          // stats); the time-series endpoint is the only source of points over time.
-          // It is fetched here, best-effort, and handed to the extractor on the
-          // dispatch input. Time filtering is done in the extractor, not via the
-          // endpoint's from/to: GetMetricsTimeseries compares the stored date field
-          // against int64 millis (loadTestManager mongo_metrics_store.go:199-208).
+          // The run GET has the latest snapshot; the time series is fetched here
+          // (best-effort) and filtered by `since` in the extractor, because the
+          // endpoint's from/to filter does not match stored timestamps.
           preflight: async ({ client, input, registry, signal }) => {
             validateLiveMetricsInput(input);
             const runId = input.run_id;
@@ -3887,7 +3840,7 @@ export const chaosToolset: ToolsetDefinition = {
             try {
               const raw = await client.request<unknown>({
                 method: "GET",
-                path: `${CHAOS_LOADTEST}/v1/runs/${encodeURIComponent(runId)}/metrics/timeseries`,
+                path: `${CHAOS_LOADTEST}/v1/runs/${encodePathSegment(runId)}/metrics/timeseries`,
                 params: {
                   organizationIdentifier: (input.org_id as string | undefined) ?? registry.orgId,
                   projectIdentifier: (input.project_id as string | undefined) ?? registry.projectId,
