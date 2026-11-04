@@ -104,7 +104,7 @@ function propertyHasDescribe(_name: string, block: string): boolean {
   if (DESCRIBED_SCHEMA_REFS.has(value)) {
     return true;
   }
-  if (/^(orgIdField|projectIdField)\s*\(/.test(value)) {
+  if (/^(orgIdField|projectIdField|resourceScopeField)\s*\(/.test(value)) {
     return true;
   }
   return /\.describe\s*\(/.test(block);

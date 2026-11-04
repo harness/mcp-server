@@ -21,7 +21,7 @@ export function registerChaosResiliencePrompt(server: McpServer): void {
             text: `Design a chaos experiment to test the resilience of "${serviceName}".
 
 Steps:
-1. **Check infrastructure**: Call harness_list with resource_type="chaos_infrastructure"${projectFilter} for Linux targets and resource_type="chaos_k8s_infrastructure"${projectFilter} for Kubernetes targets
+1. **Check infrastructure**: Call harness_list with resource_type="chaos_infrastructure"${projectFilter} for Linux targets and resource_type="chaos_enabled_infrastructure"${projectFilter} for Kubernetes targets (no environment needed). Use chaos_k8s_infrastructure only with filters.environment_id
 2. **Review templates**: Call harness_list with resource_type="chaos_experiment_template"${projectFilter} to see pre-built experiment templates
 3. **Check probes**: Call harness_list with resource_type="chaos_probe"${projectFilter} to see available steady-state probes
 4. **Check ChaosGuard rules**: Call harness_list with resource_type="chaos_guard_rule"${projectFilter} to review governance policies that may restrict experiment execution

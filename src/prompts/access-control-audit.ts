@@ -23,7 +23,7 @@ export function registerAccessControlAuditPrompt(server: McpServer): void {
 
 Steps:
 1. **List users**: Call harness_list with resource_type="user"${orgFilter}${projectFilter} to get all users
-2. **List service accounts**: Call harness_list with resource_type="service_account"${orgFilter}${projectFilter} to get all service accounts
+2. **List service accounts**: Call harness_list with resource_type="service_account"${orgFilter}${projectFilter} to get service accounts at that scope. Account-level service accounts are omitted from a project list — call again with resource_scope="account" and no org_id or project_id when the audit needs them.
 3. **List roles**: Call harness_list with resource_type="role"${orgFilter}${projectFilter} to see all defined roles
 4. **List role assignments**: Call harness_list with resource_type="role_assignment"${orgFilter}${projectFilter} to see who has what role
 5. **List resource groups**: Call harness_list with resource_type="resource_group"${orgFilter}${projectFilter} to understand resource access scopes

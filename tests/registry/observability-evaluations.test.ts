@@ -121,6 +121,13 @@ describe("Observability Evaluations toolset", () => {
     ]));
   });
 
+  it("documents list-ID and undeployed-route recovery for reads", () => {
+    const hint = resource().diagnosticHint!;
+
+    expect(hint).toContain("harness_list");
+    expect(hint).toContain("nginx 404");
+  });
+
   it("returns eval_id instead of the backend config_id field", () => {
     const definition = resource();
     const response = { config_id: EVAL_ID, name: "Production quality" };
@@ -442,14 +449,28 @@ describe("Observability Evaluations toolset", () => {
     await expect(registry.dispatch(makeClient(request), "observability_eval", "get", {
       eval_id: "../metric-sets",
     })).rejects.toThrow(
-      "eval_id must be a UUID returned by an AI Evals read operation; do not invent an identifier.",
+      "eval_id must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.",
     );
     await expect(registry.dispatch(makeClient(request), "observability_eval", "delete", {
       eval_id: "../metric-sets",
     })).rejects.toThrow(
-      "eval_id must be a UUID returned by an AI Evals read operation; do not invent an identifier.",
+      "eval_id must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.",
     );
 
     expect(request).not.toHaveBeenCalled();
   });
+
+  it.each(["get", "update", "delete"] as const)(
+    "rejects invalid eval_id values while constructing %s paths",
+    (operation) => {
+      const pathBuilder = resource().operations[operation]!.pathBuilder!;
+
+      expect(() => pathBuilder(
+        { eval_id: "display-name" },
+        { HARNESS_ORG: "org", HARNESS_PROJECT: "project" },
+      )).toThrow(
+        "eval_id must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.",
+      );
+    },
+  );
 });

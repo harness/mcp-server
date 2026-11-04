@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../utils/path.js";
 /**
  * Shared response extractors for Harness API responses.
  * Used across all toolset definitions — eliminates per-file duplication.
@@ -13,6 +14,7 @@ import {
 import type { PreflightContext } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { toUtcDateString, parseCustomWindow } from "../utils/ccm-time.js";
+import { redactSensitiveFields } from "../utils/redact.js";
 
 /** Vibe returns unwrapped, mixed-case DTOs. Keep contract fields without forwarding internal metadata. */
 function pickVibeFields(value: unknown, fields: readonly string[]): Record<string, unknown> {
@@ -229,6 +231,56 @@ export const userAggregateExtract = (raw: unknown): unknown => flattenUserAggreg
 export const userAggregatePageExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const paged = pageExtract(raw);
   return { items: paged.items.map(flattenUserAggregate), total: paged.total };
+};
+
+const SERVICE_ACCOUNT_FIELDS = [
+  "identifier",
+  "name",
+  "email",
+  "description",
+  "tags",
+  "accountIdentifier",
+  "orgIdentifier",
+  "projectIdentifier",
+] as const;
+
+const SERVICE_ACCOUNT_AGGREGATE_META = ["createdAt", "lastModifiedAt", "tokensCount"] as const;
+
+/**
+ * Aggregate list items nest the account under `serviceAccount`. Flatten identity
+ * fields so compact mode and follow-up gets see identifier/email. Plain DTOs
+ * (non-aggregate list) pass through with the same fields.
+ */
+export function flattenServiceAccountAggregate(item: unknown): unknown {
+  if (!isRecord(item)) return item;
+  const nested = isRecord(item.serviceAccount) ? item.serviceAccount : undefined;
+  const source = nested ?? item;
+  const out: Record<string, unknown> = {};
+  for (const key of SERVICE_ACCOUNT_FIELDS) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  if (nested) {
+    for (const key of SERVICE_ACCOUNT_AGGREGATE_META) {
+      if (item[key] !== undefined) out[key] = item[key];
+    }
+  }
+  return out;
+}
+
+/**
+ * Service account list is paginated on `/serviceaccount/aggregate` (`data.content`)
+ * and a raw array on `/serviceaccount` (`data: []`). Accept both so account-scope
+ * lists are not dropped by the page extractor.
+ */
+export const serviceAccountListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  if (isRecord(raw) && Array.isArray(raw.data)) {
+    return {
+      items: raw.data.map(flattenServiceAccountAggregate),
+      total: raw.data.length,
+    };
+  }
+  const paged = pageExtract(raw);
+  return { items: paged.items.map(flattenServiceAccountAggregate), total: paged.total };
 };
 
 /**
@@ -480,12 +532,78 @@ export const aiEvalsListExtract = (raw: unknown): { items: unknown[]; total: num
 };
 
 /**
+ * AI Evals paginated list whose rows carry their primary key under a resource-specific
+ * field (e.g. `uuid`, `run_id`). Mirrors it into `id` so list results feed the next get call.
+ * Rows can also hold foreign keys (`suite_run_id` on runs, `suite_id` on suite runs), so the
+ * key must be declared per resource rather than guessed.
+ */
+export const aiEvalsListExtractWithId = (idField: string) =>
+  (raw: unknown): { items: unknown[]; total: number } => {
+    const { items, total } = aiEvalsListExtract(raw);
+    return {
+      items: items.map((item) => {
+        if (!isRecord(item) || item.id !== undefined) return item;
+        const id = item[idField];
+        return typeof id === "string" ? { ...item, id } : item;
+      }),
+      total,
+    };
+  };
+
+/**
  * AI Evals — bare array response (e.g. suite evaluations, metric set entries list).
  */
 export const aiEvalsArrayExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const arr = Array.isArray(raw) ? raw : [];
   return { items: arr, total: arr.length };
 };
+
+/**
+ * AI Evals array wrapper without pagination metadata (for example, prompt tags).
+ */
+export const aiEvalsDataArrayExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const data = (raw as { data?: unknown[] }).data;
+  const items = Array.isArray(data) ? data : [];
+  return { items, total: items.length };
+};
+
+const TRACE_RESPONSE_MAX_STRING_LENGTH = 4_000;
+const TRACE_RESPONSE_MAX_COLLECTION_SIZE = 100;
+const TRACE_RESPONSE_TRUNCATION_MARKER = "… [TRUNCATED]";
+
+function boundTraceResponse(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") {
+    return value.length > TRACE_RESPONSE_MAX_STRING_LENGTH
+      ? `${value.slice(0, TRACE_RESPONSE_MAX_STRING_LENGTH - TRACE_RESPONSE_TRUNCATION_MARKER.length)}${TRACE_RESPONSE_TRUNCATION_MARKER}`
+      : value;
+  }
+  if (value === null || typeof value !== "object" || depth > 10) return value;
+  if (Array.isArray(value)) {
+    const bounded = value.slice(0, TRACE_RESPONSE_MAX_COLLECTION_SIZE)
+      .map((item) => boundTraceResponse(item, depth + 1));
+    return value.length > TRACE_RESPONSE_MAX_COLLECTION_SIZE
+      ? [...bounded, { mcp_truncated: true, mcp_original_count: value.length }]
+      : bounded;
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  const bounded = Object.fromEntries(
+    entries
+      .slice(0, TRACE_RESPONSE_MAX_COLLECTION_SIZE)
+      .map(([key, item]) => [key, boundTraceResponse(item, depth + 1)]),
+  );
+  return entries.length > TRACE_RESPONSE_MAX_COLLECTION_SIZE
+    ? { ...bounded, mcp_truncated: true, mcp_original_count: entries.length }
+    : bounded;
+}
+
+/** AI Evals responses with credential-shaped fields redacted. */
+export const aiEvalsRedactedExtract = (raw: unknown): unknown => redactSensitiveFields(raw);
+
+/** AI Evals trace responses with credential-shaped fields redacted and large values bounded. */
+export const aiEvalsTraceExtract = (raw: unknown): unknown => boundTraceResponse(redactSensitiveFields(raw));
+
+/** AI Evals trace list response with the same redaction and bounds as trace detail responses. */
+export const aiEvalsTraceListExtract = (raw: unknown): unknown => aiEvalsTraceExtract(aiEvalsListExtract(raw));
 
 /**
  * SCS-specific extractor — strips null, undefined, empty string, empty array,
@@ -706,6 +824,60 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
   return r.data?.[field] ?? raw;
 };
 
+/** Same cap the in-product investigator applies when it offers runbooks to the model. */
+export function runbookListExtract(raw: unknown): unknown {
+  const { items, total } = offsetListExtract(raw);
+  return {
+    items: items.map((r) => {
+      const { runbookId, displayName, description } = r as Record<string, unknown>;
+      return { runbookId, displayName, description };
+    }),
+    total,
+  };
+}
+
+export function runbookGetExtract(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  const { runbookId, inputs, ...rest } = raw;
+  return {
+    runbookId,
+    ...rest,
+    inputs: Array.isArray(inputs)
+      ? inputs.map((i) => {
+        const { defaultValue, ...input } = i as Record<string, unknown>;
+        return defaultValue === undefined || defaultValue === null ? input : { ...input, default: defaultValue };
+      })
+      : inputs,
+  };
+}
+
+export function runbookRunExtract(raw: unknown): unknown {
+  if (!isRecord(raw) || typeof raw.runbookExecutionId !== "string") {
+    throw new Error("Runbook execution did not return a runbookExecutionId");
+  }
+  return { runbookExecutionId: raw.runbookExecutionId, status: raw.status ?? "PENDING" };
+}
+
+export function runbookExecutionListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  if (!isRecord(raw)) return raw;
+  const items = Array.isArray(raw.results) ? raw.results : [];
+  const hasMore = raw.hasMoreResults === true;
+  return {
+    items,
+    total: items.length,
+    pagination: {
+      cursor: typeof input?.cursor === "string" ? input.cursor : undefined,
+      // Only emit a cursor that has a page behind it, so an agent's `while (next_cursor)` loop terminates.
+      next_cursor: hasMore && typeof raw.nextPageCursor === "string" ? raw.nextPageCursor : undefined,
+      has_more: hasMore,
+    },
+  };
+}
+
+export function runbookExecutionGetExtract(raw: unknown): unknown {
+  return raw;
+}
+
 function pipelineDefinitionGetParams(input: Record<string, unknown>, registry: PreflightContext["registry"]): Record<string, string> {
   const params: Record<string, string> = {};
   const orgId = input.org_id ?? registry.orgId;
@@ -736,7 +908,7 @@ export async function runtimeInputTemplatePreflight({
   try {
     const raw = await client.request<unknown>({
       method: "GET",
-      path: `/pipeline/api/pipelines/${encodeURIComponent(pipelineId)}`,
+      path: `/pipeline/api/pipelines/${encodePathSegment(pipelineId)}`,
       params: pipelineDefinitionGetParams(input, registry),
       signal,
     });
@@ -1605,6 +1777,17 @@ export const sdPageExtract = (raw: unknown): { items: unknown[]; total: number; 
   return { items, total };
 };
 
+/**
+ * Extract Service Discovery v2 list response (custom services):
+ *   { items: [...], pagination: { total, pageSize, pageCount, pageNumber }, correlationID }
+ * v2 reports pagination.total, not the v1 page.totalItems envelope.
+ */
+export const sdV2PageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { items?: unknown[]; pagination?: { total?: number } };
+  const items = r.items ?? [];
+  return { items, total: r.pagination?.total ?? items.length };
+};
+
 // ---------------------------------------------------------------------------
 // Feature Management Enterprise (FME) extractors
 // ---------------------------------------------------------------------------
@@ -2003,13 +2186,13 @@ function requireReleaseAndPhase(input: Record<string, unknown>): { releaseId: st
 
 export function releaseExecutionPhaseOutputPath(input: Record<string, unknown>): string {
   const { releaseId, phaseId } = requireReleaseAndPhase(input);
-  const enc = encodeURIComponent;
+  const enc = encodePathSegment;
   return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/output`;
 }
 
 export function releaseExecutionPhaseInputPath(input: Record<string, unknown>): string {
   const { releaseId, phaseId } = requireReleaseAndPhase(input);
-  const enc = encodeURIComponent;
+  const enc = encodePathSegment;
   return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/input`;
 }
 
@@ -2021,7 +2204,7 @@ export function releaseExecutionActivityOutputPath(input: Record<string, unknown
       "activity_identifier is required — pass via params on harness_get (from harness_list release_execution_activity)",
     );
   }
-  const enc = encodeURIComponent;
+  const enc = encodePathSegment;
   return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/activity/${enc(activityId)}/output`;
 }
 
@@ -2239,6 +2422,30 @@ export function autoCreateLogExtract(raw: unknown): Record<string, unknown> {
     failedEnvironments: raw.failedEnvironments ?? 0,
     successClusterLinks: raw.successClusterLinks ?? 0,
     failedClusterLinks: raw.failedClusterLinks ?? 0,
+  };
+}
+
+/**
+ * Server-side row cap for the agent metrics range endpoint
+ * (`maxAgentMetricsListLimit` in the GitOps server DAL). Rows are returned newest
+ * first, so hitting the cap silently drops the oldest samples in the window.
+ */
+export const AGENT_METRICS_MAX_ROWS = 50_000;
+
+/**
+ * GetMetrics → harness_list shape. The endpoint returns `{ content: [...] }`, is not
+ * paginated, and returns an empty body (no `content`) when the metrics feature flag is off.
+ * Adds a `note` (page/size are ignored) and `truncated` when the server row cap was reached.
+ */
+export function agentMetricsListExtract(raw: unknown): Record<string, unknown> {
+  const note =
+    `Not paginated: page/size are ignored; all samples in the range are returned, newest first (server cap ${AGENT_METRICS_MAX_ROWS} rows).`;
+  const content = isRecord(raw) && Array.isArray(raw.content) ? raw.content : [];
+  return {
+    items: content,
+    total: content.length,
+    ...(content.length >= AGENT_METRICS_MAX_ROWS ? { truncated: true } : {}),
+    note,
   };
 }
 

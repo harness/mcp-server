@@ -48,6 +48,9 @@ export const searchOutputSchema = z.object({
     match_count: z.number().describe("Number of matches in this type"),
     items: z.array(dynamicObject).describe("Matching resources"),
   }).catchall(z.unknown())).describe("Search results grouped by resource type"),
+  semantic_routed: z.boolean().optional().describe("True when semantic routing narrowed the searched types"),
+  types_skipped: z.array(z.string()).optional().describe("Resource types skipped by semantic routing"),
+  errors: z.record(z.string(), z.string()).optional().describe("Per-resource-type errors for types that could not be searched"),
 });
 
 // --- harness_describe ---
@@ -73,3 +76,11 @@ export const statusOutputSchema = z.object({
 
 // --- harness_schema ---
 export const schemaOutputSchema = z.object({}).catchall(z.unknown()).describe("Schema data — shape varies by query mode");
+
+/**
+ * Compact mode ships a permissive output schema: the model reads the text result, and the
+ * per-field descriptions here cost ~5 KB per tools/list for no routing benefit.
+ */
+export function compactOutputSchema<T extends z.ZodType>(full: T, compact: boolean | undefined): z.ZodType {
+  return compact ? dynamicObject : full;
+}

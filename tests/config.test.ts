@@ -515,6 +515,20 @@ describe("ConfigSchema — boolean env var coercion", () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.HARNESS_READ_ONLY).toBe(true);
   });
+
+  it("HARNESS_SCHEMA_MODE defaults to compact when unset or empty", () => {
+    for (const extra of [{}, { HARNESS_SCHEMA_MODE: "" }]) {
+      const result = ConfigSchema.safeParse({ ...validConfig, ...extra });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.HARNESS_SCHEMA_MODE).toBe("compact");
+    }
+  });
+
+  it("HARNESS_SCHEMA_MODE=full keeps the inlined resource-type schemas", () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_SCHEMA_MODE: "full" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_SCHEMA_MODE).toBe("full");
+  });
 });
 
 describe("ConfigSchema — HTTPS enforcement", () => {

@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough, stoExemptionsExtract, stoRemediationDiffExtract } from "../extractors.js";
 
@@ -504,7 +505,7 @@ export const stoToolset: ToolsetDefinition = {
           // pathBuilder dynamically picks /approve vs /promote based on body.scope.
           // 'CURRENT' (or missing) → /approve; anything else → /promote.
           pathBuilder: (input) => {
-            const exemptionId = encodeURIComponent(String(input.exemption_id ?? ""));
+            const exemptionId = encodePathSegment(String(input.exemption_id ?? ""));
             const b = (input.body as Record<string, unknown> | undefined) ?? {};
             const scope = ((b.scope ?? input.scope) as string | undefined)?.toUpperCase();
             const elevating = scope && scope !== "CURRENT";

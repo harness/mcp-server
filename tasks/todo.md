@@ -1,5 +1,70 @@
 # Harness MCP Server — Task Tracking
 
+## qs comma serialization denial of service (alert #111)
+
+- [x] Raise the qs security minimum to 6.16.1; pnpm resolves 6.17.0. The npm shrinkwrap already resolves patched 6.16.1 and needs no change.
+- [x] Verify the advisory payload, audit, dependency consistency, types, and tests.
+
+Validation: six hostile serialization checks and a normal serialization control passed; pnpm audit reports zero vulnerabilities. Typecheck, build, docs check, shrinkwrap consistency, and diff check passed. The first unrestricted full suite completed with 186 files passing and one failing: the pre-existing untracked path-security.test.ts (132 failures; 4,296 tests passed). A rerun after a server interruption also hit the schema-description test's 20-second timeout (185 files and 4,295 tests passed). Untracked path-security work was preserved.
+
+## AI Evals MCP exposure boundary (2026-10-14)
+
+### Plan
+
+- [x] Keep project-scoped Prompt Registry in the default AI Evals toolset.
+- [x] Remove the generic eval_registry_item resource from MCP.
+- [x] Keep trace annotations and on-demand trace evaluation in the default toolset.
+- [x] Redact credential-shaped fields and bound large trace response fields.
+- [x] Add scope and response-shaping regressions; verify and update PR #1102.
+
+## AI Evals reads return 404 (2026-10-08)
+
+Base: `main@upstream` `bf89204b` (v3.2.33). Reproduced with a local build against QA
+(`AI_Evals/AI_Evals_QA`), harness0, and event-store-team.
+
+### Findings
+
+1. **Get-by-non-UUID is the 404.** Every AI Evals get/update/delete path takes the UUID
+   (`dataset/{dataset_id}`, `evals/{eval_id}`, ...). Passing the slug (`identifier`) or display
+   name reaches the backend unchanged and returns `404 Dataset not found` / `404 Eval not found`.
+   Get by UUID returns 200 for dataset, evaluation, metric, metric set, and target.
+2. **Older installs hide the UUID.** Compact list mode (the default) dropped `id`/`uuid` before
+   #1030 (v3.2.31). The globally installed `harness-mcp-v2@3.2.16` returns only
+   `name`/`identifier`/`description`, so agents can only pass a slug and every get 404s. Upstream
+   main keeps `id` and `uuid`. Datasets return their key as `uuid`; the other resources use `id`.
+3. **The 404 hint misleads.** `harness_get`/`harness_list` append `diagnosticHint` only on 404,
+   but the AI Evals hints describe create-body shape ("Dataset items require 'input'...") and
+   never say "pass the UUID from `harness_list`".
+4. **Path IDs are not encoded.** The `pathBuilder`s interpolate `input.<id>` raw, so a display
+   name with spaces or parentheses is sent unescaped.
+5. **event-store-team has no AI Evals route (infra, not MCP).** nginx returns an HTML 404 for
+   `/gateway/ai-evals/api/v1/runner-config` and `/ai-evals/api/v1/runner-config` (no auth),
+   while `/ng/api/health` is 200. QA and harness0 return 200 for both prefixes, so the
+   `/gateway/ai-evals/api/v1` base in `ai-evals.ts` is correct.
+
+### Plan
+
+- [ ] Ops: upgrade the installed `harness-mcp-v2` from 3.2.16 to >= 3.2.33 (fixes finding 2 with no code change).
+- [x] Verify which AI Evals path IDs are UUIDs against `ai-evals` contracts on `main@origin`
+      (`dataset_id`, `item_id`, `eval_id`, `run_id`, `metric_id`, `set_id`, `suite_id`,
+      `suite_run_id`, `target_id`, `annotation_id`). `trace_id` is not a UUID; leave it free-form.
+- [x] Add one `idSegment(input, field)` helper in `ai-evals.ts` that runs `requireUuid` and
+      `encodeURIComponent`. Use it in every get/update/delete/execute `pathBuilder` for UUID IDs.
+      Error text: "`<field>` must be the `id`/`uuid` from `harness_list(resource_type=...)`, not the identifier or name."
+- [x] `eval_dataset` get: when `dataset_id` is not a UUID, route to
+      `dataset/by-identifier/{identifier}` instead of failing (the backend supports slug lookup).
+- [x] Rewrite AI Evals `diagnosticHint`s for 404 recovery: IDs are UUIDs from list `id`
+      (`uuid` for datasets); check `org_id`/`project_id`; an HTML nginx 404 means AI Evals is not
+      deployed at this base URL. Move the body-shape guidance into `bodySchema`/descriptions.
+- [x] Apply the same UUID guard to `observability-evaluations.ts` reads (it already guards writes).
+- [x] Tests in `tests/registry/ai-evals.test.ts`: slug/name rejected locally with no request sent;
+      UUID path encoded; dataset slug routes to `by-identifier`; 404 hint text; compact list
+      keeps `id`/`uuid` for every AI Evals list resource.
+- [ ] Infra follow-up (owner: ai-evals deploy): enable the AI Evals ingress/VirtualService on
+      event-store-team, or document it as unsupported there.
+- [x] `pnpm typecheck && pnpm test`, then `pnpm build && pnpm docs:check`. Rerun the QA repro.
+- [x] Append the lesson to `tasks/lessons.md`.
+
 ## Version Bump 3.2.28 (2026-09-16)
 
 - [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
@@ -838,3 +903,127 @@ Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, b
 - [x] Confirm main's lockfile already pins ip-address 10.7.2 and CI is green.
 - [x] Reproduce a stale `node_modules/.pnpm/ip-address@10.4.0` directory surviving `pnpm install --frozen-lockfile`.
 - [x] Count only linked installs in the NAT64 security check, and load the express-rate-limit copy for classification tests.
+
+## Version 3.2.34
+
+- [x] Create chore/version-3.2.34 from current origin/main.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.34` and open a PR against `main`.
+
+Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
+
+## AI Evals List Identity and Network Diagnostics (2026-10-13)
+
+- [x] Normalize list responses with resource-declared primary identifiers.
+- [x] Retry transient transport failures only for explicitly safe requests.
+- [x] Diagnose nginx HTML route failures without exposing raw HTML.
+- [x] Add focused regression coverage, then run full verification.
+
+## Tool schema cost vs. model accuracy (2026-10-21)
+
+Question: does the registry pattern (11 generic tools / 262 resource types) cost tokens or accuracy?
+Measured so far: tools/list 57 KB (full) vs 29 KB (compact); ~61k vs ~30k input tokens per task; 2.1-2.8 calls per task.
+
+- [x] HARNESS_SCHEMA_MODE=compact + field-copy catalog (full mode pinned by hash test).
+- [x] Fix harness_search outputSchema rejecting the `errors` field (strict clients).
+- [ ] Evals v2 (evals/schema-profile): outcome-based scoring (reads before the target call are fine), ~70 goldens with categories, repeats, prompt caching, multiple models, compare report.
+- [ ] Reduce discovery cost: resource_type examples in compact field copy; measure calls/task + unknown-type errors vs. compact baseline.
+- [ ] Reduce describe-before-act: required-params hints; measure.
+- [x] Default `HARNESS_SCHEMA_MODE` to compact. `full` remains available. Compact eval kept task success while cutting input tokens about in half.
+
+## Describe catalog operation filter (2026-10-23)
+
+Question: can `harness_describe` return only the resource types a model needs for one consolidated tool?
+
+- [x] Add `operation` (`list|get|create|update|delete|execute`) and a lean filtered catalog. `execute` includes action names.
+- [x] Keep the no-argument catalog and per-resource detail response unchanged.
+- [x] Score filter adoption and describe response size in `evals/schema-profile`, then compare a pre-change build with the changed build. Compact describe bytes/task fell 35–49%; task success held. The new-build gate passed.
+
+## Dependabot Vite and Hono fixes (2026-10-23)
+
+- [x] Create a branch from latest origin/main and verify alerts #98–101 and patched versions.
+- [x] Raise Vite and Hono minimum versions and update both lockfiles.
+- [x] Validate audit, tests, types, build, docs, and shrinkwrap consistency.
+
+Validation: 184 test files / 4,228 tests passed with `--maxWorkers=2 --testTimeout=20000` after the default run hit the schema-registration timeout. Typecheck, build, docs check, shrinkwrap check, and diff check passed. pnpm resolves Vite 7.3.7 and Hono 4.13.13; npm shrinkwrap already resolved Hono 4.13.13. The four requested advisories are absent from pnpm audit. Nine other advisories remain: @vitest/mocker (2 moderate), ip-address (1 moderate), zod (1 high), body-parser (1 high), fast-uri (2 moderate, 2 low).
+
+## Version 3.2.35
+
+- [x] Update main from origin/main and create chore/version-3.2.35.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.35` and open a PR against `main`.
+
+Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
+
+## Version 3.2.37
+
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release metadata, shrinkwrap consistency, types, build, and docs.
+- [x] Commit, push, tag, and create the GitHub release.
+
+## Version 3.2.38
+
+- [x] Fetch github/main and create chore/version-3.2.38 from it.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.38` and open a PR against `main`.
+
+Validation: 11 release/workflow tests passed; shrinkwrap consistency, typecheck, fresh build, docs check, and diff check passed.
+
+## GitHub security alerts #102–110 and container vulnerability gate
+
+- [x] Inspect failed Trivy scan: OpenSSL/libssl3, body-parser, and Zod.
+- [x] Create fix/security-alerts-oct26 from latest origin/main, separate from PR #1152.
+- [x] Update Zod, body-parser, ip-address, fast-uri, and Vitest; refresh runtime OpenSSL.
+- [x] Validate local audit, types, build, docs, shrinkwrap, and tests.
+Delivery: push the separate security branch, open a PR, and verify remote CI.
+
+Validation: pnpm audit reports zero vulnerabilities. Typecheck, build, docs, shrinkwrap consistency, and diff checks passed. Full suite: 4,237 passed with one outdated ip-address floor assertion; after updating the security floor and fixtures, all 11 tests in that file passed.
+
+## Version 3.2.36
+
+- [x] Fetch origin/main and create chore/version-3.2.36 from it.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, types, build, and docs.
+Delivery: push `chore/version-3.2.36` and open a PR against `main`.
+
+Validation: 11 release/workflow tests, shrinkwrap consistency, typecheck, fresh build, docs check, and git diff --check passed.
+
+## Owned-entity counts undercounted on IDP catalog lists (2026-10-28)
+
+- [x] Confirm the true owned-entity population for a team against the catalog API.
+- [x] Trace where the count is lost between the API response and the tool result.
+- [x] Publish the header-reported population total on the opted-in list endpoints.
+- [x] Stop dropping the HQL engine's truncation signal.
+- [x] Add regression tests and pin the blast radius of the opt-in.
+- [x] Validate typecheck, full suite, standards, build, and docs.
+
+Plan: `/v1/entities` returns a bare JSON array and reports the size of the matching
+population only in `X-Total-Elements`. The client discarded response headers, so the
+list extractor could only report `total = items.length` with no `has_more` — a page of
+20 out of 507 looked like a complete answer of 20, and the only way to get a real count
+was blind pagination plus summing (which undercounted). Fix: an opt-in
+`onResponseHeaders` callback on `RequestOptions`, a `headerPagination` flag on
+`EndpointSpec`, and `registry/pagination.ts::applyHeaderPagination` to fold the
+header-derived `total`/`page`/`page_size`/`has_more` into the result.
+
+Review:
+- Population total verified four independent ways before changing anything; 507 is the
+  correct owned count for the team that was being reported as 418.
+- Root cause was at the tool boundary, not in the catalog service or the agent's
+  reasoning — the number the agent needed was present in a header we threw away.
+- The fix is opt-in per endpoint. Only `idp_entity.list` and `idp_workflow.list` (both
+  `/v1/entities`) set `headerPagination`; a test asserts that inventory exactly, and
+  another proves a non-opted-in resource (`template`) never receives the callback and
+  keeps its body-provided total. `applyHeaderPagination` also refuses to overwrite a
+  body total that already differs from the page length, so body-paginated endpoints are
+  unaffected even if they opt in later.
+- Secondary defect: `hqlRunExtract` dropped the engine's `truncated` flag, and
+  `hqlRunBody` only requested stats when a timeout/max_results happened to be passed —
+  so on the common call a truncated prefix was indistinguishable from a full result.
+  `include_stats: true` is now always sent, and `truncated` is passed through with an
+  explicit warning not to count or aggregate a prefix.
+- Validation: `pnpm typecheck` clean; `pnpm test` 4206/4206 across 186 files;
+  `pnpm standards:check` 79/79; `pnpm build` clean; `pnpm docs:check` up to date.

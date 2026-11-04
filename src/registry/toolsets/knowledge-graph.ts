@@ -104,6 +104,18 @@ const hqlRunExtract = (raw: unknown): unknown => {
     rows: inner.rows ?? [],
   };
   if (inner.stats != null) out.stats = inner.stats;
+  // `truncated` is the engine telling us the row set is a prefix of the real
+  // result. Dropping it turns "the first N of an unknown number" into "N",
+  // which is how a row-counted population ends up undercounted. Keep it, and
+  // say explicitly what a truncated row set must not be used for.
+  if (inner.truncated != null) {
+    out.truncated = inner.truncated;
+    if (inner.truncated === true) {
+      out.truncation_warning =
+        "Row set truncated by the query engine — it is a prefix, not the full result. " +
+        "Do NOT count or aggregate these rows; re-run with an aggregate (e.g. select { count() }) for totals.";
+    }
+  }
   return out;
 };
 
@@ -161,15 +173,18 @@ function hqlRunBody(input: Record<string, unknown>) {
   const body = input.body as Record<string, unknown> | undefined;
   const timeoutMs = body?.timeout_ms ?? body?.timeoutMs;
   const maxResults = body?.max_results ?? body?.maxResults;
-  const result: Record<string, unknown> = { query_string: extractQueryString(input) };
-  if (timeoutMs != null || maxResults != null) {
-    result.options = {
+  // Always ask for stats: they carry the engine's `truncated` signal, so a
+  // caller can tell a complete row set from a prefix. Requesting them only when
+  // some other execution option happened to be passed made truncation invisible
+  // on the common call.
+  return {
+    query_string: extractQueryString(input),
+    options: {
       ...(timeoutMs != null ? { timeout_ms: Number(timeoutMs) } : {}),
       ...(maxResults != null ? { max_results: Number(maxResults) } : {}),
       include_stats: true,
-    };
-  }
-  return result;
+    },
+  };
 }
 
 // ─── Toolset definition ─────────────────────────────────────────────────────

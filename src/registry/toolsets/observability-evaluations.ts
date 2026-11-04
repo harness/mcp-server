@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 /**
  * Scheduled observability-evaluation control plane.
  *
@@ -49,7 +50,9 @@ function requireBody(input: JsonRecord, operation: string): JsonRecord {
 function requireUuid(value: unknown, field: string): string {
   const id = nonEmptyString(value);
   if (!id || !UUID_PATTERN.test(id)) {
-    throw new Error(`${field} must be a UUID returned by an AI Evals read operation; do not invent an identifier.`);
+    throw new Error(
+      `${field} must be the id or uuid from harness_list for this AI Evals resource, not its identifier or name.`,
+    );
   }
   return id;
 }
@@ -67,12 +70,12 @@ function scopeOrThrow(input: JsonRecord, config: PathBuilderConfig): { org: stri
 
 function base(input: JsonRecord, config: PathBuilderConfig): string {
   const { org, project } = scopeOrThrow(input, config);
-  return `${AI}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
+  return `${AI}/orgs/${encodePathSegment(org)}/projects/${encodePathSegment(project)}`;
 }
 
 function configPath(input: JsonRecord, config: PathBuilderConfig): string {
   const evalId = requireUuid(input.eval_id, "eval_id");
-  return `${base(input, config)}/online-eval-configs/${evalId}`;
+  return `${base(input, config)}/online-eval-configs/${encodePathSegment(evalId)}`;
 }
 
 function observabilityEvalExtract(raw: unknown): unknown {
@@ -302,7 +305,7 @@ async function validateOnlineConfigWrite(ctx: PreflightContext, isUpdate: boolea
     ? await getAiEvalsResource(
       ctx,
       input,
-      `${base(input, { HARNESS_ORG: ctx.registry.orgId, HARNESS_PROJECT: ctx.registry.projectId })}/online-eval-configs/${evalId}`,
+      `${base(input, { HARNESS_ORG: ctx.registry.orgId, HARNESS_PROJECT: ctx.registry.projectId })}/online-eval-configs/${encodePathSegment(evalId!)}`,
       `eval_id=${evalId}`,
     )
     : undefined;
@@ -383,6 +386,8 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
       identifierFields: ["eval_id"],
       searchAliases: ["observability_evals"],
       diagnosticHint:
+        "Use the eval_id from harness_list for get, update, or delete; names are not accepted. Verify org_id and project_id. " +
+        "An HTML nginx 404 means AI Evals is not deployed at this Harness base URL. " +
         "Use an existing MetricSet UUID. The configuration is consumed by a scheduled Spark scorer, not the ad-hoc trace evaluator. " +
         "Only trace scope, sampling_percentage in (0,100], non-code/non-embedding metrics, and direct LLM judge connectors are accepted.",
       relatedResources: [

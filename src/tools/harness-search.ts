@@ -9,11 +9,12 @@ import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import type { ResourceScope } from "../registry/types.js";
-import { orgIdField, projectIdField, resourceScopeSchema } from "./input-schemas.js";
-import { searchOutputSchema } from "./output-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { searchOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import type { SearchManager } from "../search/index.js";
 import type { SearchResult } from "../search/types.js";
 import { entityResultMatchesEffectiveScope } from "../search/entity-index.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 const log = createLogger("search");
 const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
@@ -108,15 +109,15 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
       description: "Search across multiple Harness resource types. Returns results ranked by relevance. Accepts a Harness URL for scope.",
       inputSchema: {
         query: z.string().describe("Search term"),
-        resource_types: z.array(z.enum(listableTypes)).optional().describe("Types to search (defaults to all listable)"),
+        resource_types: z.array(resourceTypeSchema(listableTypes, registry.compactSchemas)).optional().describe("Types to search (defaults to all listable)"),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org and project"),
-        resource_scope: resourceScopeSchema,
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
+        resource_scope: resourceScopeField(registry.compactSchemas),
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
         max_per_type: z.number().default(5).optional().describe("Max results per type"),
         compact: z.boolean().default(true).optional().describe("Strip verbose metadata (default true)"),
       },
-      outputSchema: searchOutputSchema,
+      outputSchema: compactOutputSchema(searchOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Search Harness Resources",
         readOnlyHint: true,
@@ -124,7 +125,8 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
+    async (rawArgs, extra) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const signal = extra.signal;
         const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url, { includeResourceScope: true });
@@ -134,7 +136,13 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         // Determine the full candidate type list (before semantic narrowing)
         let candidateTypes = args.resource_types ?? [];
         if (candidateTypes.length === 0) {
-          candidateTypes = registry.getAllResourceTypes().filter((rt) => registry.supportsOperation(rt, "list"));
+          // Skip types whose list op needs caller-supplied input (e.g. llm_model needs provider +
+          // credentials); a keyword scatter-gather cannot satisfy it and would only produce errors.
+          candidateTypes = registry.getAllResourceTypes().filter(
+            (rt) =>
+              registry.supportsOperation(rt, "list") &&
+              !registry.getResource(rt).listFilterFields?.some((f) => f.required),
+          );
         }
         if (requestedScope && !hasExplicitResourceTypes) {
           candidateTypes = candidateTypes.filter((rt) => registry.getSupportedScopes(rt).includes(requestedScope));

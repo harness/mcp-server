@@ -103,7 +103,12 @@ export function isOAuthSessionSubjectAuthorized(
 }
 
 export function refreshOAuthSessionCredential(
-  credential: { subject: string; accountId: string; accessToken: string } | undefined,
+  credential: {
+    subject: string;
+    identitySubject?: string;
+    accountId: string;
+    accessToken: string;
+  } | undefined,
   locals: Record<string, unknown>,
 ): boolean {
   const requestSubject = locals.harnessOAuthClaims
@@ -114,6 +119,13 @@ export function refreshOAuthSessionCredential(
     return false;
   }
   if (!credential) return true;
+  const requestIdentitySubject = locals.harnessOAuthIdentitySubject ?? requestSubject;
+  if (
+    credential.identitySubject !== undefined
+    && credential.identitySubject !== requestIdentitySubject
+  ) {
+    return false;
+  }
   if (locals.harnessOAuthAccountId !== credential.accountId) {
     return false;
   }

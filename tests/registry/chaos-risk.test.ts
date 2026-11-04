@@ -384,6 +384,19 @@ describe("chaos_risk_scan list/get", () => {
     expect(params.endTime).toBe(1700100000);
   });
 
+  it("list: canonicalizes a CodeRepository scan_type filter", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_scan", "list", {
+      org_id: "org1",
+      project_id: "proj1",
+      scan_type: "coderepository",
+    });
+
+    expect(mockRequest.mock.calls[0][0].params.scanType).toBe("CodeRepository");
+  });
+
   it("get: builds correct path with identity param", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       identity: "scan-1",
@@ -729,5 +742,257 @@ describe("chaos_risk_scan execute actions", () => {
     expect(result.total).toBe(5);
     expect(result.riskRules).toHaveLength(1);
     expect(result.summary).toEqual({ score: 333, totalRisks: 15 });
+  });
+
+  it("submit_findings: POSTs findings to /v3/risk-scans/{identity}/findings", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ accepted: 1 });
+    const client = makeClient(mockRequest);
+    const findings = [{ riskRuleId: "code-outbound-call-without-timeout", riskName: "No timeout" }];
+
+    await registry.dispatchExecute(client, "chaos_risk_scan", "submit_findings", {
+      identity: "code-scan-1",
+      org_id: "default",
+      project_id: "chaos-proj",
+      body: { findings },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/v3/risk-scans/code-scan-1/findings");
+    expect(call.body).toMatchObject({ findings });
+  });
+
+  it("submit_findings: rejects a missing findings array and more than 100 findings", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "chaos_risk_scan", "submit_findings", {
+        identity: "code-scan-1", org_id: "o", project_id: "p", body: {},
+      }),
+    ).rejects.toThrow(/findings/);
+    await expect(
+      registry.dispatchExecute(client, "chaos_risk_scan", "submit_findings", {
+        identity: "code-scan-1", org_id: "o", project_id: "p",
+        body: { findings: Array.from({ length: 101 }, () => ({})) },
+      }),
+    ).rejects.toThrow(/At most 100 findings/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("chaos_risk_scan create (CodeRepository)", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("defaults detectionMethod to External for CodeRepository scans", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "code-scan-1" });
+    const client = makeClient(mockRequest);
+    const source = { codeRepository: { repoURL: "github.com/acme/payments", commitSHA: "abc123" } };
+
+    await registry.dispatch(client, "chaos_risk_scan", "create", {
+      org_id: "o",
+      project_id: "p",
+      body: { identity: "code-scan-1", name: "Code scan", scanType: "CodeRepository", source },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body).toMatchObject({ scanType: "CodeRepository", detectionMethod: "External", source });
+  });
+
+  it("passes an explicit detectionMethod through and omits it when absent for other types", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_scan", "create", {
+      org_id: "o", project_id: "p",
+      body: { identity: "s1", name: "S1", scanType: "DiscoveryAgent", detectionMethod: "RiskAnalyzer", source: { discoveryAgent: {} } },
+    });
+    await registry.dispatch(client, "chaos_risk_scan", "create", {
+      org_id: "o", project_id: "p",
+      body: { identity: "s2", name: "S2", scanType: "DiscoveryAgent", source: { discoveryAgent: {} } },
+    });
+
+    expect(mockRequest.mock.calls[0][0].body.detectionMethod).toBe("RiskAnalyzer");
+    expect(mockRequest.mock.calls[1][0].body.detectionMethod).toBeUndefined();
+  });
+});
+
+describe("chaos_risk_rule create/update/delete", () => {
+  let registry: Registry;
+  const ruleBody = {
+    identity: "code-outbound-call-without-timeout",
+    name: "Outbound call without timeout",
+    severity: "High",
+    category: "Dependency",
+    spec: {
+      faults: ["pod-network-latency"],
+      prompt: { do: ["http.Client{} without Timeout"], outcome: ["p99 stays bounded under pod-network-latency"] },
+    },
+  };
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create: POSTs to /v3/risk-rules and defaults spec.dataSource to SourceCode", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: ruleBody.identity });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "create", {
+      org_id: "default", project_id: "chaos-proj", body: ruleBody,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/v3/risk-rules");
+    expect(call.params).toMatchObject({ organizationIdentifier: "default", projectIdentifier: "chaos-proj" });
+    expect(call.body).toMatchObject({
+      identity: ruleBody.identity,
+      severity: "High",
+      category: "Dependency",
+      spec: { dataSource: ["SourceCode"], faults: ["pod-network-latency"] },
+    });
+  });
+
+  it("create: throws locally without identity or faults", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const { identity: _identity, ...noIdentity } = ruleBody;
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", { org_id: "o", project_id: "p", body: noIdentity }),
+    ).rejects.toThrow(/identity/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p", body: { ...ruleBody, spec: { ...ruleBody.spec, faults: [] } },
+      }),
+    ).rejects.toThrow(/spec.faults/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: rejects an identity that does not match code-<failure-mode>", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    for (const identity of ["outbound-call-without-timeout", "code-Outbound_Call", "code-ab", `code-${"a".repeat(61)}`]) {
+      await expect(
+        registry.dispatch(client, "chaos_risk_rule", "create", {
+          org_id: "o", project_id: "p", body: { ...ruleBody, identity },
+        }),
+      ).rejects.toThrow(/identity must match/);
+    }
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: PUTs to /v3/risk-rules/{identity} without identity in the body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const { identity, ...body } = ruleBody;
+
+    await registry.dispatch(client, "chaos_risk_rule", "update", {
+      identity, org_id: "o", project_id: "p", body,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe(`/chaos/manager/api/v3/risk-rules/${identity}`);
+    expect(call.body.identity).toBeUndefined();
+    expect(call.body).toMatchObject({ name: ruleBody.name, spec: { dataSource: ["SourceCode"] } });
+  });
+
+  it("delete: DELETEs /v3/risk-rules/{identity}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ success: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "delete", {
+      identity: "code-x-rule", org_id: "o", project_id: "p",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/chaos/manager/api/v3/risk-rules/code-x-rule");
+  });
+
+  it("update: throws locally when a required field or a fault is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const { identity, severity: _severity, ...noSeverity } = ruleBody;
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "update", { identity, org_id: "o", project_id: "p", body: noSeverity }),
+    ).rejects.toThrow(/severity/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "update", {
+        identity, org_id: "o", project_id: "p", body: { ...ruleBody, spec: { ...ruleBody.spec, faults: [] } },
+      }),
+    ).rejects.toThrow(/spec.faults/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: rejects a dataSource other than SourceCode and a prompt missing do or outcome", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { ...ruleBody.spec, dataSource: ["ApplicationManifest"] } },
+      }),
+    ).rejects.toThrow(/spec\.dataSource/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { faults: ["pod-delete"], prompt: { outcome: ["hypothesis"] } } },
+      }),
+    ).rejects.toThrow(/spec\.prompt\.do/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { faults: ["pod-delete"], prompt: { do: [""], outcome: ["hypothesis"] } } },
+      }),
+    ).rejects.toThrow(/spec\.prompt\.do/);
+    await expect(
+      registry.dispatch(client, "chaos_risk_rule", "create", {
+        org_id: "o", project_id: "p",
+        body: { ...ruleBody, spec: { faults: ["pod-delete"], prompt: { do: ["signal"] } } },
+      }),
+    ).rejects.toThrow(/spec\.prompt\.outcome/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: keeps a caller-supplied dataSource and an empty description", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "create", {
+      org_id: "o", project_id: "p",
+      body: { ...ruleBody, description: "", spec: { ...ruleBody.spec, dataSource: ["SourceCode"] } },
+    });
+
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.description).toBe("");
+    expect(body.spec.dataSource).toEqual(["SourceCode"]);
+  });
+
+  it("list: maps custom_only to customOnly", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_rule", "list", {
+      org_id: "o", project_id: "p", custom_only: true,
+    });
+
+    expect(mockRequest.mock.calls[0][0].params.customOnly).toBe(true);
+  });
+
+  it("declares write risk levels: create and update low_write, delete destructive", () => {
+    const def = registry.getResource("chaos_risk_rule");
+    expect(def.operations.create?.operationPolicy?.risk).toBe("low_write");
+    expect(def.operations.update?.operationPolicy?.risk).toBe("low_write");
+    expect(def.operations.delete?.operationPolicy?.risk).toBe("destructive");
   });
 });

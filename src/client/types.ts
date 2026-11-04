@@ -46,6 +46,7 @@ export interface JsonEventStreamLimits {
 
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** Absolute route path only; encode identifiers and pass query values through params. */
   path: string;
   /** Scalar or string[] (repeated query keys, e.g. `inputSetIdentifiers=a&inputSetIdentifiers=b`). */
   params?: Record<string, string | number | boolean | string[] | undefined>;
@@ -61,6 +62,12 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** JSON, binary download, or a bounded batch of JSON SSE data events. */
   responseType?: "json" | "buffer" | "sse";
+  /**
+   * When `responseType` is `"buffer"`, reject before / while reading if the
+   * body would exceed this many bytes. Checks `Content-Length` first (avoids
+   * buffering oversized payloads), then enforces a hard cap while streaming.
+   */
+  maxResponseBytes?: number;
   /** Required for responseType=sse. The caller owns the batch policy. */
   sseLimits?: JsonEventStreamLimits;
   /** Product backend — when "fme", skips Harness-specific auth/headers/params. */
@@ -71,6 +78,11 @@ export interface RequestOptions {
   /** Retry policy from OperationPolicy. When "do_not_retry", transient errors
    *  (5xx, timeouts) throw immediately instead of retrying. */
   retryPolicy?: "safe" | "idempotency_key_required" | "do_not_retry";
+  /** Invoked with the lower-cased response headers of a successful response.
+   *  Several Harness v1 list endpoints (e.g. IDP `/v1/entities`) return a bare
+   *  JSON array and carry the population size only in `x-total-elements`, so
+   *  the body alone cannot distinguish "20 matches" from "page 1 of 507". */
+  onResponseHeaders?: (headers: Record<string, string>) => void;
   /** Internal tracing metadata. Never serialized into HTTP headers/query/body. */
   tracing?: {
     /** API name that produced this concrete request path. */

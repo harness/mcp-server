@@ -4,6 +4,7 @@ import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
 import { createLogger } from "../utils/logger.js";
 import { redactJsonString, redactSensitiveFields } from "../utils/redact.js";
+import { runErrorParsers } from "./error-parsers.js";
 import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { assertJsonEventStreamLimits, readJsonEventStream } from "./sse.js";
 import { getVersion } from "../utils/cli.js";
@@ -12,7 +13,14 @@ const log = createLogger("harness-client");
 
 const HARNESS_MCP_USER_AGENT = `harness-mcp-server/${getVersion()}`;
 
+// Keep aliases used by registry scopeParams under the same account boundary.
+const ACCOUNT_SCOPE_QUERY_KEYS = new Set([
+  "accountIdentifier", "routingId", "accountID", "accountId", "account_id", "account_identifier",
+]);
+
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+const TRANSIENT_NETWORK_CODES = new Set(["EAI_AGAIN", "ECONNRESET", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"]);
+const IDEMPOTENT_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * Whether the caller explicitly set a body (including empty string).
@@ -28,6 +36,66 @@ function serializeRequestBody(body: unknown): string | undefined {
   if (!hasExplicitBody(body)) return undefined;
   if (isFormDataBody(body)) return undefined;
   return typeof body === "string" ? body : JSON.stringify(body);
+}
+
+function formatByteLimitMessage(actualBytes: number, maxBytes: number): string {
+  return (
+    `Response too large (${Math.round(actualBytes / 1024 / 1024)}MB). ` +
+    `Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`
+  );
+}
+
+/**
+ * Read a binary response with an optional hard size cap.
+ * Prefer Content-Length short-circuit (no body buffer) when present; otherwise
+ * stream and abort once the cap is exceeded so oversized logs cannot OOM the process.
+ */
+async function readResponseBuffer(response: Response, maxBytes?: number): Promise<ArrayBuffer> {
+  if (maxBytes == null) {
+    return response.arrayBuffer();
+  }
+
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new HarnessApiError(formatByteLimitMessage(contentLength, maxBytes), 413);
+  }
+
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > maxBytes) {
+      throw new HarnessApiError(formatByteLimitMessage(buffer.byteLength, maxBytes), 413);
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new HarnessApiError(formatByteLimitMessage(total, maxBytes), 413);
+      }
+      chunks.push(value);
+    }
+  } catch (err) {
+    await reader.cancel().catch(() => undefined);
+    throw err;
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged.buffer;
 }
 
 function getHeaderValue(headers: Record<string, string>, headerName: string): string | undefined {
@@ -64,14 +132,29 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-/** True when body is an HTML page (redirect, WAF block, proxy error). */
+/** True when body is an HTML page (redirect, access block, or intermediary error). */
 function isHtmlBody(body: string): boolean {
   return /^\s*</.test(body) || /<!doctype/i.test(body.slice(0, 100));
+}
+
+function humanizeHtmlError(status: number): string {
+  const prefix = `HTTP ${status}: Harness returned an HTML error page`;
+  if (status === 404) {
+    return `${prefix}. Check HARNESS_BASE_URL and whether the requested product route is available in that environment.`;
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return `${prefix}: the requested service is unavailable or did not respond. ` +
+      "Retry later, or check service availability in that environment.";
+  }
+  return `${prefix}. Check HARNESS_BASE_URL and the request.`;
 }
 
 /** Produce a clean, actionable error message for non-JSON HTTP error responses. */
 function humanizeHttpError(status: number, rawBody: string): string {
   const html = isHtmlBody(rawBody);
+  if (status !== 401 && status !== 403 && html) {
+    return humanizeHtmlError(status);
+  }
 
   switch (status) {
     case 401:
@@ -86,6 +169,36 @@ function humanizeHttpError(status: number, rawBody: string): string {
       return `HTTP ${status}: ${hint || "empty response"}`;
     }
   }
+}
+
+function isSafeRetry(options: RequestOptions, method: string): boolean {
+  if (options.retryPolicy === "do_not_retry" || options.retryPolicy === "idempotency_key_required") return false;
+  return options.retryPolicy === "safe" || IDEMPOTENT_METHODS.has(method);
+}
+
+function getNetworkErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const cause = (err as { cause?: unknown }).cause;
+  if (cause && typeof cause === "object" && typeof (cause as { code?: unknown }).code === "string") {
+    return (cause as { code: string }).code;
+  }
+  return typeof (err as { code?: unknown }).code === "string" ? (err as { code: string }).code : undefined;
+}
+
+function isRetryableTransportError(err: unknown, options: RequestOptions, method: string): boolean {
+  return isSafeRetry(options, method) && TRANSIENT_NETWORK_CODES.has(getNetworkErrorCode(err) ?? "");
+}
+
+function transportError(err: unknown): HarnessApiError {
+  const code = getNetworkErrorCode(err);
+  const message = code === "ENOTFOUND"
+    ? "Cannot resolve the Harness API host (ENOTFOUND). Check HARNESS_BASE_URL and DNS configuration."
+    : code === "EAI_AGAIN"
+      ? "Temporary DNS lookup failure (EAI_AGAIN). Retry after checking DNS availability."
+      : TRANSIENT_NETWORK_CODES.has(code ?? "")
+        ? `Transient network failure (${code}). Retry after checking network connectivity.`
+        : "Network request failed before Harness returned a response. Check HARNESS_BASE_URL and network connectivity.";
+  return new HarnessApiError(message, 503, code ?? "NETWORK_ERROR", undefined, err);
 }
 
 /**
@@ -159,9 +272,15 @@ function enrichErrorMessage(
   rawMessage: string,
   parsed: Record<string, unknown>,
   path: string,
+  status: number,
 ): string {
-  const detail = collectErrorDetail(parsed, rawMessage);
-  let message = detail ? `${rawMessage} — ${detail}` : rawMessage;
+  // API-specific parsers (see error-parsers.ts) refine the message and detail for the
+  // statuses they register for. Generic enrichments below still run on top.
+  const custom = runErrorParsers(parsed, { path, status });
+  const base = custom?.message && isGarbageMessage(typeof parsed.message === "string" ? parsed.message : undefined) ? custom.message : rawMessage;
+  const generic = collectErrorDetail(parsed, base);
+  const detail = [custom?.detail, generic].filter(Boolean).join("; ");
+  let message = detail ? `${base} — ${detail}` : base;
   for (const { pathPrefix, field } of ERROR_FIELD_ENRICHMENTS) {
     const value = parsed[field];
     if (path.startsWith(pathPrefix) && typeof value === "string" && value) {
@@ -254,11 +373,11 @@ export class HarnessClient {
   }
 
   private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
-    if (this.mcpMode === "oauth") {
+    if (this.mcpMode === "oauth" || this.mcpMode === "oauth-proxy") {
       deleteHeaderValues(headers, "x-api-key");
       if (isFme) {
         throw new HarnessApiError(
-          "Legacy workspace-based FME calls are unavailable in oauth mode. " +
+          `Legacy workspace-based FME calls are unavailable in ${this.mcpMode} mode. ` +
           "Pass org_id and project_id to use the Harness-native FME API.",
           401,
           "FME_AUTH_MISSING",
@@ -429,7 +548,7 @@ export class HarnessClient {
           const rawMessage = isGarbageMessage(parsed.message)
               ? humanizeHttpError(response.status, body)
               : parsed.message!;
-          const message = enrichErrorMessage(rawMessage, parsed, options.path);
+          const message = enrichErrorMessage(rawMessage, parsed, options.path, response.status);
           log.debug(`HTTP ${response.status} error`, {
             body: this.logUnsafeBodies ? body.slice(0, 1000) : redactJsonString(body),
           });
@@ -443,7 +562,7 @@ export class HarnessClient {
           if (
             RETRYABLE_STATUS_CODES.has(response.status) &&
             attempt < this.maxRetries &&
-            options.retryPolicy !== "do_not_retry"
+            isSafeRetry(options, method)
           ) {
             lastError = error;
             continue;
@@ -464,9 +583,21 @@ export class HarnessClient {
           }
         }
 
-        // Binary response mode — return raw ArrayBuffer (used for ZIP downloads)
+        // Hand response headers to the caller before the body is read — some
+        // list endpoints report the population size only in `x-total-elements`.
+        if (options.onResponseHeaders) {
+          const responseHeaders: Record<string, string> = {};
+          response.headers.forEach((value, key) => {
+            responseHeaders[key.toLowerCase()] = value;
+          });
+          options.onResponseHeaders(responseHeaders);
+        }
+
+        // Binary response mode — return raw ArrayBuffer (used for log/blob downloads).
+        // When maxResponseBytes is set, Content-Length short-circuits and streaming
+        // enforces a hard cap so oversized bodies never fully buffer into the heap.
         if (options.responseType === "buffer") {
-          const buffer = await response.arrayBuffer();
+          const buffer = await readResponseBuffer(response, options.maxResponseBytes);
           log.debug("Binary response", { bytes: buffer.byteLength });
           return buffer as T;
         }
@@ -481,8 +612,12 @@ export class HarnessClient {
         try {
           data = JSON.parse(text);
         } catch (parseErr) {
+          const message = isHtmlBody(text)
+            ? "Harness returned an HTML page instead of API JSON. " +
+              "Check HARNESS_BASE_URL and whether this product route is deployed in that environment."
+            : `Non-JSON response from ${method} ${options.path}: ${text.slice(0, 200)}`;
           throw new HarnessApiError(
-            `Non-JSON response from ${method} ${options.path}: ${text.slice(0, 200)}`,
+            message,
             502,
             undefined,
             undefined,
@@ -502,16 +637,12 @@ export class HarnessClient {
           }
           // Timeout — retry if allowed (and policy permits)
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
+          if (attempt < this.maxRetries && isSafeRetry(options, method)) continue;
           throw lastError;
         }
-        throw new HarnessApiError(
-          `Request failed: ${(err as Error).message ?? String(err)}`,
-          502,
-          undefined,
-          undefined,
-          err,
-        );
+        lastError = transportError(err);
+        if (attempt < this.maxRetries && isRetryableTransportError(err, options, method)) continue;
+        throw lastError;
       } finally {
         clearTimeout(timer);
       }
@@ -551,6 +682,7 @@ export class HarnessClient {
         await new Promise((r) => setTimeout(r, backoff));
       }
 
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         if (options.signal?.aborted) {
           throw options.signal.reason ?? new DOMException("The operation was aborted", "AbortError");
@@ -558,7 +690,7 @@ export class HarnessClient {
 
         const timeoutController = new AbortController();
         const effectiveTimeout = options.timeoutMs ?? this.timeout;
-        const timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
+        timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
         const signal = options.signal
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
@@ -580,13 +712,13 @@ export class HarnessClient {
           const rawMessage = isGarbageMessage(parsed.message)
               ? humanizeHttpError(response.status, body)
               : parsed.message!;
-          const message = enrichErrorMessage(rawMessage, parsed, options.path);
+          const message = enrichErrorMessage(rawMessage, parsed, options.path, response.status);
           const error = new HarnessApiError(message, response.status, parsed.code, parsed.correlationId);
 
           if (
             RETRYABLE_STATUS_CODES.has(response.status) &&
             attempt < this.maxRetries &&
-            options.retryPolicy !== "do_not_retry"
+            isSafeRetry(options, method)
           ) {
             lastError = error;
             continue;
@@ -602,13 +734,14 @@ export class HarnessClient {
             throw new HarnessApiError("Request cancelled", 499, undefined, undefined, err);
           }
           lastError = new HarnessApiError("Request timed out", 408, undefined, undefined, err);
-          if (attempt < this.maxRetries && options.retryPolicy !== "do_not_retry") continue;
+          if (attempt < this.maxRetries && isSafeRetry(options, method)) continue;
           throw lastError;
         }
-        throw new HarnessApiError(
-          `Request failed: ${(err as Error).message ?? String(err)}`,
-          502, undefined, undefined, err,
-        );
+        lastError = transportError(err);
+        if (attempt < this.maxRetries && isRetryableTransportError(err, options, method)) continue;
+        throw lastError;
+      } finally {
+        clearTimeout(timer);
       }
     }
 
@@ -618,12 +751,12 @@ export class HarnessClient {
   private buildUrl(options: RequestOptions): string {
     const baseUrl = (options.baseUrl ?? this.baseUrl).replace(/\/$/, "");
     let path = options.path;
-    const queryIndex = path.indexOf("?");
-    const pathQuery = queryIndex === -1 ? "" : path.slice(queryIndex + 1);
-    if (queryIndex !== -1) {
-      path = path.slice(0, queryIndex);
+    // Paths are routes only: query values belong in options.params. Reject URL
+    // normalization syntax before fetch can reinterpret the intended endpoint.
+    if (!path.startsWith("/") || path.startsWith("//") || /[?#\\\u0000-\u0020\u007f]/u.test(path) ||
+        path.split("/").some((segment) => /^(?:\.|%2e){1,2}$/i.test(segment))) {
+      throw new Error("Invalid request path: use encoded path segments and options.params for query values");
     }
-    const pathParams = new URLSearchParams(pathQuery);
 
     const basePath = new URL(baseUrl).pathname.replace(/\/$/, "");
     if (basePath && basePath !== "/" && path.startsWith(`${basePath}/`)) {
@@ -645,16 +778,20 @@ export class HarnessClient {
       }
     }
 
-    for (const key of pathParams.keys()) {
-      params.delete(key);
-    }
-    for (const [key, value] of pathParams) {
-      params.append(key, value);
-    }
-
     if (options.params) {
       for (const [key, value] of Object.entries(options.params)) {
         if (value === undefined || value === "") continue;
+        if (options.product !== "fme" && ACCOUNT_SCOPE_QUERY_KEYS.has(key)) {
+          // The public global template catalog has its own account. Permit only
+          // its single-template GET; routing and authentication stay session-bound.
+          const isGlobalTemplateRead = key === "accountIdentifier"
+            && value === "__GLOBAL_TEMPLATES_ACCOUNT_ID__"
+            && options.method === "GET"
+            && /^\/template\/api\/templates\/[^/]+$/.test(path);
+          if (!isGlobalTemplateRead && (Array.isArray(value) || String(value) !== this.resolveAccountId())) {
+            throw new Error(`Cannot override account scoping parameter "${key}"`);
+          }
+        }
         if (Array.isArray(value)) {
           for (const item of value) {
             if (item !== undefined && item !== "") {

@@ -25,6 +25,7 @@ const ALLOWED_TOOLS_ROOT_FILES = new Set([
   "harness-status.ts",
   "harness-schema.ts",
   "index.ts",
+  "field-copy.ts",
   "input-schemas.ts",
   "output-schemas.ts",
 ]);

@@ -11,8 +11,9 @@ import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
-import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
-import { getOutputSchema } from "./output-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { getOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 function isTrue(value: unknown): boolean {
   return value === true || value === "true";
@@ -26,16 +27,16 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
     {
       description: "Get a Harness resource by ID. Accepts a Harness URL to auto-extract identifiers. For failure analysis, prefer harness_diagnose.",
       inputSchema: {
-        resource_type: resourceTypeSchema(gettableTypes).optional().describe("Resource type to retrieve. Auto-detected from url."),
+        resource_type: resourceTypeSchema(gettableTypes, registry.compactSchemas).optional().describe("Resource type to retrieve. Auto-detected from url."),
         resource_id: z.string().optional().describe("Primary resource identifier. Auto-detected from url."),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
-        resource_scope: resourceScopeSchema,
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
+        resource_scope: resourceScopeField(registry.compactSchemas),
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type."),
         return_download_url: z.union([z.boolean(), z.enum(["true", "false"])]).optional().describe("For execution_log only: return a directly fetchable log download URL instead of buffering log content."),
       },
-      outputSchema: getOutputSchema,
+      outputSchema: compactOutputSchema(getOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Get Harness Resource",
         readOnlyHint: true,
@@ -43,7 +44,8 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (rawArgs) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, ...rest } = args;
         const coercedParams = coerceRecord(params);
@@ -95,19 +97,36 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         if (resourceType === "execution_log") {
           try {
             let prefix = asString(input.prefix);
+            // unitProgresses / logKeys from the execution graph — only available when
+            // we resolve via execution_id. Explicit prefix falls back to Execute only.
+            let commandUnitNames: string[] | undefined;
+            let logKeys: string[] | undefined;
+            // GET /blob reads one exact key; without a step the resolved key is a
+            // pipeline/stage prefix whose own blob is empty, so use the zip download.
+            let downloadFallback = false;
             if (!prefix) {
               // Auto-build prefix from execution_id if available
               const executionId = asString(input.execution_id);
               if (!executionId) {
                 return errorResult("prefix or execution_id is required for execution_log. Provide a log prefix or an execution ID to auto-build it.");
               }
-              prefix = await buildLogPrefixFromExecution(client, registry, executionId, input);
+              const resolved = await buildLogPrefixFromExecution(client, registry, executionId, input);
+              prefix = resolved.prefix;
+              commandUnitNames = resolved.commandUnitNames;
+              logKeys = resolved.logKeys;
+              downloadFallback = !asString(input.step_id);
             }
-            if (isTrue(input.return_download_url)) {
+            if (isTrue(input.return_download_url) || downloadFallback) {
               const downloadUrl = await resolveLogDownloadUrl(client, prefix);
+              if (!isTrue(input.return_download_url)) {
+                return jsonResult({
+                  download_url: downloadUrl,
+                  note: "No step_id given, so returning a zip of all logs under this execution. Pass step_id (and stage_id) to get that step's log text inline.",
+                });
+              }
               return jsonResult({ download_url: downloadUrl });
             }
-            const logText = await resolveLogContent(client, prefix);
+            const logText = await resolveLogContent(client, prefix, { commandUnitNames, logKeys });
             return jsonResult({ log_content: logText });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);

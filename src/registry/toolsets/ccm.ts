@@ -1,6 +1,12 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec, BodySchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
 import { parseCustomWindow, parseTimeInput } from "../../utils/ccm-time.js";
+import {
+  COST_CATEGORY_RULES_NOTE,
+  COST_CATEGORY_RULES_ITEM_TYPE,
+  normalizeCostCategoryBody,
+} from "./ccm-cost-category.js";
 import {
   ngExtract,
   passthrough,
@@ -409,18 +415,6 @@ function compactTimeseriesStat(item: Record<string, unknown>): Record<string, un
 }
 
 // ---------------------------------------------------------------------------
-// GraphQL endpoint path helper
-// ---------------------------------------------------------------------------
-
-function gqlPath(input: Record<string, unknown>): string {
-  const accountId = input.account_id as string | undefined;
-  if (accountId) {
-    return `/ccm/api/graphql?accountIdentifier=${accountId}&routingId=${accountId}`;
-  }
-  return "/ccm/api/graphql";
-}
-
-// ---------------------------------------------------------------------------
 // AI Budgets (Lightwing AI governance) — /lw/api/accounts/{accountId}/ai-governance
 // ---------------------------------------------------------------------------
 
@@ -431,7 +425,7 @@ function requireAiBudgetId(input: Record<string, unknown>, key: string, label: s
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`${key} is required — ${label}`);
   }
-  return value.trim();
+  return encodePathSegment(value.trim());
 }
 
 function aiGovernanceBase(_input: Record<string, unknown>, config: PathBuilderConfig): string {
@@ -440,7 +434,7 @@ function aiGovernanceBase(_input: Record<string, unknown>, config: PathBuilderCo
   if (!accountId) {
     throw new Error("Harness account ID is required for AI governance APIs");
   }
-  return `/lw/api/accounts/${accountId}/ai-governance`;
+  return `/lw/api/accounts/${encodePathSegment(accountId)}/ai-governance`;
 }
 
 function aiBudgetPath(suffix: string | ((input: Record<string, unknown>) => string)) {
@@ -955,7 +949,7 @@ export const ccmToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ccm/api/perspective",
           preflight: perspectiveCreatePreflight,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective definition. viewPreferences defaults are auto-fetched from account settings and merged — agent-provided values override.",
@@ -983,7 +977,7 @@ export const ccmToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ccm/api/perspective",
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
             description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
@@ -1720,22 +1714,22 @@ For cost time-series data, use harness_get with start_time and end_time.`,
         create: {
           method: "POST",
           path: "/ccm/api/business-mapping",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => normalizeCostCategoryBody(input.body),
           bodySchema: {
             description: "Cost category (business mapping) definition. costTargets are cost buckets — each bucket has a name and rules that determine which costs fall into it. Rules use the same ViewIdCondition structure as perspectives.",
             fields: [
               { name: "name", type: "string", required: true, description: "Cost category name" },
               {
                 name: "costTargets", type: "array", required: true,
-                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
-                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+                description: `Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE} }`,
               },
               {
                 name: "sharedCosts", type: "array", required: false,
-                description: "Shared cost buckets with allocation strategy. Each has a name, rules, strategy (PROPORTIONAL or FIXED), and optional splits for FIXED strategy.",
-                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+                description: `Shared cost buckets with allocation strategy. Each has a name, rules, strategy (PROPORTIONAL or FIXED), and optional splits for FIXED strategy. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE}, strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }`,
               },
               {
                 name: "unallocatedCost", type: "object", required: false,
@@ -1753,9 +1747,9 @@ For cost time-series data, use harness_get with start_time and end_time.`,
         update: {
           method: "PUT",
           path: "/ccm/api/business-mapping",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: "accountId",
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => normalizeCostCategoryBody(input.body),
           bodySchema: {
             description: "Cost category update (full replacement). Fetch the existing category via harness_get first, modify the fields, and send the full object back.",
             fields: [
@@ -1763,13 +1757,13 @@ For cost time-series data, use harness_get with start_time and end_time.`,
               { name: "name", type: "string", required: true, description: "Cost category name" },
               {
                 name: "costTargets", type: "array", required: true,
-                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
-                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+                description: `Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE} }`,
               },
               {
                 name: "sharedCosts", type: "array", required: false,
-                description: "Shared cost buckets with allocation strategy",
-                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+                description: `Shared cost buckets with allocation strategy. ${COST_CATEGORY_RULES_NOTE}`,
+                itemType: `{ name: string, ${COST_CATEGORY_RULES_ITEM_TYPE}, strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }`,
               },
               {
                 name: "unallocatedCost", type: "object", required: false,
@@ -2214,7 +2208,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
             if ((input.value_type as string) === "business_mapping") {
               const sub = input.value_sub_type as string | undefined;
               if (sub) {
-                return `/ccm/api/business-mapping/${encodeURIComponent(sub)}`;
+                return `/ccm/api/business-mapping/${encodePathSegment(sub)}`;
               }
               return "/ccm/api/business-mapping";
             }
@@ -2437,10 +2431,14 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           method: "POST",
           path: "/lw/co/api/accounts/{accountId}/v1/detail/compute_coverage",
           pathBuilder: (input, config) => {
-            const accountId = (input.account_id as string) ?? config.HARNESS_ACCOUNT_ID ?? "";
-            input.account_id = accountId;
+            // Registry dispatch supplies the resolved session account in config.
+            // Caller-controlled account_id must never select a different tenant.
+            const accountId = config.HARNESS_ACCOUNT_ID;
+            if (!accountId) {
+              throw new Error("Harness account ID is required for commitment APIs");
+            }
             const aspect = (input.aspect as string) || "coverage";
-            const base = `/lw/co/api/accounts/${accountId}`;
+            const base = `/lw/co/api/accounts/${encodePathSegment(accountId)}`;
             switch (aspect) {
               case "coverage": return `${base}/v1/detail/compute_coverage`;
               case "savings": return `${base}/v1/detail/savings`;
@@ -2451,7 +2449,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
                 if (!cloudAccountId) {
                   throw new Error("cloud_account_id is required for aspect=estimated_savings");
                 }
-                return `${base}/v2/setup/${cloudAccountId}/estimated_savings`;
+                return `${base}/v2/setup/${encodePathSegment(cloudAccountId)}/estimated_savings`;
               }
               default: return `${base}/v1/detail/compute_coverage`;
             }
@@ -2748,7 +2746,7 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
             const base = aiGovernanceBase(input, config);
             const budgetId = input.budget_id;
             if (typeof budgetId === "string" && budgetId.trim() !== "") {
-              return `${base}/policies/${budgetId.trim()}/override/requests`;
+              return `${base}/policies/${encodePathSegment(budgetId.trim())}/override/requests`;
             }
             return `${base}/me/budgets/override/requests`;
           },

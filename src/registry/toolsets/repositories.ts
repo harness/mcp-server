@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../../utils/path.js";
 import type { ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
 import { fileContentGetExtract, fileContentListExtract, passthrough } from "../extractors.js";
 import { assertValidBase64 } from "../../utils/base64.js";
@@ -120,7 +121,7 @@ export function normalizeCodeFilePath(path: string): string {
 function encodeCodePathSegments(path: string): string {
   const normalized = normalizeCodeFilePath(path);
   if (normalized === "") return "";
-  return normalized.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+  return normalized.split("/").map((segment) => encodePathSegment(segment)).join("/");
 }
 
 function requireCodeRepoId(input: Record<string, unknown>, resourceType: string): string {
@@ -158,7 +159,7 @@ function buildCodeRepoPath(
     emptyPathError?: string;
   },
 ): string {
-  const repoId = encodeURIComponent(requireCodeRepoId(input, opts.resourceType));
+  const repoId = encodePathSegment(requireCodeRepoId(input, opts.resourceType));
   const value = input[opts.pathField];
   const raw = typeof value === "string" ? value : "";
   const encodedPath = encodeCodePathSegments(raw);

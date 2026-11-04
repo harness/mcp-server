@@ -8,8 +8,10 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord, asString } from "../utils/type-guards.js";
-import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
-import { deleteOutputSchema } from "./output-schemas.js";
+import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { fieldCopy } from "./field-copy.js";
+import { deleteOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 
 export function registerDeleteTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const deletableTypes = registry.getTypesForOperation("delete");
@@ -19,16 +21,16 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
     {
       description: "Delete a Harness resource. You can pass a Harness URL to auto-extract identifiers. This is destructive and cannot be undone.",
       inputSchema: {
-        resource_type: resourceTypeSchema(deletableTypes).describe("The type of resource to delete"),
+        resource_type: resourceTypeSchema(deletableTypes, registry.compactSchemas).describe("The type of resource to delete"),
         resource_id: z.string().optional().describe("The identifier of the resource to delete. Optional when url contains the resource ID."),
         url: z.string().optional().describe("A Harness UI URL — org, project, resource type, ID, and supported resource_scope are extracted automatically"),
-        resource_scope: resourceScopeSchema,
-        org_id: orgIdField(registry.orgId),
-        project_id: projectIdField(registry.projectId),
-        confirm: z.boolean().optional().describe("Set to true to confirm the destructive operation. Required when the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
+        resource_scope: resourceScopeField(registry.compactSchemas),
+        org_id: orgIdField(registry.orgId, registry.compactSchemas),
+        project_id: projectIdField(registry.projectId, registry.compactSchemas),
+        confirm: z.boolean().optional().describe(fieldCopy("confirm.delete", registry.schemaProfile)),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure)."),
       },
-      outputSchema: deleteOutputSchema,
+      outputSchema: compactOutputSchema(deleteOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Delete Harness Resource",
         readOnlyHint: false,
@@ -37,7 +39,8 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (rawArgs) => {
+      const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         // Validate resource_type and operation before asking user to confirm
         const def = registry.getResource(args.resource_type);

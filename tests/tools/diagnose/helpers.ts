@@ -58,6 +58,7 @@ export function makeRegistry(
   );
 
   return {
+    canonicalResourceType: (t: string) => t,
     dispatch,
     dispatchExecute,
     /** Matches default `HARNESS_ACCOUNT_ID` from `makeConfig()`. */

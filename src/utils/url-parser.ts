@@ -112,6 +112,7 @@ const URL_RESOURCE_SCOPE_TYPES = new Set([
   "file_store",
   "user",
   "user_group",
+  "service_account",
 ]);
 
 /** Structural segments that should never be treated as resource IDs */

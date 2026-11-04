@@ -5,6 +5,7 @@ import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
 import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
 import { resolveLogContent, resolveLogDownloadUrl } from "../../utils/log-resolver.js";
+import { logKeysFromNode } from "../../utils/log-keys.js";
 import { TERMINAL_STATUSES } from "../../utils/poll-execution.js";
 import { classifyFailure } from "../../utils/diagnose-triage.js";
 
@@ -46,9 +47,7 @@ interface ExecGraphNode {
   logBaseKey?: string;
   delegateInfoList?: Array<{ id?: string; name?: string }>;
   unitProgresses?: Array<{ unitName?: string; status?: string }>;
-  executableResponses?: Array<{
-    task?: { logKeys?: string[] };
-  }>;
+  executableResponses?: Array<Record<string, { logKeys?: string[] } | undefined>>;
   stepDetails?: {
     childPipelineExecutionDetails?: {
       planExecutionId?: string;
@@ -100,6 +99,10 @@ interface FailedNodeDetail {
   step: string;
   failure_message: string;
   log_key?: string;
+  /** From unitProgresses — used as GET /blob `-commandUnit:` fallbacks when logBaseKey is empty. */
+  command_unit_names?: string[];
+  /** Exact log keys from executableResponses — preferred GET /blob unit keys. */
+  log_keys?: string[];
   delegate?: string;
   script_context?: {
     name?: string;
@@ -119,6 +122,15 @@ function nonTerminalExecutionError(status: string): Error {
     + "Diagnosis is only available for completed executions. "
     + "Please wait for the execution to reach a terminal status before diagnosing it.",
   );
+}
+
+function commandUnitNamesFromNode(node: {
+  unitProgresses?: Array<{ unitName?: string }>;
+}): string[] | undefined {
+  const names = node.unitProgresses
+    ?.map((u) => u.unitName?.trim())
+    .filter((n): n is string => !!n);
+  return names?.length ? names : undefined;
 }
 
 function isNonTerminalExecutionError(err: unknown): err is Error {
@@ -253,6 +265,8 @@ function findFailedNodes(nodeMap: Record<string, ExecGraphNode>): FailedNodeDeta
       step: node.identifier ?? node.name ?? "unknown",
       failure_message: msg,
       log_key: node.logBaseKey,
+      command_unit_names: commandUnitNamesFromNode(node),
+      log_keys: logKeysFromNode(node),
       delegate,
     };
 
@@ -459,13 +473,19 @@ async function resolveDiagnoseLog(
     signal?: AbortSignal;
     returnDownloadUrl?: boolean;
     logSnippetLines: number;
+    commandUnitNames?: string[];
+    logKeys?: string[];
   },
 ): Promise<unknown> {
   if (options.returnDownloadUrl) {
     const downloadUrl = await resolveLogDownloadUrl(client, prefix, { signal: options.signal });
     return { download_url: downloadUrl };
   }
-  const logText = await resolveLogContent(client, prefix, { signal: options.signal });
+  const logText = await resolveLogContent(client, prefix, {
+    signal: options.signal,
+    commandUnitNames: options.commandUnitNames,
+    logKeys: options.logKeys,
+  });
   return truncateLog(logText, options.logSnippetLines);
 }
 
@@ -659,6 +679,8 @@ export const pipelineHandler: DiagnoseHandler = {
                 signal,
                 returnDownloadUrl,
                 logSnippetLines,
+                commandUnitNames: fn.command_unit_names,
+                logKeys: fn.log_keys,
               });
               return { key, value: logValue };
             } catch (err) {
@@ -738,6 +760,8 @@ export const pipelineHandler: DiagnoseHandler = {
             signal,
             returnDownloadUrl,
             logSnippetLines,
+            commandUnitNames: commandUnitNamesFromNode(requestedNode),
+            logKeys: logKeysFromNode(requestedNode),
           });
           diagnostic.requested_step_log = {
             step_id: requestedStepId,
@@ -810,6 +834,8 @@ export const pipelineHandler: DiagnoseHandler = {
             signal,
             returnDownloadUrl,
             logSnippetLines,
+            commandUnitNames: commandUnitNamesFromNode(bestNode),
+            logKeys: logKeysFromNode(bestNode),
           });
           diagnostic.requested_step_log = {
             step_id: bestNodeId,
@@ -868,6 +894,8 @@ export const pipelineHandler: DiagnoseHandler = {
                 signal,
                 returnDownloadUrl,
                 logSnippetLines,
+                commandUnitNames: commandUnitNamesFromNode(node),
+                logKeys: logKeysFromNode(node),
               });
               return { nodeId, logValue };
             } catch (err) {

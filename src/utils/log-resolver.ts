@@ -14,13 +14,96 @@ const DEFAULT_POLL_INTERVAL_MS = 3000;
 // heap contributed to production OOMs. Callers needing more can still pass
 // maxLogSizeBytes.
 const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024; // 2 MB
-const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+/**
+ * Max extra GET /blob calls after an empty base logBaseKey, one per
+ * command-unit key (CD steps write each unit — Fetch Files, Prepare,
+ * Install / Upgrade, … — to its own key). All of them are fetched and merged
+ * so the failing unit is never dropped. Happy path stays 1 request; unit keys
+ * are fetched only when the base key is empty.
+ */
+const MAX_COMMAND_UNIT_KEYS = 10;
+/**
+ * Cap on the summed size of all unit blobs merged for one step. Each blob is
+ * still capped at `maxLogSizeBytes`; this bounds the worst case across units.
+ */
+const MAX_MERGED_LOG_SIZE_MULTIPLIER = 4;
+/** Default unit name used by Harness UI for script/command steps. */
+const DEFAULT_COMMAND_UNIT_NAMES = ["Execute"];
 
 export interface LogResolveOptions {
   signal?: AbortSignal;
   maxPollAttempts?: number;
   pollIntervalMs?: number;
   maxLogSizeBytes?: number;
+  /**
+   * Command-unit names from the execution graph (`unitProgresses`).
+   * Fetched as `${logBaseKey}-commandUnit:${name}` only if the base key
+   * returns empty and no exact {@link logKeys} are known.
+   */
+  commandUnitNames?: string[];
+  /**
+   * Exact log keys from the node's `executableResponses[*].*.logKeys`.
+   * Preferred over {@link commandUnitNames} because `unitProgresses` can list
+   * fewer units than were actually logged.
+   */
+  logKeys?: string[];
+}
+
+/** Build UI-style command-unit blob key from a step logBaseKey. */
+export function commandUnitLogKey(baseKey: string, unitName: string): string {
+  if (baseKey.includes("-commandUnit:")) return baseKey;
+  return `${baseKey}-commandUnit:${unitName}`;
+}
+
+/**
+ * Ordered keys for GET /blob: base logBaseKey first, then every command-unit
+ * key (capped at {@link MAX_COMMAND_UNIT_KEYS}).
+ *
+ * Unit keys come from exact graph `logKeys` when available; otherwise from
+ * `unitProgresses` names plus the default {@link DEFAULT_COMMAND_UNIT_NAMES}
+ * (`Execute`), which is always kept inside the cap.
+ */
+export function blobKeysToTry(
+  baseKey: string,
+  commandUnitNames?: string[],
+  logKeys?: string[],
+): string[] {
+  if (baseKey.includes("-commandUnit:")) return [baseKey];
+
+  const seen = new Set<string>([baseKey]);
+  const unitKeys: string[] = [];
+  const add = (key: string) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    unitKeys.push(key);
+  };
+
+  if (logKeys?.length) {
+    for (const raw of logKeys) {
+      const key = raw.trim();
+      if (key) add(key);
+    }
+    return [baseKey, ...unitKeys.slice(0, MAX_COMMAND_UNIT_KEYS)];
+  }
+
+  const names = new Set<string>();
+  for (const raw of commandUnitNames ?? []) {
+    const name = raw.trim();
+    if (name) names.add(name);
+  }
+  const defaults = DEFAULT_COMMAND_UNIT_NAMES.filter((n) => !names.has(n));
+  // Reserve room for defaults (e.g. Execute) so they are never dropped by the cap.
+  const graphSlots = Math.max(0, MAX_COMMAND_UNIT_KEYS - defaults.length);
+  for (const name of [...[...names].slice(0, graphSlots), ...defaults]) {
+    add(commandUnitLogKey(baseKey, name));
+  }
+
+  return [baseKey, ...unitKeys];
+}
+
+/** Only empty bodies and 404s should advance to the next blob key. */
+function shouldTryNextBlobKey(err: unknown): boolean {
+  return err instanceof HarnessApiError && err.statusCode === 404;
 }
 
 interface BlobResponse {
@@ -356,152 +439,6 @@ function decompressBlob(buf: Buffer): string {
   return buf.toString("utf-8");
 }
 
-// ─── Blob download ──────────────────────────────────────────────────────────
-
-const LOG_SERVICE_GATEWAY_PREFIX = "/gateway/log-service";
-
-/**
- * Download the blob content from the link returned by log-service.
- *
- * External storage URLs (GCS, S3) are pre-signed and fetched directly.
- * Harness-hosted URLs are routed through the client so that auth headers
- * (PAT, service JWT, or log-service token) are injected by the client or
- * any proxy installed on it (e.g. mcpServerInternal's service routing).
- *
- * ### Routing invariants — please read before modifying
- *
- * The three strategies below have specific edge cases that are easy to get
- * wrong. Here is the reasoning behind each constraint:
- *
- * **A. Always rewrite when blob host ≠ base URL host.**
- * The log-service always returns `app.harness.io/storage/...` in blob links
- * regardless of `HARNESS_BASE_URL`. On self-managed deployments that host is
- * not publicly reachable, so the URL must be rewritten to the configured host.
- * This includes cases where `X-Amz-SignedHeaders` / `X-Goog-SignedHeaders`
- * contains `host` — a potential 403 from the CDN is preferable to a guaranteed
- * network error on a blocked host.
- *
- * **B. Skip rewrite only when blob host already equals base URL host.**
- * When the hostnames already match, the presigned signature is valid as-is and
- * rewriting would be a no-op. In that case it is safe (and cleaner) to fetch
- * the original URL directly.
- *
- * **C. Never route `/storage/` blobs through `requestStream()`.**
- * Strategy 3 prepends `/gateway/log-service/` to the path, which produces a
- * 404 for CDN storage paths. Blobs with a `/storage/` path must always be
- * direct-fetched (Strategy 2).
- *
- * **D. External S3/GCS hosts bypass all rewriting.**
- * True external storage URLs (amazonaws.com, googleapis.com, …) are publicly
- * routable with embedded signature params. Adding auth headers or rewriting the
- * host invalidates the AWS/GCS signature.
- *
- * Each invariant is covered by `REGRESSION-GUARD [A/B/C/D]` tests in
- * `tests/utils/log-resolver.test.ts`. Please keep all of them green.
- */
-async function downloadBlobContent(
-  client: HarnessClient,
-  blobLink: string,
-  prefix: string,
-  signal: AbortSignal,
-): Promise<Response> {
-  const blobUrl = safeParseUrl(blobLink);
-
-  // Three routing strategies based on the blob URL:
-  //
-  // 1. True external storage (S3, GCS domains) → direct fetch, no auth headers.
-  //    The URL is publicly routable with embedded signature params; routing through
-  //    the client or adding extra headers would invalidate the AWS/GCS signature.
-  //
-  // 2. *.harness.io pre-signed CDN blob URLs → usually rewrite hostname to match
-  //    HARNESS_BASE_URL host, then direct fetch.
-  //    The Harness log-service always returns blob links pointing to app.harness.io/storage/...
-  //    regardless of the configured base URL. On self-managed deployments app.harness.io is
-  //    not directly reachable, but the CDN is accessible via the configured host
-  //    (e.g. self-managed.example.com/storage/...). The pre-signed params authenticate the request
-  //    so no API key header is needed — and adding one would not help anyway since this is
-  //    a CDN path, not an API gateway path (/gateway/... would 403 for /storage/... paths).
-  //    Exception: if SignedHeaders includes `host`, the signature is bound to the link's
-  //    hostname — do not rewrite; fetch the original URL (e.g. QA SaaS with qa.harness.io base).
-  //
-  // 3. Standard log-service paths → client.requestStream() with gateway prefix so
-  //    PAT/JWT auth headers are injected by the client proxy.
-
-  if (blobUrl && isExternalStorageHost(blobUrl.hostname)) {
-    // Strategy 1: true external storage — always direct fetch
-    log.debug("Downloading log blob (direct, external storage)", { prefix, url: blobLink.slice(0, 80) });
-    try {
-      return await fetch(blobLink, { signal });
-    } catch (err) {
-      const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
-    }
-  }
-
-  if (blobUrl && isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname) && blobUrl.pathname.startsWith("/storage/")) {
-    // Strategy 2: *.harness.io CDN blob — rewrite hostname and direct fetch.
-    // Guarded by /storage/ prefix to avoid misrouting signed API paths (e.g. /gateway/log-service/...)
-    // that happen to carry pre-signed params — those must go through client.requestStream() for auth.
-    // The blob link always points to app.harness.io/storage/... regardless of HARNESS_BASE_URL.
-    // Rewrite to the configured host so self-managed deployments can reach it.
-    const baseUrl = safeParseUrl(client.baseURL);
-    if (!baseUrl) {
-      // If baseURL is unparseable we cannot safely rewrite — throw rather than
-      // direct-fetching the original app.harness.io URL (which is blocked on self-managed nets).
-      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
-    }
-    // Skip rewriting only when the signature covers the Host header AND the blob hostname
-    // already matches our base URL (rewrite would be a no-op). When hostnames differ
-    // (self-managed deployment), rewrite regardless — the original hostname (app.harness.io)
-    // may not be reachable from the client's network.
-    // Invariant A: rewrite when hosts differ. Invariant B: skip only when they already match (rewrite is a no-op).
-    if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
-      log.debug("Downloading log blob (direct, host-bound presigned CDN)", {
-        prefix,
-        url: blobLink.slice(0, 80),
-      });
-      try {
-        return await fetch(blobLink, { signal });
-      } catch (err) {
-        const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-        throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
-      }
-    }
-    blobUrl.hostname = baseUrl.hostname;
-    blobUrl.protocol = baseUrl.protocol;
-    // Preserve non-default port from baseURL (e.g. https://gateway.example.com:8443/...)
-    blobUrl.port = baseUrl.port;
-    const rewrittenUrl = blobUrl.toString();
-    log.debug("Downloading log blob (direct, host-rewritten)", { prefix, url: rewrittenUrl.slice(0, 80) });
-    try {
-      return await fetch(rewrittenUrl, { signal });
-    } catch (err) {
-      const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
-    }
-  }
-
-  // Strategy 3: standard log-service path — route through client for auth injection.
-  const rawPath = blobUrl
-    ? blobUrl.pathname + blobUrl.search
-    : blobLink.startsWith("/") ? blobLink : `/${blobLink}`;
-  const downloadPath = rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
-    ? rawPath
-    : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
-  log.debug("Downloading log blob (client)", { prefix, path: downloadPath.slice(0, 80) });
-  try {
-    return await client.requestStream({
-      method: "GET",
-      path: downloadPath,
-      signal,
-    });
-  } catch (err) {
-    if (err instanceof HarnessApiError) throw err;
-    const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-    throw new Error(`Log download fetch failed for ${blobUrl?.hostname ?? "harness"}: ${cause}`);
-  }
-}
-
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 async function requestLogBlobLink(
@@ -579,57 +516,132 @@ export async function resolveLogDownloadUrl(
   return rewriteDownloadUrlIfNeeded(client, blobLink);
 }
 
+/** GET /blob for one key; returns the decompressed raw text ("" when empty). */
+async function fetchBlobText(
+  client: HarnessClient,
+  key: string,
+  maxBytes: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  log.debug("Requesting log blob", { key });
+  // maxResponseBytes short-circuits on Content-Length and caps while streaming so
+  // oversized blobs never fully buffer (see harness-client readResponseBuffer).
+  const arrayBuf = await client.request<ArrayBuffer>({
+    method: "GET",
+    path: "/gateway/log-service/blob",
+    params: { key },
+    signal,
+    responseType: "buffer",
+    maxResponseBytes: maxBytes,
+    retryPolicy: "safe",
+  });
+
+  // Defense in depth for clients/mocks that ignore maxResponseBytes.
+  if (arrayBuf.byteLength > maxBytes) {
+    throw logTooLargeError(arrayBuf.byteLength, maxBytes);
+  }
+
+  const buf = Buffer.from(arrayBuf);
+  log.debug("Downloaded blob", {
+    bytes: buf.length,
+    magic: buf.length >= 4 ? buf.subarray(0, 4).toString("hex") : "empty",
+    key,
+  });
+
+  if (buf.length === 0) return "";
+  return decompressBlob(buf);
+}
+
+function logTooLargeError(bytes: number, maxBytes: number): Error {
+  return new Error(
+    `Log file too large (${Math.round(bytes / 1024 / 1024)}MB). Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`,
+  );
+}
+
 /**
  * Resolve execution log content from the Harness log-service.
  *
- * Full pipeline: initiate blob download → poll until ready → download zip →
- * extract → parse JSON log entries → return clean text.
+ * Uses GET /blob (single log key per request). Response size is capped via
+ * `maxResponseBytes` (Content-Length short-circuit + streamed hard cap).
+ *
+ * If the step `logBaseKey` has content (e.g. CI steps) it is returned after a
+ * single request. Otherwise every command-unit key is fetched and merged in
+ * timestamp order — the same content the zip download contains — so a CD step
+ * whose error is in a later unit (e.g. Helm "Install / Upgrade" after
+ * "Fetch Files") is not reduced to its first non-empty unit.
+ *
+ * Unit keys come from `logKeys` (exact, from the graph) or `commandUnitNames`
+ * (`unitProgresses`); callers passing neither (e.g. `harness_get` with an
+ * explicit prefix only) fall back to the default unit name `Execute`.
+ *
+ * For a signed zip download URL only, use {@link resolveLogDownloadUrl}.
+ *
+ * @param key Log key / logBaseKey for a single step
  */
 export async function resolveLogContent(
   client: HarnessClient,
-  prefix: string,
+  key: string,
   options?: LogResolveOptions,
 ): Promise<string> {
   const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
+  const maxMergedBytes = maxBytes * MAX_MERGED_LOG_SIZE_MULTIPLIER;
   const signal = options?.signal;
 
-  const blobLink = await requestLogBlobLink(client, prefix, options);
+  if (signal?.aborted) throw new Error("Log download cancelled");
 
-  // Step 3: Download the zip/gzip from the signed URL
-  const downloadSignal = signal
-    ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS)])
-    : AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS);
+  const [baseKey, ...unitKeys] = blobKeysToTry(key, options?.commandUnitNames, options?.logKeys);
+  let lastMissingError: unknown;
+  let sawEmpty = false;
 
-  const response = await downloadBlobContent(client, blobLink, prefix, downloadSignal);
-  if (!response.ok) {
-    const errBody = await response.text().catch(() => "");
-    throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 200)}`);
+  /** Raw blob text, or "" when the key is empty or missing (404). */
+  const fetchKey = async (candidate: string): Promise<string> => {
+    if (signal?.aborted) throw new Error("Log download cancelled");
+    try {
+      const raw = await fetchBlobText(client, candidate, maxBytes, signal);
+      if (raw.trim()) return raw;
+      sawEmpty = true;
+      log.debug("Log blob empty", { key: candidate });
+    } catch (err) {
+      // Only 404 (wrong/missing key) is skipped. Rate limits, auth, 5xx, and
+      // size errors stop — the HTTP client already retries retryable statuses.
+      if (!shouldTryNextBlobKey(err)) throw err;
+      lastMissingError = err;
+      log.debug("Log blob key not found", {
+        key: candidate,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return "";
+  };
+
+  const baseRaw = await fetchKey(baseKey!);
+  if (baseRaw) {
+    const text = parseLogLines(baseRaw).trim();
+    if (text) return text;
   }
 
-  const contentLength = Number(response.headers.get("content-length") ?? 0);
-  if (contentLength > maxBytes) {
-    throw new Error(`Log file too large (${Math.round(contentLength / 1024 / 1024)}MB). Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`);
+  const unitRaws: string[] = [];
+  let mergedBytes = 0;
+  for (const candidate of unitKeys) {
+    const raw = await fetchKey(candidate);
+    if (!raw) continue;
+    mergedBytes += Buffer.byteLength(raw);
+    if (mergedBytes > maxMergedBytes) throw logTooLargeError(mergedBytes, maxMergedBytes);
+    unitRaws.push(raw);
   }
 
-  const arrayBuf = await response.arrayBuffer();
-  if (arrayBuf.byteLength > maxBytes) {
-    throw new Error(`Log file too large (${Math.round(arrayBuf.byteLength / 1024 / 1024)}MB). Maximum: ${Math.round(maxBytes / 1024 / 1024)}MB.`);
-  }
-  const buf = Buffer.from(arrayBuf);
-
-  log.debug("Downloaded blob", {
-    bytes: buf.length,
-    contentType: response.headers.get("content-type"),
-    magic: buf.length >= 4 ? buf.subarray(0, 4).toString("hex") : "empty",
-  });
-
-  // Step 4 & 5: Extract and parse
-  const rawText = decompressBlob(buf);
-  const parsed = parseLogLines(rawText);
-
-  if (!parsed.trim()) {
-    return "(empty log output)";
+  if (unitRaws.length > 0) {
+    const text = parseLogLines(unitRaws.join("\n")).trim();
+    if (text) {
+      log.info("Resolved logs by merging command-unit blob keys", {
+        baseKey: key,
+        keysFetched: unitKeys.length,
+        keysWithContent: unitRaws.length,
+      });
+      return text;
+    }
   }
 
-  return parsed;
+  if (!sawEmpty && lastMissingError) throw lastMissingError;
+  return "(empty log output)";
 }

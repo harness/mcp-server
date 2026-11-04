@@ -4,6 +4,10 @@ import type { RequestHandler } from "express";
 import type { Config } from "../config.js";
 import { createLogger } from "./logger.js";
 import { createOAuthHttpAuthMiddleware } from "./oauth-auth.js";
+import {
+  createOAuthProxyHttpAuthMiddleware,
+  type OAuthProxyRuntime,
+} from "./oauth-proxy.js";
 
 const log = createLogger("http-auth");
 
@@ -70,7 +74,16 @@ export function createHttpAuthMiddleware(token: string | undefined): RequestHand
   };
 }
 
-export function createMcpHttpAuthMiddleware(config: HttpAuthConfig): RequestHandler {
+export function createMcpHttpAuthMiddleware(
+  config: HttpAuthConfig,
+  oauthProxyRuntime?: OAuthProxyRuntime,
+): RequestHandler {
+  if (config.HARNESS_MCP_MODE === "oauth-proxy") {
+    if (!oauthProxyRuntime) {
+      throw new Error("oauth-proxy mode requires an initialized OAuth proxy runtime.");
+    }
+    return createOAuthProxyHttpAuthMiddleware(oauthProxyRuntime);
+  }
   if (config.HARNESS_MCP_MODE === "oauth") {
     return createOAuthHttpAuthMiddleware(config);
   }
@@ -93,7 +106,8 @@ export function validateHttpAuthForBindHost(host: string, config: HttpAuthConfig
   }
 
   // Check 2: DNS-rebinding defense — non-loopback binds must be explicitly secured.
-  const hasOAuthAuthentication = config.HARNESS_MCP_MODE === "oauth";
+  const hasOAuthAuthentication = config.HARNESS_MCP_MODE === "oauth"
+    || config.HARNESS_MCP_MODE === "oauth-proxy";
   if (
     !isLoopbackBindHost(host)
     && !config.HARNESS_MCP_AUTH_TOKEN

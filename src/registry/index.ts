@@ -1,3 +1,4 @@
+import { encodePathSegment } from "../utils/path.js";
 import { randomUUID } from "node:crypto";
 import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -7,6 +8,7 @@ import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType, appendAgentTypeQuery } from "../utils/deep-links.js";
+import { applyHeaderPagination } from "./pagination.js";
 import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
 import { assertListScopeResolved } from "./list-filter-utils.js";
@@ -57,6 +59,7 @@ import { incidentsToolset } from "./toolsets/incidents.js";
 import { alertsToolset } from "./toolsets/alerts.js";
 import { deploysToolset } from "./toolsets/deploys.js";
 import { timelinesToolset } from "./toolsets/timelines.js";
+import { runbooksToolset } from "./toolsets/runbooks.js";
 import { releaseManagementToolset } from "./toolsets/release-management.js";
 import { vibeToolset } from "./toolsets/vibe.js";
 
@@ -179,6 +182,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   alertsToolset,
   deploysToolset,
   timelinesToolset,
+  runbooksToolset,
   releaseManagementToolset,
   vibeToolset,
 ];
@@ -206,6 +210,18 @@ export interface RegistryOptions {
 /**
  * The enabled registry — filtered by HARNESS_TOOLSETS config.
  */
+/** Common abbreviations/synonyms models use for resource types. */
+const RESOURCE_TYPE_ALIASES: Record<string, string> = {
+  repo: "repository",
+  git_repo: "repository",
+  pr: "pull_request",
+  exec: "execution",
+  pipeline_execution: "execution",
+  env: "environment",
+  svc: "service",
+  inputset: "input_set",
+};
+
 export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
   private toolsets: ToolsetDefinition[] = [];
@@ -314,15 +330,61 @@ export class Registry {
 
   get orgId(): string | undefined { return this.config.HARNESS_ORG; }
   get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
+  /** True when tool schemas should not inline the resource_type enum. */
+  get compactSchemas(): boolean { return this.config.HARNESS_SCHEMA_MODE !== "full"; }
+  get schemaProfile(): "full" | "compact" { return this.compactSchemas ? "compact" : "full"; }
 
   /** Get a resource definition by type, or throw. */
   getResource(resourceType: string): ResourceDefinition {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     if (!def) {
-      const available = Array.from(this.resourceMap.keys()).sort().join(", ");
-      throw new Error(`Unknown resource_type "${resourceType}". Available: ${available}`);
+      const closest = this.suggestResourceTypes(resourceType);
+      const hint = closest.length > 0 ? ` Did you mean: ${closest.join(", ")}?` : "";
+      throw new Error(
+        `Unknown resource_type "${resourceType}".${hint} Call harness_describe(search_term="...") to find valid resource types.`,
+      );
     }
     return def;
+  }
+
+  private findDefinition(resourceType: string): ResourceDefinition | undefined {
+    return this.resourceMap.get(resourceType) ?? this.resourceMap.get(this.resolveAlias(resourceType) ?? "");
+  }
+
+  /** Canonical name for a resource_type (resolving near-misses); unknown input is returned unchanged. */
+  canonicalResourceType(resourceType: string): string {
+    return this.findDefinition(resourceType)?.resourceType ?? resourceType;
+  }
+
+  /**
+   * Map a near-miss resource_type (case, hyphens, plurals, common abbreviations) to the one
+   * enabled type it unambiguously means, so callers never pay a retry for a trivial guess.
+   */
+  private resolveAlias(input: string): string | undefined {
+    const norm = input.trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const stems = [norm];
+    if (norm.endsWith("ies")) stems.push(`${norm.slice(0, -3)}y`);
+    if (norm.endsWith("es")) stems.push(norm.slice(0, -2));
+    if (norm.endsWith("s")) stems.push(norm.slice(0, -1));
+    const candidates = stems.flatMap((t) => [t, RESOURCE_TYPE_ALIASES[t]]);
+    return candidates.find((c): c is string => !!c && this.resourceMap.has(c));
+  }
+
+  /** Closest enabled resource types to an unknown input (substring / shared-token match). */
+  private suggestResourceTypes(input: string, limit = 5): string[] {
+    const needle = input.toLowerCase();
+    const tokens = needle.split(/[^a-z0-9]+/).filter((t) => t.length > 1);
+    return this.getAllResourceTypes()
+      .map((rt) => {
+        const lower = rt.toLowerCase();
+        let score = lower.includes(needle) || needle.includes(lower) ? 10 : 0;
+        for (const t of tokens) if (lower.includes(t)) score += 1;
+        return { rt, score };
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || a.rt.localeCompare(b.rt))
+      .slice(0, limit)
+      .map((x) => x.rt);
   }
 
   /** Get all enabled resource types. */
@@ -370,13 +432,13 @@ export class Registry {
 
   /** Check if a resource type supports an operation. */
   supportsOperation(resourceType: string, operation: OperationName): boolean {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     return def?.operations[operation] !== undefined;
   }
 
   /** Check if a resource type has execute actions. */
   getExecuteActions(resourceType: string): Record<string, EndpointSpec & { actionDescription: string }> | undefined {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     return def?.executeActions;
   }
 
@@ -536,7 +598,7 @@ export class Registry {
     blockReason: string,
   ): void {
     if (!this.auditManager) return;
-    const def = this.resourceMap.get(resourceType);
+    const def = this.findDefinition(resourceType);
     if (!def) return;
     let spec: EndpointSpec | undefined;
     if (operation === "execute") {
@@ -682,7 +744,7 @@ export class Registry {
               `Missing required field "${inputKey}" for ${def.resourceType}.${scopeHint}`,
             );
           }
-          path = path.replace(`{${pathPlaceholder}}`, encodeURIComponent(String(value)));
+          path = path.replace(`{${pathPlaceholder}}`, encodePathSegment(String(value)));
         }
       }
     }
@@ -853,6 +915,9 @@ export class Registry {
     const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers, ...resolvedRoute?.headers };
 
+    // Populated by the client only when spec.headerPagination is set.
+    let responseHeaders: Record<string, string> = {};
+
     const requestOpts = {
       method: resolvedMethod,
       path,
@@ -867,6 +932,7 @@ export class Registry {
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
       ...(!spec.pathBuilder && !resolvedRoute ? { tracing: { route: spec.path } } : {}),
       ...(spec.timeoutMs != null ? { timeoutMs: spec.timeoutMs } : {}),
+      ...(spec.headerPagination ? { onResponseHeaders: (h: Record<string, string>) => { responseHeaders = h; } } : {}),
       signal,
     };
 
@@ -900,6 +966,13 @@ export class Registry {
 
     // Extract response
     let result = spec.responseExtractor ? spec.responseExtractor(raw, input) : raw;
+
+    // Opt-in (spec.headerPagination): replace a page-length `total` with the
+    // population size the API reported in headers, so counting questions are
+    // not answered from a single page.
+    if (spec.headerPagination) {
+      result = applyHeaderPagination(result, responseHeaders);
+    }
 
     // Tag ELK/Mongo data source on the response when fallback is active
     if (dataSource && result && typeof result === "object" && !Array.isArray(result)) {
@@ -1232,6 +1305,67 @@ export class Registry {
     return results
       .sort((a, b) => b.score - a.score)
       .map(({ score, ...rest }) => rest);
+  }
+
+  /**
+   * Catalog limited to one consolidated-tool operation. CRUD entries omit operation lists
+   * (support is implied). `execute` includes each type's action names. `searchTerm` and
+   * `toolset` intersect with that set; the unfiltered summary stays on `describeSummary`.
+   */
+  describeByOperation(filter: {
+    operation: OperationName | "execute";
+    toolset?: string;
+    searchTerm?: string;
+  }): Record<string, unknown> {
+    if (filter.toolset && !this.toolsets.some((ts) => ts.name === filter.toolset)) {
+      const available = this.toolsets.map((ts) => ts.name);
+      return {
+        error: `Unknown toolset "${filter.toolset}". Available: ${available.join(", ")}`,
+        available_toolsets: available,
+      };
+    }
+
+    const ranked = filter.searchTerm
+      ? new Map(this.searchResources(filter.searchTerm).map((result, index) => [result.type, index]))
+      : undefined;
+    const matches: Array<{ entry: Record<string, unknown> & { type: string }; rank: number }> = [];
+    for (const ts of this.toolsets) {
+      if (filter.toolset && ts.name !== filter.toolset) continue;
+      for (const resource of ts.resources) {
+        if (ranked && !ranked.has(resource.resourceType)) continue;
+        const actions = resource.executeActions ? Object.keys(resource.executeActions) : [];
+        const supports = filter.operation === "execute"
+          ? actions.length > 0
+          : resource.operations[filter.operation] !== undefined;
+        if (!supports) continue;
+        matches.push({
+          entry: {
+            type: resource.resourceType,
+            name: resource.displayName,
+            toolset: ts.name,
+            ...(resource.searchAliases?.length ? { aliases: resource.searchAliases } : {}),
+            ...(filter.operation === "execute" ? { actions } : {}),
+          },
+          rank: ranked?.get(resource.resourceType) ?? 0,
+        });
+      }
+    }
+    if (ranked) {
+      matches.sort((a, b) => a.rank - b.rank || a.entry.type.localeCompare(b.entry.type));
+    }
+    const resource_types = matches.map((m) => m.entry);
+
+    const emptySearch = Boolean(filter.searchTerm) && resource_types.length === 0;
+    return {
+      operation: filter.operation,
+      ...(filter.toolset ? { toolset: filter.toolset } : {}),
+      ...(filter.searchTerm ? { search_term: filter.searchTerm, total_results: resource_types.length } : {}),
+      total_resource_types: resource_types.length,
+      resource_types,
+      hint: emptySearch
+        ? "No matches found. Try a broader term, or call harness_describe with no arguments to see all resource types."
+        : "Call harness_describe(resource_type='<type>') for full details including fields, scopes, and action schemas.",
+    };
   }
 
   /** Get compact summary — one line per resource type, ~15 tokens each. */

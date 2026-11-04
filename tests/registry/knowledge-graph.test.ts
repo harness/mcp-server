@@ -65,7 +65,10 @@ describe("hql_query run body", () => {
     });
   });
 
-  it("omits the options object entirely when no execution options are passed", async () => {
+  it("always requests stats so a truncated row set is detectable", async () => {
+    // Regression: options were only sent when a timeout/max_results happened to
+    // be passed, so the common call got no stats and could not tell a complete
+    // row set from a prefix — a silent undercount when rows are counted.
     const mockRequest = vi.fn().mockResolvedValue({ columns: [], rows: [] });
     const client = makeClient(mockRequest);
 
@@ -74,8 +77,10 @@ describe("hql_query run body", () => {
     });
 
     const call = mockRequest.mock.calls[0][0];
-    expect(call.body).toEqual({ query_string: "find view \"x\"" });
-    expect(call.body).not.toHaveProperty("options");
+    expect(call.body).toEqual({
+      query_string: "find view \"x\"",
+      options: { include_stats: true },
+    });
   });
 
   it("carries through positive execution options", async () => {
@@ -135,6 +140,41 @@ describe("hql_query run response extractor", () => {
     });
 
     expect(result).toEqual({ columns: [{ name: "id" }], rows: [] });
+  });
+
+  it("keeps the engine's truncation signal and warns against counting a prefix", async () => {
+    // Regression: `truncated` was dropped, so a prefix of the real result looked
+    // like the whole result — counting those rows undercounts the population.
+    const mockRequest = vi.fn().mockResolvedValue({
+      columns: [{ name: "id" }],
+      rows: [["a"], ["b"]],
+      truncated: true,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatchExecute(client, "hql_query", "run", {
+      body: { query_string: "find entity \"service\"" },
+    })) as Record<string, unknown>;
+
+    expect(result.truncated).toBe(true);
+    expect(result.truncation_warning).toContain("truncated");
+    expect(result.truncation_warning).toContain("count()");
+  });
+
+  it("reports truncated=false verbatim without a warning", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      columns: [{ name: "id" }],
+      rows: [["a"]],
+      truncated: false,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatchExecute(client, "hql_query", "run", {
+      body: { query_string: "find entity \"service\"" },
+    })) as Record<string, unknown>;
+
+    expect(result.truncated).toBe(false);
+    expect(result).not.toHaveProperty("truncation_warning");
   });
 });
 

@@ -41,7 +41,7 @@ COMMON GOTCHAS:
 - chaos_experiment list is GET /v3/experiments. Filter infrastructure with infra_ids and environment_id independently. There is no target_network_map_ids filter. Use tags=workload= or tags=service= for an application map.
 - chaos_experiment list does not accept infra_name or infra_active. status, experiment_type, and is_cron_enabled are real v3 filters.
 - chaos_application_map get treats environment_id + infra_id as de facto required: the backend's Mongo lookup is keyed on {identity, infra_id, environment_ref}, so missing either returns HTTP 500 with "mongo: no documents in result" (no validation error).
-- SD endpoints (discovered_*) require an agent_identity that is also a registered chaos_k8s_infrastructure.identity.
+- discovered_namespace, discovered_service, and discovered_network_map require agent_identity AND environment_id from a discovered_agent list row (identity and environmentIdentifier). Use that row's identity; do not assume a chaos_k8s_infrastructure identity is an agent id.
 - Chaos REST API uses organizationIdentifier (not orgIdentifier) — the registry handles this via scopeParams override; agents shouldn't notice.
 
 REASONING PLAYBOOK — answering "list experiments for <high-level X>" (e.g. "Harness Payment Bank", "the payments service"):
@@ -56,7 +56,7 @@ X is rarely a chaos_experiment field directly. It's almost always a Harness proj
       (ii)  chaos_application_map get on each candidate → response.services[].name gives service names; response.<resources>[].name gives workload names; response.identity is the app-map ID.
       (iii) chaos_experiment list with tags=service=<name> or tags=workload=<name>. GET /v3/experiments has no application-map id filter.
 
-  Step 3. If the customer wants raw inventory (not chaos-augmented), use discovered_network_map list with agent_identity=<infra identity> + environment_id; then discovered_service for finer detail. Use this when the user asks "what services even exist in my cluster" before they pick targets.
+  Step 3. If the customer wants raw inventory (not chaos-augmented), list discovered_agent first. Pass that row's identity as agent_identity and its environmentIdentifier as environment_id to discovered_network_map, then discovered_service. Use that identity; do not assume a chaos_k8s_infrastructure identity is an agent id.
 
   Step 4. Pass infra_ids and environment_id as separate filters. Do not pass infra_name or infra_active.
 
@@ -91,7 +91,7 @@ export const descChaosExperimentRun = `Experiment run timeline — full snapshot
 Returns the execution pipeline with individual nodes (faults, probes, actions), each with status, timing, and chaos data.
 Also returns experiment metadata, infra details, calculated resiliency score, manifest version, and run sequence.
 This is a read-only endpoint — it does NOT start a run. To trigger a run, use chaos_experiment execute action: run.
-Pass experiment_id via resource_id. Pass run_id or notify_id via params to identify the specific run.
+Do not call get until you have both required values. Required: experiment_id (the experiment UUID, not the identity slug) and one of run_id or notify_id. If experiment_id is missing or you only have a slug, harness_list resource_type=chaos_experiment (experiment_name=<slug> when you have a slug). If run_id and notify_id are both missing, harness_get resource_type=chaos_experiment on that UUID and read experimentRunID or notifyID from its recent runs. Pass the run id in params.
 Supports get.`;
 
 export const descChaosProbe = `Chaos resilience probe — declarative health checker that monitors application health before, during, and after a fault and determines the fault outcome.
@@ -104,6 +104,7 @@ export const descChaosExperimentTemplate = `Reusable, versioned chaos experiment
 Templates are pre-configured experiment blueprints that standardize chaos practices across teams — they support version control, revision history, typed input variables, and rendered YAML.
 Scopes: templates can be account-level (shared across all orgs/projects), org-level, or project-level.
 Use harness_list with resource_type=chaos_hub to discover available hubs and their identities before filtering templates by hub_identity.
+Do not call get or create_from_template until you have the template identity and hubIdentity. If hubIdentity is missing, harness_list resource_type=chaos_hub and use the row's identity. If the template identity is missing, harness_list resource_type=chaos_experiment_template (optional filter hub_identity). List itself has no required filter.
 Workflow: list templates → get_variables to discover required inputs → create_from_template to launch an experiment.
 Supports list, get, create, update, delete, plus execute actions: list_revisions, get_variables, get_yaml, compare_revisions, and create_from_template.
 Create and update take hub_identity (which chaos hub owns the template) and manifest (the template body). Get the template first before update and send the full manifest back — update replaces it.`;
@@ -114,7 +115,7 @@ export const descChaosInfrastructure = `Linux or Windows machine infrastructure 
 Supports list, get, create, update, and delete. infra_type defaults to Linux on every call; pass Windows when the machine is Windows. List only returns Active infras unless status=All.
 Create requires name and environment_id. Optional on create: description, tags, version, load_enabled, k8s_infra_reference. Update requires name and infra_id, and should also send description, tags, load_enabled, and k8s_infra_reference. version is create only. load_enabled is a bool: true or the string "true" enables load testing, and the string "false" is false. Omit it on update and the API stores false. Get the infra first and send the current values back.`;
 
-export const descChaosService = `Chaos Service (Service Management) — a logical service onboarded into Harness Chaos Engineering with an associated Service Discovery agent, environment, infrastructure, and probe associations. Distinct from harness_service (CD service) and from chaos_loadtest. Supports list, get, create, update, and delete.`;
+export const descChaosService = `Chaos Service (Service Management) — a logical service onboarded into Harness Chaos Engineering with an associated Service Discovery agent and probe associations. Runtime services also carry an environment and infrastructure. A CodeRepository service is onboarded from a custom_service and does not require resilience-test infrastructure. Distinct from harness_service (CD service) and from chaos_loadtest. Supports list, get, create, update, and delete.`;
 
 export const descChaosServiceEnvironmentIds = `Filter by one or more environment identifiers. Comma-separated string for multiple values (e.g. "prodEnv,stagingEnv"). Matches the chaos service's environmentId exactly.`;
 export const descChaosServiceInfrastructureIds = `Filter by one or more chaos infrastructure identifiers, each in "<environment_id>/<infrastructure_id>" form. Comma-separated string for multiple values (e.g. "env1/infra1,env2/infra2"). IMPORTANT: the 'infrastructureId' field returned by chaos_service list/get is the BARE infra ID only (the environment prefix is stripped server-side before it is returned) — do NOT pass that value alone. Build the filter value by combining that same response's 'environmentId' + "/" + 'infrastructureId'.`;
@@ -151,24 +152,46 @@ STEP 4 — Associate Probes (REQUIRED DECISION, only after STEP 3).
 
 STEP 5 — Create. Only now call harness_create(resource_type='chaos_service', org_id, project_id, body={ identity, name, description?, tags?, external_service_id, agent_id, environment_id, infrastructure_id, infrastructure_type, probes }). The server re-resolves serviceType and namespace from external_service_id and stores infrastructureId as "<environment_id>/<infrastructure_id>". Returns the full ChaosServiceResponse on 200.
 
-Never fabricate external_service_id, agent_id, or probe inputs — always source them from the discovered_agent / discovered_service / chaos_probe responses above.`;
+CODE REPOSITORY — when the service being onboarded is a custom service of type CodeRepository (resource_type custom_service, agent custom-discovery-agent):
+  Skip the infrastructure capture in STEP 1. Omit environment_id, infrastructure_id, and infrastructure_type; the server accepts a code-repository chaos service with no resilience-test infrastructure.
+  external_service_id is the custom service's id (the id returned by custom_service create or get), not its identity slug. agent_id is custom-discovery-agent.
+  Optionally join a runtime workload with linked_discovered_service: { agent_id, environment_id, external_id }. external_id must be a discovered service whose identity is namespace:kind:name with kind Deployment, DaemonSet, or StatefulSet. Do not link a Kubernetes Service (namespace:Service:name); that produces no experiment recommendation. When the user names a service, pick the Deployment, then StatefulSet, then DaemonSet of that name. Those three fields identify the workload; they are not the code-repository service's own agent. When you set the link, also send that workload's infrastructure the same way STEP 1 does for a discovered-service chaos service: environment_id = agent.environmentIdentifier, infrastructure_id = agent.identity (bare), infrastructure_type = "KubernetesV2". The chaos service agent_id stays custom-discovery-agent. If infrastructure_id is omitted, the server fills those three from the linked agent.
 
-export const descBodyChaosServiceCreate = `Chaos service create body. Required: identity, name, external_service_id, agent_id, environment_id, infrastructure_id. Optional: description, tags, infrastructure_type, onboarding_id, probes.`;
+Never fabricate external_service_id, agent_id, or probe inputs — always source them from the discovered_agent / discovered_service / custom_service / chaos_probe responses above.`;
+
+export const descBodyChaosServiceCreate = `Chaos service create body. Required: identity, name, external_service_id, agent_id. environment_id and infrastructure_id are required for every service type except CodeRepository — omit both (and infrastructure_type) when onboarding a code-repository custom service. Optional: description, tags, infrastructure_type, onboarding_id, probes, linked_discovered_service.`;
 export const descChaosServiceName = `Human-readable name for the chaos service. Required.`;
 export const descChaosServiceDescription = `Optional free-form description for the chaos service.`;
 export const descChaosServiceTagsBody = `Optional tags for the chaos service. Accepts a JSON array of strings or a comma-separated string; normalised to string[] before sending.`;
-export const descChaosServiceExternalServiceId = `External service ID (maps to externalServiceId). Required. This is the 'id' field of the chosen record from discovered_service list (STEP 2 of create) — NOT the service name. The server treats it as authoritative and re-resolves the service type and namespace from it, so it must reference a real discovered service under the same agent + environment.`;
-export const descChaosServiceAgentId = `Service Discovery agent identity (maps to agentId). Required. Use the 'identity' field of the agent chosen from discovered_agent list (STEP 1 of create). The agent's environmentIdentifier becomes environment_id, and for SD Kubernetes agents its identity is also the bare infrastructure_id.`;
-export const descChaosServiceEnvironmentId = `Harness environment identifier the service lives in (maps to environmentId). Required.`;
-export const descChaosServiceInfrastructureId = `Chaos infrastructure identifier (maps to infrastructureId). Required. Pass the BARE infra id (NOT env-prefixed) — for SD-onboarded Kubernetes this equals the Discovery agent's identity. The server stores it as "<environment_id>/<infrastructure_id>", so do not pre-prefix it yourself.`;
+export const descChaosServiceExternalServiceId = `External service ID (maps to externalServiceId). Required. For a runtime service this is the 'id' field of the chosen record from discovered_service list (STEP 2 of create). For a code repository this is the 'id' field returned by custom_service create or get. It is NOT the service name or identity slug. The server treats it as authoritative and re-resolves the service type from it.`;
+export const descChaosServiceAgentId = `Service Discovery agent identity (maps to agentId). Required. Use the 'identity' field of the agent chosen from discovered_agent list (STEP 1 of create). For a code-repository custom service this is custom-discovery-agent. For an SD Kubernetes agent, its environmentIdentifier becomes environment_id and its identity is also the bare infrastructure_id.`;
+export const descChaosServiceEnvironmentId = `Harness environment identifier the service lives in (maps to environmentId). Required for every service type except CodeRepository. Omit it when onboarding a code-repository custom service.`;
+export const descChaosServiceInfrastructureId = `Chaos infrastructure identifier (maps to infrastructureId). Required for every service type except CodeRepository; omit it for a code-repository custom service. Pass the BARE infra id (NOT env-prefixed) — for SD-onboarded Kubernetes this equals the Discovery agent's identity. The server stores a non-empty value as "<environment_id>/<infrastructure_id>", so do not pre-prefix it yourself.`;
+export const descChaosServiceLinkedDiscoveredService = `Optional runtime discovered service to join onto a CodeRepository chaos service. Object { agent_id, environment_id, external_id }. external_id is the id of a discovered workload whose identity is namespace:kind:name with kind Deployment, DaemonSet, or StatefulSet (for example hce:Deployment:frontend). Do not pass a Kubernetes Service such as hce:Service:nginx; a Service produces no experiment recommendation. When the user names a service, choose the Deployment, then StatefulSet, then DaemonSet of that name. List discovered_service with compact:false. Ignored by the server unless the onboarded custom service type is CodeRepository. When set and infrastructure_id is omitted, the server stores the discovered service's infrastructure the same way a chaos service is created for that agent: environment_id = the agent's environment, infrastructure_id = the agent's identity, infrastructure_type = KubernetesV2. The chaos service agent_id stays custom-discovery-agent.`;
 export const descChaosServiceInfrastructureType = `Infrastructure type of the underlying chaos infra. Enum: Kubernetes | KubernetesV2 | Windows | Linux | CloudFoundry | Container. Use KubernetesV2 for Service Discovery agents (the modern SD-based Kubernetes chaos infrastructure) — this is the value for services onboarded via the discovered_agent/discovered_service flow. Optional; values are the canonical PascalCase forms.`;
 export const descChaosServiceOnboardingId = `Optional onboarding batch identifier — set when this service is created as part of a multi-service onboarding flow so downstream tools can correlate the batch.`;
+export const descCustomService = `Custom service registered on the custom discovery agent (service-discovery /api/v2/services). A CodeRepository custom service identifies a repository module and is the external service a code-repository chaos_service is created from. Supports list, get, create, and update. The create response id is the external_service_id for chaos_service create; agent_id is custom-discovery-agent.`;
+export const descListCustomServices = `List custom services in the account/org/project. Filter with type=CodeRepository to see repository services. Supports pagination (page, limit) and search by name.`;
+export const descGetCustomService = `Get one custom service by its identity slug. The returned id is what chaos_service create expects as external_service_id.`;
+export const descCreateCustomService = `Create a custom service on the custom discovery agent. For a code repository pass type=CodeRepository, repo_url (any git URL; the server stores host/org/repo), and module (defaults to "." for the whole repository). One service covers every branch; branch and commit belong on the scan. Other custom types pass type plus the matching spec object. identity must be unique in the project. Returns the created service; use its id as external_service_id when creating the chaos service.`;
+export const descBodyCustomServiceCreate = `Custom service create body. Required: identity, name, type. For type CodeRepository, repo_url is required and module defaults to ".". For every other type, spec is required and is sent through as the service spec. Optional: description, tags.`;
+export const descUpdateCustomService = `Update a custom service by its identity slug (identity is not renameable and goes on the path, not in the body). This is a FULL REPLACE of name, description, tags, type and spec: resend every value you want to keep, taking the current ones from harness_get first. For a CodeRepository service pass type=CodeRepository, repo_url and module again, otherwise the stored module is overwritten. The service id is unchanged, so existing chaos services and scans that reference it keep working.`;
+export const descBodyCustomServiceUpdate = `Custom service update body. Required: name, type. For type CodeRepository, repo_url is required and module is sent again from the current record (module defaults to "." when omitted). For every other type, spec is required and replaces the stored spec. Optional: description, tags; omitting them clears them. Do not include identity.`;
+export const descCustomServiceIdentity = `Custom service identity slug, unique in the project.`;
+export const descCustomServiceName = `Human-readable custom service name. Required.`;
+export const descCustomServiceType = `Custom service type. Use CodeRepository for a repository module. Other accepted types include LinuxVM, LinuxVMProcess, WindowsVM, WindowsVMProcess, KubernetesService, KubernetesWorkload, KubernetesNode, and the Amazon* load balancer, EC2, Lambda, and RDS types.`;
+export const descCustomServiceRepoURL = `Repository URL. Required when type is CodeRepository. A full git URL is accepted; the server stores host/org/repo with no scheme.`;
+export const descCustomServiceModule = `Repository module path. Used when type is CodeRepository. Defaults to "." (the whole repository) when omitted.`;
+export const descCustomServiceSpec = `Service spec object for a non-CodeRepository custom type. Sent through as spec. Not used when type is CodeRepository (pass repo_url and module instead).`;
+export const descCustomServiceTypeFilter = `Filter custom services by type. Comma-separated. Use CodeRepository for repository services.`;
+export const descCustomServiceCategoryFilter = `Filter custom services by category. Comma-separated. CodeRepository is the category for repository services.`;
+
 export const descChaosServiceProbes = `Optional probe associations. Array of { probeId, inputs? }. probeId is the identity of an existing chaos probe (from chaos_probe list, filter infra_type='KubernetesV2'). inputs is the probe's own inputs[] array (read it from the chaos_probe list item or harness_get chaos_probe): pass each input object back intact (name, path, category, type, reference, required, ...) but REPLACE its placeholder value "<+input>" with the user-supplied value. Values for inputs marked required=true are mandatory. Do not fabricate or drop input objects — the backend uses each input's path/category to place the value.`;
 
 export const descChaosServiceProbesUpdate = `Required — full replacement of every probe association (desired-state reconcile; any existing probe omitted here is removed). Array of { probeId, inputs? }, same shape as create's 'probes'. To keep current probes, call harness_get first and resupply its 'probes' array unchanged; pass [] to explicitly detach all probes.`;
 
-export const descUpdateChaosService = `Update an existing chaos service, identified by the path 'identity' (identity is not renameable — do not put it in the body). This is a FULL REPLACE of the mutable fields (name, description, tags, external_service_id, agent_id, environment_id, infrastructure_id), not a partial patch: description and tags are overwritten with exactly what you send, including being cleared to empty if you omit them — there is no "leave unchanged" behavior for these two fields. To preserve the current description/tags, fetch the service first (harness_get) and re-supply its current values. Probes is a REQUIRED desired-state array: it is reconciled atomically with the field update, and any probe present on the service but not in the array is removed. To keep the current probes, harness_get first and resupply the 'probes' array unchanged; pass [] to intentionally detach every probe. Returns the full ChaosServiceResponse on 200.`;
-export const descBodyChaosServiceUpdate = `Chaos service update body. Required: name, external_service_id, agent_id, environment_id, infrastructure_id (the last four are re-validated server-side via a Service Discovery lookup), and probes (a full desired-state array — see below). Optional (schema-wise): description, tags — but "optional" only means the request validates without them. Omitting description or tags CLEARS them server-side (full replace, no partial patch); re-supply the current value from a prior harness_get if you want it preserved. probes is required precisely because it is a full replace: supply the complete desired set (harness_get first to keep existing ones), or [] to detach all probes. Do NOT include 'identity' — pass it at the top level so it goes on the URL.`;
+export const descUpdateChaosService = `Update an existing chaos service, identified by the path 'identity' (identity is not renameable — do not put it in the body). This is a FULL REPLACE of the mutable fields (name, description, tags, external_service_id, agent_id, environment_id, infrastructure_id), not a partial patch: description and tags are overwritten with exactly what you send, including being cleared to empty if you omit them — there is no "leave unchanged" behavior for these two fields. To preserve the current description/tags, fetch the service first (harness_get) and re-supply its current values. Probes is a REQUIRED desired-state array: it is reconciled atomically with the field update, and any probe present on the service but not in the array is removed. To keep the current probes, harness_get first and resupply the 'probes' array unchanged; pass [] to intentionally detach every probe. For a CodeRepository service with no mapped discovered service, omit environment_id and infrastructure_id. To attach a runtime discovered service for experiment recommendation, pass linked_discovered_service { agent_id, environment_id, external_id } from a discovered_service the user picked; environment_id is that agent's environment and must not be empty. Also send that service's infrastructure the same way a chaos service is created for it: environment_id = agent.environmentIdentifier, infrastructure_id = agent.identity (bare), infrastructure_type = KubernetesV2. The chaos service agent_id stays custom-discovery-agent. Ask the user for the discovered service and probes before this update. Returns the full ChaosServiceResponse on 200.`;
+export const descBodyChaosServiceUpdate = `Chaos service update body. Required: name, external_service_id, agent_id, and probes (a full desired-state array — see below). environment_id and infrastructure_id are required for every service type except CodeRepository. Omit both when updating a code-repository service that has no mapped discovered service. When linked_discovered_service is set, also send environment_id, infrastructure_id, and infrastructure_type for that discovered service (Kubernetes discovery agent: environment = agent environment, infrastructure_id = agent identity, infrastructure_type = KubernetesV2). Optional: description, tags, infrastructure_type, linked_discovered_service. Omitting description or tags CLEARS them server-side (full replace, no partial patch); re-supply the current value from a prior harness_get if you want it preserved. probes is required precisely because it is a full replace: supply the complete desired set (harness_get first to keep existing ones), or [] to detach all probes. linked_discovered_service attaches a runtime discovered service to a CodeRepository chaos service. Do NOT include 'identity' — pass it at the top level so it goes on the URL.`;
 
 export const descChaosLoadtest = `Load test (Resilience Testing) instance. Supports list, get, create, delete; run/stop via execute actions.
 Locust is supported on Linux VM and Kubernetes (script + image modes). K6 is genuinely Kubernetes-only at the backend. JMeter is restricted to Kubernetes by MCP for parity with the Harness UI (the backend itself does not enforce this for JMeter) — Linux VM supports Locust only; MCP rejects K6/JMeter with a Linux target_type at create time. JMeter accepts script/script_image scalars like Locust/K6 (plus properties/env_vars/thresholds/worker_count); 'tool_config' remains available as an advanced escape hatch (e.g. .zip bundles).
@@ -205,9 +228,10 @@ Response / read schema (what list/get returns — agents NEVER need to construct
     script_image, script_entrypoint, load_args, image_pull_secret.`;
 
 export const descChaosK8sInfrastructure = `Kubernetes chaos infrastructure (chaos server) available for running experiments.
-Use chaos_environment list first to get an environmentId, then pass it here to filter infrastructures for that environment.
-Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, infraScope, and isChaosEnabled.
-The infraID is used as the infra_ref parameter in create_from_template.
+Do not list until you have environment_id. If it is missing, harness_list resource_type=chaos_environment and use the row's identifier. Do not get until you also have identity and environmentID from a chaos_k8s_infrastructure list row.
+Get passes the row's identity as resource_id. That is the path value for GET /rest/v2/infrastructure/{identity}. infraID can differ from identity; do not pass infraID as resource_id. Also pass that row's environmentID as params.environment_id.
+check_health is the legacy V1 probe. Pass infraID as infra_id. resource_id (identity) is used only when infra_id is omitted. When both are set, infra_id is the path segment.
+For create_from_template, infra_ref is environmentID/infraID.
 IMPORTANT: Only infrastructures with status=ACTIVE AND isChaosEnabled=true can be used to create chaos experiments. Always check both fields before selecting an infrastructure.
 Supports list, get, create, update, delete, plus execute actions: check_health, get_yaml, get_manifest, helm_command.
 Update replaces the chaos-server registration (name, namespace, service account). It does not reinstall the agent. get_yaml previews the install YAML (identity, environment_id, infra_namespace, service_account). get_manifest and helm_command take infra_id. Delete needs both environment_id and infra_id.
@@ -341,10 +365,10 @@ Filters, all optional: search (name and identity), tags, experiment_ids (UUIDs),
 export const descGetExperiment = `Get one experiment (GET /v3/experiments/{identity}). Pass the slug as experiment_id. A UUID from list (experimentId) also works: is_identity is set to false when the value looks like a UUID. Returns experimentId, identity, name, manifest, infra, tags, and recent runs.`;
 
 export const descGetExperimentRun = `Get the full timeline of a chaos experiment run. This is a read-only endpoint — it does NOT trigger a run.
+Do not call until you have both required values. Required: experiment_id (resource_id) = the experiment UUID, not the identity slug, and one of run_id or notify_id in params. If experiment_id is missing or you only have a slug, harness_list resource_type=chaos_experiment with experiment_name=<slug> and do not call this yet. If run_id and notify_id are both missing, harness_get resource_type=chaos_experiment on that UUID and read experimentRunID or notifyID from its recent runs.
 Returns the execution pipeline: individual fault/probe/action nodes with status, timing, chaos data, and error details.
 Also returns experiment name, infraID, resiliency score, run phase, manifest version, and template details.
-Pass experiment_id via resource_id. Pass run_id or notify_id via params (not resource_id) to identify the specific run.
-To start a new run, use chaos_experiment execute action: run instead. is_identity is auto-detected from the shape of experiment_id when omitted (UUID vs. slug) — pass is_identity explicitly in params to override. See descIsIdentity for details.`;
+To start a new run, use chaos_experiment execute action: run instead.`;
 
 export const descListProbes = `List chaos probes with optional filtering.
 Supports filtering by name, tags, date range, probe IDs, infrastructure type, probe entity type, and sorting.
@@ -504,14 +528,14 @@ export const descProbePropertiesField = `Type-specific probe configuration. Prov
 export const descRunPropertiesField = `Probe execution cadence and retry behavior. All fields optional with server-side defaults: timeout (e.g. "10s"), interval (e.g. "2s"), attempt (retry count), pollingInterval, initialDelay, stopOnFailure (boolean), verbosity ("info" | "debug").`;
 
 export const descListExperimentTemplates = `List chaos experiment templates from chaos hubs.
-Returns a paginated list of templates with identity, name, description, tags, revision, infraType, hub identity, and audit info.
+Each row has identity and hubIdentity. On the next get or launch, pass identity as resource_id and that row's hubIdentity as params.hub_identity.
+hub_identity is optional on this list. tags is a comma-separated string. Optional filters: infrastructure=KubernetesV2, infrastructure_type=Kubernetes.
 Supports filtering by hub, infrastructure, tags, search, sort, and cross-scope inclusion.`;
 
-export const descGetExperimentTemplate = `Get detailed info about a chaos experiment template by identity.
-Returns full template including name, identity, description, tags, kind, apiVersion, revision, isDefault,
-and spec (infraType, faults, probes, actions, vertices, cleanupPolicy).
-Requires hub_identity (chaos hub that owns the template — use harness_list with resource_type=chaos_hub to find hub identities).
-Optional: revision (specific template revision; omit for latest).`;
+export const descGetExperimentTemplate = `Get one chaos experiment template.
+Do not call until you have both required values. Required: resource_id = identity, and params.hub_identity = hubIdentity. If either is missing, harness_list resource_type=chaos_experiment_template and do not call get yet. If you have no hub to filter that list, harness_list resource_type=chaos_hub first and use the hub row's identity as hub_identity.
+Returns name, identity, description, tags, kind, apiVersion, revision, isDefault, and spec.
+Optional: revision. Omit it for the latest revision.`;
 
 export const descDeleteExperimentTemplate = `Delete a chaos experiment template by identity.
 Requires hub_identity to identify which chaos hub owns the template.
@@ -825,25 +849,26 @@ ${descLoadtestFieldTaxonomy}
 
 Returns the updated load test (same shape as harness_get resource_type=chaos_loadtest).`;
 
-export const descListK8sInfra = `List Kubernetes chaos infrastructures available for running experiments.
-Use chaos_environment list first to get an environmentId, then pass it here to filter infrastructures for that environment.
-Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, infraScope, and isChaosEnabled.
+export const descListK8sInfra = `List Kubernetes chaos infrastructures in one environment.
+Do not call until you have the required filter. Required: filters.environment_id. OpenAPI marks environmentIdentifier optional, but k8s-ifs ListInfra always calls harness.ListInfraURL. An empty environment returns "missing envID", wrapped as HTTP 500 "failed to generate list harness infrastructure url, missing envID". If environment_id is missing, harness_list resource_type=chaos_environment and use the row's identifier. This list is not a project-wide inventory. Infrastructures that can run an experiment, with no environment, are chaos_enabled_infrastructure.
+Each row includes identity, environmentID, and infraID. The get path value is the row's identity. infraID can differ from identity. For get, pass identity as resource_id and environmentID as params.environment_id. For create_from_template, infra_ref is environmentID/infraID.
 IMPORTANT: Only infrastructures with status=ACTIVE AND isChaosEnabled=true can be used to create chaos experiments.
 Supports filtering by status (ACTIVE, INACTIVE, PENDING) and optional inclusion of legacy V1 infrastructures.`;
-export const descGetK8sInfra = `Get Kubernetes chaos infrastructure details`;
+export const descGetK8sInfra = `Get one Kubernetes chaos infrastructure.
+Do not call until you have both required values. Required: resource_id = the row's identity. That is the path value for GET /rest/v2/infrastructure/{identity}. infraID can differ from identity; do not pass infraID as resource_id. Also required: params.environment_id = environmentID. This get reads a v2 record; a legacy row from include_legacy_infra is not returned here. If either value is missing, harness_list resource_type=chaos_k8s_infrastructure. That list requires filters.environment_id because an empty environment returns HTTP 500 "failed to generate list harness infrastructure url, missing envID". Get the environment from harness_list resource_type=chaos_environment.`;
 
 export const descChaosEnabledInfrastructure = `Kubernetes chaos infrastructures that are READY to run experiments — i.e. chaos-enabled AND status=ACTIVE. Every result has isChaosEnabled=true and status=ACTIVE, so no post-filtering is needed.
 Backed by a dedicated endpoint (POST /rest/v2/infrastructures/chaos-enabled) that queries the chaos infrastructure store directly, so pagination and total counts reflect ONLY ready-to-use infra (correct totals).
-Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, infraScope, and isChaosEnabled. The infraID/identity is what you pass as infra_ref in chaos_experiment create_from_template, or as the infra selector when creating/running an experiment.
+Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, infraScope, and isChaosEnabled. For create_from_template, infra_ref is environmentID/infraID, not infraID alone.
 Use chaos_environment list first to get an environmentId, then pass it here to scope to that environment.
 WHEN TO USE THIS vs chaos_k8s_infrastructure:
 - Use chaos_enabled_infrastructure when the goal is to PICK an infrastructure to run a chaos experiment, or to count/list ONLY infra that can actually run experiments (correct totals).
-- Use chaos_k8s_infrastructure for the FULL inventory (including not-yet-chaos-enabled and INACTIVE/PENDING infra), single-infra detail (get), health checks (check_health), or filtering by a specific non-ACTIVE status. Its pagination/totals span all platform infra, not just chaos-ready ones, so client-side isChaosEnabled filtering there gives wrong page sizes/counts.
+- Use chaos_k8s_infrastructure for one environment, including infrastructures that are not ready to run an experiment. filters.environment_id is required there: an empty environment returns HTTP 500 "failed to generate list harness infrastructure url, missing envID". That list also has get and check_health. It is not a project-wide inventory. A list with no environment is chaos_enabled_infrastructure.
 Supports list only. Filter by environment_id, infra_type (KubernetesV2/All query the V2 chaos store; Kubernetes returns legacy V1), infra_scope, is_ai_enabled, and search. There is no status filter because results are always ACTIVE.`;
 
 export const descListChaosEnabledInfra = `List Kubernetes chaos infrastructures that are ready to run experiments (chaos-enabled AND status=ACTIVE).
-Unlike chaos_k8s_infrastructure (which lists ALL infra and stamps isChaosEnabled per row), this returns ONLY ready-to-use infra with pagination/total scoped to that set.
-Returns identity, infraID, name, environmentID, status (always ACTIVE), infraType, infraScope, and isChaosEnabled. Use the infraID/identity as infra_ref when creating experiments.
+chaos_k8s_infrastructure lists one environment and requires filters.environment_id. This list returns only ready-to-use infra, and environment_id is optional.
+Returns identity, infraID, name, description, tags, environmentID, status (always ACTIVE), infraType, infraScope, and isChaosEnabled. For create_from_template, infra_ref is environmentID/infraID.
 Filter by environment_id, infra_type, infra_scope, is_ai_enabled, and search.`;
 
 export const descChaosEnabledInfraType = `Filter by Kubernetes infrastructure type. 'KubernetesV2' and 'All' query the V2 chaos store; 'Kubernetes' returns legacy V1 infrastructures instead. Omit to return all chaos-enabled V2 infrastructures.`;
@@ -853,10 +878,12 @@ export const descInfraScope = `Filter by infrastructure scope: 'NAMESPACE' (chao
 export const descInfraAiEnabled = `When true, return only AI-enabled chaos infrastructures; when false, only non-AI-enabled ones.`;
 
 export const descListHubs = `List ChaosHubs (Git-connected repositories containing fault, experiment, probe, and action templates).
-Returns hub details including repository info, connector configuration, template counts, and sync status.
+Each row's identity is the hub_identity later template calls need. Do not pass the hub name.
+The list defaults to the current project. If it is empty, call again with filters.include_all_scope=true. Account and org hubs are hidden otherwise.
 Supports search, pagination, and cross-scope inclusion.`;
 
 export const descGetHub = `Get a ChaosHub by its identity.
+resource_id is the identity from chaos_hub list, not the display name.
 Returns full hub details including repository URL, branch, connector info, template counts, sync status, and metadata.`;
 
 export const descCreateHub = `Create a new ChaosHub in the given Harness scope (account, org, project).
@@ -975,14 +1002,15 @@ Each scanned risk records the offending risk rule, severity (Critical/High/Mediu
 Supports list and get, plus execute actions: 'occurrences' (per-scan detection history for one scanned risk) and 'summary_by_service' (aggregated risk counts per target service).
 Use chaos_risk_scan to discover scans that produce these findings, and chaos_risk_rule to inspect the rule (via riskRuleId) that flagged each finding.`;
 
-export const descChaosRiskRule = `A chaos risk rule: an LLM-driven check applied to a service's application manifest during a risk scan.
-Read-only: risk rules are synced from the ChaosHub, not created via this API.
-Each rule carries a severity, category, data source (e.g. ApplicationManifest), and a prompt spec (do/dont/outcome). System rules (isSystem=true) ship out of the box.
-Supports list and get. Use the rule identity as riskRuleId when filtering scanned_risk findings.`;
+export const descChaosRiskRule = `A chaos risk rule: a check that flags a resilience risk a chaos experiment can prove.
+Each rule carries a severity, category, data source (ApplicationManifest or SourceCode), a prompt spec (do/dont/outcome), and for SourceCode rules the chaos faults (spec.faults) that prove the risk.
+System rules (isSystem=true) are synced from the ChaosHub and cannot be modified. Custom rules are project-scoped, SourceCode-only, and support create, update and delete.
+Custom rule identities must match ^code-[a-z0-9-]{3,60}$ and name a generic failure mode (e.g. code-outbound-call-without-timeout), never a repo, file or service. A project can hold at most 30 custom SourceCode rules.
+Supports list and get for every rule. Use the rule identity as riskRuleId when filtering scanned_risk findings.`;
 
-export const descChaosRiskScan = `A chaos risk scan: an analysis run that inspects services (from a pipeline execution or a service-discovery agent) and produces risk findings (scanned_risk).
-Supports full CRUD (create, get, list, update, delete) plus execute actions: 'retry' (re-run an errored scan), 'abort' (stop a running scan), 'report' (full findings report), 'report_download' (signed PDF URL), and 'heatmap' (services vs risk-rules matrix).
-scanType is PipelineExecution, DiscoveryAgent, ProbeExecution, or CodeRepository. The matching source must be supplied on create. DiscoveryAgent is an infrastructure scan. PipelineExecution is a pipeline scan. A service-onboarding scan is chaos_onboarding trigger_risk_scan, not this create.`;
+export const descChaosRiskScan = `A chaos risk scan: an analysis run that inspects services (from a pipeline execution, a service-discovery agent, or a source code repository) and produces risk findings (scanned_risk).
+Supports full CRUD (create, get, list, update, delete) plus execute actions: 'retry' (re-run an errored scan), 'abort' (stop a running scan), 'report' (full findings report), 'report_download' (signed PDF URL), 'heatmap' (services vs risk-rules matrix), and 'submit_findings' (submit externally analysed CodeRepository findings).
+scanType is PipelineExecution, DiscoveryAgent, or CodeRepository. The matching source must be supplied on create. DiscoveryAgent is an infrastructure scan. PipelineExecution is a pipeline scan. A service-onboarding scan is chaos_onboarding trigger_risk_scan, not this create. CodeRepository scans use detectionMethod External and complete when their findings are submitted.`;
 
 // Scanned Risk operation descriptions
 export const descListScannedRisks = `List risk findings detected by chaos risk scans. Supports filtering by severity, risk rule, validation type, target service, environment/agent, tags, time range, and free-text search.`;
@@ -993,6 +1021,21 @@ export const descSummarizeScannedRisksByService = `Aggregate scanned-risk counts
 // Risk Rule operation descriptions
 export const descListRiskRules = `List chaos risk rules. Supports filtering by data source, isSystem, tags, and free-text search.`;
 export const descGetRiskRule = `Get a single chaos risk rule by its identity.`;
+export const descCreateRiskRule = `Create a project-scoped custom SourceCode risk rule. Requires identity (code-<failure-mode>), name, severity, category and spec {dataSource: ["SourceCode"], faults, prompt {do, dont, outcome}}. Fails when the project already holds 30 custom SourceCode rules.`;
+export const descUpdateRiskRule = `Replace the mutable fields of a custom risk rule (name, description, tags, severity, category, spec). System rules cannot be updated.`;
+export const descDeleteRiskRule = `Delete a custom risk rule by its identity. System rules cannot be deleted.`;
+
+// Risk Rule create/update body descriptions
+export const descBodyRiskRuleCreate = `Custom risk rule payload. identity, name, severity, category and spec are required.`;
+export const descBodyRiskRuleUpdate = `Custom risk rule payload. Replaces name, description, tags, severity, category and spec; all of name, severity, category and spec are required. Omitting description or tags clears them.`;
+export const descRiskRuleIdentity = `Rule identity matching ^code-[a-z0-9-]{3,60}$, naming a generic failure mode (e.g. code-retry-without-backoff).`;
+export const descRiskRuleName = `Human-readable rule name (at most 128 characters).`;
+export const descRiskRuleDescription = `What the failure mode is and why it hurts resilience (at most 2000 characters).`;
+export const descRiskRuleTags = `Optional tags (at most 10).`;
+export const descRiskRuleSeverity = `One of: Critical, High, Medium, Low. Critical is reserved for failures that take a whole service down on a single dependency fault.`;
+export const descRiskRuleCategory = `One of: Availability, Performance, Dependency, Resilience, Config.`;
+export const descRiskRuleSpec = `Rule spec: { dataSource: ["SourceCode"], faults: [allowlisted chaos fault ids such as pod-network-latency, pod-http-status-code, pod-delete], prompt: { do: [code signals], dont: [mitigations that make a signal a non-finding], outcome: [hypothesis with fault and probe signal] } }. dataSource defaults to ["SourceCode"] and must be exactly that. faults, prompt.do and prompt.outcome must be non-empty; prompt.dont is optional. Each prompt list holds at most 10 entries of at most 500 characters.`;
+export const descRiskRuleCustomOnly = `When true, return only custom (project-authored) risk rules.`;
 
 // Risk Scan operation descriptions
 export const descListRiskScans = `List chaos risk scans. Supports filtering by scan type, status, pipeline/agent/environment identity, tags, time range, and free-text search.`;
@@ -1000,8 +1043,12 @@ export const descGetRiskScan = `Get a single chaos risk scan by its identity.`;
 export const descCreateRiskScan = `Create a chaos risk scan. Requires identity, name, scanType, and source.
 scanType DiscoveryAgent with source.discoveryAgent { agentIdentity, environmentIdentity } is an infrastructure scan. It moves chaos_onboarding stats.infrastructureScans.
 scanType PipelineExecution with source.pipeline { pipelineIdentity, pipelineExecutionID } is a pipeline scan. Onboarding a pipeline so it can be scanned is chaos_pipeline_onboarding, not this call.
-scanType ProbeExecution uses source.probeExecution { probeIdentity, probeName, executionSource }. scanType CodeRepository uses source.codeRepository { repoURL, commitSHA }.
+scanType CodeRepository uses source.codeRepository { repoURL, commitSHA, branch, provider, linkedServices }. Those scans are created with detectionMethod External and wait for submit_findings.
 This does not advance a chaos_onboarding service step. That scan is trigger_risk_scan.`;
+export const descSubmitRiskScanFindings = `Submit externally analysed findings for a CodeRepository risk scan and complete it. Each finding references a SourceCode risk rule; severity, category and rule name are taken from the rule. At most 100 findings per scan.`;
+export const descBodySubmitRiskScanFindings = `Findings payload: { findings: [{ riskRuleId, riskName, description, impact, module, evidence: [..], remediation: [..], resilienceTestingRec: [.. must name a fault from the rule ..], codeLocations: [{ file, startLine, endLine, snippet }] (1-5) }] }.`;
+export const descRiskScanFindings = `Array of findings. Each needs riskRuleId, riskName, evidence, remediation, resilienceTestingRec and 1-5 codeLocations with a verbatim snippet at the scanned commit. module is the repository-relative module path ('.' for the root).`;
+export const descRiskScanDetectionMethod = `Detection method. AI (default) for PipelineExecution and DiscoveryAgent scans; External for CodeRepository scans (default when scanType is CodeRepository).`;
 export const descUpdateRiskScan = `Update a chaos risk scan's name, description, or tags.`;
 export const descDeleteRiskScan = `Delete a chaos risk scan by its identity.`;
 export const descRetryRiskScan = `Retry an errored chaos risk scan by its identity.`;
@@ -1017,8 +1064,8 @@ export const descRiskScanIdentity = `Unique identifier (slug) for the risk scan.
 export const descRiskScanName = `Human-readable name of the risk scan.`;
 export const descRiskScanDescription = `Optional description of the risk scan.`;
 export const descRiskScanTags = `Optional list of tags for the risk scan.`;
-export const descRiskScanType = `Origin of the scan. PipelineExecution, DiscoveryAgent, ProbeExecution, or CodeRepository.`;
-export const descRiskScanSource = `Source object for the scanType. PipelineExecution: { pipeline: { pipelineIdentity, pipelineExecutionID } }. DiscoveryAgent: { discoveryAgent: { agentIdentity, environmentIdentity } }. ProbeExecution: { probeExecution: { probeIdentity, probeName, executionSource } }. CodeRepository: { codeRepository: { repoURL, commitSHA } }.`;
+export const descRiskScanType = `Origin of the scan. One of: PipelineExecution, DiscoveryAgent, CodeRepository.`;
+export const descRiskScanSource = `Source object identifying what triggered the scan. Use { pipeline: { pipelineIdentity, pipelineExecutionID } } for PipelineExecution, { discoveryAgent: { agentIdentity, environmentIdentity } } for DiscoveryAgent, or { codeRepository: { repoURL (host/org/repo), commitSHA, branch, provider, linkedServices: [{ module, chaosServiceIdentity }] } } for CodeRepository. A code scan stores both branch and commitSHA. The next scan of that repo and branch diffs from that commit instead of reading the whole tree.`;
 
 // Scanned Risk / Risk Scan filter field descriptions
 export const descScannedRiskSeverity = `Filter by severity. Comma-separated. Values: Critical, High, Medium, Low.`;
@@ -1037,7 +1084,7 @@ export const descRiskTags = `Filter by tags. Comma-separated.`;
 export const descRiskIncludeAllScope = `Include entities from all scopes (account/org/project) accessible to the caller.`;
 export const descRiskStartTime = `Filter by start of a time window (epoch millis).`;
 export const descRiskEndTime = `Filter by end of a time window (epoch millis).`;
-export const descRiskRuleDataSource = `Filter risk rules by data source (e.g. ApplicationManifest).`;
+export const descRiskRuleDataSource = `Filter risk rules by data source: ApplicationManifest or SourceCode.`;
 export const descRiskRuleIsSystem = `When true, return only system (built-in) risk rules.`;
 export const descHeatmapSearch = `Free-text search to filter services shown in the heatmap.`;
 
@@ -1100,6 +1147,8 @@ Pass verify=true to verify, false to unverify. Default (system) probes cannot be
 
 export const descCreateFromTemplate = `Creates and launches a new chaos experiment from an existing experiment template.
 
+Do not call until you have every required field. Required: template_id, params.hub_identity, name, identity, and infra_ref as environmentID/infraID (or infra_id plus environment_id). If template_id or hub_identity is missing, harness_list resource_type=chaos_experiment_template (hub_identity comes from harness_list resource_type=chaos_hub). If environment_id is missing, harness_list resource_type=chaos_environment. If infra_id or infra_ref is missing, harness_list resource_type=chaos_k8s_infrastructure with that environment_id. name and identity come from the user. Do not call this action until all of these are set.
+
 IMPORTANT: You MUST NOT auto-select, assume, or pre-fill any value on behalf of the user.
 At every step below, you MUST display the available options and wait for explicit user confirmation before proceeding.
 NOTE: based on your previous user activies still don't assume their org/project/hub/template etc, they might would want to chose a different everytime. 
@@ -1123,8 +1172,8 @@ Step 3 — Select an environment:
   Do NOT choose an environment yourself even if only one exists.
 
 Step 4 — Select an infrastructure:
-  Call harness_list resource_type=chaos_k8s_infrastructure filtered by the environmentId from Step 3
-  (optionally filter by infraType from Step 2). Show the list and wait for the user to pick one.
+  Call harness_list resource_type=chaos_k8s_infrastructure with filters: { environment_id: "<environmentId from Step 3>" }.
+  environment_id is required on that list. Optionally filter by infraType from Step 2. Show the list and wait for the user to pick one.
   Only infrastructures where status=ACTIVE AND isChaosEnabled=true are valid.
   If the user picks one that is inactive or has isChaosEnabled=false, tell them it cannot be used and ask them to choose again.
   Do NOT choose an infrastructure yourself.
@@ -1141,16 +1190,16 @@ Returns the created experiment details including id, identity, name, infraType, 
 
 INPUT FIELDS (pass via body or top-level params):
   template_id (string, required): Template identity to launch from (path param).
-  hub_identity (string, required): ChaosHub identity containing the template (query param). Omitting returns 400.
+  hub_identity (string, required): ChaosHub identity from the template list row's hubIdentity. Pass it as params.hub_identity.
   revision (string): Template revision (e.g. "v1"). Omit for default revision.
-  account_id (string, required): Harness account identifier. Required in body — must match account scope.
+  account_id (string): Harness account identifier. Filled from the configured account when omitted. Pass it only to override that account.
   org_id (string): Organization identifier. If provided, must match query param scope.
   project_id (string): Project identifier. If provided, must match query param scope.
   name (string, required): Display name for the new experiment.
   identity (string, required): Unique identity for the new experiment (not the template).
   infra_ref (string, required): Infrastructure ref as "environmentId/infraId". Or pass infra_id + environment_id separately.
-  infra_id (string): Infrastructure ID — auto-prefixed with environment_id if needed.
-  environment_id (string): Environment ID — used to construct infra_ref when infra_id is provided.
+  infra_id (string): Infrastructure ID. Combined with environment_id into environmentID/infraID. A bare infra_id is rejected.
+  environment_id (string): Environment ID — required with infra_id when infra_ref is not already environmentID/infraID.
   import_type (string, required): "LOCAL" (copy, default) or "REFERENCE" (linked to hub template).
   description (string): Experiment description.
   tags (string[]): Experiment tags.
@@ -1162,14 +1211,18 @@ ERRORS:
 
 NOTES:
   - The "identity" field is for the NEW experiment being created, not the template (template is identified by template_id).
-  - Scope query params (accountIdentifier, organizationIdentifier, projectIdentifier) are auto-injected — only the body scope fields (account_id, org_id, project_id) need to be passed explicitly.
+  - Scope query params and the body account, org, and project are filled from the configured scope when omitted. Pass hub_identity as params.hub_identity. Pass infra_ref as environmentID/infraID, or pass infra_id and environment_id and they are joined.
   
  Note: If user wants to create an experiment from scratch (without using a template), use the create_experiment action on chaos_experiment. 
   `;
 
 export const descListRevisions = `List revision history for a template.
 Returns all revisions with their identifiers, timestamps, and change descriptions. Use to track template evolution or find a specific revision for comparison.
-Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — hub the template belongs to, required).`;
+Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — optional; pass it when the list row has hubIdentity).`;
+
+export const descListExperimentTemplateRevisions = `List revision history for an experiment template.
+Returns all revisions with their identifiers, timestamps, and change descriptions. Use to track template evolution or find a specific revision for comparison.
+Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — optional; pass it when the list row has hubIdentity).`;
 
 export const descGetVariables = `Get the input variables defined in a template.
 Returns variable definitions including names, types, default values, and descriptions. Use before create_from_template to discover required inputs.
@@ -1185,7 +1238,7 @@ Pass via params (NOT body): template_id (path — template identity, required), 
 
 export const descRunLoadtest = `Run a load test instance`;
 export const descStopLoadtest = `Stop a running load test`;
-export const descCheckK8sHealth = `Check health of a Kubernetes chaos infrastructure`;
+export const descCheckK8sHealth = `Check connectivity of a legacy (V1) Kubernetes chaos infrastructure. Published route (operationId testLegacyKubernetesChaosInfraConnection): GET /chaos/manager/api/rest/kubernetes/infra/{id}/health. Pass infraID as infra_id. infraID can differ from identity. resource_id (identity) is used only when infra_id is omitted. When both are set, infra_id is the path segment. For a current infrastructure record, use chaos_k8s_infrastructure get.`;
 
 export const descEnableGuardRule = `Enable or disable a ChaosGuard rule.
 When enabled, the rule actively enforces its governance conditions on chaos experiments.
@@ -1237,7 +1290,7 @@ export const descRuntimeInputs = `Runtime input variables: { experiment: [{name,
 export const descInfraType = `Filter by infrastructure type (e.g. Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, Container)`;
 export const descExperimentName = `Experiment name`;
 export const descExperimentIdentity = `Experiment identity (auto-generated from name if omitted)`;
-export const descInfraRef = `Infrastructure reference in format: environmentId/infraId. Use chaos_environment list to find environments, then chaos_k8s_infrastructure list to find infraIDs.`;
+export const descInfraRef = `Infrastructure reference as environmentID/infraID. A bare infra id is rejected. Use chaos_environment list for the environment, then chaos_k8s_infrastructure or chaos_enabled_infrastructure for environmentID and infraID.`;
 export const descExperimentId = `Chaos experiment identifier. Accepts either the internal UUID (default, with is_identity=false) or the human-readable identity slug (set is_identity=true). Use harness_list with resource_type=chaos_experiment to find experiment IDs.`;
 export const descInfraStatus = `Filter by infra status: Active (default) or All`;
 export const descLoadtestName = `Display name for the load test. Any non-empty string (e.g. "My Load Test", "locust-1"). The slug-safe identifier rule applies to 'identity' (auto-derived from name) — not to name.`;
@@ -1808,21 +1861,25 @@ export const descSDAgentDiagnostic = `404 from SD endpoints almost always means 
 // discovered_agent
 export const descDiscoveredAgent = `Service Discovery agent — one SD deployment running inside a customer's Kubernetes cluster, bound to a single Harness environment. Its 'identity' field is the value other resources take as 'agent_identity' (discovered_namespace / discovered_service / discovered_network_map) and as 'agent_id' (chaos_service create/update). Soft-deleted agents are hidden from list results. The token field is never returned.`;
 
-export const descListDiscoveredAgents = `List Service Discovery agents in the given account/org/project scope. Use this to look up the 'identity' value required by other Service Discovery resources and by chaos_service create/update. Optional environment_id narrows to one environment; omit to list agents across all environments in scope. Optional search does a case-insensitive regex match on the agent name. Supports page/limit pagination or all=true to fetch everything (all=true also skips per-agent installation/service/network-map count enrichment, so responses are lighter).`;
+export const descListDiscoveredAgents = `List Service Discovery agents in the given account/org/project scope. Call this before discovered_namespace, discovered_service, or discovered_network_map. Use the row's identity as agent_identity and its environmentIdentifier as environment_id. Use that identity; do not assume a chaos_k8s_infrastructure identity is an agent id. Optional environment_id narrows to one environment; omit to list agents across all environments in scope. Optional search does a case-insensitive regex match on the agent name. Supports page/limit pagination or all=true to fetch everything (all=true also skips per-agent installation/service/network-map count enrichment, so responses are lighter).`;
 
 export const descDiscoveredAgentSearch = `Case-insensitive substring match against the SD agent name field.`;
 
 // discovered_namespace
 export const descDiscoveredNamespace = `Read-only snapshot of a Kubernetes Namespace recorded by a Service Discovery agent — includes the namespace name, UID, resource version, labels, annotations, owner references, and the full corev1.NamespaceSpec/Status from the cluster's last sync. Use namespaces as the scope boundary when listing discovered_service or future discovered_workload/discovered_connection resources for the same agent.`;
 
-export const descListDiscoveredNamespaces = `List Kubernetes namespaces snapshotted by a Service Discovery agent. Requires agent_identity (path) and environment_id (query). Returns soft-deleted-aware results (only live namespaces). Optional name filter (exact match, NOT substring — see name field doc). Supports page/limit pagination or all=true to fetch everything.`;
+export const descListDiscoveredNamespaces = `List Kubernetes namespaces snapshotted by a Service Discovery agent.
+Do not call until agent_identity and environment_id are set. If either is missing, harness_list resource_type=discovered_agent and use that row's identity and environmentIdentifier. Use that identity; do not assume a chaos_k8s_infrastructure identity is an agent id.
+Returns live namespaces only. Optional name filter is an exact case-sensitive match. Supports page/limit pagination or all=true to fetch everything.`;
 
 export const descSDNamespaceNameFilter = `Filter namespaces by name — EXACT case-sensitive equality match against the Kubernetes namespace name (the SD backend wraps this in a Mongo equality filter, not a regex). For partial/fuzzy lookup, list all namespaces (use 'all=true') and filter client-side. Note: this differs from discovered_service's 'search' param, which IS case-insensitive substring.`;
 
 // discovered_service
 export const descDiscoveredService = `Read-only snapshot of a logical 'service' discovered by an SD agent. NOT limited to Kubernetes Services — the same resource type covers K8s Services / Workloads / Nodes, AWS load balancers (ALB/NLB/CLB), EC2 instances, Lambda functions, RDS, Linux/Windows VMs, Linux/Windows VM processes, and a generic 'Other' catch-all. The 'type' field discriminates which 'spec.*' block is populated. For Kubernetes services, 'spec.kubernetes' carries the K8s Service (cluster IPs, ports, type, external name) plus backing workloads (Deployment/StatefulSet/DaemonSet/Job/CronJob/RC) and pod replicas with phase, plus an optional cross-link to a Harness CD service.`;
 
-export const descListDiscoveredServices = `List logical services discovered by an SD agent — covers Kubernetes Services/Workloads, AWS resources (ALB/NLB/CLB, EC2, Lambda, RDS), VMs, and VM processes. Requires agent_identity (path) and environment_id (query). Optional namespace filter applies an equality match on spec.kubernetes.namespace (useful for K8s-typed records). Optional search applies a case-insensitive regex on the service name. To inspect L4 network edges between services, use the future discovered_connection / discovered_service_connection resources.
+export const descListDiscoveredServices = `List logical services discovered by an SD agent — covers Kubernetes Services/Workloads, AWS resources (ALB/NLB/CLB, EC2, Lambda, RDS), VMs, and VM processes.
+Do not call until agent_identity and environment_id are set. If either is missing, harness_list resource_type=discovered_agent and use that row's identity and environmentIdentifier. Use that identity; do not assume a chaos_k8s_infrastructure identity is an agent id.
+Optional namespace filter applies an equality match on spec.kubernetes.namespace (useful for K8s-typed records). Optional search applies a case-insensitive regex on the service name. To inspect L4 network edges between services, use the future discovered_connection / discovered_service_connection resources.
 
 IMPORTANT — pass compact: false on this call. The actionable payload lives inside spec.kubernetes.* (backing workloads with kind/uid, pod replicas with phase, service ports, cluster IPs, GKE NEG annotations) which the default compact mode strips because spec is not in the generic whitelist. The compacted view will silently drop these fields without indicating they exist.`;
 
@@ -1841,7 +1898,7 @@ Use this resource to inspect what an SD agent has discovered BEFORE it is groupe
 Returns name, identity, description, tags, environmentIdentifier, agentID, rules, resources (NetworkMapEntity[] — services in the map, each with kubernetes namespace + kind + hasWorkload metadata), and connections (eBPF-derived).`;
 
 export const descListDiscoveredNetworkMaps = `List service-discovery network maps for a specific SD agent and environment.
-Requires agent_identity (the SD agent ID, same as chaos_k8s_infrastructure.identity for SD-enabled infras) and environment_id.
+Do not call until agent_identity and environment_id are set. If either is missing, harness_list resource_type=discovered_agent and use that row's identity and environmentIdentifier. Use that identity; do not assume a chaos_k8s_infrastructure identity is an agent id.
 Supports search (name substring) and the all toggle (default false → server returns paginated chunk; true → server returns full list and skips the user-name enrichment loop).`;
 
 export const descSDNetworkMapSearch = `Case-insensitive substring match on network-map name. Optional.`;
