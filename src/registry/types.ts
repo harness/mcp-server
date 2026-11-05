@@ -167,10 +167,11 @@ export type ToolsetName =
   | "runbooks"
   | "release-management"
   | "vibe"
+  | "appsec"
   | "knowledge-graph"
   | "semantic-layer";
 
-export type ProductName = "harness" | "fme";
+export type ProductName = "harness" | "fme" | "appsec";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 export type ResourceScope = "project" | "org" | "account";
@@ -254,7 +255,13 @@ export interface InputExpansionRule {
 /**
  * Config type for pathBuilder (avoids circular import).
  */
-export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: string; HARNESS_PROJECT?: string };
+export type PathBuilderConfig = {
+  HARNESS_ACCOUNT_ID?: string;
+  HARNESS_ORG?: string;
+  HARNESS_PROJECT?: string;
+  HARNESS_APPSEC_BASE_URL?: string;
+  HARNESS_APPSEC_UI_URL?: string;
+};
 
 /**
  * Output of `EndpointSpec.routeResolver`: fully-resolved path for a specific call,
@@ -350,6 +357,12 @@ export interface EndpointSpec {
    * so required-field validation checks the inner object, not the wrapper.
    */
   bodyWrapperKey?: string;
+  /**
+   * When true, required-field validation for `bodySchema` checks the caller's
+   * `input.body` object directly rather than the transformed `bodyBuilder` output
+   * (e.g. when `bodyBuilder` serializes user fields into a GraphQL query/variables string).
+   */
+  validateInputBody?: boolean;
   /**
    * When true, do not inject orgIdentifier/projectIdentifier into POST/PUT
    * bodies. Some APIs take scope only in query/path and reject extra body fields.

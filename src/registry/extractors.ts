@@ -2461,3 +2461,31 @@ export function timelineListExtract(raw: unknown, input?: Record<string, unknown
     },
   };
 }
+
+export {
+  appsecApiSpansListExtract,
+  appsecApiSpecGetExtract,
+  appsecAstScanGetExtract,
+  appsecAstScanListExtract,
+  appsecDatatypeGetExtract,
+  appsecDatatypesListExtract,
+  appsecDerivationConfigCreateExtract,
+  appsecEntitiesListExtract,
+  appsecEntityGetExtract,
+  appsecExploreListExtract,
+  appsecFraudPolicyCreateExtract,
+  appsecThreatActivityGetExtract,
+  appsecThreatActivityListExtract,
+  appsecTrendListExtract,
+  appsecVulnEnumValuesExtract,
+  appsecVulnerabilitiesListExtract,
+  appsecVulnerabilityGetExtract,
+  buildAppSecEntityUrl,
+  buildAppSecFilterUrl,
+  compactAppSecItem,
+  flattenAppSecResultRow,
+  redactSpanCookies,
+  redactSpanHeaders,
+  sanitizeAndBoundSpanBody,
+  unwrapAppSecGraphql,
+} from "./appsec/extractors.js";

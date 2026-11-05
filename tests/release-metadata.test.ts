@@ -122,6 +122,34 @@ describe("release metadata", () => {
     }
   });
 
+  it("exposes AppSec config in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.HARNESS_APPSEC_API_KEY).toBe(
+        "${user_config.HARNESS_APPSEC_API_KEY}",
+      );
+      expect(manifest.user_config.HARNESS_APPSEC_API_KEY).toMatchObject({
+        required: false,
+        sensitive: true,
+      });
+      expect(manifest.server.mcp_config.env.HARNESS_APPSEC_BASE_URL).toBe(
+        "${user_config.HARNESS_APPSEC_BASE_URL}",
+      );
+      expect(manifest.user_config.HARNESS_APPSEC_BASE_URL).toMatchObject({
+        default: "https://api.traceable.ai",
+        required: false,
+        sensitive: false,
+      });
+      expect(manifest.server.mcp_config.env.HARNESS_APPSEC_UI_URL).toBe(
+        "${user_config.HARNESS_APPSEC_UI_URL}",
+      );
+      expect(manifest.user_config.HARNESS_APPSEC_UI_URL).toMatchObject({
+        default: "https://app.traceable.ai",
+        required: false,
+        sensitive: false,
+      });
+    }
+  });
+
   it("exposes HTTP session TTL config in packaged manifests", () => {
     for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
       expect(manifest.server.mcp_config.env.MCP_SESSION_TTL_MS).toBe("${user_config.MCP_SESSION_TTL_MS}");
