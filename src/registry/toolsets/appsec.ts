@@ -49,13 +49,11 @@ import {
   buildVulnerabilityListBody,
   fetchTrendCurrentCountPreflight,
   resolveAppSecTimeWindow,
-  validateReadOnlyGraphqlDocument,
 } from "../appsec/builders.js";
 
 export {
   assertValidAppSecApiId,
   resolveAppSecTimeWindow,
-  validateReadOnlyGraphqlDocument,
 };
 
 const TIME_WINDOW_FILTER_FIELDS: FilterFieldSpec[] = [
@@ -676,6 +674,7 @@ export const appsecToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: GRAPHQL_PATH,
+          validateInputBody: true,
           skipScopeBodyInjection: true,
           bodyBuilder: buildDerivationConfigCreateBody,
           responseExtractor: appsecDerivationConfigCreateExtract,

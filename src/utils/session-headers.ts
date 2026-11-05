@@ -1,6 +1,6 @@
 import type { IncomingHttpHeaders } from "node:http";
 import type { Config } from "../config.js";
-import { bindSessionAppSecApiKey, extractAccountIdFromToken } from "../config.js";
+import { extractAccountIdFromToken } from "../config.js";
 import { RISK_SEVERITY, type RiskLevel } from "../registry/types.js";
 import { createLogger } from "./logger.js";
 
@@ -128,18 +128,14 @@ export function mergeConfigWithSessionHeaders(
   const cappedAutoApproveRisk = autoApproveRisk === undefined
     ? undefined
     : capAutoApproveRisk(autoApproveRisk, baseConfig.HARNESS_AUTO_APPROVE_RISK ?? "none");
-  const mergedConfig: Config = {
+  return {
     ...baseConfig,
     ...(pipelineVersion !== undefined ? { HARNESS_PIPELINE_VERSION: pipelineVersion } : {}),
     ...(cappedAutoApproveRisk !== undefined ? { HARNESS_AUTO_APPROVE_RISK: cappedAutoApproveRisk } : {}),
     ...(sessionApiKey !== undefined ? { HARNESS_API_KEY: sessionApiKey } : {}),
-    ...(sessionAppSecApiKey !== undefined ? { HARNESS_APPSEC_API_KEY: sessionAppSecApiKey } : {}),
+    ...(sessionAppSecApiKey !== undefined ? { HARNESS_APPSEC_SESSION_API_KEY: sessionAppSecApiKey } : {}),
     ...(sessionAccountId !== undefined ? { HARNESS_ACCOUNT_ID: sessionAccountId } : {}),
     ...(sessionOrg !== undefined ? { HARNESS_ORG: sessionOrg } : {}),
     ...(sessionProject !== undefined ? { HARNESS_PROJECT: sessionProject } : {}),
   };
-  if (sessionAppSecApiKey) {
-    bindSessionAppSecApiKey(mergedConfig, sessionAppSecApiKey);
-  }
-  return mergedConfig;
 }

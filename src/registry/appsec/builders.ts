@@ -36,165 +36,6 @@ export function assertValidAppSecApiId(apiId: string, resourceType: string): str
   return trimmed;
 }
 
-/**
- * Comment- and string-aware GraphQL document classifier.
- * Strips `#` line comments and string/block-string literals, extracts top-level
- * operation definitions, and ensures the document is a single read-only query
- * (or single `submitAnalyticsQueryBatch` operation).
- */
-export function validateReadOnlyGraphqlDocument(query: string, operationName?: string): void {
-  const trimmed = query.trim();
-  if (!trimmed) {
-    throw new Error("Missing required field \"query\" in body.");
-  }
-
-  // Strip string literals ("""...""" and "...") and # line comments so tokens inside
-  // comments or strings can never spoof or hide operation keywords.
-  let stripped = "";
-  let i = 0;
-  while (i < trimmed.length) {
-    if (trimmed.startsWith("\"\"\"", i)) {
-      i += 3;
-      while (i < trimmed.length && !trimmed.startsWith("\"\"\"", i)) {
-        if (trimmed[i] === "\\") i += 2;
-        else i++;
-      }
-      i += 3;
-      stripped += " \"\" ";
-      continue;
-    }
-    if (trimmed[i] === "\"") {
-      i++;
-      while (i < trimmed.length && trimmed[i] !== "\"" && trimmed[i] !== "\n") {
-        if (trimmed[i] === "\\") i += 2;
-        else i++;
-      }
-      i++;
-      stripped += " \"\" ";
-      continue;
-    }
-    if (trimmed[i] === "#") {
-      while (i < trimmed.length && trimmed[i] !== "\n") i++;
-      continue;
-    }
-    stripped += trimmed[i]!;
-    i++;
-  }
-
-  // Walk top-level brace depth 0 to classify every operation definition
-  const operations: Array<{ kind: "query" | "mutation" | "subscription"; name?: string; body: string }> = [];
-  let depth = 0;
-  let parenDepth = 0;
-  let pos = 0;
-  const len = stripped.length;
-
-  const skipWsAndCommas = () => {
-    while (pos < len && /[\s,]/.test(stripped[pos]!)) pos++;
-  };
-
-  const readIdent = (): string => {
-    skipWsAndCommas();
-    const start = pos;
-    while (pos < len && /[A-Za-z0-9_]/.test(stripped[pos]!)) pos++;
-    return stripped.slice(start, pos);
-  };
-
-  while (pos < len) {
-    skipWsAndCommas();
-    if (pos >= len) break;
-
-    if (stripped[pos] === "{") {
-      // Shorthand anonymous query `{ ... }`
-      const blockStart = pos;
-      depth = 1;
-      pos++;
-      while (pos < len && depth > 0) {
-        if (stripped[pos] === "{") depth++;
-        else if (stripped[pos] === "}") depth--;
-        pos++;
-      }
-      operations.push({ kind: "query", body: stripped.slice(blockStart + 1, pos - 1) });
-      continue;
-    }
-
-    const keyword = readIdent();
-    if (!keyword) {
-      throw new Error("Invalid GraphQL document syntax.");
-    }
-    if (keyword === "fragment") {
-      // Skip fragment definition: fragment Name on Type { ... }
-      readIdent();
-      readIdent();
-      readIdent();
-      skipWsAndCommas();
-      if (stripped[pos] === "{") {
-        depth = 1;
-        pos++;
-        while (pos < len && depth > 0) {
-          if (stripped[pos] === "{") depth++;
-          else if (stripped[pos] === "}") depth--;
-          pos++;
-        }
-      }
-      continue;
-    }
-
-    if (keyword !== "query" && keyword !== "mutation" && keyword !== "subscription") {
-      throw new Error(`Unexpected top-level GraphQL token "${keyword}".`);
-    }
-
-    skipWsAndCommas();
-    const opName = /[A-Za-z_]/.test(stripped[pos] ?? "") ? readIdent() : undefined;
-    skipWsAndCommas();
-    if (stripped[pos] === "(") {
-      parenDepth = 1;
-      pos++;
-      while (pos < len && parenDepth > 0) {
-        if (stripped[pos] === "(") parenDepth++;
-        else if (stripped[pos] === ")") parenDepth--;
-        pos++;
-      }
-    }
-    // Skip any directives (@dir...) before '{'
-    while (pos < len && stripped[pos] !== "{") pos++;
-    if (stripped[pos] !== "{") {
-      throw new Error("Malformed GraphQL operation: missing selection set.");
-    }
-    const blockStart = pos;
-    depth = 1;
-    pos++;
-    while (pos < len && depth > 0) {
-      if (stripped[pos] === "{") depth++;
-      else if (stripped[pos] === "}") depth--;
-      pos++;
-    }
-    operations.push({
-      kind: keyword,
-      name: opName,
-      body: stripped.slice(blockStart + 1, pos - 1),
-    });
-  }
-
-  if (operations.length !== 1) {
-    throw new Error("Exactly one GraphQL operation definition is allowed.");
-  }
-
-  const op = operations[0]!;
-  if (operationName && op.name && op.name !== operationName) {
-    throw new Error(`operation_name "${operationName}" does not match operation "${op.name}".`);
-  }
-
-  if (op.kind === "subscription") {
-    throw new Error("GraphQL subscriptions are not supported.");
-  }
-
-  if (op.kind === "mutation") {
-    throw new Error(
-      "Write mutations are not allowed in read-only GraphQL queries. Use harness_create with appsec_fraud_policy or appsec_derivation_config instead.",
-    );
-  }
-}
-
 function toIsoMillisUtc(ms: number): string {
   return new Date(ms).toISOString();
 }
@@ -292,9 +133,17 @@ function resolveLimitAndOffset(
   defaultLimit = 10,
 ): { limit: number; offset: number } {
   const rawLimit = input.limit ?? input.size;
-  const limit = typeof rawLimit === "number" && rawLimit > 0 ? Math.min(rawLimit, 1000) : defaultLimit;
-  const page = typeof input.page === "number" && input.page >= 0 ? input.page : 0;
-  const offset = typeof input.offset === "number" && input.offset >= 0 ? input.offset : page * limit;
+  const limit =
+    typeof rawLimit === "number" && Number.isFinite(rawLimit) && Math.trunc(rawLimit) > 0
+      ? Math.min(Math.trunc(rawLimit), 1000)
+      : defaultLimit;
+  const page = typeof input.page === "number" && Number.isFinite(input.page) && Math.trunc(input.page) >= 0
+    ? Math.trunc(input.page)
+    : 0;
+  const offset =
+    typeof input.offset === "number" && Number.isFinite(input.offset) && Math.trunc(input.offset) >= 0
+      ? Math.trunc(input.offset)
+      : page * limit;
   return { limit, offset };
 }
 

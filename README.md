@@ -159,7 +159,7 @@ HARNESS_MCP_MODE=oauth
 
 This defaults to the issuer `https://id.harness.io/idp/realms/HarnessIDP`, resource `https://mcp.harness.io/mcp`, OAuth client `mcp-client`, and Harness API base `https://mcp.harness.io/cli`. Override them only for QA, local development, or another Harness environment.
 
-`HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token.
+`HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token. If the opt-in `appsec` toolset (`HARNESS_TOOLSETS=+appsec`) is enabled, sessions must also pass `x-harness-appsec-api-key` on the `initialize` request (HarnessID OAuth tokens are never forwarded to `api.traceable.ai`).
 
 The server publishes RFC 9728 protected-resource metadata and returns this challenge when a client has not authenticated:
 
@@ -205,6 +205,7 @@ Set `HARNESS_MCP_MODE=multi-user` for shared HTTP deployments where each client 
 - `HARNESS_API_KEY` must **not** be set in the server config — the server holds no Harness credentials.
 - Each session must provide `x-harness-api-key` on the `initialize` request. `x-harness-account-id` is required only when the API key does not embed an account segment.
 - Sessions may also provide `x-harness-org` and `x-harness-project` headers to set default scope for that session.
+- If the opt-in `appsec` toolset (`HARNESS_TOOLSETS=+appsec`) is enabled, sessions that call `appsec_*` resources must also provide `x-harness-appsec-api-key` on the `initialize` request (the session's `x-harness-api-key` is never forwarded to `api.traceable.ai`).
 - The Harness API key flows through to every Harness API call for that session, so the audit trail in Harness reflects the real user.
 - `HARNESS_MCP_AUTH_TOKEN` is independent and can still be used as an additional transport-layer gate.
 

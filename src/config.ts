@@ -542,6 +542,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS: upstreamEmailDomains(
       data.HARNESS_MCP_UPSTREAM_EMAIL_DOMAINS,
     ),
+    HARNESS_APPSEC_SESSION_API_KEY: undefined as string | undefined,
   };
 });
 
@@ -587,36 +588,23 @@ export function resolveFmeApiKey(
 }
 
 /**
- * Tracks per-session Traceable AppSec tokens injected by `mergeConfigWithSessionHeaders`
- * from the `x-harness-appsec-api-key` request header in hosted HTTP modes.
- * Using a WeakMap ensures a static/shared `HARNESS_APPSEC_API_KEY` on a raw multi-user
- * or OAuth config is defensively ignored unless bound from a session header.
- */
-const sessionAppSecTokens = new WeakMap<object, string>();
-
-export function bindSessionAppSecApiKey(config: Config, token: string | undefined): void {
-  const trimmed = token?.trim();
-  if (trimmed && !isPlaceholderCredential(trimmed)) {
-    sessionAppSecTokens.set(config, trimmed);
-  } else {
-    sessionAppSecTokens.delete(config);
-  }
-}
-
-/**
  * Resolve the token used for Traceable AppSec product APIs.
  * AppSec talks directly to api.traceable.ai, so Harness credentials
  * (HARNESS_API_KEY, session x-harness-api-key, or HarnessID OAuth tokens)
  * must never be forwarded there.
  * - Single-user mode: uses explicit HARNESS_APPSEC_API_KEY (never HARNESS_API_KEY).
- * - Multi-user / OAuth modes: uses only the per-session x-harness-appsec-api-key
- *   bound via mergeConfigWithSessionHeaders (never a shared server key).
+ * - Multi-user / OAuth modes: uses only the per-session HARNESS_APPSEC_SESSION_API_KEY
+ *   populated by mergeConfigWithSessionHeaders from x-harness-appsec-api-key
+ *   (never a shared server HARNESS_APPSEC_API_KEY).
  */
 export function resolveAppSecApiKey(
-  config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_APPSEC_API_KEY">,
+  config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_APPSEC_API_KEY"> & {
+    HARNESS_APPSEC_SESSION_API_KEY?: string;
+  },
 ): string | undefined {
   if (config.HARNESS_MCP_MODE !== "single-user") {
-    return sessionAppSecTokens.get(config);
+    const sessionKey = config.HARNESS_APPSEC_SESSION_API_KEY?.trim();
+    return sessionKey && !isPlaceholderCredential(sessionKey) ? sessionKey : undefined;
   }
   const explicitAppSecKey = config.HARNESS_APPSEC_API_KEY?.trim();
   if (explicitAppSecKey && !isPlaceholderCredential(explicitAppSecKey)) {

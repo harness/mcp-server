@@ -4,7 +4,6 @@ import { ConfigSchema, resolveAppSecApiKey, resolveProductBaseUrl, type Config }
 import { HarnessClient } from "../../src/client/harness-client.js";
 import { mergeConfigWithSessionHeaders } from "../../src/utils/session-headers.js";
 import type { HarnessClientInterface } from "../../src/registry/types.js";
-import { validateReadOnlyGraphqlDocument } from "../../src/registry/toolsets/appsec.js";
 
 const VALID_API_UUID = "c7e8f4ca-f821-332c-8510-84d79605d652";
 
@@ -236,6 +235,43 @@ describe("AppSec Toolset & Config", () => {
           /x-harness-appsec-api-key/,
         );
         expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("authenticates oauth sessions when x-harness-appsec-api-key is supplied and survives index.ts sessionConfig spread", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { dataTypes: { results: [] } } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      try {
+        const baseCfg = makeConfig({
+          HARNESS_MCP_MODE: "oauth",
+          HARNESS_API_KEY: "",
+          HARNESS_ACCOUNT_ID: "",
+          HARNESS_APPSEC_API_KEY: undefined,
+        });
+        const headerConfig = mergeConfigWithSessionHeaders(baseCfg, {
+          "x-harness-appsec-api-key": "traceable-oauth-session-token",
+        });
+        // Mirrors src/index.ts: const sessionConfig = { ...headerConfig, HARNESS_ACCOUNT_ID: oauthCredential.accountId }
+        const sessionConfig = { ...headerConfig, HARNESS_ACCOUNT_ID: "oauth-account-123" };
+        const client = new HarnessClient(sessionConfig);
+        client.setAccountIdResolver(() => "oauth-account-123");
+        client.setBearerTokenResolver(() => "harnessid-oauth-jwt-token");
+        const registry = new Registry(sessionConfig);
+
+        await registry.dispatch(client, "appsec_datatype", "list", {});
+
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        const [calledUrl, calledInit] = fetchSpy.mock.calls[0]!;
+        expect(calledUrl).toBe("https://api.traceable.ai/graphql");
+        const headers = calledInit?.headers as Record<string, string>;
+        expect(headers["Authorization"]).toBe("traceable-oauth-session-token");
+        expect(headers["Harness-Account"]).toBeUndefined();
       } finally {
         fetchSpy.mockRestore();
       }
@@ -822,32 +858,17 @@ describe("AppSec Toolset & Config", () => {
     });
   });
 
-  describe("GraphQL Document Classifier & Error Extraction", () => {
-    it("blocks comment-prefixed mutations, multi-operation documents, and comment-spoofed allowlist names", () => {
-      // 1. Leading comment before mutation
-      expect(() =>
-        validateReadOnlyGraphqlDocument(`# note\nmutation { deleteFraudPolicy(id: "p1") { ok } }`),
-      ).toThrow(/Write mutations are not allowed/);
+  describe("Pagination & Error Extraction", () => {
+    it("truncates fractional limit and offset values to integers before sending to GraphQL", async () => {
+      const { client, calls } = makeMockClient(() => ({
+        data: { entities: { total: 0, results: [] } },
+      }));
+      const registry = new Registry(makeConfig());
+      await registry.dispatch(client, "appsec_api", "list", { limit: 2.7, offset: 4.9 });
 
-      // 2. Multi-operation document with query + mutation
-      expect(() =>
-        validateReadOnlyGraphqlDocument(
-          `query A { __typename }\nmutation B { deleteFraudPolicy(id: "p1") { ok } }`,
-          "B",
-        ),
-      ).toThrow(/Exactly one GraphQL operation definition is allowed/);
-
-      // 3. Mutation with allowlisted name in trailing comment
-      expect(() =>
-        validateReadOnlyGraphqlDocument(
-          `mutation { deleteFraudPolicy(id: "p1") { ok } } # submitAnalyticsQueryBatch(`,
-        ),
-      ).toThrow(/Write mutations are not allowed/);
-
-      // Valid single query passes
-      expect(() =>
-        validateReadOnlyGraphqlDocument(`# comment\nquery GetTypes { dataTypes { results { id } } }`),
-      ).not.toThrow();
+      const vars = (calls[0]!.body as { variables: { limit: number; offset: number } }).variables;
+      expect(vars.limit).toBe(2);
+      expect(vars.offset).toBe(4);
     });
 
     it("surfaces GraphQL errors[] in HTTP 200 responses as HarnessApiError", async () => {

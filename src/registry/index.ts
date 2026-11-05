@@ -1226,14 +1226,7 @@ export class Registry {
     input: Record<string, unknown>,
     body: object,
   ): Record<string, unknown> {
-    if (
-      Array.isArray(body) ||
-      (!spec.bodyWrapperKey &&
-        typeof (body as Record<string, unknown>).query === "string" &&
-        input.body &&
-        typeof input.body === "object" &&
-        !Array.isArray(input.body))
-    ) {
+    if (Array.isArray(body) || spec.validateInputBody) {
       const inputBody = input.body;
       return inputBody && typeof inputBody === "object" && !Array.isArray(inputBody)
         ? (inputBody as Record<string, unknown>)

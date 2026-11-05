@@ -358,6 +358,12 @@ export interface EndpointSpec {
    */
   bodyWrapperKey?: string;
   /**
+   * When true, required-field validation for `bodySchema` checks the caller's
+   * `input.body` object directly rather than the transformed `bodyBuilder` output
+   * (e.g. when `bodyBuilder` serializes user fields into a GraphQL query/variables string).
+   */
+  validateInputBody?: boolean;
+  /**
    * When true, do not inject orgIdentifier/projectIdentifier into POST/PUT
    * bodies. Some APIs take scope only in query/path and reject extra body fields.
    */
