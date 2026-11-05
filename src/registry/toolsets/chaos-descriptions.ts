@@ -1248,7 +1248,7 @@ export const descEstimateWorkers = `Estimate the number of workers (load generat
 Nothing is saved; to apply the result, set worker_count on chaos_loadtest create/update. Pass load_test_identity to calibrate per-user cost from that load test's recent runs instead of the tool defaults (the response includes 'calibration' when used). For JMeter, usersPerWorker is also the thread count the plan should declare, since each worker runs the full plan.
 Use this in the Worker Count step of chaos_loadtest create/update when the user asks for an estimate or has no preference. Only tool_type and target_users are required.`;
 export const descBodyEstimateWorkers = `Tool type, target concurrency, and optional per-worker resources, rps cap, and headroom.`;
-export const descEstimateToolType = `Load test tool type: "Locust", "JMeter", or "K6".`;
+export const descEstimateToolType = `Load test tool type: "Locust", "JMeter", or "K6" (case-insensitive).`;
 export const descEstimateTargetUsers = `Total concurrent users across all workers. Must be greater than zero.`;
 export const descEstimateTargetRps = `Optional rps cap across all workers. Must not be negative.`;
 export const descEstimateResources = `Per-worker cpu/memory, same shape as chaos_loadtest.resources: { limits?: { cpu?, memory? }, requests?: { cpu?, memory? } }. Omit to use the defaults (1 core / 2Gi); 'inputs.cpuAssumed' / 'inputs.memoryAssumed' in the response show when defaults were used.`;

@@ -1268,6 +1268,28 @@ describe("chaos_loadtest execute actions", () => {
     expect(call.params.loadTestIdentity).toBe("lt-calibrate-1");
   });
 
+  it("estimate_workers: uses resource_id (loadtest_id) for calibration when load_test_identity is not set", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+      org_id: "o", project_id: "p",
+      tool_type: "Locust", target_users: 10,
+      loadtest_id: "lt-from-resource-id",
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/worker-estimate");
+    expect(call.params.loadTestIdentity).toBe("lt-from-resource-id");
+  });
+
+  it("estimate_workers: accepts tool_type case-insensitively", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+      org_id: "o", project_id: "p", tool_type: "jmeter", target_users: 10,
+    });
+    expect(mockRequest.mock.calls[0][0].body.toolType).toBe("JMeter");
+  });
+
   it("estimate_workers: hoists load_test_identity nested inside `body` (all fields nested together)", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
