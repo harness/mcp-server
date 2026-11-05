@@ -386,6 +386,13 @@ export class HarnessClient {
           "FME_AUTH_MISSING",
         );
       }
+      if (isAppSec) {
+        throw new HarnessApiError(
+          `AppSec calls to Traceable are unavailable in ${this.mcpMode} mode because HarnessID access tokens cannot be forwarded to external Traceable hosts.`,
+          401,
+          "APPSEC_AUTH_MISSING",
+        );
+      }
       if (getHeaderValue(headers, "authorization")) return;
 
       const token = this.bearerTokenResolver?.();
@@ -401,31 +408,30 @@ export class HarnessClient {
     }
 
     if (isAppSec) {
-      const headerApiKey = deleteHeaderValues(headers, "x-api-key")
-        .map((value) => value.trim())
-        .find((value) => value && !isPlaceholderCredential(value));
+      // Never forward Harness x-api-key or session x-harness-api-key to api.traceable.ai.
+      deleteHeaderValues(headers, "x-api-key");
 
-      if (getHeaderValue(headers, "authorization")) return;
-
-      const appsecApiKey = headerApiKey && !isPlaceholderCredential(headerApiKey)
-        ? headerApiKey
-        : this.appsecApiKey;
-
-      if (!appsecApiKey) {
-        const remediation = this.mcpMode === "multi-user"
-          ? "Ensure the session x-harness-api-key is a valid Traceable/AppSec API token. " +
-            "Do not configure HARNESS_APPSEC_API_KEY in multi-user mode."
-          : "Configure HARNESS_APPSEC_API_KEY with a Traceable Platform API token, " +
-            "or set HARNESS_API_KEY to a non-placeholder token.";
+      if (this.mcpMode !== "single-user") {
         throw new HarnessApiError(
-          "AppSec is not configured or authorized for this MCP session. " +
-          `${remediation}`,
+          `AppSec calls to Traceable are unavailable in ${this.mcpMode} mode. ` +
+          "Configure single-user mode with HARNESS_APPSEC_API_KEY.",
           401,
           "APPSEC_AUTH_MISSING",
         );
       }
 
-      headers["Authorization"] = appsecApiKey;
+      if (getHeaderValue(headers, "authorization")) return;
+
+      if (!this.appsecApiKey) {
+        throw new HarnessApiError(
+          "AppSec is not configured for this MCP session. " +
+          "Set HARNESS_APPSEC_API_KEY to a valid Traceable Platform API token (HARNESS_API_KEY is never forwarded to Traceable).",
+          401,
+          "APPSEC_AUTH_MISSING",
+        );
+      }
+
+      headers["Authorization"] = this.appsecApiKey;
       return;
     }
 

@@ -3,7 +3,9 @@ import { Registry } from "../../src/registry/index.js";
 import { ConfigSchema, resolveAppSecApiKey, resolveProductBaseUrl, type Config } from "../../src/config.js";
 import { HarnessClient } from "../../src/client/harness-client.js";
 import type { HarnessClientInterface } from "../../src/registry/types.js";
-import { validateAppSecTrinoSql } from "../../src/registry/toolsets/appsec.js";
+import { validateReadOnlyGraphqlDocument } from "../../src/registry/toolsets/appsec.js";
+
+const VALID_API_UUID = "c7e8f4ca-f821-332c-8510-84d79605d652";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -14,6 +16,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_APPSEC_BASE_URL: "https://api.traceable.ai",
     HARNESS_APPSEC_UI_URL: "https://app.traceable.ai",
     HARNESS_APPSEC_API_KEY: "traceable-token-xyz",
+    HARNESS_TOOLSETS: "+appsec",
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 0,
     HARNESS_RATE_LIMIT_RPS: 100,
@@ -37,27 +40,59 @@ function makeMockClient(responseImpl: (opts: Record<string, unknown>) => unknown
 }
 
 describe("AppSec Toolset & Config", () => {
-  describe("Config & Product Routing", () => {
+  describe("Opt-In Exposure & Contract", () => {
+    it("is opt-in: excluded from default registry and loaded when HARNESS_TOOLSETS includes +appsec", () => {
+      const defaultReg = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
+      expect(defaultReg.getAllResourceTypes()).not.toContain("appsec_api");
+      expect(defaultReg.getAllResourceTypes()).not.toContain("appsec_vulnerability");
+
+      const optInReg = new Registry(makeConfig({ HARNESS_TOOLSETS: "+appsec" }));
+      expect(optInReg.getAllResourceTypes()).toContain("appsec_api");
+      expect(optInReg.getAllResourceTypes()).toContain("appsec_vulnerability");
+      expect(optInReg.getAllResourceTypes()).not.toContain("appsec_query");
+    });
+
+    it("defines compactItem on every AppSec list resource and never sets skipCompact", () => {
+      const reg = new Registry(makeConfig());
+      const appsecToolset = reg.getAllToolsets().find((t) => t.name === "appsec")!;
+      expect(appsecToolset).toBeDefined();
+
+      for (const res of appsecToolset.resources) {
+        if (res.operations.list) {
+          expect(res.compactItem, `${res.resourceType} missing compactItem`).toBeTypeOf("function");
+          expect(res.operations.list.skipCompact, `${res.resourceType}.list should not set skipCompact`).toBeUndefined();
+        }
+      }
+    });
+  });
+
+  describe("Config & Product Auth Isolation (No Harness Credential Egress)", () => {
     it("strips trailing /graphql from HARNESS_APPSEC_BASE_URL in resolveProductBaseUrl", () => {
       const cfg = makeConfig({ HARNESS_APPSEC_BASE_URL: "https://api-dev.traceable.ai/graphql" });
       expect(resolveProductBaseUrl(cfg, "appsec")).toBe("https://api-dev.traceable.ai");
     });
 
-    it("rejects HARNESS_APPSEC_API_KEY in multi-user mode", () => {
+    it("rejects HARNESS_APPSEC_API_KEY in multi-user and oauth modes", () => {
       expect(() =>
         ConfigSchema.parse({
           HARNESS_MCP_MODE: "multi-user",
           HARNESS_APPSEC_API_KEY: "secret",
         }),
       ).toThrow(/HARNESS_APPSEC_API_KEY must not be set in multi-user mode/);
+
+      expect(() =>
+        ConfigSchema.parse({
+          HARNESS_MCP_MODE: "oauth",
+          HARNESS_APPSEC_API_KEY: "secret",
+        }),
+      ).toThrow(/HARNESS_APPSEC_API_KEY must not be set in oauth mode/);
     });
 
-    it("resolves explicit HARNESS_APPSEC_API_KEY or falls back to HARNESS_API_KEY", () => {
+    it("resolves only explicit HARNESS_APPSEC_API_KEY in single-user mode and never falls back to HARNESS_API_KEY", () => {
       expect(
         resolveAppSecApiKey({
           HARNESS_MCP_MODE: "single-user",
           HARNESS_APPSEC_API_KEY: "traceable-explicit",
-          HARNESS_API_KEY: "pat.acc.tok.sec",
         }),
       ).toBe("traceable-explicit");
 
@@ -65,12 +100,18 @@ describe("AppSec Toolset & Config", () => {
         resolveAppSecApiKey({
           HARNESS_MCP_MODE: "single-user",
           HARNESS_APPSEC_API_KEY: undefined,
-          HARNESS_API_KEY: "pat.acc.tok.sec",
         }),
-      ).toBe("pat.acc.tok.sec");
+      ).toBeUndefined();
+
+      expect(
+        resolveAppSecApiKey({
+          HARNESS_MCP_MODE: "multi-user",
+          HARNESS_APPSEC_API_KEY: "traceable-explicit",
+        }),
+      ).toBeUndefined();
     });
 
-    it("sends Authorization header without Harness-Account or accountIdentifier query param for product='appsec'", async () => {
+    it("sends Authorization header without Harness-Account or accountIdentifier query param when HARNESS_APPSEC_API_KEY is set", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
         new Response(JSON.stringify({ data: { dataTypes: { results: [] } } }), {
           status: 200,
@@ -94,6 +135,69 @@ describe("AppSec Toolset & Config", () => {
         const headers = calledInit?.headers as Record<string, string>;
         expect(headers["Authorization"]).toBe("traceable-secret-token");
         expect(headers["Harness-Account"]).toBeUndefined();
+        expect(headers["x-api-key"]).toBeUndefined();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("fails closed in single-user mode when HARNESS_APPSEC_API_KEY is unset (never sends HARNESS_API_KEY)", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      try {
+        const cfg = makeConfig({ HARNESS_APPSEC_API_KEY: undefined });
+        const client = new HarnessClient(cfg);
+        const registry = new Registry(cfg);
+
+        await expect(registry.dispatch(client, "appsec_datatype", "list", {})).rejects.toThrow(
+          /HARNESS_API_KEY is never forwarded to Traceable/,
+        );
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("fails closed in multi-user mode (never sends session x-api-key to Traceable)", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      try {
+        const cfg = makeConfig({
+          HARNESS_MCP_MODE: "multi-user",
+          HARNESS_API_KEY: "",
+          HARNESS_APPSEC_API_KEY: undefined,
+        });
+        const client = new HarnessClient(cfg);
+
+        await expect(
+          client.request({
+            method: "POST",
+            path: "/graphql",
+            product: "appsec",
+            headers: { "x-api-key": "pat.sessionuser.tok.sec" },
+            body: { query: "{ __typename }" },
+          }),
+        ).rejects.toThrow(/unavailable in multi-user mode/);
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("fails closed in oauth mode (never forwards HarnessID Bearer token to Traceable)", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      try {
+        const cfg = makeConfig({
+          HARNESS_MCP_MODE: "oauth",
+          HARNESS_API_KEY: "",
+          HARNESS_APPSEC_API_KEY: undefined,
+        });
+        const client = new HarnessClient(cfg);
+        client.setBearerTokenResolver(() => "harnessid-oauth-jwt-token");
+        const registry = new Registry(cfg);
+
+        await expect(registry.dispatch(client, "appsec_datatype", "list", {})).rejects.toThrow(
+          /HarnessID access tokens cannot be forwarded to external Traceable hosts/,
+        );
+        expect(fetchSpy).not.toHaveBeenCalled();
       } finally {
         fetchSpy.mockRestore();
       }
@@ -101,7 +205,7 @@ describe("AppSec Toolset & Config", () => {
   });
 
   describe("appsec_api", () => {
-    it("injects isLearnt=true and apiDiscoveryState defaults, flattens metrics, and builds deep links", async () => {
+    it("injects isLearnt=true and apiDiscoveryState defaults, flattens metrics, builds deep links, and does not mutate input", async () => {
       const { client, calls } = makeMockClient(() => ({
         data: {
           entities: {
@@ -123,15 +227,19 @@ describe("AppSec Toolset & Config", () => {
       }));
 
       const registry = new Registry(makeConfig());
-      const res = (await registry.dispatch(client, "appsec_api", "list", {
+      const input: Record<string, unknown> = {
         name_regex: ".*payments.*",
         has_pii: true,
         environment: "prod",
-      })) as {
+      };
+      const res = (await registry.dispatch(client, "appsec_api", "list", input)) as {
         items: Array<Record<string, unknown>>;
         total: number;
         filter_url: string;
       };
+
+      // Ensure no _-prefixed keys were written onto input
+      expect(Object.keys(input).filter((k) => k.startsWith("_"))).toEqual([]);
 
       expect(calls).toHaveLength(1);
       const body = calls[0]!.body as { query: string; variables: Record<string, unknown> };
@@ -163,7 +271,7 @@ describe("AppSec Toolset & Config", () => {
     });
   });
 
-  describe("appsec_api_spec & appsec_api_span", () => {
+  describe("appsec_api_spec & appsec_api_span (with Redaction & Bounding)", () => {
     it("extracts OpenAPI YAML specification in appsec_api_spec.get", async () => {
       const { client } = makeMockClient(() => ({
         data: {
@@ -184,7 +292,8 @@ describe("AppSec Toolset & Config", () => {
       expect(res.url).toBe("https://app.traceable.ai/inventory/endpoint/api-123");
     });
 
-    it("parses JSON headers, bodies, and cookies in appsec_api_span.list", async () => {
+    it("redacts Authorization/Cookie/Set-Cookie headers, redacts all cookie values, and bounds large bodies in appsec_api_span.list", async () => {
+      const hugeText = "x".repeat(3000);
       const { client } = makeMockClient(() => ({
         data: {
           submitAnalyticsQueryBatch: {
@@ -198,10 +307,34 @@ describe("AppSec Toolset & Config", () => {
                   apiId: { value: "api-123" },
                   apiName: { value: "POST /v1/payments" },
                   statusCode: { value: "200" },
-                  spanRequestHeaders: { value: JSON.stringify({ "content-type": "application/json" }) },
-                  spanRequestBody: { value: JSON.stringify({ amount: 100 }) },
-                  spanResponseHeaders: { value: "{}" },
-                  spanResponseBody: { value: JSON.stringify({ ok: true }) },
+                  sessionId: { value: "raw-session-token-123" },
+                  spanRequestHeaders: {
+                    value: JSON.stringify({
+                      "content-type": "application/json",
+                      Authorization: "Bearer super-secret-jwt",
+                      Cookie: "sid=secret-cookie",
+                      "x-api-key": "secret-api-key",
+                    }),
+                  },
+                  spanRequestCookies: {
+                    value: JSON.stringify({
+                      session_id: "cookie-secret-val",
+                      theme: "dark",
+                    }),
+                  },
+                  spanRequestBody: {
+                    value: JSON.stringify({ amount: 100, password: "my-secret-password" }),
+                  },
+                  spanResponseHeaders: {
+                    value: JSON.stringify({
+                      "Set-Cookie": "sid=new-secret",
+                      "x-request-id": "req-1",
+                    }),
+                  },
+                  spanResponseCookies: {
+                    value: JSON.stringify({ sid: "new-secret" }),
+                  },
+                  spanResponseBody: { value: hugeText },
                 },
               ],
             },
@@ -214,14 +347,32 @@ describe("AppSec Toolset & Config", () => {
       })) as { items: Array<Record<string, unknown>>; total: number };
 
       expect(res.total).toBe(1);
-      expect(res.items[0]).toMatchObject({
-        span_id: "span-1",
-        trace_id: "trace-1",
-        api_id: "api-123",
-        request_headers: { "content-type": "application/json" },
-        request_body: { amount: 100 },
-        response_body: { ok: true },
+      const span = res.items[0]!;
+      expect(span.session_id).toBe("[REDACTED]");
+      expect(span.request_headers).toEqual({
+        "content-type": "application/json",
+        Authorization: "[REDACTED]",
+        Cookie: "[REDACTED]",
+        "x-api-key": "[REDACTED]",
       });
+      expect(span.request_cookies).toEqual({
+        session_id: "[REDACTED]",
+        theme: "[REDACTED]",
+      });
+      expect(span.response_headers).toEqual({
+        "Set-Cookie": "[REDACTED]",
+        "x-request-id": "req-1",
+      });
+      expect(span.response_cookies).toEqual({
+        sid: "[REDACTED]",
+      });
+      expect(span.request_body).toEqual({
+        amount: 100,
+        password: "[REDACTED]",
+      });
+      expect(typeof span.response_body).toBe("string");
+      expect((span.response_body as string).length).toBeLessThan(2100);
+      expect(span.response_body as string).toMatch(/\.\.\.\[truncated\]$/);
     });
   });
 
@@ -315,11 +466,10 @@ describe("AppSec Toolset & Config", () => {
     it("fetches distinct enum values via execute action enum_values", async () => {
       const { client } = makeMockClient(() => ({
         data: {
-          vulnerabilitiesV3: {
+          STATUS: {
             results: [
-              {
-                STATUS: { value: ["VULNERABILITY_STATUS_OPEN", "VULNERABILITY_STATUS_FIXED"] },
-              },
+              { STATUS: { value: "VULNERABILITY_STATUS_OPEN" }, count: { value: 10 } },
+              { STATUS: { value: "VULNERABILITY_STATUS_FIXED" }, count: { value: 5 } },
             ],
           },
         },
@@ -438,7 +588,7 @@ describe("AppSec Toolset & Config", () => {
   });
 
   describe("appsec_inventory_trend", () => {
-    it("runs preflight for current count and calculates backward daily trend and N-days-ago count", async () => {
+    it("runs preflight for current count and calculates backward daily trend and N-days-ago count without mutating input", async () => {
       const now = new Date();
       const todayKey = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
         .toISOString()
@@ -453,10 +603,8 @@ describe("AppSec Toolset & Config", () => {
       const { client, calls } = makeMockClient(() => {
         callIndex++;
         if (callIndex === 1) {
-          // Preflight call to appsec_api.list
           return { data: { entities: { total: 100, results: [] } } };
         }
-        // Main submitAnalyticsQueryBatch call
         return {
           data: {
             submitAnalyticsQueryBatch: {
@@ -480,18 +628,19 @@ describe("AppSec Toolset & Config", () => {
       });
 
       const registry = new Registry(makeConfig());
-      const res = (await registry.dispatch(client, "appsec_inventory_trend", "list", {
+      const input: Record<string, unknown> = {
         trend_type: "apis",
         period_days: 3,
-      })) as {
+      };
+      const res = (await registry.dispatch(client, "appsec_inventory_trend", "list", input)) as {
         current_count: number;
         count_n_days_ago: number;
         items: Array<{ date: string; count: number }>;
       };
 
+      expect(Object.keys(input)).toEqual(["trend_type", "period_days"]);
       expect(calls).toHaveLength(2);
       expect(res.current_count).toBe(100);
-      // 100 - (5 + 10) + (2 + 3) = 90
       expect(res.count_n_days_ago).toBe(90);
       expect(res.items[0]).toMatchObject({ date: todayKey, count: 100 });
       expect(res.items[1]).toMatchObject({ date: yesterdayKey, count: 90 });
@@ -525,8 +674,8 @@ describe("AppSec Toolset & Config", () => {
     });
   });
 
-  describe("appsec_fraud_policy & appsec_derivation_config", () => {
-    it("creates a fraud policy and validates SELECT SQL query", async () => {
+  describe("appsec_fraud_policy & appsec_derivation_config (JEXL Injection & Validation)", () => {
+    it("creates a fraud policy, validates SELECT SQL query, and requires a UUID api_id", async () => {
       const { client, calls } = makeMockClient(() => ({
         data: {
           CreateFraudPolicy: {
@@ -544,7 +693,7 @@ describe("AppSec Toolset & Config", () => {
           policy_name: "high-velocity-transfers",
           description: "Detect rapid wire transfers",
           sql_query: "SELECT actor_id, COUNT(*) FROM customer_events GROUP BY actor_id",
-          api_id: "api-123",
+          api_id: VALID_API_UUID,
         },
       })) as Record<string, unknown>;
 
@@ -562,13 +711,24 @@ describe("AppSec Toolset & Config", () => {
             policy_name: "bad-policy",
             description: "Invalid SQL",
             sql_query: "DROP TABLE customer_events",
-            api_id: "api-123",
+            api_id: VALID_API_UUID,
           },
         }),
       ).rejects.toThrow(/sql_query must be a valid SELECT query/);
+
+      await expect(
+        registry.dispatch(client, "appsec_fraud_policy", "create", {
+          body: {
+            policy_name: "bad-api-id",
+            description: "Non-UUID API ID",
+            sql_query: "SELECT * FROM customer_events",
+            api_id: "not-a-uuid",
+          },
+        }),
+      ).rejects.toThrow(/must be a valid UUID/);
     });
 
-    it("creates a derivation config from structured features or legacy XML", async () => {
+    it("creates a derivation config with a valid UUID api_id and blocks JEXL quote injection in api_id", async () => {
       const { client, calls } = makeMockClient(() => ({
         data: {
           CreateDerivationConfig: {
@@ -584,7 +744,7 @@ describe("AppSec Toolset & Config", () => {
 
       const res = (await registry.dispatch(client, "appsec_derivation_config", "create", {
         body: {
-          api_id: "api-123",
+          api_id: VALID_API_UUID,
           features: [
             {
               name: "payment_amount",
@@ -600,13 +760,23 @@ describe("AppSec Toolset & Config", () => {
       const innerJson = JSON.parse(
         (calls[0]!.body as { variables: { derivation_config: string } }).variables.derivation_config,
       );
-      expect(innerJson.scope).toBe("$s.api_id.equals('api-123')");
+      expect(innerJson.scope).toBe(`$s.api_id.equals('${VALID_API_UUID}')`);
       expect(innerJson.attributes[0].name).toBe("payment_amount");
+
+      // Block JEXL injection payload in api_id
+      await expect(
+        registry.dispatch(client, "appsec_derivation_config", "create", {
+          body: {
+            api_id: "x') || true || ('",
+            features: [{ name: "payment_amount", expression: "$s.id" }],
+          },
+        }),
+      ).rejects.toThrow(/must be a valid UUID/);
 
       await expect(
         registry.dispatch(client, "appsec_derivation_config", "create", {
           body: {
-            api_id: "api-123",
+            api_id: VALID_API_UUID,
             features: [{ name: "InvalidCamelCase", expression: "$s.id" }],
           },
         }),
@@ -614,79 +784,32 @@ describe("AppSec Toolset & Config", () => {
     });
   });
 
-  describe("appsec_query & SQL/GraphQL safety guards", () => {
-    it("returns curated template on get and blocks state-changing mutations on execute.graphql", async () => {
-      const { client } = makeMockClient(() => ({ data: { __typename: "Query" } }));
-      const registry = new Registry(makeConfig());
-
-      const tmpl = (await registry.dispatch(client, "appsec_query", "get", {
-        query_name: "entities",
-      })) as Record<string, unknown>;
-      expect(tmpl.query_name).toBe("entities");
-      expect(String(tmpl.graphql_query_template)).toContain("entities(");
-
-      await expect(
-        registry.dispatchExecute(client as never, "appsec_query", "graphql", {
-          body: {
-            query: "mutation { deleteEverything { ok } }",
-          },
-        }),
-      ).rejects.toThrow(/Write mutations are not allowed/);
-
-      await expect(
-        registry.dispatchExecute(client as never, "appsec_query", "graphql", {
-          body: {
-            query: "{ vulnerabilitiesV3(limit: 1) { total } }",
-          },
-        }),
-      ).rejects.toThrow(/missing aliased selections/);
-    });
-
-    it("enforces Trino read-only SQL guard and tenant isolation, and executes valid Trino queries", async () => {
+  describe("GraphQL Document Classifier & Error Extraction", () => {
+    it("blocks comment-prefixed mutations, multi-operation documents, and comment-spoofed allowlist names", () => {
+      // 1. Leading comment before mutation
       expect(() =>
-        validateAppSecTrinoSql(
-          "SELECT * FROM iceberg.iceberg_gcs.traceable_customer_events_tenant_a LIMIT 10",
-          "tenant-a",
+        validateReadOnlyGraphqlDocument(`# note\nmutation { deleteFraudPolicy(id: "p1") { ok } }`),
+      ).toThrow(/Write mutations are not allowed/);
+
+      // 2. Multi-operation document with query + mutation
+      expect(() =>
+        validateReadOnlyGraphqlDocument(
+          `query A { __typename }\nmutation B { deleteFraudPolicy(id: "p1") { ok } }`,
+          "B",
         ),
+      ).toThrow(/Exactly one GraphQL operation definition is allowed/);
+
+      // 3. Mutation with allowlisted name in trailing comment
+      expect(() =>
+        validateReadOnlyGraphqlDocument(
+          `mutation { deleteFraudPolicy(id: "p1") { ok } } # submitAnalyticsQueryBatch(`,
+        ),
+      ).toThrow(/Write mutations are not allowed/);
+
+      // Valid single query passes
+      expect(() =>
+        validateReadOnlyGraphqlDocument(`# comment\nquery GetTypes { dataTypes { results { id } } }`),
       ).not.toThrow();
-
-      expect(() =>
-        validateAppSecTrinoSql(
-          "SELECT * FROM iceberg.iceberg_gcs.traceable_customer_events_tenant_b LIMIT 10",
-          "tenant-a",
-        ),
-      ).toThrow(/different tenant/);
-
-      expect(() => validateAppSecTrinoSql("DROP TABLE iceberg.iceberg_gcs.events", "tenant-a")).toThrow(
-        /Only read-only SELECT/,
-      );
-
-      expect(() => validateAppSecTrinoSql("SELECT 1; SELECT 2", "tenant-a")).toThrow(
-        /Exactly one SQL statement/,
-      );
-
-      const { client, calls } = makeMockClient(() => ({
-        id: "trino-q1",
-        columns: [{ name: "api_id" }, { name: "cnt" }],
-        data: [["api-1", 42]],
-      }));
-      const registry = new Registry(makeConfig());
-      const res = (await registry.dispatchExecute(client as never, "appsec_query", "trino", {
-        body: {
-          sql_query: "SELECT api_id, COUNT(*) AS cnt FROM iceberg.iceberg_gcs.events GROUP BY api_id",
-          limit: 10,
-        },
-      })) as Record<string, unknown>;
-
-      expect(calls).toHaveLength(1);
-      expect(calls[0]!.path).toBe("/v1/statement");
-      expect(res).toEqual({
-        query_id: "trino-q1",
-        columns: ["api_id", "cnt"],
-        rows: [["api-1", 42]],
-        row_count: 1,
-        truncated: false,
-      });
     });
 
     it("surfaces GraphQL errors[] in HTTP 200 responses as HarnessApiError", async () => {
@@ -695,11 +818,9 @@ describe("AppSec Toolset & Config", () => {
       }));
       const registry = new Registry(makeConfig());
 
-      await expect(
-        registry.dispatchExecute(client as never, "appsec_query", "graphql", {
-          body: { query: "{ invalidField }" },
-        }),
-      ).rejects.toThrow(/Field 'invalidField' doesn't exist/);
+      await expect(registry.dispatch(client, "appsec_datatype", "list", {})).rejects.toThrow(
+        /Field 'invalidField' doesn't exist/,
+      );
     });
   });
 });

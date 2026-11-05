@@ -306,7 +306,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (isMultiUser && data.HARNESS_APPSEC_API_KEY) {
     throw new Error(
       "HARNESS_APPSEC_API_KEY must not be set in multi-user mode. " +
-      "AppSec calls must use the session user's x-harness-api-key credential.",
+      "AppSec is only supported in single-user mode with an explicit HARNESS_APPSEC_API_KEY.",
     );
   }
 
@@ -334,7 +334,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (isOAuthMode && data.HARNESS_APPSEC_API_KEY) {
     throw new Error(
       `HARNESS_APPSEC_API_KEY must not be set in ${data.HARNESS_MCP_MODE} mode. ` +
-      "AppSec calls must use the session user's HarnessID access token.",
+      "AppSec is only supported in single-user mode with an explicit HARNESS_APPSEC_API_KEY.",
     );
   }
 
@@ -588,28 +588,21 @@ export function resolveFmeApiKey(
 
 /**
  * Resolve the token used for Traceable AppSec product APIs.
+ * AppSec talks directly to api.traceable.ai, so Harness credentials
+ * (HARNESS_API_KEY, session x-harness-api-key, or HarnessID OAuth tokens)
+ * must never be forwarded there. Only an explicit HARNESS_APPSEC_API_KEY
+ * in single-user mode is accepted.
  */
 export function resolveAppSecApiKey(
-  config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_APPSEC_API_KEY" | "HARNESS_API_KEY">,
+  config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_APPSEC_API_KEY">,
 ): string | undefined {
-  const explicitAppSecKey =
-    config.HARNESS_MCP_MODE === "multi-user"
-      || config.HARNESS_MCP_MODE === "oauth"
-      || config.HARNESS_MCP_MODE === "oauth-proxy"
-      ? undefined
-      : config.HARNESS_APPSEC_API_KEY?.trim();
+  if (config.HARNESS_MCP_MODE !== "single-user") {
+    return undefined;
+  }
+  const explicitAppSecKey = config.HARNESS_APPSEC_API_KEY?.trim();
   if (explicitAppSecKey && !isPlaceholderCredential(explicitAppSecKey)) {
     return explicitAppSecKey;
   }
-
-  const fallbackHarnessKey = config.HARNESS_MCP_MODE === "oauth"
-    || config.HARNESS_MCP_MODE === "oauth-proxy"
-    ? undefined
-    : config.HARNESS_API_KEY?.trim();
-  if (fallbackHarnessKey && !isPlaceholderCredential(fallbackHarnessKey)) {
-    return fallbackHarnessKey;
-  }
-
   return undefined;
 }
 
