@@ -376,6 +376,32 @@ export class HarnessClient {
   }
 
   private applyDefaultAuth(headers: Record<string, string>, isFme: boolean, isAppSec = false): void {
+    if (isAppSec) {
+      // Never forward Harness x-api-key, session x-harness-api-key, or HarnessID OAuth tokens to api.traceable.ai.
+      deleteHeaderValues(headers, "x-api-key");
+      const headerAppSecKey = deleteHeaderValues(headers, "x-harness-appsec-api-key")
+        .map((value) => value.trim())
+        .find((value) => value && !isPlaceholderCredential(value));
+
+      if (getHeaderValue(headers, "authorization")) return;
+
+      const appsecApiKey = headerAppSecKey ?? this.appsecApiKey;
+      if (!appsecApiKey) {
+        const remediation =
+          this.mcpMode === "single-user"
+            ? "Set HARNESS_APPSEC_API_KEY to a valid Traceable Platform API token (HARNESS_API_KEY is never forwarded to Traceable)."
+            : `Supply a per-session Traceable token via the x-harness-appsec-api-key header (Harness credentials and HarnessID OAuth tokens are never forwarded to Traceable in ${this.mcpMode} mode).`;
+        throw new HarnessApiError(
+          `AppSec is not configured or authorized for this MCP session. ${remediation}`,
+          401,
+          "APPSEC_AUTH_MISSING",
+        );
+      }
+
+      headers["Authorization"] = appsecApiKey;
+      return;
+    }
+
     if (this.mcpMode === "oauth" || this.mcpMode === "oauth-proxy") {
       deleteHeaderValues(headers, "x-api-key");
       if (isFme) {
@@ -384,13 +410,6 @@ export class HarnessClient {
           "Pass org_id and project_id to use the Harness-native FME API.",
           401,
           "FME_AUTH_MISSING",
-        );
-      }
-      if (isAppSec) {
-        throw new HarnessApiError(
-          `AppSec calls to Traceable are unavailable in ${this.mcpMode} mode because HarnessID access tokens cannot be forwarded to external Traceable hosts.`,
-          401,
-          "APPSEC_AUTH_MISSING",
         );
       }
       if (getHeaderValue(headers, "authorization")) return;
@@ -404,34 +423,6 @@ export class HarnessClient {
         );
       }
       headers["Authorization"] = `Bearer ${token}`;
-      return;
-    }
-
-    if (isAppSec) {
-      // Never forward Harness x-api-key or session x-harness-api-key to api.traceable.ai.
-      deleteHeaderValues(headers, "x-api-key");
-
-      if (this.mcpMode !== "single-user") {
-        throw new HarnessApiError(
-          `AppSec calls to Traceable are unavailable in ${this.mcpMode} mode. ` +
-          "Configure single-user mode with HARNESS_APPSEC_API_KEY.",
-          401,
-          "APPSEC_AUTH_MISSING",
-        );
-      }
-
-      if (getHeaderValue(headers, "authorization")) return;
-
-      if (!this.appsecApiKey) {
-        throw new HarnessApiError(
-          "AppSec is not configured for this MCP session. " +
-          "Set HARNESS_APPSEC_API_KEY to a valid Traceable Platform API token (HARNESS_API_KEY is never forwarded to Traceable).",
-          401,
-          "APPSEC_AUTH_MISSING",
-        );
-      }
-
-      headers["Authorization"] = this.appsecApiKey;
       return;
     }
 

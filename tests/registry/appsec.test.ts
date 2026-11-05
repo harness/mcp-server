@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { ConfigSchema, resolveAppSecApiKey, resolveProductBaseUrl, type Config } from "../../src/config.js";
 import { HarnessClient } from "../../src/client/harness-client.js";
+import { mergeConfigWithSessionHeaders } from "../../src/utils/session-headers.js";
 import type { HarnessClientInterface } from "../../src/registry/types.js";
 import { validateReadOnlyGraphqlDocument } from "../../src/registry/toolsets/appsec.js";
 
@@ -157,7 +158,7 @@ describe("AppSec Toolset & Config", () => {
       }
     });
 
-    it("fails closed in multi-user mode (never sends session x-api-key to Traceable)", async () => {
+    it("fails closed in multi-user mode when x-harness-appsec-api-key is absent (never sends session x-api-key to Traceable)", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch");
       try {
         const cfg = makeConfig({
@@ -165,7 +166,10 @@ describe("AppSec Toolset & Config", () => {
           HARNESS_API_KEY: "",
           HARNESS_APPSEC_API_KEY: undefined,
         });
-        const client = new HarnessClient(cfg);
+        const sessionCfg = mergeConfigWithSessionHeaders(cfg, {
+          "x-harness-api-key": "pat.sessionuser.tok.sec",
+        });
+        const client = new HarnessClient(sessionCfg);
 
         await expect(
           client.request({
@@ -175,14 +179,48 @@ describe("AppSec Toolset & Config", () => {
             headers: { "x-api-key": "pat.sessionuser.tok.sec" },
             body: { query: "{ __typename }" },
           }),
-        ).rejects.toThrow(/unavailable in multi-user mode/);
+        ).rejects.toThrow(/x-harness-appsec-api-key/);
         expect(fetchSpy).not.toHaveBeenCalled();
       } finally {
         fetchSpy.mockRestore();
       }
     });
 
-    it("fails closed in oauth mode (never forwards HarnessID Bearer token to Traceable)", async () => {
+    it("authenticates multi-user sessions when x-harness-appsec-api-key is supplied on session headers", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { dataTypes: { results: [] } } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      try {
+        const baseCfg = makeConfig({
+          HARNESS_MCP_MODE: "multi-user",
+          HARNESS_API_KEY: "",
+          HARNESS_ACCOUNT_ID: "",
+          HARNESS_APPSEC_API_KEY: undefined,
+        });
+        const sessionCfg = mergeConfigWithSessionHeaders(baseCfg, {
+          "x-harness-api-key": "pat.sessionuser.tok.sec",
+          "x-harness-appsec-api-key": "traceable-per-session-token",
+        });
+        const client = new HarnessClient(sessionCfg);
+        const registry = new Registry(sessionCfg);
+
+        await registry.dispatch(client, "appsec_datatype", "list", {});
+
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        const [, calledInit] = fetchSpy.mock.calls[0]!;
+        const headers = calledInit?.headers as Record<string, string>;
+        expect(headers["Authorization"]).toBe("traceable-per-session-token");
+        expect(headers["x-api-key"]).toBeUndefined();
+        expect(headers["x-harness-appsec-api-key"]).toBeUndefined();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it("fails closed in oauth mode when x-harness-appsec-api-key is absent (never forwards HarnessID Bearer token to Traceable)", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch");
       try {
         const cfg = makeConfig({
@@ -195,7 +233,7 @@ describe("AppSec Toolset & Config", () => {
         const registry = new Registry(cfg);
 
         await expect(registry.dispatch(client, "appsec_datatype", "list", {})).rejects.toThrow(
-          /HarnessID access tokens cannot be forwarded to external Traceable hosts/,
+          /x-harness-appsec-api-key/,
         );
         expect(fetchSpy).not.toHaveBeenCalled();
       } finally {

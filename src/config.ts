@@ -306,7 +306,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (isMultiUser && data.HARNESS_APPSEC_API_KEY) {
     throw new Error(
       "HARNESS_APPSEC_API_KEY must not be set in multi-user mode. " +
-      "AppSec is only supported in single-user mode with an explicit HARNESS_APPSEC_API_KEY.",
+      "Each session must provide its own Traceable token via the x-harness-appsec-api-key header.",
     );
   }
 
@@ -334,7 +334,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (isOAuthMode && data.HARNESS_APPSEC_API_KEY) {
     throw new Error(
       `HARNESS_APPSEC_API_KEY must not be set in ${data.HARNESS_MCP_MODE} mode. ` +
-      "AppSec is only supported in single-user mode with an explicit HARNESS_APPSEC_API_KEY.",
+      "Each session must provide its own Traceable token via the x-harness-appsec-api-key header.",
     );
   }
 
@@ -587,17 +587,36 @@ export function resolveFmeApiKey(
 }
 
 /**
+ * Tracks per-session Traceable AppSec tokens injected by `mergeConfigWithSessionHeaders`
+ * from the `x-harness-appsec-api-key` request header in hosted HTTP modes.
+ * Using a WeakMap ensures a static/shared `HARNESS_APPSEC_API_KEY` on a raw multi-user
+ * or OAuth config is defensively ignored unless bound from a session header.
+ */
+const sessionAppSecTokens = new WeakMap<object, string>();
+
+export function bindSessionAppSecApiKey(config: Config, token: string | undefined): void {
+  const trimmed = token?.trim();
+  if (trimmed && !isPlaceholderCredential(trimmed)) {
+    sessionAppSecTokens.set(config, trimmed);
+  } else {
+    sessionAppSecTokens.delete(config);
+  }
+}
+
+/**
  * Resolve the token used for Traceable AppSec product APIs.
  * AppSec talks directly to api.traceable.ai, so Harness credentials
  * (HARNESS_API_KEY, session x-harness-api-key, or HarnessID OAuth tokens)
- * must never be forwarded there. Only an explicit HARNESS_APPSEC_API_KEY
- * in single-user mode is accepted.
+ * must never be forwarded there.
+ * - Single-user mode: uses explicit HARNESS_APPSEC_API_KEY (never HARNESS_API_KEY).
+ * - Multi-user / OAuth modes: uses only the per-session x-harness-appsec-api-key
+ *   bound via mergeConfigWithSessionHeaders (never a shared server key).
  */
 export function resolveAppSecApiKey(
   config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_APPSEC_API_KEY">,
 ): string | undefined {
   if (config.HARNESS_MCP_MODE !== "single-user") {
-    return undefined;
+    return sessionAppSecTokens.get(config);
   }
   const explicitAppSecKey = config.HARNESS_APPSEC_API_KEY?.trim();
   if (explicitAppSecKey && !isPlaceholderCredential(explicitAppSecKey)) {
