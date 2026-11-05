@@ -2431,7 +2431,9 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           method: "POST",
           path: "/lw/co/api/accounts/{accountId}/v1/detail/compute_coverage",
           pathBuilder: (input, config) => {
-            const accountId = config.HARNESS_ACCOUNT_ID ?? "";
+            // Registry dispatch supplies the resolved session account in config.
+            // Caller-controlled account_id must never select a different tenant.
+            const accountId = config.HARNESS_ACCOUNT_ID;
             if (!accountId) {
               throw new Error("Harness account ID is required for commitment APIs");
             }
