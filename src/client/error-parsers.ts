@@ -78,8 +78,55 @@ export const fmeUnprocessableEntityParser: ErrorParser = {
   },
 };
 
+const UNIFIED_SEARCH_HINTS: Record<number, { message: string; detail: string }> = {
+  401: {
+    message: "Unified search returned 401 Unauthorized",
+    detail:
+      "the API key or token is missing, invalid or expired. This is an authentication failure, not an empty result.",
+  },
+  403: {
+    message: "Unified search returned 403 Forbidden",
+    detail:
+      "this is an authorization failure, not an empty result. Either semantic search is not enabled for this " +
+      "account (feature flag) or the caller lacks permission for this request.",
+  },
+  404: {
+    message: "Unified search returned 404 Not Found",
+    detail: "unified search is not deployed on this cluster, or the source's index does not exist yet.",
+  },
+};
+
+/** 403 detail when the service says the account's feature flag is off. */
+const UNIFIED_SEARCH_FLAG_OFF_DETAIL =
+  "semantic search is not enabled for this account (feature flag off). This is not an empty result and " +
+  "retrying will not help; use harness_list for keyword lookups.";
+
+/** The service's own error text: search-service sends `error`, Spring-style bodies send `message`. */
+function serviceErrorText(body: Record<string, unknown>): string {
+  return [body.message, body.error, body.detail].filter((v): v is string => typeof v === "string").join(" ");
+}
+
+/**
+ * search-service unified-search errors. The service's own `message` (kept by the
+ * client) says what failed; this adds what it means for the agent, so a 401/403
+ * is never mistaken for "no matches". A 403 is only blamed on the feature flag
+ * when the service says so; gateway or permission 403s get the neutral wording.
+ */
+export const unifiedSearchErrorParser: ErrorParser = {
+  name: "unified-search",
+  match: ({ path, status }) =>
+    path.startsWith("/search-service/api/v1/unified-search") && status in UNIFIED_SEARCH_HINTS,
+  parse(body, { status }) {
+    const hint = UNIFIED_SEARCH_HINTS[status];
+    if (status === 403 && /semantic search is not enabled/i.test(serviceErrorText(body ?? {}))) {
+      return { ...hint, detail: UNIFIED_SEARCH_FLAG_OFF_DETAIL };
+    }
+    return hint;
+  },
+};
+
 /** Registered parsers, checked in order. Add new API-specific parsers here. */
-export const ERROR_PARSERS: readonly ErrorParser[] = [fmeUnprocessableEntityParser];
+export const ERROR_PARSERS: readonly ErrorParser[] = [fmeUnprocessableEntityParser, unifiedSearchErrorParser];
 
 /** Run the first matching parser that produces a result; undefined means "use generic parsing". */
 export function runErrorParsers(

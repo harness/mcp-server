@@ -53,6 +53,7 @@ import { aiEvalsToolset } from "./toolsets/ai-evals.js";
 import { observabilityEvaluationsToolset } from "./toolsets/observability-evaluations.js";
 import { iacmToolset } from "./toolsets/iacm.js";
 import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
+import { unifiedSearchToolset } from "./toolsets/unified-search.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
@@ -178,6 +179,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   iacmToolset,
   knowledgeGraphToolset,
   semanticLayerToolset,
+  unifiedSearchToolset,
   ansibleToolset,
   incidentsToolset,
   alertsToolset,
