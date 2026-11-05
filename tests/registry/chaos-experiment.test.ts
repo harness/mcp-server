@@ -79,6 +79,20 @@ describe("chaos_experiment list/get", () => {
     expect((result.items[0] as Record<string, unknown>).experimentID).toBe("exp-1");
   });
 
+  it("list: maps harness_list size and search_term onto limit and search", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+      size: 20,
+      search_term: "pod",
+    });
+
+    expect(mockRequest.mock.calls[0][0].params).toMatchObject({ limit: 20, search: "pod" });
+  });
+
   it("list: returns items and total from chaos paginated response", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       data: [

@@ -299,6 +299,7 @@ describe("chaos operation paths", () => {
       ...scope,
     });
     expect(mockRequest.mock.calls[1][0].path).toBe("/chaos/manager/api/rest/v2/onboarding-confirm-discovery/ob-1");
+    expect(mockRequest.mock.calls[1][0].body).toBeUndefined();
 
     await server.call("harness_get", {
       resource_type: "chaos_pipeline_onboarding",
