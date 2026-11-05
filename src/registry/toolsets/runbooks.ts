@@ -92,17 +92,21 @@ export const runbooksToolset: ToolsetDefinition = {
           name: "activity_id",
           description: "Incident or alert public id; narrows the list to runbooks valid for that activity's template",
         },
+        {
+          name: "search_term",
+          description: "Case-insensitive text matched against the runbook name and description, e.g. 'restart' or 'rollback'",
+        },
       ],
       operations: {
         list: {
           method: "GET",
           path: RUNBOOKS_PATH,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { activity_id: "activityId", page: "page", size: "pageSize" },
+          queryParams: { activity_id: "activityId", search_term: "query", page: "page", size: "pageSize" },
           // Agents only discover runbooks the owner enabled Expose to AI on.
           defaultQueryParams: { exposedToAi: "true" },
           responseExtractor: runbookListExtract,
-          description: "List AI-exposed runbooks, optionally narrowed to an incident or alert (filters.activity_id)",
+          description: "List AI-exposed runbooks, optionally narrowed to an incident or alert (filters.activity_id) or by text in the name or description (filters.search_term)",
         },
         get: {
           method: "GET",

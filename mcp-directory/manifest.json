@@ -44,6 +44,9 @@
         "HARNESS_API_KEY": "${user_config.HARNESS_API_KEY}",
         "HARNESS_FME_API_KEY": "${user_config.HARNESS_FME_API_KEY}",
         "HARNESS_FME_BASE_URL": "${user_config.HARNESS_FME_BASE_URL}",
+        "HARNESS_APPSEC_API_KEY": "${user_config.HARNESS_APPSEC_API_KEY}",
+        "HARNESS_APPSEC_BASE_URL": "${user_config.HARNESS_APPSEC_BASE_URL}",
+        "HARNESS_APPSEC_UI_URL": "${user_config.HARNESS_APPSEC_UI_URL}",
         "TYPESAFE_API_KEY": "${user_config.TYPESAFE_API_KEY}",
         "TYPESAFE_BASE_URL": "${user_config.TYPESAFE_BASE_URL}",
         "HARNESS_ACCOUNT_ID": "${user_config.HARNESS_ACCOUNT_ID}",
@@ -85,6 +88,29 @@
       "title": "FME/Split Base URL",
       "description": "Optional Split/FME Admin API base URL used by fme_ resources. Defaults to https://api.split.io.",
       "default": "https://api.split.io",
+      "required": false,
+      "sensitive": false
+    },
+    "HARNESS_APPSEC_API_KEY": {
+      "type": "string",
+      "title": "Traceable AppSec API Key",
+      "description": "Optional single-user Traceable Platform API token for appsec_ resources (enable toolset via HARNESS_TOOLSETS=+appsec). HARNESS_API_KEY is never forwarded to Traceable. Do not set for multi-user or OAuth deployments.",
+      "required": false,
+      "sensitive": true
+    },
+    "HARNESS_APPSEC_BASE_URL": {
+      "type": "string",
+      "title": "Traceable AppSec Base URL",
+      "description": "Optional Traceable GraphQL API base URL used by appsec_ resources. Defaults to https://api.traceable.ai.",
+      "default": "https://api.traceable.ai",
+      "required": false,
+      "sensitive": false
+    },
+    "HARNESS_APPSEC_UI_URL": {
+      "type": "string",
+      "title": "Traceable AppSec UI Base URL",
+      "description": "Optional Traceable web UI base URL for deep links on appsec_ resources. Defaults to https://app.traceable.ai.",
+      "default": "https://app.traceable.ai",
       "required": false,
       "sensitive": false
     },
