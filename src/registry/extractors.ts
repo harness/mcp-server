@@ -1466,8 +1466,12 @@ export const triggerListExtract = (
  * Groups variables by task name. Handles null/undefined gracefully.
  */
 export const chaosRunTimeInputsExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { experiment?: unknown[] | null; tasks?: Record<string, unknown[]> | null } | null | undefined;
-  if (!r) return { items: [], total: 0 };
+  const envelope = raw as { data?: { experiment?: unknown[] | null; tasks?: Record<string, unknown[]> | null }; experiment?: unknown[] | null; tasks?: Record<string, unknown[]> | null } | null | undefined;
+  if (!envelope) return { items: [], total: 0 };
+  const nested = envelope.data;
+  const r = nested && typeof nested === "object" && !Array.isArray(nested) && (nested.experiment !== undefined || nested.tasks !== undefined)
+    ? nested
+    : envelope;
   const items: unknown[] = [];
   const expVars = r.experiment;
   if (Array.isArray(expVars) && expVars.length > 0) {
@@ -1689,6 +1693,43 @@ export const chaosHubListExtract = (raw: unknown): { items: unknown[]; total: nu
     total: r.pagination?.totalItems ?? (Array.isArray(r.items) ? r.items.length : 0),
   };
 };
+
+/** v3 list-metadata envelope: { items, pagination.totalItems }. Same shape as hub list. */
+export const chaosMetadataListExtract = chaosHubListExtract;
+
+/** Dashboard list keeps counts. The sidebar is not inside data. */
+export const chaosDashboardListExtract = (
+  raw: unknown,
+): { items: unknown[]; total: number; counts?: unknown } => {
+  const r = raw as { data?: unknown[]; pagination?: { totalItems?: number }; counts?: unknown };
+  const items = r.data ?? [];
+  return {
+    items,
+    total: r.pagination?.totalItems ?? items.length,
+    ...(r.counts !== undefined ? { counts: r.counts } : {}),
+  };
+};
+
+/** ChaosGuard rows are under conditions or rules, not data. */
+function chaosGuardListExtract(key: "conditions" | "rules") {
+  return (raw: unknown): { items: unknown[]; total: number } => {
+    const r = raw as { pagination?: { totalItems?: number } } & Record<string, unknown>;
+    const items = Array.isArray(r[key]) ? (r[key] as unknown[]) : [];
+    return { items, total: r.pagination?.totalItems ?? items.length };
+  };
+}
+
+/** Onboarding list is { data, page.totalItems }, not pagination. */
+export const chaosOnboardingListExtract = chaosAppMapPageExtract;
+
+/** Pipeline onboarding list is pipelineOnboardings, not data. */
+export const chaosPipelineOnboardingListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const items = (raw as { pipelineOnboardings?: unknown[] })?.pipelineOnboardings ?? [];
+  return { items, total: items.length };
+};
+
+export const chaosGuardConditionListExtract = chaosGuardListExtract("conditions");
+export const chaosGuardRuleListExtract = chaosGuardListExtract("rules");
 
 /** Extract chaos DR test list response: { items: [...], pagination: { totalItems } } */
 export const chaosDRTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {

@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 265 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 269 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,7 +10,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 265 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 269 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 43 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -1304,7 +1304,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-265 resource types organized across 43 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+269 resource types organized across 43 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1758,42 +1758,46 @@ In single-user/self-hosted mode, legacy-mode auth uses a Bearer token from `HARN
 
 | Resource Type                    | List | Get | Create | Update | Delete | Execute Actions                                                              |
 |----------------------------------| ---- | --- | ------ | ------ | ------ |------------------------------------------------------------------------------|
-| `chaos_experiment`               | x    | x   | x      |        | x      | `run`, `stop`                                                                |
+| `chaos_experiment`               | x    | x   | x      | x      | x      | `run`, `stop`, `list_metadata`, `update_cron`                                 |
 | `chaos_experiment_run`           |      | x   |        |        |        |                                                                              |
 | `chaos_experiment_variable`      | x    |     |        |        |        |                                                                              |
 | `chaos_component_variable`       |      | x   |        |        |        |                                                                              |
 | `chaos_input_set`                | x    | x   | x      | x      | x      |                                                                              |
-| `chaos_experiment_template`      | x    | x   |        |        | x      | `create_from_template`, `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions` |
-| `chaos_probe`                    | x    | x   | x      |        | x      | `enable`, `verify`, `get_manifest`                                           |
+| `chaos_experiment_template`      | x    | x   | x      | x      | x      | `create_from_template`, `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions` |
+| `chaos_probe`                    | x    | x   | x      |        | x      | `list_metadata`, `enable`, `verify`, `get_manifest`                          |
 | `chaos_probe_in_run`             | x    |     |        |        |        |                                                                              |
-| `chaos_probe_template`           | x    | x   |        |        | x      | `get_variables`                                                              |
-| `chaos_infrastructure`           | x    |     |        |        |        |                                                                              |
-| `chaos_k8s_infrastructure`       | x    | x   | x      |        |        | `check_health`                                                               |
+| `chaos_probe_template`           | x    | x   | x      | x      | x      | `get_variables`                                                              |
+| `chaos_infrastructure`           | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_k8s_infrastructure`       | x    | x   | x      | x      | x      | `check_health`, `get_yaml`, `get_manifest`, `helm_command`                   |
 | `chaos_enabled_infrastructure`   | x    |     |        |        |        |                                                                              |
 | `chaos_environment`              | x    |     |        |        |        |                                                                              |
-| `chaos_hub`                      | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_hub`                      | x    | x   | x      | x      | x      | `list_metadata`                                                              |
 | `chaos_hub_fault`                | x    |     |        |        |        |                                                                              |
-| `chaos_fault`                    | x    | x   |        |        | x      | `get_variables`, `get_yaml`                                                  |
-| `chaos_fault_template`           | x    | x   |        |        | x      | `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions`           |
+| `chaos_fault`                    | x    | x   |        |        | x      | `list_metadata`, `get_variables`, `get_yaml`                                 |
+| `chaos_fault_template`           | x    | x   | x      | x      | x      | `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions`           |
 | `chaos_fault_experiment_run`     | x    |     |        |        |        |                                                                              |
-| `chaos_action`                   | x    | x   | x      |        | x      | `get_manifest`                                                               |
-| `chaos_action_template`          | x    | x   |        |        | x      | `list_revisions`, `get_variables`, `compare_revisions`                       |
+| `chaos_action`                   | x    | x   | x      | x      | x      | `list_metadata`, `get_manifest`                                              |
+| `chaos_action_template`          | x    | x   | x      | x      | x      | `list_revisions`, `get_variables`, `compare_revisions`                       |
 | `chaos_loadtest`                 | x    | x   | x      | x      | x      | `run`, `stop`                                                                |
 | `chaos_service`                  | x    | x   | x      | x      | x      | `list_experiment_runs`, `list_load_tests`                                    |
 | `custom_service`                 | x    | x   | x      | x      |        |                                                                              |
-| `chaos_application_map`          | x    | x   |        |        |        |                                                                              |
+| `chaos_application_map`          | x    | x   |        |        | x      |                                                                              |
 | `discovered_agent`               | x    |     |        |        |        |                                                                              |
 | `discovered_namespace`           | x    |     |        |        |        |                                                                              |
 | `discovered_service`             | x    |     |        |        |        |                                                                              |
 | `discovered_network_map`         | x    |     |        |        |        |                                                                              |
-| `chaos_guard_condition`          | x    | x   |        |        | x      |                                                                              |
-| `chaos_guard_rule`               | x    | x   |        |        | x      | `enable`                                                                     |
+| `chaos_guard_condition`          | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_guard_rule`               | x    | x   | x      | x      | x      | `enable`                                                                     |
 | `chaos_recommendation`           | x    | x   |        |        |        |                                                                              |
+| `chaos_onboarding`               | x    | x   | x      |        | x      | `stats`, `confirm_discovery`, `onboard_services`, `confirm_service_onboarding`, `trigger_risk_scan`, `risk_scan`, `confirm_risk_scan`, `list_services`, `confirm_network_map`, `confirm_experiment_creation`, `confirm_experiment_run`, `skip`, `stop` |
+| `chaos_pipeline_onboarding`      | x    | x   | x      |        | x      | `can_onboard`                                                                |
 | `chaos_risk`                     | x    | x   |        |        |        |                                                                              |
 | `chaos_dr_test`                  | x    |     | x      |        |        |                                                                              |
 | `scanned_risk`                   | x    | x   |        |        |        | `occurrences`, `summary_by_service`                                          |
 | `chaos_risk_rule`                | x    | x   | x      | x      | x      |                                                                              |
 | `chaos_risk_scan`                | x    | x   | x      | x      | x      | `retry`, `abort`, `report`, `report_download`, `heatmap`, `submit_findings` |
+| `chaos_dashboard`                | x    | x   |        | x      |        |                                                                              |
+| `chaos_image_registry`           |      | x   | x      | x      |        | `resolve`                                                                    |
 
 ### Cloud Cost Management (CCM)
 
@@ -2079,7 +2083,7 @@ Available toolset names:
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
 | `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition, fme_metric, fme_event_type, fme_experiment, fme_experiment_settings, fme_experiment_alerting, fme_experiment_result                       |
 | `gitops`                | gitops_agent, gitops_agent_metrics, gitops_argo_project, gitops_app_project_mapping, gitops_autocreate_log, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree, gitops_cluster_link |
-| `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, custom_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan |
+| `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, custom_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_onboarding, chaos_pipeline_onboarding, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan, chaos_dashboard, chaos_image_registry |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
@@ -2121,7 +2125,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 | 48 Toolsets (43 default) |
-                |  265 Resource Types|
+                |  269 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

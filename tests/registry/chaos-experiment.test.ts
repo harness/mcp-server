@@ -66,7 +66,7 @@ describe("chaos_experiment list/get", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiment");
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments");
     expect(call.params).toMatchObject({
       organizationIdentifier: "default",
       projectIdentifier: "PM_Signoff",
@@ -77,6 +77,20 @@ describe("chaos_experiment list/get", () => {
     expect(result.total).toBe(1);
     expect((result.items[0] as Record<string, unknown>).name).toBe("pod-delete");
     expect((result.items[0] as Record<string, unknown>).experimentID).toBe("exp-1");
+  });
+
+  it("list: maps harness_list size and search_term onto limit and search", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+      size: 20,
+      search_term: "pod",
+    });
+
+    expect(mockRequest.mock.calls[0][0].params).toMatchObject({ limit: 20, search: "pod" });
   });
 
   it("list: returns items and total from chaos paginated response", async () => {
@@ -218,7 +232,7 @@ describe("chaos_experiment list/get", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-pod-delete");
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments/exp-pod-delete");
     expect(call.params).toMatchObject({
       organizationIdentifier: "default",
       projectIdentifier: "proj1",
@@ -245,25 +259,29 @@ describe("chaos_experiment list/get", () => {
 });
 
 describe("chaos_experiment create", () => {
-  // Locks the bodySchema <-> bodyBuilder contract:
-  //   - bodySchema marks `id` optional, so omitting it must NOT trip required-field validation
-  //   - bodyBuilder must auto-generate a v4 UUID when `id` is missing
-  //   - caller-supplied `id` must round-trip untouched
-  const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   let registry: Registry;
 
   beforeEach(() => {
     registry = new Registry(makeConfig());
   });
 
-  it("create: auto-generates a v4 UUID for id when caller omits it", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "new-exp" });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_experiment", "create", {
+  it("create: posts the v3 body and requires identity", async () => {
+    const client = makeClient();
+    await expect(registry.dispatch(client, "chaos_experiment", "create", {
       org_id: "default",
       project_id: "test-project",
       name: "demo-exp-01",
+      manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
+      infra_id: "demo/infra-1",
+      infra_type: "Kubernetes",
+    })).rejects.toThrow(/identity/);
+
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "demoexp01" });
+    await registry.dispatch(makeClient(mockRequest), "chaos_experiment", "create", {
+      org_id: "default",
+      project_id: "test-project",
+      name: "demo-exp-01",
+      identity: "demoexp01",
       manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
       infra_id: "demo/infra-1",
       infra_type: "Kubernetes",
@@ -272,15 +290,14 @@ describe("chaos_experiment create", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiment");
-    expect(call.body.id).toMatch(UUID_V4);
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments");
     expect(call.body.name).toBe("demo-exp-01");
+    expect(call.body.identity).toBe("demoexp01");
     expect(call.body.infraId).toBe("demo/infra-1");
-    expect(call.body.infra_id).toBe("demo/infra-1");
     expect(call.body.infraType).toBe("Kubernetes");
   });
 
-  it("create: echoes caller-supplied id without overwriting it", async () => {
+  it("create: sends a caller-supplied experiment_id as experimentId", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ experimentID: "new-exp" });
     const client = makeClient(mockRequest);
     const callerId = "11111111-2222-4333-8444-555555555555";
@@ -288,7 +305,8 @@ describe("chaos_experiment create", () => {
     await registry.dispatch(client, "chaos_experiment", "create", {
       org_id: "default",
       project_id: "test-project",
-      id: callerId,
+      experiment_id: callerId,
+      identity: "demoexp02",
       name: "demo-exp-02",
       manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
       infra_id: "demo/infra-2",
@@ -296,7 +314,7 @@ describe("chaos_experiment create", () => {
     });
 
     const call = mockRequest.mock.calls[0][0];
-    expect(call.body.id).toBe(callerId);
+    expect(call.body.experimentId).toBe(callerId);
   });
 
   it("create: documented contract — composite infra_id '{environmentIdentifier}/{infraID}' passes through verbatim", async () => {
@@ -307,6 +325,7 @@ describe("chaos_experiment create", () => {
       org_id: "default",
       project_id: "test-project",
       name: "demo-exp-composite",
+      identity: "demoexpcomposite",
       manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
       infra_id: "demo/qaauto1",
       infra_type: "Kubernetes",
@@ -314,7 +333,6 @@ describe("chaos_experiment create", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.body.infraId).toBe("demo/qaauto1");
-    expect(call.body.infra_id).toBe("demo/qaauto1");
   });
 });
 
@@ -1091,7 +1109,7 @@ describe("chaos_experiment isIdentity routing", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-without-runtime/run");
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments/exp-without-runtime/run");
     expect(call.params.isIdentity).toBe("true");
   });
 
@@ -1121,7 +1139,7 @@ describe("chaos_experiment isIdentity routing", () => {
     });
 
     const call = mockRequest.mock.calls[0][0];
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c/run");
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments/f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c/run");
     expect(call.params.isIdentity).toBe(false);
   });
 
@@ -1152,7 +1170,7 @@ describe("chaos_experiment isIdentity routing", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-without-runtime/variables");
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments/exp-without-runtime/variables");
     expect(call.params.isIdentity).toBe("true");
   });
 
@@ -1167,7 +1185,7 @@ describe("chaos_experiment isIdentity routing", () => {
     });
 
     const call = mockRequest.mock.calls[0][0];
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c/variables");
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments/f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c/variables");
     expect(call.params.isIdentity).toBe(false);
   });
 
@@ -1214,7 +1232,7 @@ describe("chaos_experiment isIdentity routing", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/ef9199b6-0248-4c0b-9d63-9176bf2b7123/inputsets");
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments/ef9199b6-0248-4c0b-9d63-9176bf2b7123/inputsets");
     expect(call.params.isIdentity).toBe("false");
   });
 
@@ -1231,7 +1249,7 @@ describe("chaos_experiment isIdentity routing", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.params.isIdentity).toBe(true);
-    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-without-runtime/inputsets");
+    expect(call.path).toBe("/chaos/manager/api/v3/experiments/exp-without-runtime/inputsets");
   });
 
   it("input_set list: is_identity=false with UUID passes false to backend", async () => {

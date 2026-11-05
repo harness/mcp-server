@@ -1,7 +1,7 @@
 import { encodePathSegment } from "../../utils/path.js";
 import { randomUUID } from "node:crypto";
 import YAML from "yaml";
-import type { ToolsetDefinition, ParamsSchema, BodyFieldSpec } from "../types.js";
+import type { ToolsetDefinition, ParamsSchema, EndpointSpec, BodySchema, BodyFieldSpec } from "../types.js";
 import {
   passthrough,
   ngExtract,
@@ -11,6 +11,8 @@ import {
   chaosExperimentListExtract,
   chaosInputSetListExtract,
   chaosAppMapPageExtract,
+  chaosOnboardingListExtract,
+  chaosPipelineOnboardingListExtract,
   chaosProbeListExtract,
   chaosInfraListExtract,
   chaosK8sInfraListExtract,
@@ -18,6 +20,10 @@ import {
   chaosLoadTestExtract,
   chaosServiceListExtract,
   chaosHubListExtract,
+  chaosMetadataListExtract,
+  chaosDashboardListExtract,
+  chaosGuardConditionListExtract,
+  chaosGuardRuleListExtract,
   chaosDRTestListExtract,
   sdPageExtract,
   sdV2PageExtract,
@@ -199,6 +205,23 @@ import {
   descRiskSearch, descRiskSortField, descRiskSortAscending, descRiskTags, descRiskIncludeAllScope,
   descRiskStartTime, descRiskEndTime,
   descRiskRuleDataSource, descRiskRuleIsSystem, descHeatmapSearch,
+  descListMetadata, descBodyListMetadata, descMetadataIdentifiers, descMetadataSearch,
+  descMetadataSortField, descMetadataSortAscending, descMetadataTags,
+  descUpdateExperimentCron, descBodyUpdateExperimentCron, descCronExperimentIds, descCronAction, descCronSyntax,
+  descChaosDashboard, descListDashboards, descGetDashboard, descUpdateDashboard, descBodyDashboardUpdate,
+  descDashboardSearch, descDashboardCategory, descDashboardFavourite, descDashboardTags,
+  descDashboardSortField, descDashboardIsFavourite, descDashboardTagsBody,
+  descChaosImageRegistry, descGetImageRegistry, descCreateImageRegistry, descUpdateImageRegistry, descResolveImageRegistry,
+  descBodyImageRegistry, descBodyImageRegistryUpdate, descImageRegistryServer, descImageRegistryAccount, descImageRegistryInfraId,
+  descImageRegistryPrivate, descImageRegistrySecretName, descImageRegistryDefault, descImageRegistryAllowOverride,
+  descImageRegistryUseCustomImages, descImageRegistryCustomImages, descImageRegistryCustomImagesUpdate,
+  descImageRegistryPrivateUpdate, descImageRegistryDefaultUpdate, descImageRegistryAllowOverrideUpdate, descImageRegistryUseCustomImagesUpdate,
+  descImageRegistryArtifactType, descImageRegistryArtifactTypeUpdate,
+  descImageRegistryConnectorRef, descImageRegistryConnectorSpec, descImageRegistryConnectorSpecUpdate,
+  descUpdateExperiment, descBodyExperimentTemplateWrite, descUpdateAction,
+  descTemplateEntityWrite, descUpdateK8sInfra, descDeleteK8sInfra, descGetK8sInfraYaml, descK8sInfraById,
+  descMachineInfraWrite, descChaosOnboarding, descCreateOnboarding, descGetOnboardingStats, descChaosPipelineOnboarding,
+  descGuardConditionWrite, descGuardRuleWrite,
 } from "./chaos-descriptions.js";
 
 /**
@@ -568,6 +591,584 @@ function buildRiskRuleBody(
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function looksLikeExperimentUuid(id: unknown): boolean {
   return typeof id === "string" && UUID_RE.test(id);
+}
+
+const METADATA_SORT_FIELDS = ["name", "lastUpdated", "experimentName", "lastExecuted", "createdAt"];
+const DASHBOARD_SORT_FIELDS = ["name", "lastUpdated", "createdAt"];
+
+function listMetadataAction(path: string): EndpointSpec & { actionDescription: string } {
+  return {
+    method: "POST",
+    path,
+    operationPolicy: { risk: "read", retryPolicy: "safe" },
+    // Scope is already on the query string. The metadata body is only { identifiers }.
+    skipScopeBodyInjection: true,
+    queryParams: {
+      page: "page",
+      limit: "limit",
+      search: "search",
+      sort_field: "sortField",
+      sort_ascending: "sortAscending",
+      tags: "tags",
+      include_all_scope: "includeAllScope",
+    },
+    defaultQueryParams: { page: "0", limit: "15" },
+    bodyBuilder: (input) => {
+      const b = coerceBody(input);
+      const raw = b.identifiers ?? input.identifiers;
+      if (raw == null || raw === "") return {};
+      const identifiers = Array.isArray(raw)
+        ? raw.map(String).filter(Boolean)
+        : String(raw).split(",").map((id) => id.trim()).filter(Boolean);
+      return identifiers.length > 0 ? { identifiers } : {};
+    },
+    responseExtractor: chaosMetadataListExtract,
+    actionDescription: descListMetadata,
+    bodySchema: {
+      description: descBodyListMetadata,
+      fields: [
+        { name: "identifiers", type: "array", required: false, itemType: "string", description: descMetadataIdentifiers },
+      ],
+    },
+    paramsSchema: {
+      fields: [
+        { name: "page", required: false, description: "Page number (0-indexed). Default 0." },
+        { name: "limit", required: false, description: "Page size. Default 15, maximum 100." },
+        { name: "search", required: false, description: descMetadataSearch },
+        { name: "sort_field", required: false, description: `${descMetadataSortField} Valid: ${METADATA_SORT_FIELDS.join(", ")}.` },
+        { name: "sort_ascending", required: false, description: descMetadataSortAscending },
+        { name: "tags", required: false, description: descMetadataTags },
+        { name: "include_all_scope", required: false, description: descIncludeAllScope },
+        { name: "identifiers", required: false, description: descMetadataIdentifiers },
+      ],
+    } satisfies ParamsSchema,
+  };
+}
+
+const CRON_ACTIONS: Record<string, "Enable" | "Disable" | "Update"> = {
+  enable: "Enable",
+  disable: "Disable",
+  update: "Update",
+  Enable: "Enable",
+  Disable: "Disable",
+  Update: "Update",
+};
+
+function buildUpdateCronBody(input: Record<string, unknown>): Record<string, unknown> {
+  const b = coerceBody(input);
+  const rawIds = b.experiment_ids ?? b.experimentIDs ?? input.experiment_ids;
+  const experimentIDs = Array.isArray(rawIds)
+    ? rawIds.map(String).filter(Boolean)
+    : typeof rawIds === "string"
+      ? rawIds.split(",").map((id) => id.trim()).filter(Boolean)
+      : [];
+  if (experimentIDs.length === 0) {
+    throw new Error("experiment_ids is required (1-20 experiment IDs).");
+  }
+  if (experimentIDs.length > 20) {
+    throw new Error("only 20 experiments can be updated at a time.");
+  }
+  const action = CRON_ACTIONS[String(b.action ?? "")];
+  if (!action) {
+    throw new Error("action is required. Valid values: Enable, Disable, Update.");
+  }
+  const cronSyntax = (b.cron_syntax ?? b.cronSyntax) as string | undefined;
+  if (action === "Update" && !cronSyntax) {
+    throw new Error("cron_syntax is required when action is Update.");
+  }
+  return {
+    experimentIDs,
+    action,
+    ...(cronSyntax ? { cronSyntax } : {}),
+  };
+}
+
+const IMAGE_REGISTRY_ARTIFACT_TYPES = new Set(["DockerRegistry", "Ecr", "GoogleArtifactRegistry", "Har"]);
+
+function parseBool(value: unknown): boolean {
+  return value === true || value === "true";
+}
+
+/**
+ * Maps the MCP body onto imageregistries.CreateRequest / UpdateRequest.
+ * mode "update" is a full replace: the API $sets every field, so omitted
+ * bools and custom images are stored as false / empty.
+ */
+function buildImageRegistryBody(input: Record<string, unknown>, mode: "create" | "update" = "create"): Record<string, unknown> {
+  const isUpdate = mode === "update";
+  const b = coerceBody(input);
+  const artifactTypeRaw = b.artifact_type !== undefined ? b.artifact_type : b.artifactType;
+  const artifactTypeProvided = artifactTypeRaw !== undefined;
+  const artifactType = artifactTypeProvided ? String(artifactTypeRaw) : "";
+  if (isUpdate && !artifactTypeProvided) {
+    throw new Error(
+      "artifact_type is required on update. Copy it from the get response, or send an empty string when that document has no connector. Omitting it clears connector mode and stores a legacy registry.",
+    );
+  }
+  if (artifactType !== "" && !IMAGE_REGISTRY_ARTIFACT_TYPES.has(artifactType)) {
+    throw new Error(`invalid artifact_type: ${artifactType}. Valid: DockerRegistry, Ecr, GoogleArtifactRegistry, Har.`);
+  }
+  const registryServer = (b.registry_server ?? b.registryServer) as string | undefined;
+  const registryAccount = (b.registry_account ?? b.registryAccount) as string | undefined;
+  const connectorRef = (b.connector_ref ?? b.connectorRef) as string | undefined;
+  const specRaw = (b.connector_spec ?? b.connectorSpec) as Record<string, unknown> | undefined;
+  const connectorSpec: Record<string, unknown> = {};
+  if (specRaw && typeof specRaw === "object") {
+    if (specRaw.region != null) connectorSpec.region = specRaw.region;
+    const hostname = specRaw.registryHostname ?? specRaw.registry_hostname;
+    if (hostname != null) connectorSpec.registryHostname = hostname;
+    if (specRaw.project != null) connectorSpec.project = specRaw.project;
+    if (specRaw.repository != null) connectorSpec.repository = specRaw.repository;
+  }
+  if (artifactType !== "") {
+    if (!connectorRef) throw new Error("connector_ref is required when artifact_type is set.");
+    if (artifactType === "Ecr" && !connectorSpec.region) {
+      throw new Error("connector_spec.region is required for Ecr.");
+    }
+    if (
+      artifactType === "GoogleArtifactRegistry" &&
+      (!connectorSpec.registryHostname || !connectorSpec.project || !connectorSpec.repository)
+    ) {
+      throw new Error("connector_spec.registryHostname, project, and repository are required for GoogleArtifactRegistry.");
+    }
+  } else if (!registryServer || !registryAccount) {
+    throw new Error("registry_server and registry_account are required when artifact_type is empty.");
+  }
+
+  const imagesRaw = (b.custom_images ?? b.customImages) as Record<string, unknown> | undefined;
+  const customImages: Record<string, unknown> = {};
+  if (imagesRaw && typeof imagesRaw === "object") {
+    const logWatcher = imagesRaw.logWatcher ?? imagesRaw.log_watcher;
+    const ddcrLib = imagesRaw.ddcrLib ?? imagesRaw.ddcr_lib;
+    const ddcrFault = imagesRaw.ddcrFault ?? imagesRaw.ddcr_fault;
+    const loadTestRunner = imagesRaw.loadTestRunner ?? imagesRaw.load_test_runner;
+    if (logWatcher != null) customImages.logWatcher = logWatcher;
+    if (imagesRaw.ddcr != null) customImages.ddcr = imagesRaw.ddcr;
+    if (ddcrLib != null) customImages.ddcrLib = ddcrLib;
+    if (ddcrFault != null) customImages.ddcrFault = ddcrFault;
+    if (loadTestRunner != null) customImages.loadTestRunner = loadTestRunner;
+  }
+  const infraID = (b.infra_id ?? b.infraID ?? input.infra_id) as string | undefined;
+  const isPrivate = b.is_private ?? b.isPrivate;
+  const isDefault = b.is_default ?? b.isDefault;
+  const allowChildOverride = b.allow_child_override ?? b.allowChildOverride;
+  const useCustomImages = b.use_custom_images ?? b.useCustomImages;
+  const secretName = b.secret_name ?? b.secretName;
+
+  // toDefaultCreateRequest / toDefaultUpdateRequest drop InfraID, so a default
+  // write with an infra id persists the scope singleton and leaves the infra doc.
+  if (parseBool(isDefault) && infraID) {
+    throw new Error(
+      "is_default cannot be combined with infra_id. The API drops infra_id when is_default is true and writes the account, org, or project singleton. Omit infra_id to store the platform default, or omit is_default to write that infrastructure's registry.",
+    );
+  }
+
+  if (isUpdate) {
+    const missing: string[] = [];
+    if (isPrivate === undefined) missing.push("is_private");
+    if (allowChildOverride === undefined) missing.push("allow_child_override");
+    if (useCustomImages === undefined) missing.push("use_custom_images");
+    if (isDefault === undefined) missing.push("is_default");
+    if (imagesRaw == null || typeof imagesRaw !== "object" || Array.isArray(imagesRaw)) missing.push("custom_images");
+    if (missing.length > 0) {
+      throw new Error(
+        `update replaces every stored image-registry field. Missing ${missing.join(", ")}. Get the registry and send the current document back with your changes.`,
+      );
+    }
+    if (parseBool(isPrivate) && (secretName == null || secretName === "")) {
+      throw new Error("secret_name is required when is_private is true, because update replaces the pull secret.");
+    }
+  }
+
+  const customImagesBody = Object.keys(customImages).length > 0 ? customImages : {};
+  return {
+    ...(registryServer != null ? { registryServer } : {}),
+    ...(registryAccount != null ? { registryAccount } : {}),
+    ...(infraID ? { infraID } : {}),
+    ...(isPrivate !== undefined || isUpdate ? { isPrivate: parseBool(isPrivate) } : {}),
+    ...(secretName != null ? { secretName } : {}),
+    ...(isDefault !== undefined || isUpdate ? { isDefault: parseBool(isDefault) } : {}),
+    ...(allowChildOverride !== undefined || isUpdate ? { allowChildOverride: parseBool(allowChildOverride) } : {}),
+    ...(useCustomImages !== undefined || isUpdate ? { useCustomImages: parseBool(useCustomImages) } : {}),
+    ...(Object.keys(customImages).length > 0 || isUpdate ? { customImages: customImagesBody } : {}),
+    ...(isUpdate || artifactType !== "" ? { artifactType } : {}),
+    ...(connectorRef ? { connectorRef } : {}),
+    ...(Object.keys(connectorSpec).length > 0 ? { connectorSpec } : {}),
+  };
+}
+
+function compactDashboard(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "identity", "name", "description", "tags", "category", "isFavourite", "dashboardID",
+    "createdAt", "updatedAt", "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
+const imageRegistryBodyFields: BodySchema["fields"] = [
+  { name: "registry_server", type: "string", required: false, description: descImageRegistryServer },
+  { name: "registry_account", type: "string", required: false, description: descImageRegistryAccount },
+  { name: "infra_id", type: "string", required: false, description: descImageRegistryInfraId },
+  { name: "is_private", type: "boolean", required: false, description: descImageRegistryPrivate },
+  { name: "secret_name", type: "string", required: false, description: descImageRegistrySecretName },
+  { name: "is_default", type: "boolean", required: false, description: descImageRegistryDefault },
+  { name: "allow_child_override", type: "boolean", required: false, description: descImageRegistryAllowOverride },
+  { name: "use_custom_images", type: "boolean", required: false, description: descImageRegistryUseCustomImages },
+  { name: "custom_images", type: "object", required: false, description: descImageRegistryCustomImages },
+  { name: "artifact_type", type: "string", required: false, description: descImageRegistryArtifactType },
+  { name: "connector_ref", type: "string", required: false, description: descImageRegistryConnectorRef },
+  { name: "connector_spec", type: "object", required: false, description: descImageRegistryConnectorSpec },
+];
+
+const imageRegistryBodySchema: BodySchema = {
+  description: descBodyImageRegistry,
+  fields: imageRegistryBodyFields,
+};
+
+const imageRegistryUpdateSchema: BodySchema = {
+  description: descBodyImageRegistryUpdate,
+  fields: [
+    { name: "registry_server", type: "string", required: false, description: descImageRegistryServer },
+    { name: "registry_account", type: "string", required: false, description: descImageRegistryAccount },
+    { name: "infra_id", type: "string", required: false, description: descImageRegistryInfraId },
+    { name: "isPrivate", type: "boolean", required: true, description: descImageRegistryPrivateUpdate },
+    { name: "secret_name", type: "string", required: false, description: descImageRegistrySecretName },
+    { name: "isDefault", type: "boolean", required: true, description: descImageRegistryDefaultUpdate },
+    { name: "allowChildOverride", type: "boolean", required: true, description: descImageRegistryAllowOverrideUpdate },
+    { name: "useCustomImages", type: "boolean", required: true, description: descImageRegistryUseCustomImagesUpdate },
+    { name: "customImages", type: "object", required: true, description: descImageRegistryCustomImagesUpdate },
+    { name: "artifactType", type: "string", required: true, description: descImageRegistryArtifactTypeUpdate },
+    { name: "connector_ref", type: "string", required: false, description: descImageRegistryConnectorRef },
+    { name: "connector_spec", type: "object", required: false, description: descImageRegistryConnectorSpecUpdate },
+  ],
+};
+
+const imageRegistryInfraParams: ParamsSchema = {
+  fields: [
+    { name: "infra_id", required: false, description: descImageRegistryInfraId },
+  ],
+};
+
+function isBlank(value: unknown): boolean {
+  return value == null || value === "";
+}
+
+function toTagList(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined;
+  return Array.isArray(raw)
+    ? raw.map(String)
+    : String(raw).split(",").map((tag) => tag.trim()).filter(Boolean);
+}
+
+function copyQueryField(input: Record<string, unknown>, body: Record<string, unknown>, field: string): void {
+  if (input[field] === undefined && body[field] !== undefined) input[field] = body[field];
+}
+
+function buildHubTemplateBody(input: Record<string, unknown>, templateKind: "fault" | "probe" | "action"): Record<string, unknown> {
+  const b = coerceBody(input);
+  copyQueryField(input, b, "hub_identity");
+  if (isBlank(b.identity)) b.identity = input.template_identity ?? input.template_id;
+  const infraType = b.infra_type ?? b.infrastructure_type ?? b.infraType ?? b.infrastructureType;
+  if (templateKind === "fault") b.infra_type = infraType;
+  else b.infrastructure_type = infraType;
+  const probeProperties = b.probe_properties ?? b.probeProperties;
+  const actionProperties = b.action_properties ?? b.actionProperties;
+  if (isBlank(input.hub_identity)) {
+    throw new Error("hub_identity is required. List chaos_hub and pass that hub's identity. It is sent as the hubIdentity query param.");
+  }
+  const hints: Record<string, string> = {
+    name: "template display name.",
+    identity: "template slug, unique in the hub.",
+    type: templateKind === "fault"
+      ? "fault name such as pod-delete, from chaos_fault list."
+      : templateKind === "probe"
+        ? "probe type: httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, apmProbe, or containerProbe."
+        : "delay, customScript, or container.",
+  };
+  if (templateKind === "fault") {
+    hints.infra_type = "Kubernetes, KubernetesV2, Linux, or Windows.";
+  } else {
+    hints.infrastructure_type = "Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, or Container.";
+  }
+  explainMissing(b, hints);
+  if (templateKind === "fault" && isBlank(b.spec)) {
+    throw new Error("spec is required. Copy spec from chaos_fault_template get. faulttemplate.Spec is { chaos: { faultName, params }, target? }. { faults: [] } is a ChaosGuard fault_spec, not this object, and the API rejects it.");
+  }
+  if (templateKind === "probe" && isBlank(probeProperties)) {
+    throw new Error("probe_properties is required. Copy probeProperties from chaos_probe_template get on update. On create, put the probe body under one key: httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, apmProbe, or containerProbe.");
+  }
+  if (templateKind === "action" && isBlank(actionProperties)) {
+    throw new Error("action_properties is required. For delay this is { delayAction: { duration } }. Copy actionProperties from chaos_action_template get when updating.");
+  }
+  const tags = toTagList(b.tags);
+  const spec = templateKind === "fault" ? faultTemplateSpec(b.spec) : undefined;
+  const probeProps = templateKind === "probe" ? probeTemplateProperties(probeProperties) : undefined;
+  return {
+    name: b.name,
+    identity: b.identity,
+    type: b.type,
+    ...(b.description ? { description: b.description } : {}),
+    ...(tags ? { tags } : {}),
+    ...(templateKind === "fault" ? { infraType } : { infrastructureType: infraType }),
+    hubRef: b.hub_ref ?? b.hubRef ?? input.hub_identity,
+    ...(spec ? { spec } : {}),
+    ...(probeProps ? { probeProperties: probeProps } : {}),
+    ...(actionProperties ? { actionProperties } : {}),
+    ...(b.run_properties || b.runProperties ? { runProperties: b.run_properties ?? b.runProperties } : {}),
+    ...(b.variables ? { variables: b.variables } : {}),
+    ...(b.inputs ? { inputs: b.inputs } : {}),
+  };
+}
+
+function explainMissing(b: Record<string, unknown>, hints: Record<string, string>): void {
+  const missing = Object.keys(hints).filter((field) => isBlank(b[field]));
+  if (missing.length === 0) return;
+  const details = missing.map((field) => `${field} — ${hints[field]}`).join(" ");
+  throw new Error(`Missing required field(s): ${missing.join(", ")}. ${details}`);
+}
+
+const GUARD_OPERATORS = new Set(["EQUAL_TO", "NOT_EQUAL_TO"]);
+const RECURRENCE_TYPES = new Set(["Yearly", "Monthly", "Daily", "Weekly", "None"]);
+const PROBE_TEMPLATE_KEYS = ["httpProbe", "cmdProbe", "promProbe", "k8sProbe", "sloProbe", "datadogProbe", "dynatraceProbe", "apmProbe", "containerProbe"];
+
+function faultTemplateSpec(raw: unknown): Record<string, unknown> {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("spec must be an object. Copy spec from chaos_fault_template get. faulttemplate.Spec is { chaos: { faultName, params }, target? }.");
+  }
+  const spec = raw as Record<string, unknown>;
+  const chaos = spec.chaos;
+  if (chaos == null || typeof chaos !== "object" || Array.isArray(chaos) || isBlank((chaos as Record<string, unknown>).faultName)) {
+    throw new Error("spec.chaos.faultName is required. faulttemplate.Spec is { chaos: { faultName, params }, target? }. Copy spec from chaos_fault_template get. { faults: [] } is a ChaosGuard fault_spec and the API rejects it.");
+  }
+  return spec;
+}
+
+function probeTemplateProperties(raw: unknown): Record<string, unknown> {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("probe_properties must be an object. Copy probeProperties from chaos_probe_template get. On create, put the probe body under httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, apmProbe, or containerProbe.");
+  }
+  const props = raw as Record<string, unknown>;
+  const present = PROBE_TEMPLATE_KEYS.filter((key) => props[key] != null && typeof props[key] === "object");
+  if (present.length !== 1) {
+    throw new Error("probe_properties must contain exactly one of httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, apmProbe, or containerProbe. Copy probeProperties from chaos_probe_template get on update. On create, put the probe body under that key (httpProbe for an HTTP probe). Do not nest probeProperties inside probe_properties, and do not send a flat map such as { probeTimeout }.");
+  }
+  return props;
+}
+
+function toInfraScopeSpec(raw: unknown, field: "k8s_spec" | "machine_spec"): Record<string, unknown> {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(
+      `${field} must be an object. Keep the body field named ${field}. Inside it the API reads infraSpec ({ operator: EQUAL_TO | NOT_EQUAL_TO, infraIds: string[] })${field === "k8s_spec" ? ", and optionally applicationSpec and chaosServiceAccountSpec" : ""}. infra_spec is sent as infraSpec, and infra_ids is sent as infraIds.`,
+    );
+  }
+  const spec = raw as Record<string, unknown>;
+  const infraSpec = spec.infraSpec ?? spec.infra_spec;
+  if (infraSpec == null || typeof infraSpec !== "object" || Array.isArray(infraSpec)) {
+    throw new Error(
+      `${field}.infraSpec is required. Shape: { operator: EQUAL_TO | NOT_EQUAL_TO, infraIds: string[] }. ${field === "k8s_spec" ? "Optional siblings on k8s_spec: applicationSpec ({ operator, workloads }) and chaosServiceAccountSpec ({ operator, serviceAccounts })." : "Optional sibling on machine_spec: unverifiedProbe (ALLOWED or BLOCKED)."} A spec without infraSpec is stored empty.`,
+    );
+  }
+  const infra = infraSpec as Record<string, unknown>;
+  if (!GUARD_OPERATORS.has(String(infra.operator))) {
+    throw new Error(`${field}.infraSpec.operator must be EQUAL_TO or NOT_EQUAL_TO.`);
+  }
+  const infraIds = infra.infraIds ?? infra.infra_ids;
+  if (!Array.isArray(infraIds)) {
+    throw new Error(`${field}.infraSpec.infraIds is required (a string array of environmentId/infraId values). infra_ids is accepted and sent as infraIds. A missing list is stored empty.`);
+  }
+  return {
+    infraSpec: { operator: infra.operator, infraIds },
+    ...(field === "k8s_spec" && (spec.applicationSpec || spec.application_spec)
+      ? { applicationSpec: spec.applicationSpec ?? spec.application_spec }
+      : {}),
+    ...(field === "k8s_spec" && (spec.chaosServiceAccountSpec || spec.chaos_service_account_spec)
+      ? { chaosServiceAccountSpec: spec.chaosServiceAccountSpec ?? spec.chaos_service_account_spec }
+      : {}),
+    ...(spec.unverifiedProbe || spec.unverified_probe
+      ? { unverifiedProbe: spec.unverifiedProbe ?? spec.unverified_probe }
+      : {}),
+  };
+}
+
+function toTimeWindows(raw: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(
+      "time_windows must be a non-empty array. Each item uses timeZone (IANA name), startTime (non-zero unix millis), and recurrence.type (Yearly, Monthly, Daily, Weekly, or None). Optional: endTime, duration, recurrence.spec.until, recurrence.spec.value. On update, copy timeWindows from chaos_guard_rule get. time_zone/start_time are accepted and sent as timeZone/startTime; a window without startTime is stored with startTime 0.",
+    );
+  }
+  return raw.map((item, index) => {
+    if (item == null || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`time_windows[${index}] must be an object with timeZone, startTime, and recurrence.type.`);
+    }
+    const window = item as Record<string, unknown>;
+    const timeZone = window.timeZone ?? window.time_zone;
+    const startTime = window.startTime ?? window.start_time;
+    const recurrenceRaw = window.recurrence;
+    const recurrence = recurrenceRaw && typeof recurrenceRaw === "object" && !Array.isArray(recurrenceRaw)
+      ? recurrenceRaw as Record<string, unknown>
+      : undefined;
+    const recurrenceType = recurrence?.type;
+    if (isBlank(timeZone) || startTime == null || startTime === "" || startTime === 0 || isBlank(recurrenceType)) {
+      throw new Error(
+        `time_windows[${index}] needs timeZone, startTime (non-zero unix millis), and recurrence.type (Yearly, Monthly, Daily, Weekly, or None). Optional recurrence.spec.until and recurrence.spec.value.`,
+      );
+    }
+    if (!RECURRENCE_TYPES.has(String(recurrenceType))) {
+      throw new Error(`time_windows[${index}].recurrence.type must be Yearly, Monthly, Daily, Weekly, or None.`);
+    }
+    const specRaw = recurrence?.spec;
+    const spec = specRaw && typeof specRaw === "object" && !Array.isArray(specRaw)
+      ? specRaw as Record<string, unknown>
+      : undefined;
+    return {
+      timeZone,
+      startTime,
+      ...(window.duration ? { duration: window.duration } : {}),
+      ...(window.endTime != null || window.end_time != null ? { endTime: window.endTime ?? window.end_time } : {}),
+      recurrence: {
+        type: recurrenceType,
+        ...(spec ? { spec: { ...(spec.until != null ? { until: spec.until } : {}), ...(spec.value != null ? { value: spec.value } : {}) } } : {}),
+      },
+    };
+  });
+}
+
+function buildGuardConditionBody(input: Record<string, unknown>): Record<string, unknown> {
+  const b = coerceBody(input);
+  if (isBlank(b.condition_id)) b.condition_id = b.conditionId ?? input.condition_id;
+  if (isBlank(b.infra_type)) b.infra_type = b.infraType;
+  if (isBlank(b.fault_spec)) b.fault_spec = b.faultSpec;
+  explainMissing(b, {
+    condition_id: "slug you choose for this condition.",
+    name: "display name.",
+    infra_type: "Kubernetes, KubernetesV2, Linux, or Windows.",
+    fault_spec: "{ operator: EQUAL_TO | NOT_EQUAL_TO, faults: [{ faultType: FAULT_NAME | FAULT_GROUP, name }] }. Fault names come from chaos_fault list.",
+  });
+  const faultSpec = b.fault_spec as Record<string, unknown>;
+  if (!faultSpec || typeof faultSpec !== "object" || !GUARD_OPERATORS.has(String(faultSpec.operator))) {
+    throw new Error("fault_spec.operator must be EQUAL_TO or NOT_EQUAL_TO. faults is a list of { faultType, name }.");
+  }
+  const tags = toTagList(b.tags);
+  const k8sRaw = b.k8s_spec ?? b.k8sSpec;
+  const machineRaw = b.machine_spec ?? b.machineSpec;
+  const infraType = String(b.infra_type);
+  if ((infraType === "Kubernetes" || infraType === "KubernetesV2") && !k8sRaw) {
+    throw new Error("k8s_spec is required when infra_type is Kubernetes or KubernetesV2. Keep the field named k8s_spec. Inside it send infraSpec: { operator: EQUAL_TO | NOT_EQUAL_TO, infraIds: string[] }. infra_ids is accepted and sent as infraIds. Optional: applicationSpec and chaosServiceAccountSpec. A Kubernetes condition without k8s_spec is stored with a nil k8sSpec.");
+  }
+  if ((infraType === "Linux" || infraType === "Windows") && !machineRaw) {
+    throw new Error("machine_spec is required when infra_type is Linux or Windows. Keep the field named machine_spec. Inside it send infraSpec: { operator: EQUAL_TO | NOT_EQUAL_TO, infraIds: string[] }. infra_ids is accepted and sent as infraIds. Optional: unverifiedProbe (ALLOWED or BLOCKED).");
+  }
+  return {
+    conditionId: b.condition_id,
+    name: b.name,
+    infraType: b.infra_type,
+    faultSpec,
+    ...(b.description ? { description: b.description } : {}),
+    ...(tags ? { tags } : {}),
+    ...(k8sRaw ? { k8sSpec: toInfraScopeSpec(k8sRaw, "k8s_spec") } : {}),
+    ...(machineRaw ? { machineSpec: toInfraScopeSpec(machineRaw, "machine_spec") } : {}),
+  };
+}
+
+function buildGuardRuleBody(input: Record<string, unknown>): Record<string, unknown> {
+  const b = coerceBody(input);
+  if (isBlank(b.rule_id)) b.rule_id = b.ruleId ?? input.rule_id;
+  if (isBlank(b.user_group_ids)) b.user_group_ids = b.userGroupIds;
+  if (isBlank(b.condition_ids)) b.condition_ids = b.conditionIds;
+  if (isBlank(b.time_windows)) b.time_windows = b.timeWindows;
+  explainMissing(b, {
+    rule_id: "slug you choose. On update this is also the path id.",
+    name: "display name.",
+    user_group_ids: "Harness user group ids this rule applies to.",
+    condition_ids: "chaos_guard_condition ids from chaos_guard_condition list.",
+    time_windows: "non-empty list. Each item needs timeZone, startTime (unix millis), and recurrence.type (Yearly, Monthly, Daily, Weekly, or None).",
+  });
+  const timeWindows = toTimeWindows(b.time_windows);
+  const tags = toTagList(b.tags);
+  return {
+    ruleId: b.rule_id,
+    name: b.name,
+    userGroupIds: b.user_group_ids,
+    conditionIds: b.condition_ids,
+    timeWindows,
+    ...(b.description ? { description: b.description } : {}),
+    ...(tags ? { tags } : {}),
+    ...(b.is_enabled != null || b.isEnabled != null ? { isEnabled: parseBool(b.is_enabled ?? b.isEnabled) } : {}),
+  };
+}
+
+function buildExperimentWriteBody(input: Record<string, unknown>, mode: "create" | "update"): Record<string, unknown> {
+  const b = coerceBody(input);
+  if (isBlank(b.infra_type)) b.infra_type = b.infraType;
+  if (isBlank(b.infra_id)) b.infra_id = b.infraId;
+  if (mode === "update" && isBlank(b.experiment_id)) b.experiment_id = input.experiment_id;
+  const hints: Record<string, string> = {
+    name: "display name.",
+    manifest: mode === "update"
+      ? "full experiment JSON or YAML. Copy it from chaos_experiment get. An omitted manifest is stored empty."
+      : "full experiment JSON or YAML string.",
+    infra_type: "Kubernetes, KubernetesV2, Linux, or Windows.",
+    infra_id: "from chaos_k8s_infrastructure or chaos_infrastructure. Kubernetes uses environmentId/infraId.",
+  };
+  if (mode === "create") hints.identity = "slug, unique in the project. Not the experiment UUID.";
+  else hints.experiment_id = "path id. Slug, or the UUID from list (experimentId). A UUID sets is_identity to false.";
+  explainMissing(b, hints);
+  const tags = toTagList(b.tags);
+  const infraType = b.infra_type;
+  const infraId = b.infra_id;
+  return {
+    ...(mode === "create" ? { identity: b.identity } : {}),
+    name: b.name,
+    manifest: b.manifest,
+    infraType,
+    infraId,
+    ...(b.experiment_id || b.experimentId ? { experimentId: b.experiment_id ?? b.experimentId } : {}),
+    ...(b.description ? { description: b.description } : {}),
+    ...(tags ? { tags } : {}),
+    ...(b.cron_syntax || b.cronSyntax ? { cronSyntax: b.cron_syntax ?? b.cronSyntax } : {}),
+    ...(b.is_single_run_cron != null || b.isSingleRunCronEnabled != null
+      ? { isSingleRunCronEnabled: parseBool(b.is_single_run_cron ?? b.isSingleRunCronEnabled) }
+      : {}),
+    ...(b.experiment_type || b.experimentType ? { experimentType: b.experiment_type ?? b.experimentType } : {}),
+    ...(b.validate_manifest != null || b.validateManifest != null
+      ? { validateManifest: parseBool(b.validate_manifest ?? b.validateManifest) }
+      : {}),
+  };
+}
+
+function buildOnboardingBody(input: Record<string, unknown>): Record<string, unknown> {
+  const b = coerceBody(input);
+  if (isBlank(b.environmentRef)) b.environmentRef = b.environment_id ?? b.environment_ref;
+  if (isBlank(b.infrastructureRef)) b.infrastructureRef = b.infra_id ?? b.infrastructure_ref;
+  explainMissing(b, {
+    environmentRef: "scoped Harness environment id from chaos_environment list. Keep an org. or account. prefix.",
+    infrastructureRef: "Harness CD infrastructure id in that environment.",
+    mode: "Manual or Automatic.",
+  });
+  const mode = String(b.mode);
+  if (mode !== "Manual" && mode !== "Automatic") {
+    throw new Error("mode must be Manual or Automatic.");
+  }
+  const manualMethod = b.manual_method ?? b.manualMethod;
+  if (!isBlank(manualMethod) && manualMethod !== "NetworkMap" && manualMethod !== "Service") {
+    throw new Error("manual_method must be NetworkMap or Service. Use it when mode is Manual.");
+  }
+  const serviceAccount = b.service_account ?? b.serviceAccount;
+  const discovery = b.discoveryAdvanceConfiguration ?? b.discovery_advance_configuration;
+  const chaosConfig = b.chaosAdvanceConfiguration ?? b.chaos_advance_configuration;
+  return {
+    environmentRef: b.environmentRef,
+    infrastructureRef: b.infrastructureRef,
+    mode,
+    ...(serviceAccount ? { serviceAccount } : {}),
+    ...(b.is_ai_enabled != null || b.isAIEnabled != null ? { isAIEnabled: parseBool(b.is_ai_enabled ?? b.isAIEnabled) } : {}),
+    ...(manualMethod ? { manualMethod } : {}),
+    ...(discovery ? { discoveryAdvanceConfiguration: discovery } : {}),
+    ...(chaosConfig ? { chaosAdvanceConfiguration: chaosConfig } : {}),
+  };
 }
 
 // ── Load test helpers ────────────────────────────────────────────────
@@ -1032,120 +1633,152 @@ export const chaosToolset: ToolsetDefinition = {
         "chaos test", "fault injection", "fault injection experiment",
         "blast radius experiment", "resilience test", "chaos engineering test",
       ],
-      // NOTE: hce-saas backend limitations for ListChaosV2Experiments
-      // (verified by reading repository.go ListChaosV2Experiments aggregation):
-      // 1. infraName, status, infraActive: parsed into ExperimentFilterInput
-      //    but NEVER applied in the Mongo aggregation (repository.go:684-770).
-      //    Do NOT expose them — agents would think they work and silently get
-      //    unfiltered results.
-      // 2. infra_id + environment_id ONLY work when BOTH are provided
-      //    (repository.go:712-714); either alone is silently dropped.
-      // 3. tags filter is AND substring match across the experiment's tag array
-      //    (substring per tag — tags=fault=gcp matches fault=gcp-vm-kill etc.).
       listFilterFields: [
-        { name: "experiment_name", description: descSearchExperiments },
-        { name: "infra_id", description: descExperimentInfraId },
+        { name: "search", description: "Substring match on experiment name and identity." },
         { name: "tags", description: descTags },
-        { name: "experiment_ids", description: descExperimentIds },
-        { name: "environment_id", description: descExperimentEnvironmentId },
-        { name: "start_date", description: descExperimentStartDate },
-        { name: "end_date", description: descExperimentEndDate },
-        { name: "target_network_map_ids", description: descExperimentTargetNetworkMapIds },
+        { name: "experiment_ids", description: "Comma-separated experiment UUIDs (experimentId)." },
+        { name: "identities", description: "Comma-separated experiment slugs." },
+        { name: "infra_types", description: "Comma-separated infrastructure types: Kubernetes, KubernetesV2, Linux, Windows." },
+        { name: "infra_ids", description: "Comma-separated chaos infrastructure ids." },
+        { name: "experiment_type", description: "experiment, cronexperiment, or gameday." },
+        { name: "is_cron_enabled", description: "When true, only experiments with cron enabled.", type: "boolean" },
         { name: "my_experiments", description: descExperimentMyExperiments, type: "boolean" },
         { name: "exclude_automation", description: descExperimentExcludeAutomation, type: "boolean" },
+        { name: "status", description: "Run status filter accepted by GET /v3/experiments." },
+        { name: "environment_id", description: descExperimentEnvironmentId },
+        { name: "start_time", description: "Range start, unix millis." },
+        { name: "end_time", description: "Range end, unix millis." },
+        { name: "sort_field", description: "name, lastUpdated, experimentName, lastExecuted, or createdAt." },
+        { name: "sort_ascending", description: descSortAsc, type: "boolean" },
       ],
       relatedResources: [
         { resourceType: "chaos_experiment_variable", relationship: "child", description: "Runtime variables for the experiment. List these to discover required inputs before running." },
         { resourceType: "chaos_input_set", relationship: "child", description: "Saved collections of variable overrides. Create input sets to reuse runtime configurations across runs." },
-        { resourceType: "chaos_application_map", relationship: "scoped_by", description: "When an experiment is bound to a chaos_application_map, the backend auto-emits workload=<name> AND service=<name> system tags. To find every experiment that targets a workload/service inside a given app map, either filter chaos_experiment with target_network_map_ids=<map> (returns ALL experiments on that map) or list services via chaos_application_map.get and use tags=workload=<name> / tags=service=<name>." },
+        { resourceType: "chaos_application_map", relationship: "scoped_by", description: "When an experiment is bound to a chaos_application_map, the backend auto-emits workload=<name> AND service=<name> system tags. GET /v3/experiments has no target_network_map_ids filter. Find experiments for a map with tags=workload=<name> or tags=service=<name>." },
         { resourceType: "chaos_fault", relationship: "uses", description: "Each fault step in the experiment manifest emits a fault=<faultName> system tag. Use chaos_fault to discover available fault identities, then filter chaos_experiment with tags=fault=<name>." },
         { resourceType: "chaos_probe", relationship: "uses", description: "Each probe reference in the experiment manifest emits a probe=<probeID> system tag. Use chaos_probe to discover probe identities, then filter chaos_experiment with tags=probe=<probeID>." },
-        { resourceType: "chaos_k8s_infrastructure", relationship: "scoped_by", description: "Experiments execute on a chaos infrastructure (the chaos agent installed in a Kubernetes cluster). Filter list with infra_id + environment_id (BOTH required together — backend ignores either alone)." },
+        { resourceType: "chaos_k8s_infrastructure", relationship: "scoped_by", description: "Experiments execute on a chaos infrastructure. Filter list with infra_ids and, separately, environment_id. Both are optional on GET /v3/experiments." },
         { resourceType: "discovered_network_map", relationship: "discovery_source", description: "When the user gives a high-level target (e.g. 'experiments for the payments app') without an app-map ID, the discovery path is: discovered_network_map → enumerate services/workloads → tags=workload=<name> on chaos_experiment. See descToolsetChaos REASONING PLAYBOOK for the full step-by-step." },
       ],
       operations: {
         list: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/experiment`,
+          path: `${CHAOS}/v3/experiments`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
             size: "limit",
-            experiment_name: "experimentName",
-            search_term: "experimentName",
-            infra_id: "infraId",
+            search: "search",
+            search_term: "search",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
+            experiment_ids: "experimentIDs",
+            identities: "identities",
+            infra_types: "infraTypes",
+            infra_ids: "infraIDs",
             tags: "tags",
-            experiment_ids: "experimentIds",
-            environment_id: "environmentIdentifier",
-            start_date: "startDate",
-            end_date: "endDate",
-            target_network_map_ids: "targetNetworkMapIds",
+            experiment_type: "experimentType",
+            is_cron_enabled: "isCronEnabled",
             my_experiments: "myExperiments",
             exclude_automation: "excludeAutomation",
+            status: "status",
+            environment_id: "environmentID",
+            start_time: "startTime",
+            end_time: "endTime",
           },
+          defaultQueryParams: { page: "0", limit: "15" },
           responseExtractor: chaosExperimentListExtract,
           description: descListExperiments,
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/experiments/{experimentId}`,
+          path: `${CHAOS}/v3/experiments/{identity}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { experiment_id: "experimentId" },
+          pathParams: { experiment_id: "identity" },
+          queryParams: { is_identity: "isIdentity" },
+          defaultQueryParams: { isIdentity: "true" },
+          bodyBuilder: (input) => {
+            if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
+              (input as Record<string, unknown>).is_identity = false;
+            }
+            return undefined;
+          },
           responseExtractor: passthrough,
           description: descGetExperiment,
         },
         delete: {
           method: "DELETE",
-          path: `${CHAOS}/rest/v2/experiment/{experimentId}`,
+          path: `${CHAOS}/v3/experiments/{identity}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { experiment_id: "experimentId" },
+          pathParams: { experiment_id: "identity" },
+          queryParams: { is_identity: "isIdentity" },
+          defaultQueryParams: { isIdentity: "true" },
+          bodyBuilder: (input) => {
+            if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
+              (input as Record<string, unknown>).is_identity = false;
+            }
+            return undefined;
+          },
           responseExtractor: passthrough,
           description: descDeleteExperiment,
         },
         create: {
           method: "POST",
-          path: `${CHAOS}/rest/v2/experiment`,
+          path: `${CHAOS}/v3/experiments`,
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => {
-            const b = coerceBody(input);
-            // Accept both snake_case (MCP convention) and camelCase (Harness API / manifest convention)
-            const infraId = b.infra_id ?? b.infraId;
-            const infraType = b.infra_type ?? b.infraType;
-            const cronSyntax = b.cron_syntax ?? b.cronSyntax;
-            const isSingleRunCron = b.is_single_run_cron ?? b.isSingleRunCronEnabled;
-            const experimentType = b.experiment_type ?? b.experimentType;
-            const tags = b.tags;
-            return {
-              id: (b.id as string) || randomUUID(),
-              ...(b.identity ? { identity: b.identity } : {}),
-              name: b.name,
-              ...(b.manifest ? { manifest: b.manifest } : {}),
-              ...(infraId ? { infraId, infra_id: infraId } : {}),
-              ...(infraType ? { infraType, infra_type: infraType } : {}),
-              ...(b.description ? { description: b.description } : {}),
-              ...(tags ? { tags: Array.isArray(tags) ? tags : (tags as string).split(",").map((t: string) => t.trim()).filter(Boolean) } : {}),
-              ...(cronSyntax !== undefined ? { cronSyntax } : {}),
-              ...(isSingleRunCron !== undefined ? { isSingleRunCronEnabled: isSingleRunCron } : {}),
-              ...(experimentType ? { experimentType } : {}),
-            };
-          },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => buildExperimentWriteBody(input, "create"),
           responseExtractor: passthrough,
           description: descCreateExperiment,
           bodySchema: {
-            description: descBodyExperimentCreate,
+            description: descCreateExperiment,
             fields: [
-              { name: "id", type: "string", required: false, description: descExperimentIdUUID },
               { name: "name", type: "string", required: true, description: descExperimentName },
+              { name: "identity", type: "string", required: true, description: descExperimentIdentity },
               { name: "manifest", type: "string", required: true, description: descExperimentManifest },
-              { name: "infra_id", type: "string", required: true, description: descExperimentInfraIdCreate },
-              { name: "infra_type", type: "string", required: true, description: descExperimentInfraType },
-              { name: "identity", type: "string", required: false, description: descExperimentIdentity },
+              { name: "infraType", type: "string", required: true, description: descExperimentInfraType },
+              { name: "infraId", type: "string", required: true, description: descExperimentInfraIdCreate },
+              { name: "experiment_id", type: "string", required: false, description: descExperimentIdUUID },
               { name: "description", type: "string", required: false, description: descExperimentDescription },
               { name: "tags", type: "array", required: false, description: descExperimentTags },
               { name: "cron_syntax", type: "string", required: false, description: descExperimentCronSyntax },
-              { name: "is_single_run_cron", type: "boolean", required: false, description: "When true and cron_syntax is set, the cron job runs only once (LimitRunsTo(1)). Default: false (unlimited runs)." },
-              { name: "experiment_type", type: "string", required: false, description: "Experiment workflow type. Valid: Workflow, CronWorkflow, ChaosEngine, ChaosSchedule, GamedayWorkflow. Usually auto-determined — only GamedayWorkflow is special-cased. Default: NonCronExperimentV2 (or CronExperimentV2 if cron_syntax is set)." },
+              { name: "is_single_run_cron", type: "boolean", required: false, description: "When true with cron_syntax, the schedule runs once." },
+              { name: "experiment_type", type: "string", required: false, description: "Optional. Leave unset and the API chooses from cron_syntax. If set: experiment, cronexperiment, or gameday." },
+              { name: "validate_manifest", type: "boolean", required: false, description: "When true, the API validates the manifest before saving." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/v3/experiments/{identity}`,
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { experiment_id: "identity" },
+          queryParams: { is_identity: "isIdentity" },
+          defaultQueryParams: { isIdentity: "true" },
+          bodyBuilder: (input) => {
+            if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
+              (input as Record<string, unknown>).is_identity = false;
+            }
+            return buildExperimentWriteBody(input, "update");
+          },
+          responseExtractor: passthrough,
+          description: descUpdateExperiment,
+          bodySchema: {
+            description: descUpdateExperiment,
+            fields: [
+              { name: "experiment_id", type: "string", required: false, description: "Path identity. Slug, or UUID when is_identity is false." },
+              { name: "name", type: "string", required: true, description: descExperimentName },
+              { name: "manifest", type: "string", required: true, description: "Full manifest. Get the experiment and send it back. Omitting it stores an empty manifest." },
+              { name: "infraType", type: "string", required: true, description: descExperimentInfraType },
+              { name: "infraId", type: "string", required: true, description: descExperimentInfraIdCreate },
+              { name: "description", type: "string", required: false, description: descExperimentDescription },
+              { name: "tags", type: "array", required: false, description: descExperimentTags },
+              { name: "cron_syntax", type: "string", required: false, description: descExperimentCronSyntax },
+              { name: "is_single_run_cron", type: "boolean", required: false, description: "When true with cron_syntax, the schedule runs once." },
+              { name: "experiment_type", type: "string", required: false, description: "experiment, cronexperiment, or gameday." },
+              { name: "validate_manifest", type: "boolean", required: false, description: "When true, the API validates the manifest before saving." },
             ],
           },
         },
@@ -1153,9 +1786,9 @@ export const chaosToolset: ToolsetDefinition = {
       executeActions: {
         run: {
           method: "POST",
-          path: `${CHAOS}/rest/v2/experiments/{experimentId}/run`,
+          path: `${CHAOS}/v3/experiments/{identity}/run`,
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
-          pathParams: { experiment_id: "experimentId" },
+          pathParams: { experiment_id: "identity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "true" },
           bodyBuilder: (input) => {
@@ -1241,23 +1874,55 @@ export const chaosToolset: ToolsetDefinition = {
         },
         stop: {
           method: "POST",
-          path: `${CHAOS}/rest/v2/experiment/{experimentId}/stop`,
+          path: `${CHAOS}/v3/experiments/{identity}/stop`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          pathParams: { experiment_id: "experimentId" },
-          queryParams: {
-            experiment_run_id: "experimentRunId",
-            notify_id: "notifyId",
-            force: "force",
+          pathParams: { experiment_id: "identity" },
+          queryParams: { is_identity: "isIdentity" },
+          defaultQueryParams: { isIdentity: "true" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            if (input.is_identity === undefined && b.is_identity !== undefined) {
+              (input as Record<string, unknown>).is_identity = b.is_identity;
+            }
+            if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
+              (input as Record<string, unknown>).is_identity = false;
+            }
+            const experimentRunId = b.experiment_run_id ?? b.experimentRunId ?? input.experiment_run_id;
+            const notifyId = b.notify_id ?? b.notifyId ?? input.notify_id;
+            const force = b.force ?? b.forceStop ?? input.force;
+            return {
+              ...(experimentRunId ? { experimentRunId } : {}),
+              ...(notifyId ? { notifyId } : {}),
+              ...(force != null ? { forceStop: parseBool(force) } : {}),
+            };
           },
-          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: descStopExperiment,
           bodySchema: {
-            description: "No body required. Stop parameters are passed as query parameters & don't pass anything to request body.",
+            description: "POST /v3/experiments/{identity}/stop. experiment_run_id, notify_id, and force are sent in the body. is_identity is a query param. Omit both ids to stop every running run of the experiment.",
             fields: [
               { name: "experiment_run_id", type: "string", required: false, description: descExperimentRunIdStop },
               { name: "notify_id", type: "string", required: false, description: descNotifyId },
               { name: "force", type: "boolean", required: false, description: descForce },
+              { name: "is_identity", type: "boolean", required: false, description: descIsIdentity },
+            ],
+          },
+        },
+        list_metadata: listMetadataAction(`${CHAOS}/v3/experiments/list-metadata`),
+        update_cron: {
+          method: "POST",
+          path: `${CHAOS}/v3/experiments/update-cron`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildUpdateCronBody,
+          responseExtractor: passthrough,
+          actionDescription: descUpdateExperimentCron,
+          bodySchema: {
+            description: descBodyUpdateExperimentCron,
+            fields: [
+              { name: "experimentIDs", type: "array", required: true, itemType: "string", description: `${descCronExperimentIds} experiment_ids is accepted.` },
+              { name: "action", type: "string", required: true, description: descCronAction },
+              { name: "cronSyntax", type: "string", required: false, description: `${descCronSyntax} cron_syntax is accepted.` },
             ],
           },
         },
@@ -1773,6 +2438,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
       },
       executeActions: {
+        list_metadata: listMetadataAction(`${CHAOS}/v3/probes/list-metadata`),
         enable: {
           method: "POST",
           path: `${CHAOS}/rest/v2/probes/{probeId}/enable`,
@@ -1931,6 +2597,52 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: descGetExperimentTemplate,
         },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/experimenttemplates`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          queryParams: { hub_identity: "hubIdentity" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            copyQueryField(input, b, "hub_identity");
+            explainMissing(b, { manifest: "full experiment template manifest. A partial manifest overwrites the stored template." });
+            if (isBlank(input.hub_identity)) throw new Error("hub_identity is required. List chaos_hub and pass that hub's identity.");
+            return { manifest: b.manifest };
+          },
+          responseExtractor: passthrough,
+          description: descBodyExperimentTemplateWrite,
+          bodySchema: {
+            description: descBodyExperimentTemplateWrite,
+            fields: [
+              { name: "manifest", type: "string", required: true, description: "Experiment template manifest." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/rest/experimenttemplates/{templateId}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { template_id: "templateId" },
+          queryParams: { hub_identity: "hubIdentity" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            copyQueryField(input, b, "hub_identity");
+            explainMissing(b, { manifest: "full experiment template manifest. A partial manifest overwrites the stored template." });
+            if (isBlank(input.hub_identity)) throw new Error("hub_identity is required. List chaos_hub and pass that hub's identity.");
+            if (isBlank(input.template_id)) throw new Error("template_id is required.");
+            return { manifest: b.manifest };
+          },
+          responseExtractor: passthrough,
+          description: descBodyExperimentTemplateWrite,
+          bodySchema: {
+            description: descBodyExperimentTemplateWrite,
+            fields: [
+              { name: "manifest", type: "string", required: true, description: "Replacement experiment template manifest." },
+            ],
+          },
+        },
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/experimenttemplates/{templateId}`,
@@ -2082,9 +2794,9 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/experiments/{experimentId}/variables`,
+          path: `${CHAOS}/v3/experiments/{identity}/variables`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { experiment_id: "experimentId" },
+          pathParams: { experiment_id: "identity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "true" },
           // No request body for this GET — bodyBuilder is used purely to auto-detect
@@ -2174,19 +2886,19 @@ export const chaosToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets`,
+          path: `${CHAOS}/v3/experiments/{identity}/inputsets`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { experiment_id: "experimentId" },
-          queryParams: { page: "page", limit: "limit", size: "limit", is_identity: "isIdentity" },
+          pathParams: { experiment_id: "identity" },
+          queryParams: { page: "page", limit: "limit", search: "search", is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           responseExtractor: chaosInputSetListExtract,
           description: descListInputSets,
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets/{inputsetId}`,
+          path: `${CHAOS}/v3/experiments/{identity}/inputsets/{inputsetIdentity}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { experiment_id: "experimentId", inputset_id: "inputsetId" },
+          pathParams: { experiment_id: "identity", inputset_id: "inputsetIdentity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           responseExtractor: ngExtract,
@@ -2194,9 +2906,9 @@ export const chaosToolset: ToolsetDefinition = {
         },
         create: {
           method: "POST",
-          path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets`,
+          path: `${CHAOS}/v3/experiments/{identity}/inputsets`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          pathParams: { experiment_id: "experimentId" },
+          pathParams: { experiment_id: "identity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           bodyBuilder: (input) => {
@@ -2222,9 +2934,9 @@ export const chaosToolset: ToolsetDefinition = {
         },
         update: {
           method: "PUT",
-          path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets/{inputsetId}`,
+          path: `${CHAOS}/v3/experiments/{identity}/inputsets/{inputsetIdentity}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          pathParams: { experiment_id: "experimentId", inputset_id: "inputsetId" },
+          pathParams: { experiment_id: "identity", inputset_id: "inputsetIdentity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           bodyBuilder: (input) => {
@@ -2248,9 +2960,9 @@ export const chaosToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: `${CHAOS}/rest/v2/experiments/{experimentId}/inputsets/{inputsetId}`,
+          path: `${CHAOS}/v3/experiments/{identity}/inputsets/{inputsetIdentity}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { experiment_id: "experimentId", inputset_id: "inputsetId" },
+          pathParams: { experiment_id: "identity", inputset_id: "inputsetIdentity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           responseExtractor: passthrough,
@@ -2299,6 +3011,104 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: chaosInfraListExtract,
           description: descListLinuxInfra,
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/machine/infra/{id}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { infra_id: "id" },
+          queryParams: { infra_type: "infraType" },
+          defaultQueryParams: { infraType: "Linux" },
+          responseExtractor: passthrough,
+          description: "GET /rest/machine/infra/{id}. infra_id is the path id. infra_type defaults to Linux.",
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/machine/infra`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          queryParams: { infra_type: "infraType" },
+          defaultQueryParams: { infraType: "Linux" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            copyQueryField(input, b, "infra_type");
+            if (isBlank(b.environmentID)) b.environmentID = b.environment_id;
+            explainMissing(b, {
+              name: "infrastructure name.",
+              environmentID: "Harness environment id. environment_id is accepted.",
+            });
+            const tags = toTagList(b.tags);
+            return {
+              name: b.name,
+              environmentID: b.environmentID,
+              ...(b.description ? { description: b.description } : {}),
+              ...(tags ? { tags } : {}),
+              ...(b.version ? { version: b.version } : {}),
+              ...(b.load_enabled != null || b.loadEnabled != null ? { loadEnabled: parseBool(b.load_enabled ?? b.loadEnabled) } : {}),
+              ...(b.k8s_infra_reference || b.k8sInfraReference ? { k8sInfraReference: b.k8s_infra_reference ?? b.k8sInfraReference } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descMachineInfraWrite,
+          bodySchema: {
+            description: descMachineInfraWrite,
+            fields: [
+              { name: "name", type: "string", required: true, description: "Infrastructure name." },
+              { name: "environmentID", type: "string", required: true, description: `${descEnvironmentId} environment_id is accepted.` },
+              { name: "description", type: "string", required: false, description: "Optional description." },
+              { name: "tags", type: "array", required: false, description: "Optional tags." },
+              { name: "version", type: "string", required: false, description: "Chaos infrastructure version. Create only. Update does not store version." },
+              { name: "loadEnabled", type: "boolean", required: false, description: "Whether load testing is enabled. load_enabled is accepted; true or the string \"true\" enables it, and the string \"false\" is false. Omit and the API stores false." },
+              { name: "k8sInfraReference", type: "string", required: false, description: "Kubernetes infra this machine is linked to for remote runs. k8s_infra_reference is accepted." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/rest/machine/infra/{id}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { infra_id: "id" },
+          queryParams: { infra_type: "infraType" },
+          defaultQueryParams: { infraType: "Linux" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            explainMissing(b, { name: "infrastructure name." });
+            if (isBlank(input.infra_id)) throw new Error("infra_id is required.");
+            const environmentID = b.environmentID ?? b.environment_id;
+            const tags = toTagList(b.tags);
+            return {
+              name: b.name,
+              ...(environmentID ? { environmentID } : {}),
+              ...(b.description ? { description: b.description } : {}),
+              ...(tags ? { tags } : {}),
+              ...(b.load_enabled != null || b.loadEnabled != null ? { loadEnabled: parseBool(b.load_enabled ?? b.loadEnabled) } : {}),
+              ...(b.k8s_infra_reference || b.k8sInfraReference ? { k8sInfraReference: b.k8s_infra_reference ?? b.k8sInfraReference } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descMachineInfraWrite,
+          bodySchema: {
+            description: descMachineInfraWrite,
+            fields: [
+              { name: "name", type: "string", required: true, description: "Infrastructure name." },
+              { name: "environmentID", type: "string", required: false, description: `${descEnvironmentId} environment_id is accepted.` },
+              { name: "description", type: "string", required: false, description: "Optional description. Get the infra and send the current value back unless you mean to change it." },
+              { name: "tags", type: "array", required: false, description: "Optional tags. Get the infra and send the current tags back unless you mean to change them." },
+              { name: "loadEnabled", type: "boolean", required: false, description: "Whether load testing is enabled. load_enabled is accepted; true or the string \"true\" enables it, and the string \"false\" is false. Omit and the API stores false, which turns load testing off. Get the infra and send the current value back unless you mean to change it." },
+              { name: "k8sInfraReference", type: "string", required: false, description: "Kubernetes infra this machine is linked to for remote runs. k8s_infra_reference is accepted. Get the infra and send the current value back unless you mean to change it." },
+            ],
+          },
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/machine/infra/{id}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { infra_id: "id" },
+          queryParams: { infra_type: "infraType" },
+          defaultQueryParams: { infraType: "Linux" },
+          responseExtractor: passthrough,
+          description: "DELETE /rest/machine/infra/{id}. infra_id is required. infra_type defaults to Linux.",
         },
       },
     },
@@ -3083,7 +3893,7 @@ export const chaosToolset: ToolsetDefinition = {
             const infraType = ((b.infra_type ?? b.infraType ?? "KUBERNETES") as string).toUpperCase();
             const k8sConnectorId = (b.k8s_connector_id ?? b.k8sConnectorID ?? b.k8sConnectorId) as string | undefined;
             const discoveryAgentId = (b.discovery_agent_id ?? b.discoveryAgentID ?? b.discoveryAgentId) as string | undefined;
-            const aiEnabled = Boolean(b.ai_enabled ?? b.aiEnabled ?? false);
+            const aiEnabled = parseBool(b.ai_enabled ?? b.aiEnabled);
             const rawTags = b.tags;
             const tags: string[] = Array.isArray(rawTags)
               ? (rawTags as string[])
@@ -3105,7 +3915,7 @@ export const chaosToolset: ToolsetDefinition = {
               ...(k8sConnectorId ? { k8sConnectorID: k8sConnectorId } : {}),
               ...(discoveryAgentId ? { discoveryAgentID: discoveryAgentId } : {}),
               aiEnabled,
-              insecureSkipVerify: Boolean(b.insecure_skip_verify ?? b.insecureSkipVerify ?? false),
+              insecureSkipVerify: parseBool(b.insecure_skip_verify ?? b.insecureSkipVerify),
             };
           },
           responseExtractor: passthrough,
@@ -3115,18 +3925,74 @@ export const chaosToolset: ToolsetDefinition = {
             fields: [
               { name: "identity", type: "string", required: true, description: descK8sInfraIdentityCreate },
               { name: "name", type: "string", required: true, description: descK8sInfraNameCreate },
-              { name: "environment_id", type: "string", required: true, description: descK8sInfraEnvironmentIdCreate },
-              { name: "infra_id", type: "string", required: false, description: descK8sInfraInfraIdCreate },
-              { name: "k8s_connector_id", type: "string", required: false, description: descK8sInfraConnectorIdCreate },
-              { name: "infra_namespace", type: "string", required: false, description: descK8sInfraNamespaceCreate },
-              { name: "service_account", type: "string", required: false, description: descK8sInfraServiceAccountCreate },
-              { name: "infra_scope", type: "string", required: false, description: descK8sInfraScopeCreate },
-              { name: "infra_type", type: "string", required: false, description: descK8sInfraTypeCreate },
+              { name: "environmentID", type: "string", required: true, description: `${descK8sInfraEnvironmentIdCreate} environment_id is accepted.` },
+              { name: "infraID", type: "string", required: false, description: `${descK8sInfraInfraIdCreate} infra_id is accepted.` },
+              { name: "k8sConnectorID", type: "string", required: false, description: `${descK8sInfraConnectorIdCreate} k8s_connector_id is accepted.` },
+              { name: "infraNamespace", type: "string", required: false, description: `${descK8sInfraNamespaceCreate} infra_namespace is accepted.` },
+              { name: "serviceAccount", type: "string", required: false, description: `${descK8sInfraServiceAccountCreate} service_account is accepted.` },
+              { name: "infraScope", type: "string", required: false, description: `${descK8sInfraScopeCreate} infra_scope is accepted.` },
+              { name: "infraType", type: "string", required: false, description: `${descK8sInfraTypeCreate} infra_type is accepted.` },
               { name: "description", type: "string", required: false, description: "Optional description for the chaos server." },
               { name: "tags", type: "array", required: false, description: "Optional tags (array of strings or comma-separated string)." },
-              { name: "ai_enabled", type: "boolean", required: false, description: descK8sInfraAiEnabledCreate },
+              { name: "aiEnabled", type: "boolean", required: false, description: `${descK8sInfraAiEnabledCreate} ai_enabled is accepted.` },
             ],
           },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/rest/v2/infrastructure`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const body = {
+              ...b,
+              environmentID: b.environmentID ?? b.environment_id,
+              infraNamespace: b.infraNamespace ?? b.infra_namespace,
+              serviceAccount: b.serviceAccount ?? b.service_account,
+            };
+            explainMissing(body, {
+              identity: "chaos infrastructure slug.",
+              name: "display name.",
+              environmentID: "Harness environment id. environment_id is accepted.",
+              infraNamespace: "Kubernetes namespace. infra_namespace is accepted.",
+              serviceAccount: "Kubernetes service account. service_account is accepted.",
+            });
+            const tags = toTagList(b.tags);
+            return {
+              identity: b.identity,
+              name: b.name,
+              environmentID: body.environmentID,
+              infraNamespace: body.infraNamespace,
+              serviceAccount: body.serviceAccount,
+              ...(b.description ? { description: b.description } : {}),
+              ...(tags ? { tags } : {}),
+              ...(b.infra_scope ? { infraScope: String(b.infra_scope).toUpperCase() } : {}),
+              ...(b.infra_type ? { infraType: String(b.infra_type).toUpperCase() } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descUpdateK8sInfra,
+          bodySchema: {
+            description: descUpdateK8sInfra,
+            fields: [
+              { name: "identity", type: "string", required: true, description: descK8sInfraIdentityCreate },
+              { name: "name", type: "string", required: true, description: descK8sInfraNameCreate },
+              { name: "environmentID", type: "string", required: true, description: `${descK8sInfraEnvironmentIdCreate} environment_id is accepted.` },
+              { name: "infraNamespace", type: "string", required: true, description: `${descK8sInfraNamespaceCreate} infra_namespace is accepted.` },
+              { name: "serviceAccount", type: "string", required: true, description: `${descK8sInfraServiceAccountCreate} service_account is accepted.` },
+              { name: "description", type: "string", required: false, description: "Optional description." },
+              { name: "tags", type: "array", required: false, description: "Optional tags." },
+            ],
+          },
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/v2/infrastructure/{environmentIdentifier}/{identity}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { environment_id: "environmentIdentifier", infra_id: "identity" },
+          responseExtractor: passthrough,
+          description: descDeleteK8sInfra,
         },
       },
       executeActions: {
@@ -3156,6 +4022,63 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: descCheckK8sHealth,
           bodySchema: { description: descBodyNoBody, fields: [] },
+        },
+        get_yaml: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/infrastructure/yaml`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const identity = b.identity ?? input.infra_id;
+            const environmentID = b.environment_id ?? b.environmentID ?? input.environment_id;
+            const infraNamespace = b.infra_namespace ?? b.infraNamespace;
+            const serviceAccount = b.service_account ?? b.serviceAccount;
+            explainMissing(
+              { identity, environmentID, infraNamespace, serviceAccount },
+              {
+                identity: "chaos infrastructure slug.",
+                environmentID: "Harness environment id. environment_id is accepted.",
+                infraNamespace: "Kubernetes namespace. infra_namespace is accepted.",
+                serviceAccount: "Kubernetes service account. service_account is accepted.",
+              },
+            );
+            return {
+              identity,
+              environmentID,
+              infraNamespace,
+              serviceAccount,
+            };
+          },
+          responseExtractor: passthrough,
+          actionDescription: descGetK8sInfraYaml,
+          bodySchema: {
+            description: descGetK8sInfraYaml,
+            fields: [
+              { name: "identity", type: "string", required: true, description: descK8sInfraIdentityCreate },
+              { name: "environmentID", type: "string", required: true, description: `${descK8sInfraEnvironmentIdCreate} environment_id is accepted.` },
+              { name: "infraNamespace", type: "string", required: true, description: `${descK8sInfraNamespaceCreate} infra_namespace is accepted.` },
+              { name: "serviceAccount", type: "string", required: true, description: `${descK8sInfraServiceAccountCreate} service_account is accepted.` },
+            ],
+          },
+        },
+        get_manifest: {
+          method: "GET",
+          path: `${CHAOS}/rest/kubernetes/infra/manifest/{id}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { infra_id: "id" },
+          responseExtractor: passthrough,
+          actionDescription: descK8sInfraById,
+          bodySchema: { description: descK8sInfraById, fields: [] },
+        },
+        helm_command: {
+          method: "GET",
+          path: `${CHAOS}/rest/kubernetes/infra/helm-command/{id}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { infra_id: "id" },
+          responseExtractor: passthrough,
+          actionDescription: descK8sInfraById,
+          bodySchema: { description: descK8sInfraById, fields: [] },
         },
       },
     },
@@ -3329,6 +4252,9 @@ export const chaosToolset: ToolsetDefinition = {
           description: descDeleteHub,
         },
       },
+      executeActions: {
+        list_metadata: listMetadataAction(`${CHAOS}/v3/hubs/list-metadata`),
+      },
     },
 
     // ── Chaos Faults ────────────────────────────────────────────────
@@ -3396,6 +4322,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
       },
       executeActions: {
+        list_metadata: listMetadataAction(`${CHAOS}/v3/faults/list-metadata`),
         get_variables: {
           method: "GET",
           path: `${CHAOS}/rest/faults/{faultId}/variables`,
@@ -3536,6 +4463,47 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: descGetFaultTemplate,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/faulttemplates`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          queryParams: { hub_identity: "hubIdentity" },
+          bodyBuilder: (input) => buildHubTemplateBody(input, "fault"),
+          responseExtractor: passthrough,
+          description: descTemplateEntityWrite,
+          bodySchema: {
+            description: descTemplateEntityWrite,
+            fields: [
+              { name: "name", type: "string", required: true, description: "Fault template name." },
+              { name: "identity", type: "string", required: true, description: "Fault template identity." },
+              { name: "type", type: "string", required: true, description: descFaultType },
+              { name: "infraType", type: "string", required: true, description: descInfraType },
+              { name: "spec", type: "object", required: true, description: "faulttemplate.Spec: { chaos: { faultName, params }, target? }. Copy spec from chaos_fault_template get. { faults: [] } is a ChaosGuard fault_spec and the API rejects it." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/rest/faulttemplates/{templateIdentity}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: { hub_identity: "hubIdentity" },
+          bodyBuilder: (input) => buildHubTemplateBody(input, "fault"),
+          responseExtractor: passthrough,
+          description: descTemplateEntityWrite,
+          bodySchema: {
+            description: descTemplateEntityWrite,
+            fields: [
+              { name: "name", type: "string", required: true, description: "Fault template name." },
+              { name: "identity", type: "string", required: true, description: "Fault template identity." },
+              { name: "type", type: "string", required: true, description: descFaultType },
+              { name: "infraType", type: "string", required: true, description: descInfraType },
+              { name: "spec", type: "object", required: true, description: "faulttemplate.Spec: { chaos: { faultName, params }, target? }. Copy spec from chaos_fault_template get. { faults: [] } is a ChaosGuard fault_spec and the API rejects it." },
+            ],
+          },
         },
         delete: {
           method: "DELETE",
@@ -3681,6 +4649,47 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: descGetProbeTemplate,
         },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/templates/probes`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          queryParams: { hub_identity: "hubIdentity" },
+          bodyBuilder: (input) => buildHubTemplateBody(input, "probe"),
+          responseExtractor: passthrough,
+          description: descTemplateEntityWrite,
+          bodySchema: {
+            description: descTemplateEntityWrite,
+            fields: [
+              { name: "name", type: "string", required: true, description: "Probe template name." },
+              { name: "identity", type: "string", required: true, description: "Probe template identity." },
+              { name: "type", type: "string", required: true, description: descEntityTypeProbe },
+              { name: "infrastructureType", type: "string", required: true, description: descInfraType },
+              { name: "probeProperties", type: "object", required: true, description: "Exactly one of httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, apmProbe, or containerProbe. Copy probeProperties from chaos_probe_template get. probe_properties is accepted. Do not nest probeProperties inside that object, and do not send a flat map such as { probeTimeout }." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/rest/templates/probes/{templateIdentity}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: { hub_identity: "hubIdentity" },
+          bodyBuilder: (input) => buildHubTemplateBody(input, "probe"),
+          responseExtractor: passthrough,
+          description: descTemplateEntityWrite,
+          bodySchema: {
+            description: descTemplateEntityWrite,
+            fields: [
+              { name: "name", type: "string", required: true, description: "Probe template name." },
+              { name: "identity", type: "string", required: true, description: "Probe template identity." },
+              { name: "type", type: "string", required: true, description: descEntityTypeProbe },
+              { name: "infrastructureType", type: "string", required: true, description: descInfraType },
+              { name: "probeProperties", type: "object", required: true, description: "Exactly one of httpProbe, cmdProbe, promProbe, k8sProbe, sloProbe, datadogProbe, dynatraceProbe, apmProbe, or containerProbe. Copy probeProperties from chaos_probe_template get. probe_properties is accepted. Do not nest probeProperties inside that object, and do not send a flat map such as { probeTimeout }." },
+            ],
+          },
+        },
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/templates/probes/{templateIdentity}`,
@@ -3765,6 +4774,47 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: descGetActionTemplate,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/templates/actions`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          queryParams: { hub_identity: "hubIdentity" },
+          bodyBuilder: (input) => buildHubTemplateBody(input, "action"),
+          responseExtractor: passthrough,
+          description: descTemplateEntityWrite,
+          bodySchema: {
+            description: descTemplateEntityWrite,
+            fields: [
+              { name: "name", type: "string", required: true, description: "Action template name." },
+              { name: "identity", type: "string", required: true, description: "Action template identity." },
+              { name: "type", type: "string", required: true, description: descEntityTypeAction },
+              { name: "infrastructureType", type: "string", required: true, description: descInfraType },
+              { name: "actionProperties", type: "object", required: true, description: "Action template properties. action_properties is accepted." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/rest/templates/actions/{templateIdentity}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { template_identity: "templateIdentity" },
+          queryParams: { hub_identity: "hubIdentity" },
+          bodyBuilder: (input) => buildHubTemplateBody(input, "action"),
+          responseExtractor: passthrough,
+          description: descTemplateEntityWrite,
+          bodySchema: {
+            description: descTemplateEntityWrite,
+            fields: [
+              { name: "name", type: "string", required: true, description: "Action template name." },
+              { name: "identity", type: "string", required: true, description: "Action template identity." },
+              { name: "type", type: "string", required: true, description: descEntityTypeAction },
+              { name: "infrastructureType", type: "string", required: true, description: descInfraType },
+              { name: "actionProperties", type: "object", required: true, description: "Action template properties. action_properties is accepted." },
+            ],
+          },
         },
         delete: {
           method: "DELETE",
@@ -3893,6 +4943,51 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: descGetAction,
         },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/rest/actions/{actionId}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { action_id: "actionId" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            if (isBlank(b.type)) b.type = b.action_type ?? b.actionType;
+            if (isBlank(b.infrastructure_type)) b.infrastructure_type = b.infrastructureType ?? b.infra_type;
+            explainMissing(b, {
+              name: "action name.",
+              type: "delay, customScript, or container.",
+              infrastructure_type: "Kubernetes, KubernetesV2, Linux, Windows, CloudFoundry, or Container.",
+            });
+            if (isBlank(input.action_id)) throw new Error("action_id is required.");
+            const tags = toTagList(b.tags);
+            const actionProperties = b.action_properties ?? b.actionProperties;
+            return {
+              name: b.name,
+              type: b.type,
+              infrastructureType: b.infrastructure_type,
+              ...(b.identity ? { identity: b.identity } : {}),
+              ...(b.description ? { description: b.description } : {}),
+              ...(tags ? { tags } : {}),
+              ...(actionProperties ? { actionProperties } : {}),
+              ...(b.variables ? { variables: b.variables } : {}),
+              ...(b.run_properties || b.runProperties ? { runProperties: b.run_properties ?? b.runProperties } : {}),
+              ...(b.inputs ? { inputs: b.inputs } : {}),
+            };
+          },
+          responseExtractor: chaosActionExtract,
+          description: descUpdateAction,
+          bodySchema: {
+            description: descUpdateAction,
+            fields: [
+              { name: "name", type: "string", required: true, description: descActionName },
+              { name: "type", type: "string", required: true, description: descActionEntityTypeCreate },
+              { name: "infrastructureType", type: "string", required: true, description: `${descActionInfraTypeCreate} infrastructure_type is accepted.` },
+              { name: "description", type: "string", required: false, description: descActionDescriptionCreate },
+              { name: "tags", type: "array", required: false, description: descActionTagsCreate },
+              { name: "actionProperties", type: "object", required: false, description: `${descActionPropertiesBody} action_properties is accepted.` },
+            ],
+          },
+        },
         delete: {
           method: "DELETE",
           path: `${CHAOS}/rest/actions/{actionId}`,
@@ -3927,11 +5022,7 @@ export const chaosToolset: ToolsetDefinition = {
               ...(tags != null
                 ? { tags: Array.isArray(tags) ? tags : String(tags).split(",").map((t: string) => t.trim()).filter(Boolean) }
                 : {}),
-              // Emit snake_case alias too so the registry's required-field
-              // validator (which checks the built body against bodySchema field
-              // names) sees `infrastructure_type`; the backend reads the
-              // camelCase `infrastructureType` and ignores the extra key.
-              ...(infrastructureType != null ? { infrastructureType, infrastructure_type: infrastructureType } : {}),
+              ...(infrastructureType != null ? { infrastructureType } : {}),
               ...(type != null ? { type } : {}),
               ...(b.variables != null ? { variables: b.variables } : {}),
               ...(actionProperties != null ? { actionProperties } : {}),
@@ -3946,8 +5037,8 @@ export const chaosToolset: ToolsetDefinition = {
             fields: [
               { name: "name", type: "string", required: true, description: descActionName },
               { name: "type", type: "string", required: true, description: descActionEntityTypeCreate },
-              { name: "infrastructure_type", type: "string", required: true, description: descActionInfraTypeCreate },
-              { name: "action_properties", type: "object", required: false, description: descActionPropertiesBody },
+              { name: "infrastructureType", type: "string", required: true, description: `${descActionInfraTypeCreate} infrastructure_type is accepted.` },
+              { name: "actionProperties", type: "object", required: false, description: `${descActionPropertiesBody} action_properties is accepted.` },
               { name: "duration", type: "string", required: false, description: descActionDurationShorthand },
               { name: "identity", type: "string", required: false, description: descActionIdentityCreate },
               { name: "description", type: "string", required: false, description: descActionDescriptionCreate },
@@ -3960,6 +5051,7 @@ export const chaosToolset: ToolsetDefinition = {
         },
       },
       executeActions: {
+        list_metadata: listMetadataAction(`${CHAOS}/v3/actions/list-metadata`),
         get_manifest: {
           method: "GET",
           path: `${CHAOS}/rest/actions/manifest/{actionId}`,
@@ -4085,7 +5177,7 @@ export const chaosToolset: ToolsetDefinition = {
         { resourceType: "chaos_k8s_infrastructure", relationship: "scoped_by", description: "Application maps are scoped by (environment, infrastructure). Use chaos_k8s_infrastructure to discover valid infra_id values." },
         { resourceType: "chaos_environment",        relationship: "scoped_by", description: "Application maps are scoped by environment. Use chaos_environment to discover valid environment_id values." },
         { resourceType: "discovered_network_map",   relationship: "backed-by", description: "The chaos application map wraps an underlying service-discovery network map. Use discovered_network_map to inspect the raw per-agent inventory." },
-        { resourceType: "chaos_experiment",         relationship: "scopes",    description: "Experiments bound to this application map auto-emit workload=<name> AND service=<name> system tags (one per workload/service in the manifest). Find them via chaos_experiment list with target_network_map_ids=<this map's identity> (broadest) or tags=workload=<name> / tags=service=<name> (narrower)." },
+        { resourceType: "chaos_experiment",         relationship: "scopes",    description: "Experiments bound to this application map auto-emit workload=<name> AND service=<name> system tags (one per workload/service in the manifest). GET /v3/experiments has no target_network_map_ids filter. Find them with tags=workload=<name> or tags=service=<name>." },
       ],
       operations: {
         list: {
@@ -4139,6 +5231,30 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: descGetApplicationMap,
         },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/v2/applicationmaps/{mapId}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { map_id: "mapId" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            infra_id: "infraId",
+          },
+          preflight: async ({ input }) => {
+            const missing: string[] = [];
+            if (input.map_id === undefined || input.map_id === "") missing.push("map_id");
+            if (input.environment_id === undefined || input.environment_id === "") missing.push("environment_id");
+            if (input.infra_id === undefined || input.infra_id === "") missing.push("infra_id");
+            if (missing.length > 0) {
+              throw new Error(
+                `Missing required field(s) for delete on chaos_application_map: ${missing.join(", ")}. ` +
+                `Pass map_id plus environment_id and infra_id. The backend deletes by {identity, infra_id, environment}.`,
+              );
+            }
+          },
+          responseExtractor: passthrough,
+          description: descChaosApplicationMap,
+        },
       },
     },
 
@@ -4172,7 +5288,7 @@ export const chaosToolset: ToolsetDefinition = {
             infrastructure_type: "infrastructureType",
             tags: "tags",
           },
-          responseExtractor: chaosPageExtract,
+          responseExtractor: chaosGuardConditionListExtract,
           description: descListGuardConditions,
         },
         get: {
@@ -4182,6 +5298,49 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { condition_id: "conditionId" },
           responseExtractor: passthrough,
           description: descGetGuardCondition,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/v3/chaosguard-conditions`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => buildGuardConditionBody(input),
+          responseExtractor: passthrough,
+          description: descGuardConditionWrite,
+          bodySchema: {
+            description: descGuardConditionWrite,
+            fields: [
+              { name: "conditionId", type: "string", required: true, description: "Condition id. condition_id is accepted." },
+              { name: "name", type: "string", required: true, description: "Condition name." },
+              { name: "infraType", type: "string", required: true, description: "Kubernetes, KubernetesV2, Linux, or Windows. infra_type is accepted." },
+              { name: "faultSpec", type: "object", required: true, description: "{ operator: EQUAL_TO | NOT_EQUAL_TO, faults: [{ faultType, name }] }. fault_spec is accepted." },
+              { name: "description", type: "string", required: false, description: "Optional description." },
+              { name: "tags", type: "array", required: false, description: "Optional tags." },
+              { name: "k8s_spec", type: "object", required: false, description: "Required when infra_type is Kubernetes or KubernetesV2. Field name stays k8s_spec. Inside it send infraSpec: { operator: EQUAL_TO | NOT_EQUAL_TO, infraIds }. infra_ids is sent as infraIds. Optional: applicationSpec, chaosServiceAccountSpec." },
+              { name: "machine_spec", type: "object", required: false, description: "Required when infra_type is Linux or Windows. Field name stays machine_spec. Inside it send infraSpec: { operator: EQUAL_TO | NOT_EQUAL_TO, infraIds }. infra_ids is sent as infraIds. Optional: unverifiedProbe (ALLOWED or BLOCKED)." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/v3/chaosguard-conditions/{conditionId}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { condition_id: "conditionId" },
+          bodyBuilder: (input) => buildGuardConditionBody(input),
+          responseExtractor: passthrough,
+          description: descGuardConditionWrite,
+          bodySchema: {
+            description: descGuardConditionWrite,
+            fields: [
+              { name: "conditionId", type: "string", required: true, description: "Condition id. Also the path id. condition_id is accepted." },
+              { name: "name", type: "string", required: true, description: "Condition name." },
+              { name: "infraType", type: "string", required: true, description: "Kubernetes, KubernetesV2, Linux, or Windows. infra_type is accepted." },
+              { name: "faultSpec", type: "object", required: true, description: "{ operator: EQUAL_TO | NOT_EQUAL_TO, faults: [{ faultType: FAULT_NAME | FAULT_GROUP, name }] }. fault_spec is accepted." },
+              { name: "k8s_spec", type: "object", required: false, description: "Required when infra_type is Kubernetes or KubernetesV2. Field name stays k8s_spec. Inside it send infraSpec: { operator: EQUAL_TO | NOT_EQUAL_TO, infraIds }. infra_ids is sent as infraIds. Optional: applicationSpec, chaosServiceAccountSpec." },
+              { name: "machine_spec", type: "object", required: false, description: "Required when infra_type is Linux or Windows. Field name stays machine_spec. Inside it send infraSpec: { operator: EQUAL_TO | NOT_EQUAL_TO, infraIds }. infra_ids is sent as infraIds. Optional: unverifiedProbe (ALLOWED or BLOCKED)." },
+            ],
+          },
         },
         delete: {
           method: "DELETE",
@@ -4224,7 +5383,7 @@ export const chaosToolset: ToolsetDefinition = {
             infrastructure_type: "infrastructureType",
             tags: "tags",
           },
-          responseExtractor: chaosPageExtract,
+          responseExtractor: chaosGuardRuleListExtract,
           description: descListGuardRules,
         },
         get: {
@@ -4234,6 +5393,51 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { rule_id: "ruleId" },
           responseExtractor: passthrough,
           description: descGetGuardRule,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/v3/chaosguard-rules`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => buildGuardRuleBody(input),
+          responseExtractor: passthrough,
+          description: descGuardRuleWrite,
+          bodySchema: {
+            description: descGuardRuleWrite,
+            fields: [
+              { name: "ruleId", type: "string", required: true, description: "Rule id. rule_id is accepted." },
+              { name: "name", type: "string", required: true, description: "Rule name." },
+              { name: "userGroupIds", type: "array", required: true, description: "User group ids allowed by this rule. user_group_ids is accepted." },
+              { name: "conditionIds", type: "array", required: true, description: "Chaos guard condition ids. condition_ids is accepted." },
+              { name: "timeWindows", type: "array", required: true, description: "Each item needs timeZone (IANA), startTime (non-zero unix millis), and recurrence.type (Yearly, Monthly, Daily, Weekly, or None). Optional: endTime, duration, recurrence.spec.until, recurrence.spec.value. time_windows is accepted." },
+              { name: "description", type: "string", required: false, description: "Optional description." },
+              { name: "tags", type: "array", required: false, description: "Optional tags." },
+              { name: "is_enabled", type: "boolean", required: false, description: "Omit and the API stores false on create and on update, so the rule is disabled. Send true to enable it, or call the enable action. On update, copy the current value from get if you are not changing it." },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/v3/chaosguard-rules/{ruleId}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { rule_id: "ruleId" },
+          bodyBuilder: (input) => {
+            if (isBlank(input.rule_id) && !isBlank((coerceBody(input)).rule_id)) input.rule_id = coerceBody(input).rule_id;
+            return buildGuardRuleBody(input);
+          },
+          responseExtractor: passthrough,
+          description: descGuardRuleWrite,
+          bodySchema: {
+            description: descGuardRuleWrite,
+            fields: [
+              { name: "ruleId", type: "string", required: true, description: "Rule id. Also the path id. rule_id is accepted." },
+              { name: "name", type: "string", required: true, description: "Rule name." },
+              { name: "userGroupIds", type: "array", required: true, description: "User group ids. user_group_ids is accepted." },
+              { name: "conditionIds", type: "array", required: true, description: "Condition ids. condition_ids is accepted." },
+              { name: "timeWindows", type: "array", required: true, description: "Each item needs timeZone, startTime (non-zero unix millis), and recurrence.type (Yearly, Monthly, Daily, Weekly, or None). Copy timeWindows from get on update. time_windows is accepted." },
+            ],
+          },
         },
         delete: {
           method: "DELETE",
@@ -4306,23 +5510,40 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["risk_id"],
+      listFilterFields: [
+        { name: "search", description: "Substring match on risk name and identity." },
+        { name: "tags", description: "Comma-separated tags." },
+        { name: "category", description: "Availability, Performance, Dependency, Resilience, or Config." },
+        { name: "infrastructure", description: "One infrastructure type, such as Kubernetes or Linux." },
+        { name: "include_all_scope", description: "When true, include risks from parent scopes.", type: "boolean" },
+        { name: "sort_field", description: "name, lastUpdated, or createdAt." },
+        { name: "sort_ascending", description: descSortAsc, type: "boolean" },
+      ],
       operations: {
         list: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/risks`,
+          path: `${CHAOS}/v3/risks`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
+            search: "search",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
+            tags: "tags",
+            category: "category",
+            infrastructure: "infrastructure",
+            include_all_scope: "includeAllScope",
           },
+          defaultQueryParams: { page: "0", limit: "15" },
           responseExtractor: chaosPageExtract,
           description: descListRisks,
         },
         get: {
           method: "GET",
-          path: `${CHAOS}/rest/v2/risks/{riskId}`,
+          path: `${CHAOS}/v3/risks/{identity}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { risk_id: "riskId" },
+          pathParams: { risk_id: "identity" },
           responseExtractor: passthrough,
           description: descGetRisk,
         },
@@ -5042,23 +6263,21 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = coerceBody(input);
-            const missing: string[] = [];
-            if (!b.identity) missing.push("identity");
-            if (!b.name) missing.push("name");
-            const scanType = b.scanType ?? b.scan_type;
-            if (!scanType) missing.push("scanType");
-            if (!b.source) missing.push("source");
-            if (missing.length > 0) {
-              throw new Error(`Missing required field(s): ${missing.join(", ")}. All are required to create a risk scan.`);
-            }
+            if (isBlank(b.scanType)) b.scanType = b.scan_type;
+            explainMissing(b, {
+              identity: "slug, unique in the project.",
+              name: "display name.",
+              scanType: descRiskScanType,
+              source: descRiskScanSource,
+            });
             const detectionMethod = b.detectionMethod ?? b.detection_method
-              ?? (scanType === "CodeRepository" ? "External" : undefined);
+              ?? (b.scanType === "CodeRepository" ? "External" : undefined);
             return {
               identity: b.identity,
               name: b.name,
               ...(b.description != null ? { description: b.description } : {}),
               ...(b.tags != null ? { tags: b.tags } : {}),
-              scanType,
+              scanType: b.scanType,
               ...(detectionMethod != null ? { detectionMethod } : {}),
               source: b.source,
             };
@@ -5197,6 +6416,464 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "search", required: false, description: descHeatmapSearch },
             ],
           } satisfies ParamsSchema,
+        },
+      },
+    },
+
+    {
+      resourceType: "chaos_onboarding",
+      displayName: "Chaos Onboarding",
+      description: descChaosOnboarding,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["onboarding_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/onboarding/{onboardingID}",
+      listFilterFields: [
+        { name: "search", description: "Substring match on the onboarding session." },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/onboarding`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page: "page", limit: "limit", search: "search" },
+          defaultQueryParams: { page: "0", limit: "10" },
+          responseExtractor: chaosOnboardingListExtract,
+          description: "GET /rest/v2/onboarding. The id to pass next is onboardingID. environmentRef on the item is the scoped environment id to reuse (keep an org. or account. prefix). Items also include infrastructureRef, status, and mode. The UI opens /onboarding/{onboardingID} or /guided-onboarding/{onboardingID}.",
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/onboarding/{onboardingid}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { onboarding_id: "onboardingid" },
+          responseExtractor: passthrough,
+          description: "GET /rest/v2/onboarding/{onboardingid}. Pass resource_id using onboardingID from list, or pass onboarding_id in params. The response environmentRef is the scoped environment id.",
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => buildOnboardingBody(input),
+          responseExtractor: passthrough,
+          description: descCreateOnboarding,
+          bodySchema: {
+            description: descCreateOnboarding,
+            fields: [
+              { name: "environmentRef", type: "string", required: true, description: "Scoped environment id: project id, org.<id>, or account.<id>. environment_id is accepted." },
+              { name: "infrastructureRef", type: "string", required: true, description: "Harness CD infrastructure id in that environment. infra_id is accepted." },
+              { name: "mode", type: "string", required: true, description: "Manual or Automatic." },
+              { name: "serviceAccount", type: "string", required: false, description: "Kubernetes service account. service_account is accepted." },
+              { name: "isAIEnabled", type: "boolean", required: false, description: "When true, AI is enabled for this session. is_ai_enabled is accepted." },
+              { name: "manualMethod", type: "string", required: false, description: "NetworkMap or Service. Used when mode is Manual. manual_method is accepted." },
+              { name: "discoveryAdvanceConfiguration", type: "object", required: false, description: "Discovery advanced settings (cron, delegate selectors). Use the API's camelCase keys." },
+              { name: "chaosAdvanceConfiguration", type: "object", required: false, description: "Chaos infrastructure advanced settings, including resource limits. Use the API's camelCase keys." },
+            ],
+          },
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/v2/onboarding/{onboardingid}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { onboarding_id: "onboardingid" },
+          responseExtractor: passthrough,
+          description: "DELETE /rest/v2/onboarding/{onboardingid}. Pass resource_id using onboardingID from list, or pass onboarding_id in params.",
+        },
+      },
+      executeActions: {
+        stats: {
+          method: "GET",
+          path: `${CHAOS}/v3/onboarding-stats`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          actionDescription: descGetOnboardingStats,
+          bodySchema: { description: descGetOnboardingStats, fields: [] },
+        },
+        confirm_discovery: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding-confirm-discovery/{onboardingid}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { onboarding_id: "onboardingid" },
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding-confirm-discovery/{onboardingid}. No body. Pass resource_id using onboardingID from list, or pass onboarding_id in params.",
+          bodySchema: { description: "No body. Pass resource_id using onboardingID from list, or pass onboarding_id in params.", fields: [] },
+        },
+        onboard_services: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding-onboard-services/{onboardingid}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { onboarding_id: "onboardingid" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const ids = b.externalServiceIds ?? b.external_service_ids;
+            if (!Array.isArray(ids) || ids.length === 0) {
+              throw new Error("externalServiceIds is required. Pass the discovered service ids. external_service_ids is accepted. CHAOS_RT_SERVICES_ENABLED must be on or this route returns 403.");
+            }
+            return { externalServiceIds: ids };
+          },
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding-onboard-services/{onboardingid}. Body is { externalServiceIds }. Requires CHAOS_RT_SERVICES_ENABLED or the route returns 403.",
+          bodySchema: {
+            description: "Selected discovered services. Requires CHAOS_RT_SERVICES_ENABLED.",
+            fields: [
+              { name: "externalServiceIds", type: "array", required: true, description: "Discovered service ids. external_service_ids is accepted." },
+            ],
+          },
+        },
+        confirm_service_onboarding: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding-confirm-service-onboarding/{onboardingid}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { onboarding_id: "onboardingid" },
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding-confirm-service-onboarding/{onboardingid}. No body. Requires CHAOS_RT_SERVICES_ENABLED or the route returns 403.",
+          bodySchema: { description: "No body. Requires CHAOS_RT_SERVICES_ENABLED.", fields: [] },
+        },
+        trigger_risk_scan: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding-trigger-risk-scan/{onboardingid}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { onboarding_id: "onboardingid" },
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding-trigger-risk-scan/{onboardingid}. Starts the session's service risk scan and stores scanIdentity on the session. This is not chaos_risk_scan create. Requires CHAOS_RT_SERVICES_ENABLED or the route returns 403.",
+          bodySchema: { description: "No body. Requires CHAOS_RT_SERVICES_ENABLED.", fields: [] },
+        },
+        risk_scan: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/onboarding/{onboardingid}/risk-scan`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { onboarding_id: "onboardingid" },
+          responseExtractor: passthrough,
+          actionDescription: "GET /rest/v2/onboarding/{onboardingid}/risk-scan. Reads the scan started by trigger_risk_scan. Requires CHAOS_RT_SERVICES_ENABLED or the route returns 403.",
+          bodySchema: { description: "No body. Requires CHAOS_RT_SERVICES_ENABLED.", fields: [] },
+        },
+        confirm_risk_scan: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding-confirm-risk-scan/{onboardingid}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { onboarding_id: "onboardingid" },
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding-confirm-risk-scan/{onboardingid}. No body. Requires CHAOS_RT_SERVICES_ENABLED or the route returns 403.",
+          bodySchema: { description: "No body. Requires CHAOS_RT_SERVICES_ENABLED.", fields: [] },
+        },
+        list_services: {
+          method: "GET",
+          path: `${CHAOS}/rest/v2/onboarding/{onboardingid}/services`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { onboarding_id: "onboardingid" },
+          queryParams: { page: "page", limit: "limit", search: "search" },
+          responseExtractor: passthrough,
+          actionDescription: "GET /rest/v2/onboarding/{onboardingid}/services. Returns services and probes, not a data array. Requires CHAOS_RT_SERVICES_ENABLED or the route returns 403.",
+          bodySchema: { description: "No body. Requires CHAOS_RT_SERVICES_ENABLED.", fields: [] },
+        },
+        confirm_network_map: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding-confirm-networkmap/{onboardingid}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { onboarding_id: "onboardingid" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const mode = b.mode;
+            if (mode !== "Manual" && mode !== "Automatic") {
+              throw new Error("mode is required. Manual or Automatic.");
+            }
+            return { mode };
+          },
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding-confirm-networkmap/{onboardingid}. Body is { mode: Manual | Automatic }.",
+          bodySchema: {
+            description: "Network map confirmation.",
+            fields: [{ name: "mode", type: "string", required: true, description: "Manual or Automatic." }],
+          },
+        },
+        confirm_experiment_creation: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding-confirm-experiment-creation/{onboardingid}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { onboarding_id: "onboardingid" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const mode = b.mode;
+            if (mode !== "Basic" && mode !== "Intermediate" && mode !== "Advanced") {
+              throw new Error("mode is required. Basic, Intermediate, or Advanced.");
+            }
+            return { mode };
+          },
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding-confirm-experiment-creation/{onboardingid}. Body is { mode: Basic | Intermediate | Advanced }.",
+          bodySchema: {
+            description: "Experiment creation confirmation.",
+            fields: [{ name: "mode", type: "string", required: true, description: "Basic, Intermediate, or Advanced." }],
+          },
+        },
+        confirm_experiment_run: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding-confirm-experiment-run/{onboardingid}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { onboarding_id: "onboardingid" },
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding-confirm-experiment-run/{onboardingid}. No body.",
+          bodySchema: { description: "No body.", fields: [] },
+        },
+        skip: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding/{onboardingid}/skip`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { onboarding_id: "onboardingid" },
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding/{onboardingid}/skip. Marks unfinished steps skipped.",
+          bodySchema: { description: "No body.", fields: [] },
+        },
+        stop: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/onboarding/{onboardingid}/stop`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { onboarding_id: "onboardingid" },
+          skipScopeBodyInjection: true,
+          responseExtractor: passthrough,
+          actionDescription: "POST /rest/v2/onboarding/{onboardingid}/stop. Stops experiment runs started by this session.",
+          bodySchema: { description: "No body.", fields: [] },
+        },
+      },
+    },
+
+    {
+      resourceType: "chaos_pipeline_onboarding",
+      displayName: "Chaos Pipeline Onboarding",
+      description: descChaosPipelineOnboarding,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["pipeline_identity"],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/rest/pipeline-onboarding`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: chaosPipelineOnboardingListExtract,
+          description: "GET /rest/pipeline-onboarding. Rows are pipelineOnboardings. pipelineIdentity is the id for get, delete, and can_onboard.",
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/pipeline-onboarding`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            if (isBlank(b.pipelineIdentity)) b.pipelineIdentity = b.pipeline_identity ?? input.pipeline_id;
+            explainMissing(b, { pipelineIdentity: "pipeline identifier. pipeline_identity is accepted. Call can_onboard first." });
+            const discovery = b.discoveryAdvanceConfiguration ?? b.discovery_advance_configuration;
+            const chaosConfig = b.chaosAdvanceConfiguration ?? b.chaos_advance_configuration;
+            return {
+              pipelineIdentity: b.pipelineIdentity,
+              ...(b.isAIEnabled != null || b.is_ai_enabled != null ? { isAIEnabled: parseBool(b.isAIEnabled ?? b.is_ai_enabled) } : {}),
+              ...(discovery ? { discoveryAdvanceConfiguration: discovery } : {}),
+              ...(chaosConfig ? { chaosAdvanceConfiguration: chaosConfig } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descChaosPipelineOnboarding,
+          bodySchema: {
+            description: descChaosPipelineOnboarding,
+            fields: [
+              { name: "pipelineIdentity", type: "string", required: true, description: "Pipeline identifier. pipeline_identity is accepted." },
+              { name: "isAIEnabled", type: "boolean", required: false, description: "When true, AI is enabled. is_ai_enabled is accepted." },
+              { name: "discoveryAdvanceConfiguration", type: "object", required: false, description: "Discovery advanced settings. Use camelCase keys." },
+              { name: "chaosAdvanceConfiguration", type: "object", required: false, description: "Chaos infrastructure advanced settings. Use camelCase keys." },
+            ],
+          },
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/rest/pipeline-onboarding/{identity}/status`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { pipeline_identity: "identity" },
+          responseExtractor: passthrough,
+          description: "GET /rest/pipeline-onboarding/{identity}/status. Pass resource_id using pipelineIdentity from list, or pass pipeline_identity in params.",
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/rest/pipeline-onboarding/{identity}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { pipeline_identity: "identity" },
+          responseExtractor: passthrough,
+          description: "DELETE /rest/pipeline-onboarding/{identity}. Pass resource_id using pipelineIdentity from list, or pass pipeline_identity in params.",
+        },
+      },
+      executeActions: {
+        can_onboard: {
+          method: "GET",
+          path: `${CHAOS}/rest/pipeline-onboarding/{identity}/can-onboard-chaos`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { pipeline_identity: "identity" },
+          responseExtractor: passthrough,
+          actionDescription: "GET /rest/pipeline-onboarding/{identity}/can-onboard-chaos. Pass resource_id using pipelineIdentity from list, or pass pipeline_identity in params. check is true when the pipeline can be onboarded.",
+          bodySchema: { description: "No body. Pass resource_id using pipelineIdentity from list, or pass pipeline_identity in params.", fields: [] },
+        },
+      },
+    },
+
+    // ── Chaos Dashboards (chaos-manager v3) ─────────────────────────
+    {
+      resourceType: "chaos_dashboard",
+      displayName: "Chaos Dashboard",
+      description: descChaosDashboard,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["identity"],
+      compactItem: compactDashboard,
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos-dashboards",
+      searchAliases: ["chaos dashboard", "resilience dashboard", "experiment dashboard"],
+      listFilterFields: [
+        { name: "search", description: descDashboardSearch },
+        { name: "tags", description: descDashboardTags },
+        {
+          name: "category",
+          description: descDashboardCategory,
+          enum: ["Experiment Activity", "Experiment Outcomes & Scores", "Authoring and People", "Coverage & Gap Analysis"],
+        },
+        { name: "favourite", description: descDashboardFavourite, type: "boolean" },
+        { name: "sort_field", description: descDashboardSortField, enum: DASHBOARD_SORT_FIELDS },
+        { name: "sort_ascending", description: descMetadataSortAscending, type: "boolean" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/v3/dashboards`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            search: "search",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
+            tags: "tags",
+            category: "category",
+            favourite: "favourite",
+          },
+          defaultQueryParams: { page: "0", limit: "15" },
+          responseExtractor: chaosDashboardListExtract,
+          description: descListDashboards,
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/v3/dashboards/{identity}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { identity: "identity" },
+          responseExtractor: passthrough,
+          description: descGetDashboard,
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/v3/dashboards/{identity}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: { identity: "identity" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const tags = b.tags;
+            // The API always $sets tags, so an omitted list clears them.
+            if (tags === undefined) {
+              throw new Error(
+                "tags is required. Update replaces the tag list, including when you only change is_favourite. Get the dashboard and pass its current tags back.",
+              );
+            }
+            const rawFavourite = b.is_favourite ?? b.isFavourite;
+            return {
+              tags: Array.isArray(tags)
+                ? tags
+                : String(tags).split(",").map((tag: string) => tag.trim()).filter(Boolean),
+              ...(rawFavourite !== undefined ? { isFavourite: parseBool(rawFavourite) } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descUpdateDashboard,
+          bodySchema: {
+            description: descBodyDashboardUpdate,
+            fields: [
+              { name: "tags", type: "array", required: true, itemType: "string", description: descDashboardTagsBody },
+              { name: "is_favourite", type: "boolean", required: false, description: descDashboardIsFavourite },
+            ],
+          },
+        },
+      },
+    },
+
+    // ── Chaos Image Registry (chaos-manager v3, scope singleton) ────
+    {
+      resourceType: "chaos_image_registry",
+      displayName: "Chaos Image Registry",
+      description: descChaosImageRegistry,
+      toolset: "chaos",
+      scope: "project",
+      supportedScopes: ["account", "org", "project"],
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: [],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/image-registry",
+      searchAliases: ["image registry", "chaos image registry", "custom registry"],
+      relatedResources: [
+        {
+          resourceType: "chaos_k8s_infrastructure",
+          relationship: "scoped_by",
+          description: "Pass that infrastructure's infra_id to read or write the infra-level registry. Omit infra_id for the account, org, or project singleton. Use resource_scope to choose account or org.",
+        },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${CHAOS}/v3/image-registries`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { infra_id: "infraID" },
+          paramsSchema: imageRegistryInfraParams,
+          responseExtractor: passthrough,
+          description: descGetImageRegistry,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/v3/image-registries`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          queryParams: { infra_id: "infraID" },
+          paramsSchema: imageRegistryInfraParams,
+          bodyBuilder: (input) => buildImageRegistryBody(input),
+          responseExtractor: passthrough,
+          description: descCreateImageRegistry,
+          bodySchema: imageRegistryBodySchema,
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/v3/image-registries`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          queryParams: { infra_id: "infraID" },
+          paramsSchema: imageRegistryInfraParams,
+          bodyBuilder: (input) => buildImageRegistryBody(input, "update"),
+          responseExtractor: passthrough,
+          description: descUpdateImageRegistry,
+          bodySchema: imageRegistryUpdateSchema,
+        },
+      },
+      executeActions: {
+        resolve: {
+          method: "GET",
+          path: `${CHAOS}/v3/image-registries/resolve`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { infra_id: "infraID" },
+          responseExtractor: passthrough,
+          actionDescription: descResolveImageRegistry,
+          bodySchema: { description: descBodyNoBody, fields: [] },
+          paramsSchema: imageRegistryInfraParams,
         },
       },
     },
