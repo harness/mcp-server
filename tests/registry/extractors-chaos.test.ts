@@ -4,12 +4,32 @@ import {
   chaosDashboardListExtract,
   chaosDRTestListExtract,
   chaosExperimentListExtract,
+  chaosHarConvertExtract,
   chaosGuardConditionListExtract,
   chaosGuardRuleListExtract,
   chaosInputSetListExtract,
   chaosOnboardingListExtract,
   chaosPipelineOnboardingListExtract,
 } from "../../src/registry/extractors.js";
+
+describe("chaosHarConvertExtract", () => {
+  it("decodes scriptContent into a plain-text script and drops the base64 field", () => {
+    const script = "print('héllo')\n";
+    expect(
+      chaosHarConvertExtract({
+        toolType: "Locust",
+        scriptContent: Buffer.from(script, "utf8").toString("base64"),
+        fileName: "recorded-flow.py",
+      }),
+    ).toEqual({ toolType: "Locust", fileName: "recorded-flow.py", script });
+  });
+
+  it("passes through payloads without scriptContent (e.g. error bodies)", () => {
+    const err = { error: "bad har" };
+    expect(chaosHarConvertExtract(err)).toBe(err);
+    expect(chaosHarConvertExtract(null)).toBeNull();
+  });
+});
 
 describe("chaosInputSetListExtract", () => {
   it("injects experimentId from input into each item", () => {

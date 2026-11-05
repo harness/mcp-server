@@ -193,7 +193,7 @@ export const descChaosServiceProbesUpdate = `Required — full replacement of ev
 export const descUpdateChaosService = `Update an existing chaos service, identified by the path 'identity' (identity is not renameable — do not put it in the body). This is a FULL REPLACE of the mutable fields (name, description, tags, external_service_id, agent_id, environment_id, infrastructure_id), not a partial patch: description and tags are overwritten with exactly what you send, including being cleared to empty if you omit them — there is no "leave unchanged" behavior for these two fields. To preserve the current description/tags, fetch the service first (harness_get) and re-supply its current values. Probes is a REQUIRED desired-state array: it is reconciled atomically with the field update, and any probe present on the service but not in the array is removed. To keep the current probes, harness_get first and resupply the 'probes' array unchanged; pass [] to intentionally detach every probe. For a CodeRepository service with no mapped discovered service, omit environment_id and infrastructure_id. To attach a runtime discovered service for experiment recommendation, pass linked_discovered_service { agent_id, environment_id, external_id } from a discovered_service the user picked; environment_id is that agent's environment and must not be empty. Also send that service's infrastructure the same way a chaos service is created for it: environment_id = agent.environmentIdentifier, infrastructure_id = agent.identity (bare), infrastructure_type = KubernetesV2. The chaos service agent_id stays custom-discovery-agent. Ask the user for the discovered service and probes before this update. To remove an existing link, pass linked_discovered_service as {} and omit environment_id, infrastructure_id, and infrastructure_type. Omitting the field leaves the current link unchanged. Returns the full ChaosServiceResponse on 200.`;
 export const descBodyChaosServiceUpdate = `Chaos service update body. Required: name, external_service_id, agent_id, and probes (a full desired-state array — see below). environment_id and infrastructure_id are required for every service type except CodeRepository. Omit both when updating a code-repository service that has no mapped discovered service. When linked_discovered_service names a discovered workload (agent_id, environment_id, external_id), also send environment_id, infrastructure_id, and infrastructure_type for that discovered service (Kubernetes discovery agent: environment = agent environment, infrastructure_id = agent identity, infrastructure_type = KubernetesV2). Optional: description, tags, infrastructure_type, linked_discovered_service. Omitting description or tags CLEARS them server-side (full replace, no partial patch); re-supply the current value from a prior harness_get if you want it preserved. probes is required precisely because it is a full replace: supply the complete desired set (harness_get first to keep existing ones), or [] to detach all probes. linked_discovered_service attaches a runtime discovered service to a CodeRepository chaos service. Pass {} to remove that link and omit environment_id, infrastructure_id, and infrastructure_type; omit the field to leave it unchanged. Do NOT include 'identity' — pass it at the top level so it goes on the URL.`;
 
-export const descChaosLoadtest = `Load test (Resilience Testing) instance. Supports list, get, create, delete; run/stop via execute actions.
+export const descChaosLoadtest = `Load test (Resilience Testing) instance. Supports list, get, create, delete; run/stop via execute actions. To create a script from a HAR recording, use the convert_har action.
 Locust is supported on Linux VM and Kubernetes (script + image modes). K6 is genuinely Kubernetes-only at the backend. JMeter is restricted to Kubernetes by MCP for parity with the Harness UI (the backend itself does not enforce this for JMeter) — Linux VM supports Locust only; MCP rejects K6/JMeter with a Linux target_type at create time. JMeter accepts script/script_image scalars like Locust/K6 (plus properties/env_vars/thresholds/worker_count); 'tool_config' remains available as an advanced escape hatch (e.g. .zip bundles).
 To create one, follow the prerequisite chain declared in relatedResources: (1) pick a load-runner infra via chaos_infrastructure (Linux VM) or chaos_enabled_infrastructure (Kubernetes), then (2) list chaos_service with infrastructure_ids='<environment_id>/<infra_id>' and pick one — or create a chaos_service if the list is empty — feeding its identity into service_references. When picking a Kubernetes infra, remember to set target_type='kubernetes' explicitly; it is not derived from the infra you chose.
 
@@ -567,6 +567,7 @@ export const descLoadtestFieldTaxonomy = `  (a) Script file / Custom image -> sc
   (f) Iterations (cap) -> iterations (fixed|<+input>) -> toolConfig.k6.tunables.iterations. K6 ONLY. Duration takes precedence when both are set.
   (g) RPS Limit -> rps_limit (fixed|<+input>) -> toolConfig.k6.tunables.rpsLimit. K6 ONLY. Global cap, split evenly across replicas; always applies (unlike (c)/(d)/(f), which k6 ignores once the script declares its own scenarios/stages).
   (h) Worker Count / Replicas -> worker_count (fixed|<+input>) -> toolConfig.<tool>.tunables.workerCount. LOCUST + K6 + JMETER, Kubernetes only (VM always runs a single worker/pod -- skip entirely for target_type='machine-chaos-linux'). Locust: Users are DISTRIBUTED across workers, not multiplied. K6: <=1 = single pod; higher values fan out to multiple runner pods via --execution-segment. JMeter: workers MULTIPLY load -- each injector runs the FULL uploaded plan unchanged; thread counts inside the file are NOT sliced across workers.
+      Ask the user for a fixed worker_count, or offer to estimate it. If they want an estimate or have no preference, call harness_execute(resource_type='chaos_loadtest', action='estimate_workers', body={ tool_type, target_users: <(c) Users for Locust/K6; for JMeter ask for the total concurrency the plan/image simulates>, resources: <Step 7b resources, if set> }) and use recommendedWorkers as worker_count. Show usersPerWorker, bindingConstraint, and warnings so the user knows it is an estimate. Do NOT leave worker_count unset just because the user had no number in mind.
   (i) Environment Variables -> env_vars -> toolConfig.<tool>.envVars[]. K6 + JMETER. Structured array; each entry is a literal {key, value}, a runtime {key, value: "<+input>"}, or a secret reference {key, secret_id, secret_scope?}. See the env_vars field's own description (descLoadtestEnvVars) for the full validator, reserved-name list, and secret_scope discovery flow (harness_list resource_type=secret type=SecretText) -- not repeated here. K6 additionally rejects HOST_URL/K6_VUS/K6_DURATION/K6_ITERATIONS/K6_STAGES/K6_RPS (tool-specific reserved names on top of the shared list).
   (j) Property Overrides -> properties -> toolConfig.jmeter.properties[]. JMETER ONLY. Array of {key, value, send_to_engines?}; injects/overrides JMeter properties at run time without editing the uploaded plan -- reference as \${__P(NAME)} inside the plan. send_to_engines (-G) controls whether the property also reaches remote workers in Distributed Execution; omit for controller-only properties.
   (k) Thresholds -> thresholds -> toolConfig.jmeter.thresholds[]. JMETER ONLY. Array of {metric, stat?, operator, value, abort_on_fail?}; pass/fail criteria evaluated against the run's .jtl results AFTER the test (the uploaded plan's own Assertions still apply per-request during the run). metric one of response_time_ms|error_rate_pct|throughput_rps|latency_ms; operator one of < <= > >= == !=; stat (e.g. p95/p99/avg/median/max) is REQUIRED when metric is response_time_ms or latency_ms.`;
@@ -575,7 +576,7 @@ export const descCreateLoadtest = `Creates a Locust load test (Resilience Testin
 IMPORTANT: You MUST NOT auto-select, assume, or pre-fill any value on behalf of the user.
 At every step below, present the options / ask for the value and wait for explicit user confirmation before proceeding.
 Do NOT assume org/project/infrastructure/script/URL based on previous activity — the user may choose differently each time.
-Locust (Python), K6 (JavaScript), and JMeter (Java) are supported. K6 and JMeter are Kubernetes-only; Linux VM supports Locust only. All three tools support "Upload script" and "Using Custom Image" via scalar inputs (script, script_image, script_entrypoint, load_args, image_pull_secret) plus tool-specific extras (properties/thresholds for JMeter; env_vars for K6/JMeter). The 'tool_config' body field remains available as an advanced escape hatch (e.g. JMeter .zip bundles pre-base64'd into tool_config.jmeter.script.content). For K6, "Define test via UI" is deferred.
+Locust (Python), K6 (JavaScript), and JMeter (Java) are supported. K6 and JMeter are Kubernetes-only; Linux VM supports Locust only. All three tools support "Upload script", "Upload HAR" (converted to a script via convert_har), and "Using Custom Image" via scalar inputs (script, script_image, script_entrypoint, load_args, image_pull_secret) plus tool-specific extras (properties/thresholds for JMeter; env_vars for K6/JMeter). The 'tool_config' body field remains available as an advanced escape hatch (e.g. JMeter .zip bundles pre-base64'd into tool_config.jmeter.script.content). For K6, "Define test via UI" is deferred.
 Required workflow -- follow in order, pausing for user input after each step.
 COMMON STEPS (identical for Locust, K6, and JMeter):
 Each step below shows the slice of the canonical stored LoadTest YAML that its inputs populate (what the user sees in the Harness UI YAML view). You NEVER hand-write this YAML -- MCP synthesizes it from the scalars/objects you pass to harness_create; the slices exist only so you can reason about which of your inputs affects which YAML path and echo an accurate preview back to the user.
@@ -645,9 +646,11 @@ Step 5 -- Tool type:
    - JMeter has no target_url / users / duration / ramp_up scalar surface -- load shape is baked into the uploaded plan (script mode) or the container image (custom image mode). Server defaults 100/600/30 for missing tunables on save.
 
 Step 6 -- Tool-specific configuration (branch on tool_type from Step 5):
-Every tool type supports two authoring modes:
+Every tool type supports three authoring options:
   (a) Upload script (script_source='inline', mode='script') -- paste the raw script; MCP base64-encodes it into toolConfig.<tool>.script.content.
-  (b) Using Custom Image (script_source='image', mode='image') -- point at a prebuilt container image; no script is uploaded.
+  (b) Upload HAR (script_source='inline', mode='script') -- ask for a HAR recording, call harness_execute(resource_type='chaos_loadtest', action='convert_har', body={ tool_type, har_content }), and show the generated script to the user for review. Then follow the <Tool>Script branch below with the returned script as (a) Script file.
+  (c) Using Custom Image (script_source='image', mode='image') -- point at a prebuilt container image; no script is uploaded.
+Ask the user which of the three to use.
 Mode lives at toolConfig.<tool>.mode; script_source on the wire body mirrors it ('inline' <-> 'script', 'image' <-> 'image').
 Fields marked (*) in a branch below are MANDATORY for that branch -- the UI (and MCP validation) reject creation with any '*' field empty. Unmarked fields are OPTIONAL.
 Fixed vs runtime input: fields noted "(fixed|<+input>)" below accept EITHER a concrete value NOW, OR the literal string '<+input>' meaning "prompt for this value at run time". Pass the placeholder verbatim -- MCP forwards it as-is into the tunables and into the base64 YAML manifest.
@@ -684,7 +687,7 @@ Step 6.LocustImage -- Locust + Using Custom Image (mode='image'):
     (c) Users*                   -> users
     (d) Duration*                -> duration_sec
     (e) Ramp Up*                 -> ramp_up_sec
-    (h) Worker Count             -> worker_count        (K8s; 0/omit = standalone)
+    (h) Worker Count             -> worker_count        (K8s; see (h) -- offer an estimate)
   YAML populated after this step (delta only):
     spec:
       toolConfig:
@@ -735,7 +738,7 @@ Step 6.K6Image -- K6 + Using Custom Image (mode='image'):
     (a) Load args                -> load_args           (optional; semicolon-separated k=v pairs, e.g. "tags=smoke,fast;headless=true" -- NOT bare CLI flags)
     (a) Image Registry Type      -> Public: omit image_pull_secret
                                     Private: image_pull_secret (name of the Kubernetes image-pull secret)
-    (h) Worker Count             -> worker_count        (K8s; 0/omit = standalone)
+    (h) Worker Count             -> worker_count        (K8s; see (h) -- offer an estimate; ask for the concurrency the image simulates)
     (g) RPS Limit                -> rps_limit           (optional; toolConfig.k6.tunables.rpsLimit when > 0)
     (i) Environment Variables    -> env_vars            (see Step 4c)
   Note: Users/Duration/Iterations tunables are meaningless for image mode -- the bundled script controls its own scenarios/stages. Do not ask for them here.
@@ -789,7 +792,7 @@ Step 6.JMeterImage -- JMeter + Using Custom Image (mode='image'):
     (j) Property Overrides       -> properties          (optional; array of {key, value, send_to_engines?}. send_to_engines=true adds -G so the property reaches remote workers in Distributed Execution)
     (i) Environment Variables    -> env_vars            (optional; fixed / '<+input>' runtime / secret via {secret_id, secret_scope?}. See descLoadtestEnvVars for the full reserved-name list and secret discovery flow)
     (k) Thresholds               -> thresholds          (optional; array of {metric, stat?, operator, value, abort_on_fail?}. metric one of response_time_ms|error_rate_pct|throughput_rps|latency_ms; operator one of < <= > >= == !=; stat REQUIRED for response_time_ms / latency_ms. value is a number -- runtime '<+input>' is NOT supported for thresholds)
-    (h) Workers                  -> worker_count        (optional; number of load injectors. Each injector runs the FULL plan unchanged -- workers MULTIPLY load. 0/omit = single standalone injector)
+    (h) Workers                  -> worker_count        (optional; number of load injectors. Each injector runs the FULL plan unchanged -- workers MULTIPLY load. See (h) -- offer an estimate; ask for the concurrency the plan simulates)
   YAML populated after this step (delta only):
     spec:
       toolConfig:
@@ -1238,8 +1241,64 @@ export const descCompareRevisions = `Compare two revisions of a template.
 Returns a diff showing what changed between revision1 and revision2. Use list_revisions to discover available revisions.
 Pass via params (NOT body): template_id (path — template identity, required), hub_identity (query — hub the template belongs to, required), revision1 (query — required), revision2 (query — required).`;
 
-export const descRunLoadtest = `Run a load test instance`;
+export const descRunLoadtest = `Run a load test instance. Returns the run identity (run_identity if supplied, otherwise a generated UUID) and its initial status; the run executes asynchronously.
+Track progress with chaos_loadtest_run status or live_metrics. Once the run is Finished, Stopped, or Failed, offer the user its AI insights via chaos_loadtest_run ai_insights (run_id = this run's identity). Use generate_ai_insights only if ai_insights returns NotGenerated, Failed, or Skipped.`;
 export const descStopLoadtest = `Stop a running load test`;
+export const descEstimateWorkers = `Estimate the number of workers (load generator pods) needed for a target concurrency, based on per-worker cpu/memory. Returns recommendedWorkers along with usersPerWorker, bindingConstraint, and warnings.
+Nothing is saved; to apply the result, set worker_count on chaos_loadtest create/update. Pass load_test_identity to calibrate per-user cost from that load test's recent runs instead of the tool defaults (the response includes 'calibration' when used). For JMeter, usersPerWorker is also the thread count the plan should declare, since each worker runs the full plan.
+Use this in the Worker Count step of chaos_loadtest create/update when the user asks for an estimate or has no preference. Only tool_type and target_users are required.`;
+export const descBodyEstimateWorkers = `Tool type, target concurrency, and optional per-worker resources, rps cap, and headroom.`;
+export const descEstimateToolType = `Load test tool type: "Locust", "JMeter", or "K6" (case-insensitive).`;
+export const descEstimateTargetUsers = `Total concurrent users across all workers. Must be greater than zero.`;
+export const descEstimateTargetRps = `Optional rps cap across all workers. Must not be negative.`;
+export const descEstimateResources = `Per-worker cpu/memory, same shape as chaos_loadtest.resources: { limits?: { cpu?, memory? }, requests?: { cpu?, memory? } }. Omit to use the defaults (1 core / 2Gi); 'inputs.cpuAssumed' / 'inputs.memoryAssumed' in the response show when defaults were used.`;
+export const descEstimateHeadroom = `Target utilisation per worker, within (0, 1]. Defaults to 0.8.`;
+export const descEstimateLoadTestIdentity = `Optional. Identity of an existing chaos_loadtest to calibrate from. Falls back to tool defaults if it has fewer than 2 usable recent runs.`;
+
+export const descConvertHar = `Convert a HAR recording (exported from browser DevTools or a proxy) into a load test script for K6, JMeter, or Locust. Nothing is saved; this only generates a script.
+Returns { toolType, fileName, script }. 'script' is plain text: show it to the user for review, then pass it as 'script' to chaos_loadtest create/update with the same tool_type. The generated script has no load shape (users, duration, thresholds); those are set in the create flow.
+Limits (defaults, configurable per deployment): HAR up to 50 MiB, conversion within 60s (504 otherwise; retry with a shorter recording). A malformed or empty HAR, or an unsupported tool_type, returns 400.`;
+export const descBodyConvertHar = `Target tool type and the HAR recording to convert.`;
+export const descConvertHarToolType = `Target tool type: "Locust", "JMeter", or "K6" (case-insensitive). Use the same value as tool_type on chaos_loadtest create.`;
+export const descConvertHarContent = `The HAR file content, as JSON text or a parsed object (base64 is also accepted). Pass the full file unchanged; a truncated or edited HAR is rejected.`;
+
+export const descChaosLoadtestRun = `A single run of a chaos_loadtest, started via chaos_loadtest run. Read-only; run and stop stay on chaos_loadtest.
+Use it to check run status, poll a run in progress (status, live_metrics), and read or generate AI insights.
+Run status: Pending -> Running -> (Stopping ->) Stopped | Finished | Failed. Stopped, Finished, and Failed are terminal.
+AI insights status: NotGenerated -> Pending/Generating -> Ready | Failed | Skipped. Insights are generated automatically when a run finishes.
+list requires loadtest_id (from chaos_loadtest list/get). run_id comes from this resource's list or from the identity returned by chaos_loadtest run.`;
+
+export const descListLoadtestRuns = `List runs of a load test. loadtest_id is required.
+Each item's aiInsights is trimmed to { status, verdict, headline }; use get or ai_insights on a run_id for the full analysis.`;
+
+export const descGetLoadtestRun = `Get a load test run, including full AI insights when Ready.
+load_test_identity (optional) restricts the lookup to that load test; returns 404 if that load test is not found.`;
+
+export const descGetRunAIInsights = `Get the AI performance analysis of a run: verdict, headline, summary, findings, recommendations, and caveats. Read-only.
+Always returns a 'status'. Pending/Generating: poll again (do not call generate_ai_insights). Ready, Failed, Skipped: final. Failed or Skipped can be retried with generate_ai_insights.`;
+
+export const descGenerateRunAIInsights = `Generate AI insights for a finished run that has none, or whose analysis Failed or was Skipped. Asynchronous: returns status=Generating; poll ai_insights on the same run_id until it changes.
+Returns 409 if insights are already Ready or Generating, or if the run has not finished (Pending/Running/Stopping). Returns 501 if AI insights are disabled for the deployment; do not retry.`;
+
+export const descRunLoadtestId = `Identity of the parent chaos_loadtest. Required.`;
+export const descRunStatusFilter = `Filter by run status.`;
+export const descRunSearch = `Search by run name.`;
+export const descRunId = `Identity of the load test run, as returned by chaos_loadtest run or the run_id on chaos_loadtest_run list/get items.`;
+export const descRunAIInsightsLoadTestIdentity = `Optional. Identity of the load test this run belongs to; returns 404 if that load test is not found.`;
+
+export const descRunStatus = `Get the current status of a run: status, phase, elapsed/total/remaining time, progress, current vs target users, and worker counts. Returns JSON plus a 'markdown' summary that can be shown as-is.
+is_terminal is true for Stopped, Finished, and Failed. Poll every poll.recommended_interval_sec (5s) until is_terminal is true.
+Before metrics arrive, values are null (not zero) and data_available is false. 'warnings' flags partial ramp-up data, workers not running, and stale metrics. workers.active is null when the infrastructure does not report per-pod data (for example, Linux VM).`;
+
+export const descRunLiveMetrics = `Get live metrics for a running or finished run. Returns JSON plus a 'markdown' summary (status, latency, throughput, errors, workers, endpoints) that can be shown as-is.
+Fields: latency_ms {p50,p90,p95,p99,max,avg}; throughput {current_rps,total_requests}; errors {total_failures,error_rate_pct,top_failing_endpoints,run_errors}; saturation (workers, users, per-worker cpu/memory); endpoints[]; thresholds[]; series; warnings[]; poll.
+Not available from the backend: p90 (always null), per-endpoint p95/p99 for Locust, and an HTTP status breakdown. 'not_reported' lists what is missing for the run.
+For incremental polling, pass 'since' = the previous response's next_since to get only newer series points. Snapshot values (latency, totals, endpoints, workers) are always the latest. Poll every poll.recommended_interval_sec (5s) until poll.stop_polling is true.
+While a run is starting, metrics are null with a 'metrics_not_available' warning. If only the time series fails to load, the snapshot is still returned with a 'series_unavailable' warning.`;
+
+export const descRunLiveSince = `Return only series points newer than this. Use next_since from the previous response (ISO-8601) or an epoch time in ms or s. Omit on the first call.`;
+export const descRunLiveMaxPoints = `Maximum series points to return (default 60, max 500). The most recent points are kept.`;
+export const descRunLiveMaxEndpoints = `Maximum endpoints to return, by request count (default 20, max 200).`;
 export const descCheckK8sHealth = `Check connectivity of a legacy (V1) Kubernetes chaos infrastructure. Published route (operationId testLegacyKubernetesChaosInfraConnection): GET /chaos/manager/api/rest/kubernetes/infra/{id}/health. Pass infraID as infra_id. infraID can differ from identity. resource_id (identity) is used only when infra_id is omitted. When both are set, infra_id is the path segment. For a current infrastructure record, use chaos_k8s_infrastructure get.`;
 
 export const descEnableGuardRule = `Enable or disable a ChaosGuard rule.
