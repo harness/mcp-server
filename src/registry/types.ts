@@ -167,10 +167,11 @@ export type ToolsetName =
   | "runbooks"
   | "release-management"
   | "vibe"
+  | "appsec"
   | "knowledge-graph"
   | "semantic-layer";
 
-export type ProductName = "harness" | "fme";
+export type ProductName = "harness" | "fme" | "appsec";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
 export type ResourceScope = "project" | "org" | "account";
@@ -254,7 +255,13 @@ export interface InputExpansionRule {
 /**
  * Config type for pathBuilder (avoids circular import).
  */
-export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: string; HARNESS_PROJECT?: string };
+export type PathBuilderConfig = {
+  HARNESS_ACCOUNT_ID?: string;
+  HARNESS_ORG?: string;
+  HARNESS_PROJECT?: string;
+  HARNESS_APPSEC_BASE_URL?: string;
+  HARNESS_APPSEC_UI_URL?: string;
+};
 
 /**
  * Output of `EndpointSpec.routeResolver`: fully-resolved path for a specific call,

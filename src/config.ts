@@ -221,6 +221,9 @@ const RawConfigSchema = z.object({
   HARNESS_MCP_TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
+  HARNESS_APPSEC_API_KEY: optionalStringFromEnv,
+  HARNESS_APPSEC_BASE_URL: urlFromEnv("https://api.traceable.ai"),
+  HARNESS_APPSEC_UI_URL: urlFromEnv("https://app.traceable.ai"),
   // TypeSafe API (https://typesafe.ai) — powers advisory diagnose triage
   // (spec 010). Operator-configured credential, never session-supplied: it
   // egresses failure messages/log snippets on behalf of every session, so it
@@ -300,6 +303,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
+  if (isMultiUser && data.HARNESS_APPSEC_API_KEY) {
+    throw new Error(
+      "HARNESS_APPSEC_API_KEY must not be set in multi-user mode. " +
+      "AppSec calls must use the session user's x-harness-api-key credential.",
+    );
+  }
+
   if (isMultiUser && data.TYPESAFE_API_KEY) {
     throw new Error(
       "TYPESAFE_API_KEY must not be set in multi-user mode. " +
@@ -318,6 +328,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     throw new Error(
       `HARNESS_FME_API_KEY must not be set in ${data.HARNESS_MCP_MODE} mode. ` +
       "FME calls must use the session user's HarnessID access token.",
+    );
+  }
+
+  if (isOAuthMode && data.HARNESS_APPSEC_API_KEY) {
+    throw new Error(
+      `HARNESS_APPSEC_API_KEY must not be set in ${data.HARNESS_MCP_MODE} mode. ` +
+      "AppSec calls must use the session user's HarnessID access token.",
     );
   }
 
@@ -440,6 +457,20 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
+  if (data.HARNESS_APPSEC_BASE_URL && !data.HARNESS_APPSEC_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_APPSEC_BASE_URL must use HTTPS (got "${data.HARNESS_APPSEC_BASE_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
+  if (data.HARNESS_APPSEC_UI_URL && !data.HARNESS_APPSEC_UI_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `HARNESS_APPSEC_UI_URL must use HTTPS (got "${data.HARNESS_APPSEC_UI_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
   if (data.TYPESAFE_BASE_URL && !data.TYPESAFE_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
     throw new Error(
       `TYPESAFE_BASE_URL must use HTTPS (got "${data.TYPESAFE_BASE_URL}"). ` +
@@ -556,12 +587,45 @@ export function resolveFmeApiKey(
 }
 
 /**
+ * Resolve the token used for Traceable AppSec product APIs.
+ */
+export function resolveAppSecApiKey(
+  config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_APPSEC_API_KEY" | "HARNESS_API_KEY">,
+): string | undefined {
+  const explicitAppSecKey =
+    config.HARNESS_MCP_MODE === "multi-user"
+      || config.HARNESS_MCP_MODE === "oauth"
+      || config.HARNESS_MCP_MODE === "oauth-proxy"
+      ? undefined
+      : config.HARNESS_APPSEC_API_KEY?.trim();
+  if (explicitAppSecKey && !isPlaceholderCredential(explicitAppSecKey)) {
+    return explicitAppSecKey;
+  }
+
+  const fallbackHarnessKey = config.HARNESS_MCP_MODE === "oauth"
+    || config.HARNESS_MCP_MODE === "oauth-proxy"
+    ? undefined
+    : config.HARNESS_API_KEY?.trim();
+  if (fallbackHarnessKey && !isPlaceholderCredential(fallbackHarnessKey)) {
+    return fallbackHarnessKey;
+  }
+
+  return undefined;
+}
+
+/**
  * Resolve the base URL for a given product backend.
  * - "harness" → undefined (uses the default client base URL)
  * - "fme"     → HARNESS_FME_BASE_URL from config (defaults to https://api.split.io)
+ * - "appsec"  → HARNESS_APPSEC_BASE_URL from config (defaults to https://api.traceable.ai, strips trailing /graphql)
  */
-export function resolveProductBaseUrl(config: Config, product: "harness" | "fme"): string | undefined {
+export function resolveProductBaseUrl(config: Config, product: "harness" | "fme" | "appsec"): string | undefined {
   if (product === "fme") return config.HARNESS_FME_BASE_URL;
+  if (product === "appsec") {
+    return (config.HARNESS_APPSEC_BASE_URL ?? "https://api.traceable.ai")
+      .replace(/\/+$/, "")
+      .replace(/\/graphql$/i, "");
+  }
   return undefined;
 }
 
