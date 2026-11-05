@@ -7,7 +7,7 @@ import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { registerGetTool } from "../../src/tools/harness-get.js";
 import type { EndpointSpec } from "../../src/registry/types.js";
 import { ALL_TOOLSET_NAMES, Registry } from "../../src/registry/index.js";
-import { encodePathSegment } from "../../src/utils/path.js";
+import { encodePathSegment, hasTraversableSegment } from "../../src/utils/path.js";
 
 const config = {
   HARNESS_API_KEY: "pat.test.abc.xyz",
@@ -33,16 +33,19 @@ function clientWith(response: unknown = {}) {
 }
 
 describe("shared path segment encoding", () => {
-  it.each([".", ".."])('rejects URL-normalized segment "%s"', (value) => {
+  it.each([
+    ".", "..", "../x", "foo/../bar", "foo/./bar", "..\\secret",
+    "%2e%2e/secret", "%2e%2e%2fsecret", ".%2e%2fsecret",
+  ])('rejects traversable segment %j', (value) => {
     expect(() => encodePathSegment(value)).toThrow(/Path segment/);
   });
 
-  it.each([attack, "%2e", ".%2E", "%2e%2e", "../x", "..hidden", "release..stable", "日本語", ""])('encodes literal input %j once', (value) => {
+  it.each([attack, "%2e", ".%2E", "%2e%2e", "..hidden", "release..stable", "日本語", ""])('encodes literal input %j once', (value) => {
     expect(encodePathSegment(value)).toBe(encodeURIComponent(value));
   });
 
   it("prevents normalization through generic path substitution before any request", async () => {
-    for (const value of [".", ".."]) {
+    for (const value of [".", "..", "../x", "%2e%2e%2fsecret"]) {
       const { client, request } = clientWith();
       await expect(registry.dispatch(client, "cost_budget", "get", { budget_id: value }))
         .rejects.toThrow(/Path segment/);
@@ -122,7 +125,7 @@ describe.each(customRoutes)("%s.%s segment %s", (resource, operation, field, def
     expect(new URL(path, config.HARNESS_BASE_URL).pathname).toBe(path);
   });
 
-  it.each([".", ".."])('rejects exact dot segment "%s"', (value) => {
+  it.each([".", "..", "../x", "%2e%2e%2fsecret"])('rejects traversable segment %j', (value) => {
     expect(() => builtPath(spec(), { ...defaults, [field]: value })).toThrow(/Path segment/);
   });
 });
@@ -156,12 +159,12 @@ describe("nested Code paths", () => {
 });
 
 describe("preflight and query paths", () => {
-  it.each([attack, ".", ".."])('protects retry execution ID %j before a request', async (executionId) => {
+  it.each([attack, ".", "..", "../x", "%2e%2e%2fsecret"])('protects retry execution ID %j before a request', async (executionId) => {
     const { client, request } = clientWith({ data: { groups: [{ info: [{ identifier: "stage" }] }] } });
     const preflight = registry.getResource("pipeline").executeActions!.retry.preflight!;
     const input = { pipeline_id: "pipeline", execution_id: executionId };
     const result = preflight({ client, input, registry, accountId: "account" });
-    if (executionId === "." || executionId === "..") {
+    if (hasTraversableSegment(executionId)) {
       await expect(result).rejects.toThrow(/Path segment/);
       expect(request).not.toHaveBeenCalled();
     } else {
@@ -305,9 +308,21 @@ describe("registry paths through the real HTTP client", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "id/../target?accountIdentifier=other&routingId=other",
+    "../x",
+    "%2e%2e%2fsecret",
+  ])("rejects traversable identifier %j before fetch", async (identifier) => {
+    await expect(registry.dispatch(realClient(), "registry", "update", {
+      ...scope,
+      registry_id: identifier,
+      body: { identifier, packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+    })).rejects.toThrow(/Path segment/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   describe.each([
     "id?accountIdentifier=other&routingId=other",
-    "id/../target?accountIdentifier=other&routingId=other",
   ])("malicious identifier %j", (identifier) => {
     it("dispatches registry update as PUT with an encoded path and raw body refs", async () => {
       const body = { identifier, packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } };
@@ -349,6 +364,22 @@ describe("registry paths through the real HTTP client", () => {
       expect(input.execution_id).toBe(identifier);
       expect(input.retry_stages).toEqual(["stage"]);
     });
+  });
+
+  it.each([
+    ["coverage", "/lw/co/api/accounts/account/v1/detail/compute_coverage", {}],
+    ["estimated_savings", `/lw/co/api/accounts/account/v2/setup/${encodeURIComponent("aws/account")}/estimated_savings`, { cloud_account_id: "aws/account" }],
+  ])("pins cost commitment %s to the session account", async (aspect, pathname, extra) => {
+    await registry.dispatch(realClient(), "cost_commitment", "get", {
+      account_id: "other-account",
+      aspect,
+      start_date: "2026-01-01",
+      end_date: "2026-01-31",
+      ...extra,
+    });
+    const { url } = expectRequest(pathname, "POST");
+    expect(url.pathname).not.toContain("other-account");
+    expect(url.searchParams.get("start_date")).toBe("2026-01-01");
   });
 
   it("serializes HAR create space_ref once and preserves an explicit raw parentRef", async () => {

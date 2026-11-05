@@ -8,6 +8,7 @@ import { runErrorParsers } from "./error-parsers.js";
 import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { assertJsonEventStreamLimits, readJsonEventStream } from "./sse.js";
 import { getVersion } from "../utils/cli.js";
+import { hasTraversableSegment } from "../utils/path.js";
 
 const log = createLogger("harness-client");
 
@@ -744,7 +745,7 @@ export class HarnessClient {
     // Paths are routes only: query values belong in options.params. Reject URL
     // normalization syntax before fetch can reinterpret the intended endpoint.
     if (!path.startsWith("/") || path.startsWith("//") || /[?#\\\u0000-\u0020\u007f]/u.test(path) ||
-        path.split("/").some((segment) => /^(?:\.|%2e){1,2}$/i.test(segment))) {
+        path.split("/").some((segment) => /^(?:\.|%2e){1,2}$/i.test(segment) || hasTraversableSegment(segment))) {
       throw new Error("Invalid request path: use encoded path segments and options.params for query values");
     }
 
