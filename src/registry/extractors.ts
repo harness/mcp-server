@@ -824,7 +824,7 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
   return r.data?.[field] ?? raw;
 };
 
-/** Same cap the in-product investigator applies when it offers runbooks to the model. */
+/** Keeps only the fields an agent needs to pick a runbook; steps and scripts are never included. */
 export function runbookListExtract(raw: unknown): unknown {
   const { items, total } = offsetListExtract(raw);
   return {
@@ -2502,3 +2502,31 @@ export function timelineListExtract(raw: unknown, input?: Record<string, unknown
     },
   };
 }
+
+export {
+  appsecApiSpansListExtract,
+  appsecApiSpecGetExtract,
+  appsecAstScanGetExtract,
+  appsecAstScanListExtract,
+  appsecDatatypeGetExtract,
+  appsecDatatypesListExtract,
+  appsecDerivationConfigCreateExtract,
+  appsecEntitiesListExtract,
+  appsecEntityGetExtract,
+  appsecExploreListExtract,
+  appsecFraudPolicyCreateExtract,
+  appsecThreatActivityGetExtract,
+  appsecThreatActivityListExtract,
+  appsecTrendListExtract,
+  appsecVulnEnumValuesExtract,
+  appsecVulnerabilitiesListExtract,
+  appsecVulnerabilityGetExtract,
+  buildAppSecEntityUrl,
+  buildAppSecFilterUrl,
+  compactAppSecItem,
+  flattenAppSecResultRow,
+  redactSpanCookies,
+  redactSpanHeaders,
+  sanitizeAndBoundSpanBody,
+  unwrapAppSecGraphql,
+} from "./appsec/extractors.js";

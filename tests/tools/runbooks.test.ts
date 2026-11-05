@@ -126,6 +126,16 @@ describe("runbook — harness_list", () => {
     expect(optsOf(mockRequest.mock.calls[0]!).params.activityId).toBe("INC-1");
   });
 
+  it("passes filters.search_term through as the query param", async () => {
+    await server.call("harness_list", { resource_type: "runbook", filters: { search_term: "restart" } });
+    expect(optsOf(mockRequest.mock.calls[0]!).params.query).toBe("restart");
+  });
+
+  it("omits the query param when no search_term is given", async () => {
+    await server.call("harness_list", { resource_type: "runbook" });
+    expect(optsOf(mockRequest.mock.calls[0]!).params.query).toBeUndefined();
+  });
+
   it("surfaces REST errors", async () => {
     mockRequest.mockRejectedValue(new Error("boom"));
     const result = await server.call("harness_list", { resource_type: "runbook" });

@@ -159,7 +159,7 @@ HARNESS_MCP_MODE=oauth
 
 This defaults to the issuer `https://id.harness.io/idp/realms/HarnessIDP`, resource `https://mcp.harness.io/mcp`, OAuth client `mcp-client`, and Harness API base `https://mcp.harness.io/cli`. Override them only for QA, local development, or another Harness environment.
 
-`HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token.
+`HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token. If the opt-in `appsec` toolset (`HARNESS_TOOLSETS=+appsec`) is enabled, sessions must also pass `x-harness-appsec-api-key` on the `initialize` request (HarnessID OAuth tokens are never forwarded to `api.traceable.ai`).
 
 The server publishes RFC 9728 protected-resource metadata and returns this challenge when a client has not authenticated:
 
@@ -205,6 +205,7 @@ Set `HARNESS_MCP_MODE=multi-user` for shared HTTP deployments where each client 
 - `HARNESS_API_KEY` must **not** be set in the server config — the server holds no Harness credentials.
 - Each session must provide `x-harness-api-key` on the `initialize` request. `x-harness-account-id` is required only when the API key does not embed an account segment.
 - Sessions may also provide `x-harness-org` and `x-harness-project` headers to set default scope for that session.
+- If the opt-in `appsec` toolset (`HARNESS_TOOLSETS=+appsec`) is enabled, sessions that call `appsec_*` resources must also provide `x-harness-appsec-api-key` on the `initialize` request (the session's `x-harness-api-key` is never forwarded to `api.traceable.ai`).
 - The Harness API key flows through to every Harness API call for that session, so the audit trail in Harness reflects the real user.
 - `HARNESS_MCP_AUTH_TOKEN` is independent and can still be used as an additional transport-layer gate.
 
@@ -627,6 +628,9 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_BROKER_TRANSACTION_TTL_MS` | No | `600000` | Maximum lifetime of the chained browser authorization transaction |
 | `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. Legacy FME is unavailable in OAuth mode so HarnessID tokens are never sent to `api.split.io`; use Harness-native `org_id`+`project_id` scope instead. Must not be set in `multi-user`, `oauth`, or `oauth-proxy` mode |
 | `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources in **legacy (`workspace_id`) mode only**. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development. Harness-native (`org_id`+`project_id`) mode ignores this and uses the standard `HARNESS_API_KEY`/`HARNESS_BASE_URL` instead |
+| `HARNESS_APPSEC_API_KEY`    | No       | --                          | Optional single-user Traceable Platform API token used by `appsec_` resources (`HARNESS_TOOLSETS=+appsec`). `HARNESS_API_KEY`, session `x-harness-api-key`, and HarnessID OAuth tokens are never forwarded to Traceable. Must not be set in `multi-user`, `oauth`, or `oauth-proxy` mode (hosted sessions supply `x-harness-appsec-api-key` per session) |
+| `HARNESS_APPSEC_BASE_URL`   | No       | `https://api.traceable.ai`  | Traceable GraphQL API base URL used by `appsec_` resources. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development |
+| `HARNESS_APPSEC_UI_URL`     | No       | `https://app.traceable.ai`  | Traceable web UI base URL used for deep links on `appsec_` resources (auto-derived from `HARNESS_APPSEC_BASE_URL` when unset) |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
 | `HARNESS_API_TIMEOUT_MS`    | No       | `30000`                     | HTTP request timeout in milliseconds                                                                                                                                                                                                                  |
@@ -2012,9 +2016,10 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 43 of 47 toolsets are enabled. Four toolsets are opt-in and excluded from the defaults:
+By default, 43 of 48 toolsets are enabled. Five toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
+- **`appsec`** — Traceable Application & API Security (API inventory, OpenAPI specs, sample spans, sensitive data types, runtime threat activities, security events, AST scans, inventory trends, fraud policies, and derivation configs). Opt-in because it requires a dedicated `HARNESS_APPSEC_API_KEY` and targets `api.traceable.ai`.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
 - **`observability-evaluations`** — Scheduled production-telemetry evaluation rules. Opt-in because it depends on the deployed scoring control plane.
 - **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions). Opt-in until v3 writes land, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
@@ -2101,6 +2106,7 @@ Available toolset names:
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 | `vibe`                | vibe_project, vibe_app_lifecycle |
 | `timelines`           | activity_timeline |
+| `appsec` *(opt-in)*   | appsec_api, appsec_api_spec, appsec_api_span, appsec_entity, appsec_vulnerability, appsec_threat_activity, appsec_security_event, appsec_ast_scan, appsec_inventory_trend, appsec_datatype, appsec_fraud_policy, appsec_derivation_config |
 
 
 ## Architecture
@@ -2118,8 +2124,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  43 Toolsets      |
-                |  269 Resource Types|
+                | 48 Toolsets (43 default) |
+                |  265 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
