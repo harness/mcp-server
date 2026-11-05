@@ -613,6 +613,20 @@ function buildRiskRuleBody(
   };
 }
 
+/** Matches tool_type case-insensitively and returns the canonical casing. */
+function normalizeLoadTestToolType(value: unknown): "Locust" | "JMeter" | "K6" {
+  if (value == null || value === "") {
+    throw new Error("tool_type is required: 'Locust', 'JMeter', or 'K6'.");
+  }
+  const toolType = (["Locust", "JMeter", "K6"] as const).find(
+    (t) => t.toLowerCase() === String(value).trim().toLowerCase(),
+  );
+  if (!toolType) {
+    throw new Error(`tool_type '${String(value)}' must be 'Locust', 'JMeter', or 'K6'.`);
+  }
+  return toolType;
+}
+
 /**
  * Adds snake_case copies of required fields so the registry's required-field
  * check passes. They are non-enumerable, so they are not serialized.
@@ -3599,18 +3613,13 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const b = coerceBody(input);
 
-            // load_test_identity is a query param; accept it inside body too.
-            if (input.load_test_identity === undefined && b.load_test_identity !== undefined) {
-              (input as Record<string, unknown>).load_test_identity = b.load_test_identity;
+            // load_test_identity is a query param; accept it inside body, or as resource_id.
+            if (input.load_test_identity === undefined) {
+              const identity = b.load_test_identity ?? input.loadtest_id;
+              if (identity !== undefined) input.load_test_identity = identity;
             }
 
-            const toolType = (b.tool_type ?? b.toolType) as string | undefined;
-            if (!toolType) {
-              throw new Error("tool_type is required: 'Locust', 'JMeter', or 'K6'.");
-            }
-            if (toolType !== "Locust" && toolType !== "JMeter" && toolType !== "K6") {
-              throw new Error(`tool_type '${toolType}' must be 'Locust', 'JMeter', or 'K6'.`);
-            }
+            const toolType = normalizeLoadTestToolType(b.tool_type ?? b.toolType);
 
             const targetUsers = (b.target_users ?? b.targetUsers) as number | undefined;
             if (typeof targetUsers !== "number" || !Number.isFinite(targetUsers) || targetUsers <= 0) {
@@ -3664,16 +3673,7 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const b = coerceBody(input);
 
-            const rawToolType = (b.tool_type ?? b.toolType) as string | undefined;
-            if (!rawToolType) {
-              throw new Error("tool_type is required: 'Locust', 'JMeter', or 'K6'.");
-            }
-            const toolType = (["Locust", "JMeter", "K6"] as const).find(
-              (t) => t.toLowerCase() === String(rawToolType).trim().toLowerCase(),
-            );
-            if (!toolType) {
-              throw new Error(`tool_type '${rawToolType}' must be 'Locust', 'JMeter', or 'K6'.`);
-            }
+            const toolType = normalizeLoadTestToolType(b.tool_type ?? b.toolType);
 
             const harContent = encodeHarContent(b.har_content ?? b.harContent);
 
