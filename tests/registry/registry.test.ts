@@ -1859,7 +1859,7 @@ describe("Registry", () => {
   describe("firewall_exception_v3 create", () => {
     let reg: Registry;
     beforeEach(() => {
-      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3,registries-firewall" }));
     });
 
     it("exact path is POST /har/api/v3/scans/exceptions", async () => {
@@ -1926,7 +1926,7 @@ describe("Registry", () => {
   describe("firewall_exception_v3 list scope", () => {
     let reg: Registry;
     beforeEach(() => {
-      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3,registries-firewall" }));
     });
 
     it("list does not leak org/project when neither is passed", async () => {
@@ -1956,7 +1956,7 @@ describe("Registry", () => {
   describe("firewall_exception_v3 update/delete/approve/reject", () => {
     let reg: Registry;
     beforeEach(() => {
-      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3,registries-firewall" }));
     });
 
     it("update sends PUT to /har/api/v3/scans/exceptions/{id}", async () => {
