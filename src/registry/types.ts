@@ -134,6 +134,7 @@ export type ToolsetName =
   | "repositories"
   | "registries"
   | "registries-v3"
+  | "registries-firewall"
   | "templates"
   | "dashboards"
   | "idp"
