@@ -1688,11 +1688,19 @@ export const chaosHarConvertExtract = (raw: unknown): unknown => {
   };
 };
 
-/** Load test run — passed through, with identity mirrored to run_id. */
+/**
+ * Load test run — passed through, with identity mirrored to run_id.
+ * resolvedVariables can hold resolved secret values, so only the names are kept.
+ */
 export const chaosLoadTestRunExtract = (raw: unknown): unknown => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const t = raw as Record<string, unknown>;
-  return { run_id: t.identity, ...t };
+  const run: Record<string, unknown> = { run_id: t.identity, ...t };
+  const vars = t.resolvedVariables;
+  if (vars && typeof vars === "object" && !Array.isArray(vars)) {
+    run.resolvedVariables = Object.fromEntries(Object.keys(vars).map((k) => [k, "[REDACTED]"]));
+  }
+  return run;
 };
 
 /** Run status view for polling. See loadtest-live.ts. */

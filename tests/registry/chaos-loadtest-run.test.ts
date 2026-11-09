@@ -166,6 +166,26 @@ describe("chaos_loadtest_run get", () => {
     expect(result.run_id).toBe("run-1");
     expect((result.aiInsights as Record<string, unknown>).findings).toBeDefined();
   });
+
+  it("masks resolvedVariables values on get and list", async () => {
+    const run = {
+      identity: "run-1",
+      status: "Finished",
+      resolvedVariables: { API_TOKEN: "s3cr3t", USERS: 50 },
+    };
+    const getRequest = vi.fn().mockResolvedValue(run);
+    const got = await registry.dispatch(makeClient(getRequest), "chaos_loadtest_run", "get", {
+      org_id: "o", project_id: "p", run_id: "run-1",
+    }) as Record<string, unknown>;
+    expect(got.resolvedVariables).toEqual({ API_TOKEN: "[REDACTED]", USERS: "[REDACTED]" });
+    expect(JSON.stringify(got)).not.toContain("s3cr3t");
+
+    const listRequest = vi.fn().mockResolvedValue({ items: [run], pagination: { totalItems: 1 } });
+    const listed = await registry.dispatch(makeClient(listRequest), "chaos_loadtest_run", "list", {
+      org_id: "o", project_id: "p", loadtest_id: "lt-1", compact: false,
+    });
+    expect(JSON.stringify(listed)).not.toContain("s3cr3t");
+  });
 });
 
 describe("chaos_loadtest_run execute actions", () => {
