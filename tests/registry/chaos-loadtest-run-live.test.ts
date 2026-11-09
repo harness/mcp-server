@@ -115,6 +115,12 @@ describe("parseSince", () => {
   it("rejects garbage with an actionable message", () => {
     expect(() => parseSince("yesterday")).toThrow(/Invalid 'since'.*next_since/);
   });
+
+  it("rejects epochs outside the representable date range", () => {
+    expect(() => parseSince(1e17)).toThrow(/out of range/);
+    expect(() => parseSince("99999999999999999999")).toThrow(/out of range/);
+    expect(() => parseSince(Number.MAX_VALUE)).toThrow(/out of range/);
+  });
 });
 
 describe("buildRunStatus", () => {

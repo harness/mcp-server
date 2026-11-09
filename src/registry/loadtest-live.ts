@@ -102,7 +102,13 @@ export function parseSince(raw: unknown): number | undefined {
   }
   // 1e11 ms is early 1973; 1e11 s is the year 5138. Anything below is epoch seconds.
   const isEpoch = typeof raw === "number" || /^\d+(\.\d+)?$/.test(String(raw).trim());
-  return isEpoch && ms < 1e11 ? ms * 1000 : ms;
+  const result = isEpoch && ms < 1e11 ? ms * 1000 : ms;
+  if (Number.isNaN(new Date(result).getTime())) {
+    throw new Error(
+      `Invalid 'since' ${JSON.stringify(raw)}: the timestamp is out of range. Pass an ISO-8601 time or an epoch in milliseconds or seconds.`,
+    );
+  }
+  return result;
 }
 
 /** Validate the optional polling inputs before any network call is made. */
