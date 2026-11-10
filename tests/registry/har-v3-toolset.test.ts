@@ -7,6 +7,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { registriesV3Toolset } from "../../src/registry/toolsets/registries-v3.js";
+import { registriesFirewallToolset } from "../../src/registry/toolsets/registries-firewall.js";
 import { compactItems } from "../../src/utils/compact.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -233,7 +234,9 @@ describe("HAR v3 toolset", () => {
 
 describe("registries-v3 compactItem projection", () => {
   const getResource = (rt: string) => {
-    const r = registriesV3Toolset.resources.find((res) => res.resourceType === rt);
+    const r =
+      registriesV3Toolset.resources.find((res) => res.resourceType === rt) ??
+      registriesFirewallToolset.resources.find((res) => res.resourceType === rt);
     if (!r) throw new Error(`resource ${rt} not found`);
     return r;
   };
@@ -331,10 +334,6 @@ describe("registries-v3 opt-in with Registry", () => {
     "file_metadata_v3",
     "metadata_key_v3",
     "metadata_value_v3",
-    "artifact_scan_v3",
-    "bulk_scan_evaluation_v3",
-    "firewall_exception_v3",
-    "firewall_exception_version_v3",
   ];
 
   it("toolset is marked optIn: true", () => {
@@ -360,5 +359,30 @@ describe("registries-v3 opt-in with Registry", () => {
   it("IS present when added to defaults with HARNESS_TOOLSETS=+registries-v3", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+registries-v3" }));
     expect(registry.getAllResourceTypes()).toContain("package_v3");
+  });
+});
+
+// ─── registries-firewall default-enabled behaviour ───────────────────────────
+// Firewall/scan resources have no v1 equivalent, so (unlike registries-v3)
+// this toolset is default-enabled rather than opt-in.
+
+describe("registries-firewall is default-enabled", () => {
+  const FIREWALL_TYPES = [
+    "artifact_scan_v3",
+    "bulk_scan_evaluation_v3",
+    "firewall_exception_v3",
+    "firewall_exception_version_v3",
+  ];
+
+  it("toolset is marked optIn: false", () => {
+    expect(registriesFirewallToolset.optIn).toBe(false);
+  });
+
+  it("IS present when HARNESS_TOOLSETS is unset (all defaults)", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
+    const types = registry.getAllResourceTypes();
+    for (const t of FIREWALL_TYPES) {
+      expect(types).toContain(t);
+    }
   });
 });
