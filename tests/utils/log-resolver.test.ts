@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   blobKeysToTry,
   commandUnitLogKey,
+  fullModeUnitKeyOrder,
   packageSnippetForDiagnose,
   resolveLogContent,
   resolveLogDownloadUrl,
@@ -303,6 +304,39 @@ describe("resolveLogContent", () => {
     expect(result).toContain("ConfigMap");
   });
 
+  it("full mode still fetches a failed unit dropped by the 10-key end cap", async () => {
+    // 15 unit keys → blobKeysToTry keeps the last 10. U0 is Failed but capped away;
+    // failedUnitNames must still pull it in for diagnose→get escalation.
+    const logKeys = Array.from({ length: 15 }, (_, i) => `base-commandUnit:U${i}`);
+    const bodies: Record<string, string> = {
+      "base-commandUnit:U0": "early unit is the real failure",
+      "base-commandUnit:U14": "late unit noise",
+    };
+    const requestFn = vi.fn(async (opts: unknown) => {
+      const key = (opts as { params: { key: string } }).params.key;
+      const buf = Buffer.from(bodies[key] ?? "");
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    });
+
+    const result = await resolveLogContent(makeClient(requestFn), "base", {
+      logKeys,
+      failedUnitNames: ["U0"],
+      mode: "full",
+    });
+
+    expect(result).toContain("--- commandUnit: U0 ---");
+    expect(result).toContain("early unit is the real failure");
+    expect(result).toContain("--- commandUnit: U14 ---");
+    const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
+    expect(keys[0]).toBe("base");
+    expect(keys).toContain("base-commandUnit:U0");
+    // Cap still applies to the non-failed slice — U1 is among the dropped early keys.
+    expect(keys).not.toContain("base-commandUnit:U1");
+    expect(fullModeUnitKeyOrder("base", logKeys.slice(-10), ["U0"])[0]).toBe(
+      "base-commandUnit:U0",
+    );
+  });
+
   it("full mode does not soft-trim long early units (diagnose→get escalation)", async () => {
     const early = Array.from({ length: 800 }, (_, i) => `early-${i}`).join("\n");
     const late = Array.from({ length: 900 }, (_, i) => `late-${i}`).join("\n");
@@ -347,6 +381,27 @@ describe("resolveLogContent", () => {
         start(controller) {
           controller.enqueue(new TextEncoder().encode("partial-"));
           // Never close — body hangs until AbortSignal fires on read.
+        },
+      });
+      return new Response(stream, { status: 200 });
+    });
+    const client = {
+      request: vi.fn(),
+      requestStream,
+      account: "test-account",
+      baseURL: "https://custom.harness.example/gateway",
+    } as unknown as HarnessClient;
+
+    await expect(
+      resolveLogContent(client, "prefix", { bodyTimeoutMs: 30 }),
+    ).rejects.toThrow(/timed out|aborted|cancelled/i);
+  });
+
+  it("aborts when the body hangs before any bytes (peek must not look like empty)", async () => {
+    const requestStream = vi.fn().mockImplementation(async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start() {
+          // Never enqueue and never close — timeout cancels the reader during peek.
         },
       });
       return new Response(stream, { status: 200 });

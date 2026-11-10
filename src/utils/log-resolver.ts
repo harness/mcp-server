@@ -90,7 +90,8 @@ export interface LogResolveOptions {
   snippetLines?: number;
   /**
    * From `unitProgresses` entries with failed/error status. Snippet mode tries
-   * these keys first (then reverse last-non-empty).
+   * these keys first (then reverse last-non-empty). Full mode always includes
+   * them even when the 10-key cap dropped them from {@link blobKeysToTry}.
    */
   failedUnitNames?: string[];
 }
@@ -207,6 +208,21 @@ export function snippetUnitKeyOrder(
   const failedSet = new Set(failed);
   const restReversed = [...unitKeys].reverse().filter((k) => !failedSet.has(k));
   return [...failed, ...restReversed];
+}
+
+/**
+ * Full-mode fetch order: failed units first (including synthesized keys outside
+ * the capped unitKeys list), then the remaining capped unit keys.
+ * Keeps diagnose→get escalation honest when the failure was early and capped away.
+ */
+export function fullModeUnitKeyOrder(
+  baseKey: string,
+  unitKeys: string[],
+  failedUnitNames?: string[],
+): string[] {
+  const failed = failedUnitKeysToTry(baseKey, unitKeys, failedUnitNames);
+  const failedSet = new Set(failed);
+  return [...failed, ...unitKeys.filter((k) => !failedSet.has(k))];
 }
 
 /**
@@ -812,6 +828,7 @@ async function streamBlobResponseToText(
   throwIfAborted(signal);
   if (!response.body) {
     const buf = Buffer.from(await response.arrayBuffer());
+    throwIfAborted(signal);
     if (buf.length === 0) return "";
     if (buf.length > maxWireBytes) throw logTooLargeError(buf.length, maxWireBytes);
     return takeUtf8Tail(Buffer.from(decompressBlob(buf), "utf-8"), tailBytes);
@@ -825,6 +842,8 @@ async function streamBlobResponseToText(
   } finally {
     unbindPeek();
   }
+  // reader.cancel() on abort looks like EOF — do not treat that as an empty blob.
+  throwIfAborted(signal);
   if (peeked.length === 0) return "";
 
   if (peeked[0] === GZIP_MAGIC_0 && peeked[1] === GZIP_MAGIC_1) {
@@ -835,6 +854,7 @@ async function streamBlobResponseToText(
     const unbindZip = bindAbortToReader(reader, signal);
     try {
       const full = await readRemaining(reader, peeked, maxWireBytes);
+      throwIfAborted(signal);
       return takeUtf8Tail(Buffer.from(decompressBlob(full), "utf-8"), tailBytes);
     } finally {
       unbindZip();
@@ -1065,8 +1085,9 @@ export async function resolveLogContent(
       return formatUnitSection(candidate, tailLogLines(text, snippetLines));
     }
   } else {
+    const order = fullModeUnitKeyOrder(baseKey!, unitKeys, options?.failedUnitNames);
     const sections: string[] = [];
-    for (const candidate of unitKeys) {
+    for (const candidate of order) {
       const raw = await fetchKey(candidate);
       if (!raw) continue;
       const text = parseLogLines(raw).trim();
@@ -1078,7 +1099,7 @@ export async function resolveLogContent(
     if (sections.length > 0) {
       log.info("Resolved logs as labeled command-unit sections", {
         baseKey: key,
-        keysFetched: unitKeys.length,
+        keysFetched: order.length,
         keysWithContent: sections.length,
       });
       return sections.join("\n\n");
