@@ -426,6 +426,29 @@ export interface EndpointSpec {
 /**
  * Declarative definition of a Harness resource type and how it maps to CRUD endpoints.
  */
+/** One detail row on an approval card. */
+export interface ReviewCardField {
+  /** Row label; must be unique within the card. */
+  label: string;
+  /** Dotted path into the create/update input body. */
+  path: string;
+  /** Enum value -> display text. */
+  labels?: Record<string, string>;
+  /** Template for object values, e.g. "{identifierName}: {fieldName}". */
+  template?: string;
+  /** Shown when the path is missing or empty. */
+  default?: string;
+  /** Read-only id -> display-name lookup via harness_list. */
+  lookup?: { resourceType: string; match: string; display: string };
+}
+
+export interface ReviewCardSpec {
+  version: 1;
+  /** Noun used in the card title (e.g. "View"); defaults to the resource displayName. */
+  label?: string;
+  fields: ReviewCardField[];
+}
+
 export interface ResourceDefinition {
   /** Unique key: "pipeline", "service", "connector", etc. */
   resourceType: string;
@@ -491,6 +514,12 @@ export interface ResourceDefinition {
     relationship: string;
     description: string;
   }>;
+  /**
+   * Optional approval-card layout for create/update review. Absent = the chat
+   * shows its generic confirm card. Pure JSON data (no functions): it is
+   * consumed outside this process via `harness_describe(resource_type=...)`.
+   */
+  reviewCard?: ReviewCardSpec;
   /** Execution guidance for LLMs. Describes how to discover and provide runtime inputs. */
   executeHint?: string;
   /** CRUD endpoint mappings */
