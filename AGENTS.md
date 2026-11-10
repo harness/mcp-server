@@ -114,11 +114,8 @@ PAT/SAT tokens embed the account ID (`pat.<accountId>.<tokenId>.<secret>`), so `
 
 ---
 
-## Task Tracking
+## Lessons
 
-This repo uses `tasks/` for agent task management:
-
-- `tasks/todo.md` — write the plan here before starting; mark items complete as you go
 - `tasks/lessons.md` — append a lesson after any correction or mistake; read it at the start of a session if working on a known problem area
 
 ---
