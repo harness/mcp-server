@@ -48,16 +48,29 @@ const registryUpdateSchema: BodySchema = {
   fields: registryCreateSchema.fields,
 };
 
-function harSpaceRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
+/**
+ * Resolve the HAR space segments for the requested scope.
+ * - resource_scope "account": [account]
+ * - resource_scope "org":     [account, org]
+ * - otherwise (project/default): [account, org, project] with config fallbacks
+ * Account/org-level registries (e.g. acct-docker-prod) have no org/project segments.
+ */
+function harSpaceSegments(input: Record<string, unknown>, config: PathBuilderConfig): string[] {
   const account = config.HARNESS_ACCOUNT_ID ?? "";
+  const scope = input.resource_scope;
+  if (scope === "account") return [account];
   const org = (input.org_id as string) || config.HARNESS_ORG || "";
+  if (scope === "org") return [account, org];
   const project = (input.project_id as string) || config.HARNESS_PROJECT || "";
-  return `${account}/${org}/${project}`;
+  return [account, org, project];
+}
+
+function harSpaceRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  return harSpaceSegments(input, config).join("/");
 }
 
 function harSpacePath(input: Record<string, unknown>, config: PathBuilderConfig): string {
-  return [config.HARNESS_ACCOUNT_ID ?? "", (input.org_id as string) || config.HARNESS_ORG || "",
-    (input.project_id as string) || config.HARNESS_PROJECT || ""].map(encodePathSegment).join("/");
+  return harSpaceSegments(input, config).map(encodePathSegment).join("/");
 }
 
 function harRegistryRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
@@ -76,6 +89,7 @@ export const registriesToolset: ToolsetDefinition = {
       description: "Artifact registry. Supports list, get, create, and update.",
       toolset: "registries",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["registry_id"],
       listFilterFields: [
         { name: "search", description: "Filter artifact registries by name or keyword" },
@@ -160,6 +174,7 @@ export const registriesToolset: ToolsetDefinition = {
       description: "Artifact within a registry. Supports list.",
       toolset: "registries",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["registry_id", "artifact_id"],
       listFilterFields: [
         { name: "search", description: "Filter artifacts by name or keyword" },
@@ -189,6 +204,7 @@ export const registriesToolset: ToolsetDefinition = {
       description: "Version of an artifact. Supports list.",
       toolset: "registries",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["registry_id", "artifact_id", "version"],
       listFilterFields: [
         { name: "search", description: "Filter artifact versions by name or keyword" },
@@ -222,6 +238,7 @@ export const registriesToolset: ToolsetDefinition = {
       description: "Files within an artifact version. Supports list.",
       toolset: "registries",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["registry_id", "artifact_id", "version"],
       operations: {
         list: {

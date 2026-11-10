@@ -75,3 +75,64 @@ describe("cost_perspective create preflight", () => {
     expect(request).not.toHaveBeenCalled();
   });
 });
+
+describe("cost_perspective update preflight", () => {
+  function getUpdatePreflight() {
+    const spec = ccmToolset.resources.find((r) => r.resourceType === "cost_perspective")
+      ?.operations.update;
+    if (!spec?.preflight) throw new Error("cost_perspective update preflight missing");
+    return spec.preflight;
+  }
+
+  function makeUpdateCtx(body: Record<string, unknown>, existing: unknown | Error) {
+    const dispatch = vi.fn().mockImplementation(async () => {
+      if (existing instanceof Error) throw existing;
+      return existing;
+    });
+    const ctx = {
+      client: { account: "acct", request: vi.fn() } as unknown as PreflightContext["client"],
+      input: { body },
+      registry: { dispatch, getResource: vi.fn(), orgId: undefined, projectId: undefined },
+    } as PreflightContext;
+    return { ctx, dispatch };
+  }
+
+  const existing = {
+    uuid: "p1",
+    name: "Old",
+    viewVersion: "v1",
+    viewType: "CUSTOMER",
+    viewState: "COMPLETED",
+    folderId: "f1",
+    viewRules: [{ viewConditions: [] }],
+    viewPreferences: { includeOthers: true },
+    unitMetricInfo: [{ name: "u" }],
+  };
+
+  it("fills missing fields (incl. viewVersion) from the existing perspective", async () => {
+    const body: Record<string, unknown> = { uuid: "p1", name: "Renamed" };
+    const { ctx, dispatch } = makeUpdateCtx(body, existing);
+    await getUpdatePreflight()(ctx);
+    expect(dispatch).toHaveBeenCalledWith(expect.anything(), "cost_perspective", "get", { perspective_id: "p1" }, undefined);
+    expect(body.name).toBe("Renamed");
+    expect(body.viewVersion).toBe("v1");
+    expect(body.folderId).toBe("f1");
+    expect(body.viewPreferences).toEqual({ includeOthers: true });
+    expect(body.unitMetricInfo).toEqual([{ name: "u" }]);
+  });
+
+  it("keeps caller values, including an explicit empty unitMetricInfo", async () => {
+    const body: Record<string, unknown> = { uuid: "p1", name: "X", folderId: "f2", unitMetricInfo: [] };
+    const { ctx } = makeUpdateCtx(body, existing);
+    await getUpdatePreflight()(ctx);
+    expect(body.folderId).toBe("f2");
+    expect(body.unitMetricInfo).toEqual([]);
+  });
+
+  it("still defaults viewVersion to v1 when the lookup fails", async () => {
+    const body: Record<string, unknown> = { uuid: "p1", name: "X" };
+    const { ctx } = makeUpdateCtx(body, new Error("boom"));
+    await getUpdatePreflight()(ctx);
+    expect(body.viewVersion).toBe("v1");
+  });
+});
