@@ -15,8 +15,6 @@ import {
   appsecTrendListExtract,
   appsecDatatypesListExtract,
   appsecDatatypeGetExtract,
-  appsecFraudPolicyCreateExtract,
-  appsecDerivationConfigCreateExtract,
   compactAppSecItem,
 } from "../extractors.js";
 import {
@@ -28,7 +26,6 @@ import {
   VULNERABILITY_SEVERITIES,
 } from "../appsec/queries.js";
 import {
-  assertValidAppSecApiId,
   buildApiGetBody,
   buildApiListBody,
   buildApiSpansListBody,
@@ -36,11 +33,9 @@ import {
   buildAstScanGetBody,
   buildAstScanListBody,
   buildDatatypesBody,
-  buildDerivationConfigCreateBody,
   buildEntityGetBody,
   buildEntityListBody,
   buildExploreListBody,
-  buildFraudPolicyCreateBody,
   buildInventoryTrendBody,
   buildThreatActivityGetBody,
   buildThreatActivityListBody,
@@ -51,10 +46,7 @@ import {
   resolveAppSecTimeWindow,
 } from "../appsec/builders.js";
 
-export {
-  assertValidAppSecApiId,
-  resolveAppSecTimeWindow,
-};
+export { resolveAppSecTimeWindow };
 
 const TIME_WINDOW_FILTER_FIELDS: FilterFieldSpec[] = [
   {
@@ -79,8 +71,7 @@ export const appsecToolset: ToolsetDefinition = {
   displayName: "Application & API Security",
   description:
     "Traceable Application & API Security — discover API endpoints, OpenAPI specs, sample spans, " +
-    "sensitive data types (PII), runtime threat activities, security events, AST scans, inventory trends, " +
-    "and author fraud policies and event derivation configs.",
+    "sensitive data types (PII), runtime threat activities, security events, AST scans, and inventory trends.",
   optIn: true,
   resources: [
     // 1. appsec_api
@@ -609,96 +600,6 @@ export const appsecToolset: ToolsetDefinition = {
           responseExtractor: appsecDatatypeGetExtract,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description: "Get details for a single sensitive data type by datatype_id",
-        },
-      },
-    },
-
-    // 11. appsec_fraud_policy
-    {
-      resourceType: "appsec_fraud_policy",
-      displayName: "AppSec Fraud Policy",
-      description:
-        "Custom entity-graph SQL fraud detection policy (`CreateFraudPolicy` mutation). Policies are created in disabled draft state " +
-        "(`disabled: true`); review, enable, or delete created policies in the Traceable Protection UI.",
-      diagnosticHint:
-        "CreateFraudPolicy is a write-only draft authoring mutation (`disabled: true`). To review, enable, or delete a created draft policy, use the Traceable Protection UI under Fraud Policies.",
-      toolset: "appsec",
-      scope: "account",
-      product: "appsec",
-      headerBasedScoping: true,
-      identifierFields: ["policy_id"],
-      operations: {
-        create: {
-          method: "POST",
-          path: GRAPHQL_PATH,
-          bodyWrapperKey: "variables",
-          skipScopeBodyInjection: true,
-          bodyBuilder: buildFraudPolicyCreateBody,
-          responseExtractor: appsecFraudPolicyCreateExtract,
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          description: "Create a custom fraud detection policy backed by an entity-graph SQL query",
-          bodySchema: {
-            description: "Fraud policy creation payload",
-            fields: [
-              { name: "policy_name", type: "string", required: true, description: "Name for the fraud policy" },
-              { name: "description", type: "string", required: true, description: "Description of what the policy detects" },
-              { name: "sql_query", type: "string", required: true, description: "Entity-graph SELECT SQL query for the fraud rule" },
-              { name: "api_id", type: "string", required: true, description: "Target API endpoint UUID (from appsec_api)" },
-              {
-                name: "associated_event_derivation_config_id",
-                type: "string",
-                required: false,
-                description: "Optional derivation config ID created via appsec_derivation_config",
-              },
-            ],
-          },
-        },
-      },
-    },
-
-    // 12. appsec_derivation_config
-    {
-      resourceType: "appsec_derivation_config",
-      displayName: "AppSec Event Derivation Config",
-      description:
-        "JEXL-based event derivation configuration (`CreateDerivationConfig` mutation) that extracts custom attributes from API spans. " +
-        "Configs are created in disabled draft state (`disabled: true`); review, enable, or delete created configs in the Traceable Protection UI.",
-      diagnosticHint:
-        "CreateDerivationConfig is a write-only draft authoring mutation (`disabled: true`). Pass a valid UUID api_id from appsec_api. Review, enable, or delete created derivation configs in the Traceable Protection UI.",
-      toolset: "appsec",
-      scope: "account",
-      product: "appsec",
-      headerBasedScoping: true,
-      identifierFields: ["derivation_config_id"],
-      operations: {
-        create: {
-          method: "POST",
-          path: GRAPHQL_PATH,
-          validateInputBody: true,
-          skipScopeBodyInjection: true,
-          bodyBuilder: buildDerivationConfigCreateBody,
-          responseExtractor: appsecDerivationConfigCreateExtract,
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          description: "Create an event derivation config from structured JEXL features (or legacy JEXLExpressions XML)",
-          bodySchema: {
-            description: "Event derivation configuration payload",
-            fields: [
-              { name: "api_id", type: "string", required: true, description: "Target API endpoint UUID (required)" },
-              {
-                name: "features",
-                type: "array",
-                required: false,
-                description: "Array of JEXL feature definitions: [{ name (snake_case), expression, explanation, type }]",
-                itemType: "object",
-              },
-              {
-                name: "jexl_expressions_xml",
-                type: "string",
-                required: false,
-                description: "Optional legacy <JEXLExpressions><Feature name=\"...\"> XML string (alternative to features array)",
-              },
-            ],
-          },
         },
       },
     },

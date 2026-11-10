@@ -758,29 +758,3 @@ export function appsecDatatypeGetExtract(raw: unknown, input?: Record<string, un
   }
   return list.items[0];
 }
-
-export function appsecFraudPolicyCreateExtract(raw: unknown): unknown {
-  const data = unwrapAppSecGraphql(raw);
-  const createResp = isRecord(data.CreateFraudPolicy) ? data.CreateFraudPolicy : {};
-  const policy = isRecord(createResp.fraud_policy) ? createResp.fraud_policy : createResp;
-  return {
-    status: "SUCCESS",
-    id: policy.id,
-    name: policy.name,
-    disabled: policy.disabled,
-    fraud_policy: policy,
-  };
-}
-
-export function appsecDerivationConfigCreateExtract(raw: unknown): unknown {
-  const data = unwrapAppSecGraphql(raw);
-  const createResp = isRecord(data.CreateDerivationConfig) ? data.CreateDerivationConfig : {};
-  const config = isRecord(createResp.derivation_config) ? createResp.derivation_config : createResp;
-  return {
-    status: "SUCCESS",
-    id: config.id,
-    name: config.name,
-    disabled: config.disabled,
-    derivation_config: config,
-  };
-}

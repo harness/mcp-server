@@ -2046,7 +2046,7 @@ Security exemption execute workflow:
 By default, 43 of 49 toolsets are enabled. Five toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
-- **`appsec`** — Traceable Application & API Security (API inventory, OpenAPI specs, sample spans, sensitive data types, runtime threat activities, security events, AST scans, inventory trends, fraud policies, and derivation configs). Opt-in because it requires a dedicated `HARNESS_APPSEC_API_KEY` and targets `api.traceable.ai`.
+- **`appsec`** — Traceable Application & API Security (API inventory, OpenAPI specs, sample spans, sensitive data types, runtime threat activities, security events, AST scans, and inventory trends). Opt-in because it requires a dedicated `HARNESS_APPSEC_API_KEY` and targets `api.traceable.ai`.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
 - **`observability-evaluations`** — Scheduled production-telemetry evaluation rules. Opt-in because it depends on the deployed scoring control plane.
 - **`unified-search`** — Semantic search across every source search-service serves. Opt-in because the backend is not deployed on every cluster and is feature-flagged per account (see [Unified Search](#unified-search)).
@@ -2135,7 +2135,7 @@ Available toolset names:
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 | `vibe`                | vibe_project, vibe_app_lifecycle |
 | `timelines`           | activity_timeline |
-| `appsec` *(opt-in)*   | appsec_api, appsec_api_spec, appsec_api_span, appsec_entity, appsec_vulnerability, appsec_threat_activity, appsec_security_event, appsec_ast_scan, appsec_inventory_trend, appsec_datatype, appsec_fraud_policy, appsec_derivation_config |
+| `appsec` *(opt-in)*   | appsec_api, appsec_api_spec, appsec_api_span, appsec_entity, appsec_vulnerability, appsec_threat_activity, appsec_security_event, appsec_ast_scan, appsec_inventory_trend, appsec_datatype |
 
 
 ## Architecture

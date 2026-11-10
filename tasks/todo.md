@@ -4,7 +4,7 @@
 
 - [x] Add `HARNESS_APPSEC_BASE_URL`, `HARNESS_APPSEC_UI_URL`, and `HARNESS_APPSEC_API_KEY` config support + `product: "appsec"` routing in `HarnessClient`.
 - [x] Add shared AppSec GraphQL extractors, deep-link builder, and trend/span transformers in `src/registry/extractors.ts`.
-- [x] Implement `src/registry/toolsets/appsec.ts` with 13 declarative resources (`appsec_api`, `appsec_api_spec`, `appsec_api_span`, `appsec_entity`, `appsec_vulnerability`, `appsec_threat_activity`, `appsec_security_event`, `appsec_ast_scan`, `appsec_inventory_trend`, `appsec_datatype`, `appsec_fraud_policy`, `appsec_derivation_config`, `appsec_query`) and register in `src/registry/index.ts`.
+- [x] Implement `src/registry/toolsets/appsec.ts` with declarative read resources (`appsec_api`, `appsec_api_spec`, `appsec_api_span`, `appsec_entity`, `appsec_vulnerability`, `appsec_threat_activity`, `appsec_security_event`, `appsec_ast_scan`, `appsec_inventory_trend`, `appsec_datatype`) and register in `src/registry/index.ts`.
 - [x] Add unit and contract tests in `tests/registry/appsec.test.ts` and verify `pnpm typecheck`, `pnpm test`, `pnpm standards:check`, `pnpm build && pnpm docs:generate`, and `pnpm docs:check`.
 
 ## qs comma serialization denial of service (alert #111)
