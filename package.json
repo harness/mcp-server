@@ -14,13 +14,14 @@
     "scripts/ensure-secure-adm-zip.mjs"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "pnpm build:apps && tsc",
+    "build:apps": "vite build --config apps/harness-app/vite.config.ts",
     "dev": "tsc --watch",
     "start": "node build/index.js stdio",
     "start:http": "node build/index.js http",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js stdio",
     "prepare:mcpb": "node scripts/prepare-mcpb.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p apps/harness-app/tsconfig.json",
     "sync-schemas": "node scripts/sync-schemas.js",
     "sync-entity-schemas": "node scripts/sync-entity-schemas.js",
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
@@ -88,6 +89,7 @@
     }
   },
   "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.220.0",
     "@opentelemetry/resources": "^2.9.0",
@@ -95,6 +97,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
+    "preact": "^11.2.0",
     "typescript": "^5.7.3",
     "vite": "^7.3.7",
     "vitest": "^4.1.12"

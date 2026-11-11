@@ -37,6 +37,7 @@ import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from ".
 import { buildHttpHealthResponse } from "./utils/http-health.js";
 import { beginSessionRequest, endSessionRequest, isSessionExpired, type HttpSessionActivity } from "./utils/http-sessions.js";
 import { createHarnessHttpExpressApp } from "./utils/http-app.js";
+import { MCP_APPS_EXTENSION_ID, mcpAppsEnabled } from "./apps/mcp-apps.js";
 
 
 const log = createLogger("main");
@@ -81,7 +82,10 @@ function createHarnessServer(
       websiteUrl: "https://harness.io",
     },
     {
-      capabilities: { logging: {} },
+      capabilities: {
+        logging: {},
+        ...(mcpAppsEnabled(config) ? { extensions: { [MCP_APPS_EXTENSION_ID]: {} } } : {}),
+      },
       instructions: [
         "Harness MCP server — manage CI/CD pipelines, code repos, PRs, services, environments, and more.",
         "",

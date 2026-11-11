@@ -20,6 +20,7 @@ import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
+import { buildResultView, createAppViewContext } from "../apps/mcp-apps.js";
 
 const log = createLogger("execute");
 
@@ -137,6 +138,7 @@ function extractExecutionId(result: unknown, resourceType: string): string | und
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const executableTypes = registry.getTypesWithExecuteActions();
+  const appView = createAppViewContext(server, registry.mcpAppsEnabled);
 
   server.registerTool(
     "harness_execute",
@@ -177,6 +179,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         ).max(20).optional().describe(fieldCopy("execute.queries", registry.schemaProfile)),
       },
       outputSchema: compactOutputSchema(executeOutputSchema, registry.compactSchemas),
+      ...appView.toolMeta,
       annotations: {
         title: "Execute Harness Action",
         readOnlyHint: false,
@@ -584,10 +587,14 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           }
         }
 
-        if (Object.keys(envelope).length === 0) {
-          return jsonResult(result);
-        }
-        return jsonResult({ ...(asRecord(result) ?? {}), ...envelope });
+        const payload = Object.keys(envelope).length === 0 ? result : { ...(asRecord(result) ?? {}), ...envelope };
+        return appView.attach(jsonResult(payload), () =>
+          buildResultView(payload, {
+            displayName: def.displayName,
+            action: args.action,
+            status: asString(envelope.execution_status),
+          }),
+        );
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);

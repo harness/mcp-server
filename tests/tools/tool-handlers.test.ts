@@ -4364,3 +4364,99 @@ describe("harness_diagnose", () => {
     }
   });
 });
+
+describe("MCP Apps view data", () => {
+  const UI_CAPS = {
+    elicitation: { form: {} },
+    extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } },
+  };
+
+  async function registerViewTools(overrides: Partial<Config> = {}, caps?: unknown) {
+    const server = makeMcpServer("accept");
+    if (caps) server.server.getClientCapabilities = () => caps;
+    const config = makeConfig({ HARNESS_TOOLSETS: "pipelines", ...overrides });
+    const registry = new Registry(config);
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { identifier: "build_app", name: "Build App", storeType: "INLINE" },
+    });
+    const client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const { registerStatusTool } = await import("../../src/tools/harness-status.js");
+    registerGetTool(server, registry, client);
+    registerExecuteTool(server, registry, client, config);
+    registerStatusTool(server, registry, client, config);
+    return { server, mockRequest };
+  }
+
+  it("links harness_get, harness_execute, and harness_status to ui://harness/app", async () => {
+    const { server } = await registerViewTools();
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toEqual({ ui: { resourceUri: "ui://harness/app" } });
+    }
+  });
+
+  it("omits the UI link when HARNESS_MCP_APPS=off", async () => {
+    const { server } = await registerViewTools({ HARNESS_MCP_APPS: "off" }, UI_CAPS);
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toBeUndefined();
+    }
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("returns text-only results to hosts without the MCP Apps extension", async () => {
+    const { server } = await registerViewTools();
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result.isError).toBeUndefined();
+    expect(result._meta).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ identifier: "build_app" });
+  });
+
+  it("adds a result view with a read-only refresh for UI hosts, leaving the text unchanged", async () => {
+    const plain = await registerViewTools();
+    const ui = await registerViewTools({}, UI_CAPS);
+    const args = { resource_type: "pipeline", resource_id: "build_app" };
+    const textOnly = await plain.server.call("harness_get", args);
+    const result = await ui.server.call("harness_get", args);
+
+    expect(result.content).toEqual(textOnly.content);
+    expect(result.structuredContent).toEqual(textOnly.structuredContent);
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"] as Record<string, unknown>;
+    expect(view).toMatchObject({
+      kind: "result",
+      title: "Build App",
+      open_in_harness: expect.stringContaining("/pipelines/build_app/"),
+      refresh: { tool: "harness_get", arguments: args },
+    });
+  });
+
+  it("never offers refresh on harness_execute views, so a view cannot repeat a write", async () => {
+    const { server } = await registerViewTools({}, UI_CAPS);
+    const result = await server.call("harness_execute", { resource_type: "pipeline", action: "run", resource_id: "build_app" });
+    expect(result.isError).toBeUndefined();
+    const view = (result._meta as Record<string, unknown> | undefined)?.["harness.io/view"] as Record<string, unknown> | undefined;
+    expect(view?.subtitle).toContain("run");
+    expect(view).not.toHaveProperty("refresh");
+  });
+
+  it("adds no view to error results", async () => {
+    const { server } = await registerViewTools({}, UI_CAPS);
+    const result = await server.call("harness_get", { resource_type: "nonexistent" });
+    expect(result.isError).toBe(true);
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("shows project health on harness_status views", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    const result = await server.call("harness_status", { org_id: "default", project_id: "test-project" });
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"];
+    expect(view).toMatchObject({
+      kind: "result",
+      title: "Project health",
+      status: { label: "Healthy", tone: "success" },
+      refresh: { tool: "harness_status", arguments: { org_id: "default", project_id: "test-project" } },
+    });
+  });
+});

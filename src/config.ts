@@ -204,6 +204,8 @@ const RawConfigSchema = z.object({
   HARNESS_READ_ONLY: booleanFromEnv.default(false),
   // compact (default): resource_type is a plain string in tool schemas (discover via harness_describe) — far smaller tools/list payload. Set "full" to inline every resource type.
   HARNESS_SCHEMA_MODE: z.preprocess(emptyStringAsUndefined, z.enum(["full", "compact"]).default("compact")),
+  // MCP Apps (interactive views rendered in the chat). auto (default): advertise ui://harness/app and attach view data only for hosts that declare io.modelcontextprotocol/ui. off: text-only results.
+  HARNESS_MCP_APPS: z.preprocess(emptyStringAsUndefined, z.enum(["auto", "off"]).default("auto")),
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
   HARNESS_AUTO_APPROVE_RISK: z.preprocess(
     emptyStringAsUndefined,
