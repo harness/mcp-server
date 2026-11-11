@@ -14,9 +14,15 @@
  */
 
 /** Response headers that carry the size of the whole matching population. */
-const TOTAL_HEADERS = ["x-total-elements", "x-total-count", "x-total-items"] as const;
+const TOTAL_HEADERS = ["x-total-elements", "x-total-count", "x-total-items", "x-total"] as const;
+/** 0-based page number headers. */
 const PAGE_NUMBER_HEADERS = ["x-page-number", "x-page-index"] as const;
-const PAGE_SIZE_HEADERS = ["x-page-size"] as const;
+/**
+ * 1-based page number headers. Gitness-style services (Code, AI Code Review)
+ * send `x-page` / `x-per-page` / `x-total` with pages counted from 1.
+ */
+const ONE_BASED_PAGE_NUMBER_HEADERS = ["x-page"] as const;
+const PAGE_SIZE_HEADERS = ["x-page-size", "x-per-page"] as const;
 
 function headerNumber(headers: Record<string, string>, names: readonly string[]): number | undefined {
   for (const name of names) {
@@ -52,7 +58,9 @@ export function applyHeaderPagination(result: unknown, headers: Record<string, s
   const existingTotal = record.total;
   if (typeof existingTotal === "number" && existingTotal !== items.length) return result;
 
-  const pageNumber = headerNumber(headers, PAGE_NUMBER_HEADERS);
+  const oneBasedPage = headerNumber(headers, ONE_BASED_PAGE_NUMBER_HEADERS);
+  const pageNumber = headerNumber(headers, PAGE_NUMBER_HEADERS)
+    ?? (oneBasedPage !== undefined && oneBasedPage >= 1 ? oneBasedPage - 1 : undefined);
   const pageSize = headerNumber(headers, PAGE_SIZE_HEADERS) ?? items.length;
 
   // Rows already consumed when this page was served. Without a page number the
