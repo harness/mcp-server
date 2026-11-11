@@ -1840,21 +1840,6 @@ describe("harness_delete", () => {
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
   });
 
-  it("uses the operation's confirmNote in the approval prompt, else the default warning", async () => {
-    const declineServer = makeMcpServer("decline");
-    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(declineServer, new Registry(makeConfig({ HARNESS_TOOLSETS: "aicr" })), client, makeConfig());
-    await declineServer.call("harness_delete", { resource_type: "aicr_rule", resource_id: "5" });
-    expect(declineServer.server.elicitInput.mock.calls[0][0].message).toBe(
-      'Delete aicr_rule "5"?\n\nThis archives the rule: reviews stop using it in every repository that inherits it. Update with status active restores it.',
-    );
-
-    const plain = makeMcpServer("decline");
-    registerDeleteTool(plain, registry, client, makeConfig());
-    await plain.call("harness_delete", { resource_type: "pipeline", resource_id: "my-pipe" });
-    expect(plain.server.elicitInput.mock.calls[0][0].message).toContain("This is destructive and cannot be undone.");
-  });
-
   it("deletes resource when confirmed", async () => {
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -4617,5 +4602,81 @@ describe("MCP Apps view data", () => {
       status: { label: "Healthy", tone: "success" },
       refresh: { tool: "harness_status", arguments: { org_id: "default", project_id: "test-project" } },
     });
+  });
+});
+
+describe("approval prompt notes (confirmNote)", () => {
+  /** The prompt a declining user sees for one call, and whether anything was sent. */
+  async function promptFor(registry: Registry, tool: string, args: Record<string, unknown>) {
+    const server = makeMcpServer("decline");
+    const request = vi.fn().mockResolvedValue({});
+    const client = makeClient(request);
+    const config = makeConfig();
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    for (const register of [registerCreateTool, registerUpdateTool, registerDeleteTool, registerExecuteTool]) {
+      register(server, registry, client, config);
+    }
+    const result = await server.call(tool, args);
+    expect(result.isError).toBe(true);
+    expect(request).not.toHaveBeenCalled();
+    return server.server.elicitInput.mock.calls[0]![0].message as string;
+  }
+
+  it("only the AI Code Review writes set a note, across every toolset", async () => {
+    const { ALL_TOOLSET_NAMES } = await import("../../src/registry/index.js");
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.join(",") }));
+    const withNote: string[] = [];
+    for (const type of registry.getAllResourceTypes()) {
+      const def = registry.getResource(type);
+      for (const [name, spec] of [...Object.entries(def.operations), ...Object.entries(def.executeActions ?? {})]) {
+        if (spec?.confirmNote !== undefined) withNote.push(`${type}.${name}`);
+      }
+    }
+    expect(withNote.sort()).toEqual([
+      "aicr_convention.create", "aicr_convention.delete", "aicr_convention.update",
+      "aicr_finding.dismiss", "aicr_gate.set",
+      "aicr_repository.disable", "aicr_repository.enable",
+      "aicr_rule.create", "aicr_rule.delete", "aicr_rule.override", "aicr_rule.update",
+      "aicr_setting.set",
+    ]);
+  });
+
+  it("operations without a note keep the same prompt, byte for byte", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,ccm" }));
+    expect(await promptFor(registry, "harness_create", { resource_type: "cost_perspective", body: { name: "x" } }))
+      .toBe('Create cost_perspective?\n\n{\n  "name": "x"\n}');
+    expect(await promptFor(registry, "harness_update", { resource_type: "cost_perspective", resource_id: "p1", body: { name: "y" } }))
+      .toBe('Update cost_perspective "p1"?\n\n{\n  "name": "y"\n}');
+    expect(await promptFor(registry, "harness_execute", { resource_type: "pipeline", action: "run", resource_id: "my-pipe" }))
+      .toBe('Execute "run" on pipeline "my-pipe"?');
+    expect(await promptFor(registry, "harness_delete", { resource_type: "pipeline", resource_id: "my-pipe" }))
+      .toBe('Delete pipeline "my-pipe"?\n\nThis is destructive and cannot be undone.');
+  });
+
+  it("AI Code Review writes say what changes and where, after the usual prompt", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "aicr" }));
+    expect(await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_gate", action: "set", org_id: "acme", project_id: "web",
+      body: { categories: [{ category: "security", reported: true, fail_at: "major_and_above" }, { category: "hygiene", reported: false, fail_at: "never" }] },
+    })).toBe(
+      'Execute "set" on aicr_gate?\n\nSets the merge gate of project acme/web: security fails at major_and_above; hygiene not reported. ' +
+        "Categories not listed keep their setting. Applies to pull requests of every repository under it.",
+    );
+    expect(await promptFor(registry, "harness_create", { resource_type: "aicr_rule", org_id: "acme", body: { title: "No TODOs" } })).toBe(
+      'Create aicr_rule?\n\n{\n  "title": "No TODOs"\n}\n\nCreates this rule on org acme: reviews check pull requests of every repository under it against it, ' +
+        "and a failed rule fails the Team rules check.",
+    );
+    expect(await promptFor(registry, "harness_update", {
+      resource_type: "aicr_convention", resource_id: "7", org_id: "acme", project_id: "web", repo_id: "demo", body: { status: "archived" },
+    })).toBe(
+      'Update aicr_convention "7"?\n\n{\n  "status": "archived"\n}\n\nArchives the convention on repository demo in project acme/web: ' +
+        "reviews stop using it in every repository that inherits it. Update with status active restores it.",
+    );
+    expect(await promptFor(registry, "harness_delete", { resource_type: "aicr_rule", resource_id: "5" })).toBe(
+      'Delete aicr_rule "5"?\n\nArchives the rule on the account: reviews stop using it in every repository that inherits it. Update with status active restores it.',
+    );
   });
 });

@@ -1177,3 +1177,64 @@ describe("applyHeaderPagination with gitness-style headers", () => {
     expect(result.page).toBe(4);
   });
 });
+
+describe("aicr approval prompt notes", () => {
+  const def = (type: string) => registry().getResource(type);
+  const note = (spec: { confirmNote?: unknown } | undefined, input: Record<string, unknown>) =>
+    (spec!.confirmNote as (i: Record<string, unknown>) => string | undefined)(input);
+  const REPO = { org_id: "acme", project_id: "web", repo_id: "demo" };
+
+  it("setting.set names the scope and each field changed", () => {
+    expect(note(def("aicr_setting").executeActions!.set, {
+      org_id: "acme",
+      body: { llm_connector_ref: null, add_paths: [{ pattern: "vendor/**", type: "excluded" }], review_triggers: { on_push: false } },
+    })).toBe(
+      "Changes the AI Code Review settings of org acme: review_triggers: on_push false; llm_connector_ref: inherit; add_paths: vendor/** (excluded). " +
+        "Other settings stay as they are. Applies to reviews of pull requests of every repository under it.",
+    );
+  });
+
+  it("rule override says on or off, for that repository only", () => {
+    const override = def("aicr_rule").executeActions!.override;
+    expect(note(override, { ...REPO, rule_id: "5", body: { enabled: false } })).toBe(
+      "Turns rule 5 off for repository demo in project acme/web only; other repositories keep the rule as it is.",
+    );
+    expect(note(override, { rule_id: "5", body: { enabled: false } })).toBeUndefined();
+  });
+
+  it("repository enable says which pipelines get the trigger; disable says what is deleted", () => {
+    const { enable, disable } = def("aicr_repository").executeActions!;
+    expect(note(enable, REPO)).toBe(
+      "Enables AI Code Review on repository demo in project acme/web: adds a pull request trigger to its project's AI Code Review pipeline " +
+        "(creating the pipeline if missing), so new pull request commits are reviewed.",
+    );
+    expect(note(enable, { repo_path: `${ACCOUNT}/acme/demo` })).toContain(
+      `on repository ${ACCOUNT}/acme/demo: adds a pull request trigger to the AI Code Review pipeline of every project under the org`,
+    );
+    expect(note(enable, { repo_id: "demo" })).toContain("on repository demo at account level: adds a pull request trigger to the AI Code Review pipeline of every project under the account");
+    expect(note(disable, REPO)).toBe(
+      "Disables AI Code Review on repository demo in project acme/web: deletes its pull request triggers and the gates, rules, rule overrides " +
+        "and conventions set on it. Enabling it again does not restore them.",
+    );
+    expect(note(disable, {})).toBeUndefined();
+  });
+
+  it("finding dismiss names the finding, pull request, repository and reason", () => {
+    expect(note(def("aicr_finding").executeActions!.dismiss, { ...REPO, pr_number: 3, finding_key: "ab12", body: { reason: "accepted_risk" } })).toBe(
+      "Dismisses finding ab12 on pull request #3 of repository demo in project acme/web (reason: accepted_risk): " +
+        "it no longer fails the AI Code Review check. undo_dismiss reopens it.",
+    );
+  });
+
+  it("rule and convention update: restore and plain change", () => {
+    expect(note(def("aicr_rule").operations.update, { project_id: "web", org_id: "acme", body: { status: "active" } })).toBe(
+      "Restores the rule on project acme/web: reviews use it again in every repository that inherits it.",
+    );
+    expect(note(def("aicr_convention").operations.update, { ...REPO, body: { title: "x" } })).toBe(
+      "Changes the convention on repository demo in project acme/web; every repository that inherits it gets the change.",
+    );
+    expect(note(def("aicr_convention").operations.create, REPO)).toBe(
+      "Creates this convention on repository demo in project acme/web: reviews follow it on its pull requests.",
+    );
+  });
+});

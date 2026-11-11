@@ -849,6 +849,154 @@ async function aicrReviewPreflight(ctx: PreflightContext): Promise<void> {
   input[AICR_FINDINGS_KEY] = settle(findings);
 }
 
+// ---------------------------------------------------------------------------
+// Approval prompt notes: what a write changes and where, from the call's input
+// (before preflight, no requests). A call the preflight will refuse may get a vague note.
+// ---------------------------------------------------------------------------
+
+const AICR_NOTE_MAX_CHARS = 600;
+
+interface AicrNoteTarget {
+  /** e.g. `project acme/web`, `repository demo in org acme`, `the account`. */
+  where: string;
+  repo: boolean;
+  /** The space level the repository or space sits at. */
+  level: "account" | "org" | "project";
+}
+
+function aicrNoteTarget(input: Record<string, unknown>): AicrNoteTarget {
+  // Same precedence as resolveAicrRepoPath: repo_path wins over repo_id.
+  const repoPath = str(input.repo_path)?.replace(/^\/+|\/+$/g, "");
+  if (repoPath) {
+    const depth = repoPath.split("/").length;
+    return { where: `repository ${repoPath}`, repo: true, level: depth >= 4 ? "project" : depth === 3 ? "org" : "account" };
+  }
+  const org = str(input.org_id);
+  const project = str(input.project_id);
+  const level = project ? "project" : org ? "org" : "account";
+  const space = project ? `project ${org ? `${org}/` : ""}${project}` : org ? `org ${org}` : "the account";
+  const repo = str(input.repo_id);
+  if (repo) return { where: `repository ${repo} ${level === "account" ? "at account level" : `in ${space}`}`, repo: true, level };
+  return { where: space, repo: false, level };
+}
+
+function aicrNoteBody(input: Record<string, unknown>): Record<string, unknown> {
+  return (typeof input.body === "object" && input.body !== null && !Array.isArray(input.body) ? input.body : {}) as Record<string, unknown>;
+}
+
+function aicrNoteValue(value: unknown): string {
+  if (value === null) return "inherit";
+  if (Array.isArray(value)) {
+    return value
+      .map((p) => (typeof p === "object" && p !== null ? `${String((p as Record<string, unknown>).pattern)} (${String((p as Record<string, unknown>).type)})` : String(p)))
+      .join(", ");
+  }
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).map(([k, v]) => `${k} ${v === null ? "inherit" : String(v)}`).join(", ");
+  }
+  return String(value);
+}
+
+function aicrNote(text: string): string {
+  return text.length <= AICR_NOTE_MAX_CHARS ? text : `${text.slice(0, AICR_NOTE_MAX_CHARS)}...`;
+}
+
+/** Whose pull requests a space or repository setting reaches. */
+function aicrNoteReach(t: AicrNoteTarget): string {
+  return t.repo ? "its pull requests" : "pull requests of every repository under it";
+}
+
+function aicrGateSetNote(input: Record<string, unknown>): string {
+  const t = aicrNoteTarget(input);
+  const categories = aicrNoteBody(input).categories;
+  const parts = (Array.isArray(categories) ? categories : [])
+    .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
+    .map((c) => `${String(c.category)} ${c.reported === false ? "not reported" : `fails at ${String(c.fail_at)}`}`);
+  return aicrNote(
+    `Sets the merge gate of ${t.where}${parts.length ? `: ${parts.join("; ")}` : ""}. ` +
+      `Categories not listed keep their setting. Applies to ${aicrNoteReach(t)}.`,
+  );
+}
+
+function aicrSettingSetNote(input: Record<string, unknown>): string {
+  const t = aicrNoteTarget(input);
+  const body = aicrNoteBody(input);
+  const parts = AICR_SETTING_FIELDS.filter((f) => body[f] !== undefined).map((f) => `${f}: ${aicrNoteValue(body[f])}`);
+  return aicrNote(
+    `Changes the AI Code Review settings of ${t.where}${parts.length ? `: ${parts.join("; ")}` : ""}. ` +
+      `Other settings stay as they are. Applies to reviews of ${aicrNoteReach(t)}.`,
+  );
+}
+
+function aicrPolicyCreateNote(kind: "rule" | "convention") {
+  return (input: Record<string, unknown>): string => {
+    const t = aicrNoteTarget(input);
+    return kind === "rule"
+      ? `Creates this rule on ${t.where}: reviews check ${aicrNoteReach(t)} against it, and a failed rule fails the Team rules check.`
+      : `Creates this convention on ${t.where}: reviews follow it on ${aicrNoteReach(t)}.`;
+  };
+}
+
+function aicrPolicyArchiveText(kind: "rule" | "convention", where: string): string {
+  return `Archives the ${kind} on ${where}: reviews stop using it in every repository that inherits it. Update with status active restores it.`;
+}
+
+function aicrPolicyUpdateNote(kind: "rule" | "convention") {
+  return (input: Record<string, unknown>): string => {
+    const { where } = aicrNoteTarget(input);
+    const status = aicrNoteBody(input).status;
+    if (status === "archived") return aicrPolicyArchiveText(kind, where);
+    if (status === "active") return `Restores the ${kind} on ${where}: reviews use it again in every repository that inherits it.`;
+    return `Changes the ${kind} on ${where}; every repository that inherits it gets the change.`;
+  };
+}
+
+function aicrPolicyDeleteNote(kind: "rule" | "convention") {
+  return (input: Record<string, unknown>): string => aicrPolicyArchiveText(kind, aicrNoteTarget(input).where);
+}
+
+function aicrRuleOverrideNote(input: Record<string, unknown>): string | undefined {
+  const t = aicrNoteTarget(input);
+  if (!t.repo) return undefined;
+  const enabled = aicrNoteBody(input).enabled;
+  const rule = str(input.rule_id);
+  const what = `rule${rule ? ` ${rule}` : ""}`;
+  return typeof enabled === "boolean"
+    ? `Turns ${what} ${enabled ? "on" : "off"} for ${t.where} only; other repositories keep the rule as it is.`
+    : `Overrides ${what} for ${t.where} only.`;
+}
+
+function aicrEnableNote(input: Record<string, unknown>): string | undefined {
+  const t = aicrNoteTarget(input);
+  if (!t.repo) return undefined;
+  const pipelines =
+    t.level === "project"
+      ? "its project's AI Code Review pipeline (creating the pipeline if missing)"
+      : `the AI Code Review pipeline of every project under the ${t.level} (creating pipelines if missing)`;
+  return `Enables AI Code Review on ${t.where}: adds a pull request trigger to ${pipelines}, so new pull request commits are reviewed.`;
+}
+
+function aicrDisableNote(input: Record<string, unknown>): string | undefined {
+  const t = aicrNoteTarget(input);
+  if (!t.repo) return undefined;
+  return (
+    `Disables AI Code Review on ${t.where}: deletes its pull request triggers and the gates, rules, rule overrides and conventions set on it. ` +
+    "Enabling it again does not restore them."
+  );
+}
+
+function aicrDismissNote(input: Record<string, unknown>): string | undefined {
+  const t = aicrNoteTarget(input);
+  if (!t.repo) return undefined;
+  const key = str(input.finding_key);
+  const pr = str(input.pr_number);
+  const reason = str(aicrNoteBody(input).reason);
+  return aicrNote(
+    `Dismisses finding${key ? ` ${key}` : ""}${pr ? ` on pull request #${pr}` : ""} of ${t.where}${reason ? ` (reason: ${reason})` : ""}: ` +
+      "it no longer fails the AI Code Review check. undo_dismiss reopens it.",
+  );
+}
+
 const REPO_PARAM_FIELDS = [
   {
     name: "repo_id",
@@ -1278,6 +1426,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           skipScopeBodyInjection: true,
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrDismissExtract,
+          confirmNote: aicrDismissNote,
           actionDescription:
             "Dismiss one finding of a pull request's latest review. A dismissed finding no longer fails the AI Code Review check, " +
             "and the dismissal carries over to later runs. Fails if the finding is already dismissed or not in the latest review.",
@@ -1457,6 +1606,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           skipScopeBodyInjection: true,
           queryParams: { space_path: "space_path" },
           responseExtractor: aicrEnableExtract,
+          confirmNote: aicrEnableNote,
           actionDescription:
             "Enable AI Code Review on a Harness Code repository, the same as turning on its AI review setting in Harness. " +
             "Adds a pull request trigger to the project's AI Code Review pipeline (creating the pipeline, and the account's " +
@@ -1477,6 +1627,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           skipScopeBodyInjection: true,
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrDisableExtract,
+          confirmNote: aicrDisableNote,
           actionDescription:
             "Disable AI Code Review on a repository: deletes its pull request triggers, turns its AI review setting off, " +
             "and deletes the repository's own AI Code Review config with the gates, rules, rule overrides and conventions set on it. " +
@@ -1544,6 +1695,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             repo_path: "repo_path",
           },
           responseExtractor: aicrGateExtract,
+          confirmNote: aicrGateSetNote,
           actionDescription:
             "Set the gate of the given categories on a space or repository; categories left out keep their setting. Returns all categories. " +
             "A space or repository cannot be looser than its parent spaces: it must report a category they report, at fail_at as strict or stricter, " +
@@ -1646,6 +1798,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             repo_path: "repo_path",
           },
           responseExtractor: aicrRuleCreateExtract,
+          confirmNote: aicrPolicyCreateNote("rule"),
           description:
             "Create a rule on a space or repository. A repository needs its own AI Code Review config.",
           paramsSchema: { fields: POLICY_SCOPE_FIELDS },
@@ -1666,6 +1819,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           skipScopeBodyInjection: true,
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrRuleExtract,
+          confirmNote: aicrPolicyUpdateNote("rule"),
           description:
             "Change the given fields of a rule; status archived archives it and active restores it. Use execute override to turn an inherited rule off for one repository.",
           paramsSchema: { fields: [...POLICY_SCOPE_FIELDS, RULE_ID_FIELD] },
@@ -1688,7 +1842,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           pathParams: { rule_id: "ruleId" },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           preflight: aicrPolicyByIdPreflight("rule", true),
-          confirmNote: "This archives the rule: reviews stop using it in every repository that inherits it. Update with status active restores it.",
+          confirmNote: aicrPolicyDeleteNote("rule"),
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrArchiveExtract("rule_id"),
           description:
@@ -1719,6 +1873,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             repo_path: "repo_path",
           },
           responseExtractor: aicrRuleExtract,
+          confirmNote: aicrRuleOverrideNote,
           actionDescription:
             "Turn an overridable rule of a parent space off (enabled false) or back on for one repository, without changing it elsewhere. " +
             "Fails for a required (not overridable) or archived rule, and for a rule set on the repository itself. Calling it again updates the same override. " +
@@ -1824,6 +1979,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             repo_path: "repo_path",
           },
           responseExtractor: aicrConventionCreateExtract,
+          confirmNote: aicrPolicyCreateNote("convention"),
           description:
             "Create a convention on a space or repository. A repository needs its own AI Code Review config.",
           paramsSchema: { fields: POLICY_SCOPE_FIELDS },
@@ -1853,6 +2009,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           skipScopeBodyInjection: true,
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrConventionExtract,
+          confirmNote: aicrPolicyUpdateNote("convention"),
           description:
             "Change the given fields of a convention; a list given replaces the old one. status archived archives it and active restores it.",
           paramsSchema: {
@@ -1877,7 +2034,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           pathParams: { convention_id: "conventionId" },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           preflight: aicrPolicyByIdPreflight("convention", true),
-          confirmNote: "This archives the convention: reviews stop using it in every repository that inherits it. Update with status active restores it.",
+          confirmNote: aicrPolicyDeleteNote("convention"),
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrArchiveExtract("convention_id"),
           description:
@@ -1935,6 +2092,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             repo_identifier: "repo_identifier",
           },
           responseExtractor: aicrSettingSetExtract,
+          confirmNote: aicrSettingSetNote,
           actionDescription:
             "Change the given settings of one space or repository; the others stay as they are. " +
             "add_paths and remove_paths change only paths set on this scope (get shows each path's scope). " +
