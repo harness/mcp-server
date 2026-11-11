@@ -5,11 +5,16 @@ import type { HarnessClient } from "../../../src/client/harness-client.js";
 import type { Registry } from "../../../src/registry/index.js";
 import { classifyFailure } from "../../../src/utils/diagnose-triage.js";
 
-// Mock resolveLogContent so diagnose tests don't depend on the full log pipeline
-vi.mock("../../../src/utils/log-resolver.js", () => ({
-  resolveLogContent: vi.fn().mockResolvedValue("resolved log line 1\nresolved log line 2"),
-  resolveLogDownloadUrl: vi.fn().mockResolvedValue("https://storage.example.com/logs.zip?signed=1"),
-}));
+// Mock resolveLogContent so diagnose tests don't depend on the full log pipeline.
+// Keep packageSnippetForDiagnose real so diagnose packaging/total_lines stay covered.
+vi.mock("../../../src/utils/log-resolver.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/utils/log-resolver.js")>();
+  return {
+    ...actual,
+    resolveLogContent: vi.fn().mockResolvedValue("resolved log line 1\nresolved log line 2"),
+    resolveLogDownloadUrl: vi.fn().mockResolvedValue("https://storage.example.com/logs.zip?signed=1"),
+  };
+});
 
 // Spec 010: classifyFailure is backed by its REAL implementation via a
 // passthrough mock — tests can still override with mockResolvedValueOnce, but
@@ -428,6 +433,49 @@ describe("pipelineHandler", () => {
     expect(contentMock).toHaveBeenCalledWith(expect.anything(), "log/helm", expect.objectContaining({
       commandUnitNames: ["Fetch Files"],
       logKeys: ["log/helm-commandUnit:Fetch Files", "log/helm-commandUnit:Install / Upgrade"],
+      mode: "snippet",
+    }));
+  });
+
+  it("passes failed unitProgresses names for snippet preference", async () => {
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    const contentMock = resolveLogContent as ReturnType<typeof vi.fn>;
+    contentMock.mockClear();
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "helm", name: "Helm", status: "Failed" }] }],
+      nodeMapEntries: {
+        helm: {
+          uuid: "helm",
+          identifier: "helm",
+          name: "Helm",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.helm",
+          status: "Failed",
+          failureInfo: { message: "Install failed" },
+          logBaseKey: "log/helm",
+          unitProgresses: [
+            { unitName: "Fetch Files", status: "Success" },
+            { unitName: "Install / Upgrade", status: "Failed" },
+          ],
+          executableResponses: [
+            { taskChain: { logKeys: ["log/helm-commandUnit:Fetch Files", "log/helm-commandUnit:Install / Upgrade"] } },
+          ],
+        },
+      },
+    });
+
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry: makePipelineRegistry(exec),
+      args: { summary: false, include_logs: true },
+    });
+
+    await pipelineHandler.diagnose(ctx);
+
+    expect(contentMock).toHaveBeenCalledWith(expect.anything(), "log/helm", expect.objectContaining({
+      failedUnitNames: ["Install / Upgrade"],
+      mode: "snippet",
     }));
   });
 
@@ -773,6 +821,41 @@ describe("pipelineHandler", () => {
     expect(entry.truncated).toBe(true);
     expect(entry.total_lines).toBe(200);
     expect((entry.log_snippet as string)).toContain("lines omitted");
+  });
+
+  it("preserves resolver snippet markers and pre-trim total_lines (no double-trim)", async () => {
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    const kept = Array.from({ length: 200 }, (_, i) => `kept-${i}`).join("\n");
+    const preTailed =
+      `--- commandUnit: Install / Upgrade ---\n... (1800 lines omitted) ...\n${kept}`;
+    (resolveLogContent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(preTailed);
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "S1", status: "Failed", steps: [{ id: "st1", name: "ST1", status: "Failed" }] }],
+      nodeMapEntries: {
+        st1: {
+          uuid: "st1", identifier: "st1", name: "ST1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.st1",
+          status: "Failed", failureInfo: { message: "err" }, logBaseKey: "log/st1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: false, include_logs: true, log_snippet_lines: 200 },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+    const entry = (result.failed_step_logs as Record<string, Record<string, unknown>>)["s1/st1"];
+    expect(entry.truncated).toBe(true);
+    expect(entry.total_lines).toBe(2000);
+    expect(entry.log_snippet).toBe(preTailed);
+    expect(entry.log_snippet as string).toContain("commandUnit: Install / Upgrade");
+    expect(entry.log_snippet as string).toContain("1800 lines omitted");
   });
 
   it("fetches log for explicitly requested step even when it passed", async () => {

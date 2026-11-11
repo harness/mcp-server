@@ -1,4 +1,6 @@
-import { gunzipSync, inflateRawSync } from "node:zlib";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { createGunzip, gunzipSync, inflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "./errors.js";
 import { createLogger } from "./logger.js";
@@ -9,32 +11,63 @@ const log = createLogger("log-resolver");
 // maxPollAttempts is exhausted. Tests override maxPollAttempts.
 const DEFAULT_POLL_ATTEMPTS = 5;
 const DEFAULT_POLL_INTERVAL_MS = 3000;
-// Tightened from 10 MB to 2 MB. Diagnose callers truncate output to a few
-// hundred lines anyway; buffering 10 MB per concurrent log fetch into the V8
-// heap contributed to production OOMs. Callers needing more can still pass
-// maxLogSizeBytes.
-const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024; // 2 MB
+/**
+ * After streaming GET /blob (gzip/plain with a sliding window; zip buffered
+ * with a high wire safety cap), keep only this many trailing decompressed
+ * bytes per key. Replaces the old 2MB hard reject so large unit logs still
+ * yield a useful tail. Override via {@link LogResolveOptions.maxLogSizeBytes}.
+ */
+const DEFAULT_BLOB_TAIL_BYTES = 500 * 1024; // 500 KB
+/**
+ * Absolute compressed-size safety limit while reading a GET /blob body
+ * (gzip/plain streamed or ZIP buffered). Prevents unbounded wire reads even
+ * when only a trailing decompressed window is kept.
+ */
+const ABSOLUTE_BLOB_WIRE_BYTES = 32 * 1024 * 1024;
+/** @deprecated Use {@link ABSOLUTE_BLOB_WIRE_BYTES}. */
+const ABSOLUTE_ZIP_WIRE_BYTES = ABSOLUTE_BLOB_WIRE_BYTES;
+/**
+ * How long a single blob body may take to finish after headers (stalls hang
+ * forever otherwise — requestStream clears its header timeout once the
+ * Response is returned). Override via {@link LogResolveOptions.bodyTimeoutMs}.
+ */
+const DEFAULT_BLOB_BODY_TIMEOUT_MS = 120_000;
 /**
  * Max extra GET /blob calls after an empty base logBaseKey, one per
- * command-unit key (CD steps write each unit — Fetch Files, Prepare,
- * Install / Upgrade, … — to its own key). All of them are fetched and merged
- * so the failing unit is never dropped. Happy path stays 1 request; unit keys
- * are fetched only when the base key is empty.
+ * command-unit key. When over the cap, the **last** keys are kept (failures
+ * and the last unit that logged tend to be late). Happy path stays 1 request;
+ * unit keys are fetched only when the base key is empty.
  */
 const MAX_COMMAND_UNIT_KEYS = 10;
-/**
- * Cap on the summed size of all unit blobs merged for one step. Each blob is
- * still capped at `maxLogSizeBytes`; this bounds the worst case across units.
- */
-const MAX_MERGED_LOG_SIZE_MULTIPLIER = 4;
 /** Default unit name used by Harness UI for script/command steps. */
 const DEFAULT_COMMAND_UNIT_NAMES = ["Execute"];
+/** Default diagnose / snippet tail when callers omit {@link LogResolveOptions.snippetLines}. */
+const DEFAULT_SNIPPET_LINES = 200;
+/** Matches {@link tailLogLines} omitted-lines marker. */
+const OMITTED_LINES_RE = /\.\.\. \((\d+) lines omitted\) \.\.\./;
+
+export type LogResolveMode = "snippet" | "full";
 
 export interface LogResolveOptions {
   signal?: AbortSignal;
   maxPollAttempts?: number;
   pollIntervalMs?: number;
+  /**
+   * Max trailing decompressed bytes kept per GET /blob after streaming
+   * (default 500KB). Not a wire reject — oversized blobs are tailed, not thrown
+   * (until {@link ABSOLUTE_BLOB_WIRE_BYTES} compressed bytes are exceeded).
+   */
   maxLogSizeBytes?: number;
+  /**
+   * Max time to finish reading one blob body after headers (default 120s).
+   * Aborts stalled streams that would otherwise hang forever.
+   */
+  bodyTimeoutMs?: number;
+  /**
+   * Compressed wire safety ceiling while streaming one blob (default 32MB).
+   * Tests may lower this; production callers should leave it unset.
+   */
+  maxWireBytes?: number;
   /**
    * Command-unit names from the execution graph (`unitProgresses`).
    * Fetched as `${logBaseKey}-commandUnit:${name}` only if the base key
@@ -47,6 +80,20 @@ export interface LogResolveOptions {
    * fewer units than were actually logged.
    */
   logKeys?: string[];
+  /**
+   * `snippet` — prefer failed units then last non-empty (diagnose). `full` —
+   * labeled sections for every non-empty unit with no line soft-trim
+   * (harness_get). Default `full`. Per-key byte tail still applies.
+   */
+  mode?: LogResolveMode;
+  /** Tail line count for `snippet` mode (and safety trim). Default 200. */
+  snippetLines?: number;
+  /**
+   * From `unitProgresses` entries with failed/error status. Snippet mode tries
+   * these keys first (then reverse last-non-empty). Full mode always includes
+   * them even when the 10-key cap dropped them from {@link blobKeysToTry}.
+   */
+  failedUnitNames?: string[];
 }
 
 /** Build UI-style command-unit blob key from a step logBaseKey. */
@@ -56,8 +103,8 @@ export function commandUnitLogKey(baseKey: string, unitName: string): string {
 }
 
 /**
- * Ordered keys for GET /blob: base logBaseKey first, then every command-unit
- * key (capped at {@link MAX_COMMAND_UNIT_KEYS}).
+ * Ordered keys for GET /blob: base logBaseKey first, then command-unit keys
+ * (capped at {@link MAX_COMMAND_UNIT_KEYS}, keeping the **last** keys when over).
  *
  * Unit keys come from exact graph `logKeys` when available; otherwise from
  * `unitProgresses` names plus the default {@link DEFAULT_COMMAND_UNIT_NAMES}
@@ -83,22 +130,131 @@ export function blobKeysToTry(
       const key = raw.trim();
       if (key) add(key);
     }
-    return [baseKey, ...unitKeys.slice(0, MAX_COMMAND_UNIT_KEYS)];
+    return [baseKey, ...unitKeys.slice(-MAX_COMMAND_UNIT_KEYS)];
   }
 
-  const names = new Set<string>();
+  const names: string[] = [];
+  const nameSeen = new Set<string>();
   for (const raw of commandUnitNames ?? []) {
     const name = raw.trim();
-    if (name) names.add(name);
+    if (!name || nameSeen.has(name)) continue;
+    nameSeen.add(name);
+    names.push(name);
   }
-  const defaults = DEFAULT_COMMAND_UNIT_NAMES.filter((n) => !names.has(n));
-  // Reserve room for defaults (e.g. Execute) so they are never dropped by the cap.
+  const defaults = DEFAULT_COMMAND_UNIT_NAMES.filter((n) => !nameSeen.has(n));
+  // Keep the last graph names + defaults (Execute) so late units are not dropped.
   const graphSlots = Math.max(0, MAX_COMMAND_UNIT_KEYS - defaults.length);
-  for (const name of [...[...names].slice(0, graphSlots), ...defaults]) {
+  for (const name of [...names.slice(-graphSlots), ...defaults]) {
     add(commandUnitLogKey(baseKey, name));
   }
 
   return [baseKey, ...unitKeys];
+}
+
+/** Extract a human label from a blob key for section headers. */
+export function commandUnitLabel(key: string): string {
+  const marker = "-commandUnit:";
+  const idx = key.indexOf(marker);
+  return idx >= 0 ? key.slice(idx + marker.length) : "step";
+}
+
+/** Keep the last `n` lines of text (diagnose-style tail). */
+export function tailLogLines(text: string, n: number): string {
+  if (n <= 0) return text;
+  const lines = text.split("\n");
+  if (lines.length <= n) return text;
+  return `... (${lines.length - n} lines omitted) ...\n` + lines.slice(-n).join("\n");
+}
+
+function formatUnitSection(key: string, body: string): string {
+  return `--- commandUnit: ${commandUnitLabel(key)} ---\n${body}`;
+}
+
+/**
+ * Map failed unit names to blob keys. Prefers matches already in `unitKeys`,
+ * otherwise synthesizes `${base}-commandUnit:${name}` so a failed unit missing
+ * from a truncated logKeys list is still tried.
+ */
+export function failedUnitKeysToTry(
+  baseKey: string,
+  unitKeys: string[],
+  failedUnitNames?: string[],
+): string[] {
+  if (!failedUnitNames?.length) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of failedUnitNames) {
+    const name = raw.trim();
+    if (!name) continue;
+    const synthesized = commandUnitLogKey(baseKey, name);
+    const match =
+      unitKeys.find((k) => k === synthesized) ??
+      unitKeys.find((k) => k.endsWith(`-commandUnit:${name}`)) ??
+      synthesized;
+    if (seen.has(match)) continue;
+    seen.add(match);
+    out.push(match);
+  }
+  return out;
+}
+
+/** Snippet fetch order: failed units first, then remaining keys from the end. */
+export function snippetUnitKeyOrder(
+  baseKey: string,
+  unitKeys: string[],
+  failedUnitNames?: string[],
+): string[] {
+  const failed = failedUnitKeysToTry(baseKey, unitKeys, failedUnitNames);
+  const failedSet = new Set(failed);
+  const restReversed = [...unitKeys].reverse().filter((k) => !failedSet.has(k));
+  return [...failed, ...restReversed];
+}
+
+/**
+ * Full-mode fetch order: failed units first (including synthesized keys outside
+ * the capped unitKeys list), then the remaining capped unit keys.
+ * Keeps diagnose→get escalation honest when the failure was early and capped away.
+ */
+export function fullModeUnitKeyOrder(
+  baseKey: string,
+  unitKeys: string[],
+  failedUnitNames?: string[],
+): string[] {
+  const failed = failedUnitKeysToTry(baseKey, unitKeys, failedUnitNames);
+  const failedSet = new Set(failed);
+  return [...failed, ...unitKeys.filter((k) => !failedSet.has(k))];
+}
+
+/**
+ * Shape a resolveLogContent snippet for diagnose without double-trimming.
+ *
+ * When the resolver already applied {@link tailLogLines}, preserve the unit
+ * header / omitted marker and report `total_lines` as the pre-trim unit size
+ * (omitted + kept). Only apply a fresh tail when the text has no marker.
+ */
+export function packageSnippetForDiagnose(
+  text: string,
+  maxLines: number,
+): string | { log_snippet: string; total_lines: number; truncated: true } {
+  const omittedMatch = text.match(OMITTED_LINES_RE);
+  if (omittedMatch && omittedMatch.index !== undefined) {
+    const omitted = Number(omittedMatch[1]);
+    const after = text.slice(omittedMatch.index + omittedMatch[0].length).replace(/^\n/, "");
+    const kept = after.length === 0 ? 0 : after.split("\n").length;
+    return {
+      log_snippet: text,
+      total_lines: omitted + kept,
+      truncated: true,
+    };
+  }
+
+  const lines = text.split("\n");
+  if (lines.length <= maxLines) return text;
+  return {
+    log_snippet: tailLogLines(text, maxLines),
+    total_lines: lines.length,
+    truncated: true,
+  };
 }
 
 /** Only empty bodies and 404s should advance to the next blob key. */
@@ -416,14 +572,16 @@ function extractZipEntriesFromLocalHeaders(buf: Buffer): ZipEntry[] {
 }
 
 /**
- * Decompress a downloaded blob — handles gzip, zip, or plain text.
+ * Decompress a fully-buffered blob — handles gzip, zip, or plain text.
+ * Callers should pass {@link takeUtf8Tail} afterward when only a trailing window is needed.
  */
 function decompressBlob(buf: Buffer): string {
   if (buf.length === 0) return "";
 
   // Gzip
   if (buf[0] === GZIP_MAGIC_0 && buf[1] === GZIP_MAGIC_1) {
-    const decompressed = gunzipSync(buf, { maxOutputLength: DEFAULT_MAX_LOG_BYTES * 10 });
+    // Allow large inflate then tail — streaming path is preferred for gzip GET /blob.
+    const decompressed = gunzipSync(buf, { maxOutputLength: ABSOLUTE_ZIP_WIRE_BYTES });
     return decompressed.toString("utf-8");
   }
 
@@ -437,6 +595,273 @@ function decompressBlob(buf: Buffer): string {
 
   // Plain text
   return buf.toString("utf-8");
+}
+
+/** Sliding window of the last `maxBytes` of a byte stream. */
+class ByteTail {
+  private chunks: Buffer[] = [];
+  private size = 0;
+
+  constructor(private readonly maxBytes: number) {}
+
+  push(chunk: Buffer): void {
+    if (chunk.length === 0) return;
+    if (chunk.length >= this.maxBytes) {
+      this.chunks = [chunk.subarray(chunk.length - this.maxBytes)];
+      this.size = this.maxBytes;
+      return;
+    }
+    this.chunks.push(chunk);
+    this.size += chunk.length;
+    while (this.size > this.maxBytes && this.chunks.length > 0) {
+      const overflow = this.size - this.maxBytes;
+      const head = this.chunks[0]!;
+      if (head.length <= overflow) {
+        this.chunks.shift();
+        this.size -= head.length;
+      } else {
+        this.chunks[0] = head.subarray(overflow);
+        this.size = this.maxBytes;
+        break;
+      }
+    }
+  }
+
+  toUtf8(): string {
+    if (this.size === 0) return "";
+    return takeUtf8Tail(Buffer.concat(this.chunks, this.size), this.size);
+  }
+}
+
+/** Decode a byte window as UTF-8, dropping a leading partial multi-byte char if needed. */
+function takeUtf8Tail(buf: Buffer, maxBytes: number): string {
+  const slice = buf.length > maxBytes ? buf.subarray(buf.length - maxBytes) : buf;
+  let start = 0;
+  while (start < slice.length && start < 4 && (slice[start]! & 0xc0) === 0x80) start++;
+  return slice.subarray(start).toString("utf-8");
+}
+
+async function readAtLeast(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  minBytes: number,
+): Promise<Buffer> {
+  const parts: Buffer[] = [];
+  let total = 0;
+  while (total < minBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    parts.push(Buffer.from(value));
+    total += value.byteLength;
+  }
+  return parts.length ? Buffer.concat(parts, total) : Buffer.alloc(0);
+}
+
+async function readRemaining(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: Buffer,
+  maxTotal: number,
+): Promise<Buffer> {
+  const parts: Buffer[] = prefix.length ? [prefix] : [];
+  let total = prefix.length;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    total += value.byteLength;
+    if (total > maxTotal) {
+      await reader.cancel().catch(() => undefined);
+      throw logTooLargeError(total, maxTotal);
+    }
+    parts.push(Buffer.from(value));
+  }
+  return parts.length ? Buffer.concat(parts, total) : Buffer.alloc(0);
+}
+
+function webReaderToNodeReadable(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: Buffer,
+  options?: {
+    signal?: AbortSignal;
+    maxWireBytes?: number;
+    onWireBytes?: (total: number) => void;
+  },
+): Readable {
+  let prefixSent = prefix.length === 0;
+  let wireBytes = prefix.length;
+  const maxWire = options?.maxWireBytes;
+  return new Readable({
+    async read() {
+      try {
+        throwIfAborted(options?.signal);
+        if (!prefixSent) {
+          prefixSent = true;
+          if (maxWire !== undefined && wireBytes > maxWire) {
+            throw logTooLargeError(wireBytes, maxWire);
+          }
+          options?.onWireBytes?.(wireBytes);
+          this.push(prefix);
+          return;
+        }
+        const { done, value } = await reader.read();
+        if (done) {
+          this.push(null);
+          return;
+        }
+        if (value && value.byteLength) {
+          wireBytes += value.byteLength;
+          if (maxWire !== undefined && wireBytes > maxWire) {
+            await reader.cancel().catch(() => undefined);
+            throw logTooLargeError(wireBytes, maxWire);
+          }
+          options?.onWireBytes?.(wireBytes);
+          this.push(Buffer.from(value));
+          return;
+        }
+        this.push(Buffer.alloc(0));
+      } catch (err) {
+        this.destroy(err instanceof Error ? err : new Error(String(err)));
+      }
+    },
+  });
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new Error("Log download cancelled");
+  }
+}
+
+/** Cancel a body reader when `signal` aborts so stalled `read()` calls unblock. */
+function bindAbortToReader(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal?: AbortSignal,
+): () => void {
+  if (!signal) return () => undefined;
+  const onAbort = () => {
+    void reader.cancel(signal.reason).catch(() => undefined);
+  };
+  if (signal.aborted) {
+    onAbort();
+    return () => undefined;
+  }
+  signal.addEventListener("abort", onAbort, { once: true });
+  return () => signal.removeEventListener("abort", onAbort);
+}
+
+async function streamGunzipToTail(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: Buffer,
+  tailBytes: number,
+  maxWireBytes: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  throwIfAborted(signal);
+  if (prefix.length > maxWireBytes) throw logTooLargeError(prefix.length, maxWireBytes);
+
+  const unbind = bindAbortToReader(reader, signal);
+  const tail = new ByteTail(tailBytes);
+  const gunzip = createGunzip();
+  gunzip.on("data", (chunk: Buffer) => tail.push(chunk));
+
+  try {
+    await pipeline(
+      webReaderToNodeReadable(reader, prefix, { signal, maxWireBytes }),
+      gunzip,
+    );
+    throwIfAborted(signal);
+    return tail.toUtf8();
+  } finally {
+    unbind();
+  }
+}
+
+async function streamPlainToTail(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  prefix: Buffer,
+  tailBytes: number,
+  maxWireBytes: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  throwIfAborted(signal);
+  const unbind = bindAbortToReader(reader, signal);
+  const tail = new ByteTail(tailBytes);
+  tail.push(prefix);
+  let wireBytes = prefix.length;
+  if (wireBytes > maxWireBytes) {
+    unbind();
+    throw logTooLargeError(wireBytes, maxWireBytes);
+  }
+  try {
+    for (;;) {
+      throwIfAborted(signal);
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+      wireBytes += value.byteLength;
+      if (wireBytes > maxWireBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw logTooLargeError(wireBytes, maxWireBytes);
+      }
+      tail.push(Buffer.from(value));
+    }
+    throwIfAborted(signal);
+    return tail.toUtf8();
+  } finally {
+    unbind();
+  }
+}
+
+/**
+ * Stream a GET /blob Response body: sliding 500KB (or `tailBytes`) for gzip/plain;
+ * ZIP is buffered up to {@link ABSOLUTE_BLOB_WIRE_BYTES} then decompressed and tailed.
+ * Gzip/plain also enforce the same compressed wire ceiling and honor `signal`.
+ */
+async function streamBlobResponseToText(
+  response: Response,
+  tailBytes: number,
+  signal?: AbortSignal,
+  maxWireBytes: number = ABSOLUTE_BLOB_WIRE_BYTES,
+): Promise<string> {
+  throwIfAborted(signal);
+  if (!response.body) {
+    const buf = Buffer.from(await response.arrayBuffer());
+    throwIfAborted(signal);
+    if (buf.length === 0) return "";
+    if (buf.length > maxWireBytes) throw logTooLargeError(buf.length, maxWireBytes);
+    return takeUtf8Tail(Buffer.from(decompressBlob(buf), "utf-8"), tailBytes);
+  }
+
+  const reader = response.body.getReader();
+  const unbindPeek = bindAbortToReader(reader, signal);
+  let peeked: Buffer;
+  try {
+    peeked = await readAtLeast(reader, 4);
+  } finally {
+    unbindPeek();
+  }
+  // reader.cancel() on abort looks like EOF — do not treat that as an empty blob.
+  throwIfAborted(signal);
+  if (peeked.length === 0) return "";
+
+  if (peeked[0] === GZIP_MAGIC_0 && peeked[1] === GZIP_MAGIC_1) {
+    return streamGunzipToTail(reader, peeked, tailBytes, maxWireBytes, signal);
+  }
+
+  if (peeked.length >= 4 && peeked.readUInt32LE(0) === ZIP_MAGIC) {
+    const unbindZip = bindAbortToReader(reader, signal);
+    try {
+      const full = await readRemaining(reader, peeked, maxWireBytes);
+      throwIfAborted(signal);
+      return takeUtf8Tail(Buffer.from(decompressBlob(full), "utf-8"), tailBytes);
+    } finally {
+      unbindZip();
+    }
+  }
+
+  return streamPlainToTail(reader, peeked, tailBytes, maxWireBytes, signal);
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -516,40 +941,47 @@ export async function resolveLogDownloadUrl(
   return rewriteDownloadUrlIfNeeded(client, blobLink);
 }
 
-/** GET /blob for one key; returns the decompressed raw text ("" when empty). */
+/**
+ * GET /blob for one key via {@link HarnessClient.requestStream}.
+ * Streams the body and keeps only the last `tailBytes` of decompressed text
+ * (default 500KB). Compressed wire is capped at {@link ABSOLUTE_BLOB_WIRE_BYTES};
+ * `bodyTimeoutMs` aborts stalled body reads (requestStream only times out headers).
+ */
 async function fetchBlobText(
   client: HarnessClient,
   key: string,
-  maxBytes: number,
+  tailBytes: number,
   signal?: AbortSignal,
+  bodyTimeoutMs: number = DEFAULT_BLOB_BODY_TIMEOUT_MS,
+  maxWireBytes: number = ABSOLUTE_BLOB_WIRE_BYTES,
 ): Promise<string> {
-  log.debug("Requesting log blob", { key });
-  // maxResponseBytes short-circuits on Content-Length and caps while streaming so
-  // oversized blobs never fully buffer (see harness-client readResponseBuffer).
-  const arrayBuf = await client.request<ArrayBuffer>({
+  log.debug("Requesting log blob (stream)", { key, tailBytes, bodyTimeoutMs, maxWireBytes });
+  const bodySignal = AbortSignal.timeout(bodyTimeoutMs);
+  const combined = signal ? AbortSignal.any([signal, bodySignal]) : bodySignal;
+  const response = await client.requestStream({
     method: "GET",
     path: "/gateway/log-service/blob",
     params: { key },
-    signal,
-    responseType: "buffer",
-    maxResponseBytes: maxBytes,
+    signal: combined,
     retryPolicy: "safe",
   });
 
-  // Defense in depth for clients/mocks that ignore maxResponseBytes.
-  if (arrayBuf.byteLength > maxBytes) {
-    throw logTooLargeError(arrayBuf.byteLength, maxBytes);
+  try {
+    const text = await streamBlobResponseToText(response, tailBytes, combined, maxWireBytes);
+    log.debug("Streamed blob tail", {
+      key,
+      tailChars: text.length,
+      magic: text.length >= 4 ? Buffer.from(text.slice(0, 4)).toString("hex") : "empty",
+    });
+    return text;
+  } catch (err) {
+    if (bodySignal.aborted && !signal?.aborted) {
+      throw new Error(
+        `Log blob body timed out after ${bodyTimeoutMs}ms while streaming key=${key}`,
+      );
+    }
+    throw err;
   }
-
-  const buf = Buffer.from(arrayBuf);
-  log.debug("Downloaded blob", {
-    bytes: buf.length,
-    magic: buf.length >= 4 ? buf.subarray(0, 4).toString("hex") : "empty",
-    key,
-  });
-
-  if (buf.length === 0) return "";
-  return decompressBlob(buf);
 }
 
 function logTooLargeError(bytes: number, maxBytes: number): Error {
@@ -561,18 +993,23 @@ function logTooLargeError(bytes: number, maxBytes: number): Error {
 /**
  * Resolve execution log content from the Harness log-service.
  *
- * Uses GET /blob (single log key per request). Response size is capped via
- * `maxResponseBytes` (Content-Length short-circuit + streamed hard cap).
+ * Uses GET /blob (single log key per request) via a streamed body read. Each
+ * blob keeps only the last {@link LogResolveOptions.maxLogSizeBytes} (default
+ * 500KB) of decompressed text — oversized units are tailed at the byte layer,
+ * not rejected (until the compressed wire ceiling). Body reads are bounded by
+ * {@link LogResolveOptions.bodyTimeoutMs}.
  *
  * If the step `logBaseKey` has content (e.g. CI steps) it is returned after a
- * single request. Otherwise every command-unit key is fetched and merged in
- * timestamp order — the same content the zip download contains — so a CD step
- * whose error is in a later unit (e.g. Helm "Install / Upgrade" after
- * "Fetch Files") is not reduced to its first non-empty unit.
+ * single request. Otherwise command-unit keys are resolved from `logKeys` or
+ * `commandUnitNames` (else `Execute`):
  *
- * Unit keys come from `logKeys` (exact, from the graph) or `commandUnitNames`
- * (`unitProgresses`); callers passing neither (e.g. `harness_get` with an
- * explicit prefix only) fall back to the default unit name `Execute`.
+ * - **snippet** (diagnose): prefer `failedUnitNames` from graph status, else
+ *   walk unit keys from the end; skip empty/404; return first hit (labeled +
+ *   line-tailed). Covers marked failures, late failures, and early failures
+ *   where later units never ran.
+ * - **full** (harness_get): labeled sections for every non-empty unit with
+ *   **no line soft-trim** so diagnose→get escalation can recover early errors
+ *   that snippets drop. Per-key 500KB byte tail still applies for memory.
  *
  * For a signed zip download URL only, use {@link resolveLogDownloadUrl}.
  *
@@ -583,8 +1020,11 @@ export async function resolveLogContent(
   key: string,
   options?: LogResolveOptions,
 ): Promise<string> {
-  const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
-  const maxMergedBytes = maxBytes * MAX_MERGED_LOG_SIZE_MULTIPLIER;
+  const tailBytes = options?.maxLogSizeBytes ?? DEFAULT_BLOB_TAIL_BYTES;
+  const bodyTimeoutMs = options?.bodyTimeoutMs ?? DEFAULT_BLOB_BODY_TIMEOUT_MS;
+  const maxWireBytes = options?.maxWireBytes ?? ABSOLUTE_BLOB_WIRE_BYTES;
+  const mode: LogResolveMode = options?.mode ?? "full";
+  const snippetLines = options?.snippetLines ?? DEFAULT_SNIPPET_LINES;
   const signal = options?.signal;
 
   if (signal?.aborted) throw new Error("Log download cancelled");
@@ -597,7 +1037,14 @@ export async function resolveLogContent(
   const fetchKey = async (candidate: string): Promise<string> => {
     if (signal?.aborted) throw new Error("Log download cancelled");
     try {
-      const raw = await fetchBlobText(client, candidate, maxBytes, signal);
+      const raw = await fetchBlobText(
+        client,
+        candidate,
+        tailBytes,
+        signal,
+        bodyTimeoutMs,
+        maxWireBytes,
+      );
       if (raw.trim()) return raw;
       sawEmpty = true;
       log.debug("Log blob empty", { key: candidate });
@@ -617,28 +1064,45 @@ export async function resolveLogContent(
   const baseRaw = await fetchKey(baseKey!);
   if (baseRaw) {
     const text = parseLogLines(baseRaw).trim();
-    if (text) return text;
-  }
-
-  const unitRaws: string[] = [];
-  let mergedBytes = 0;
-  for (const candidate of unitKeys) {
-    const raw = await fetchKey(candidate);
-    if (!raw) continue;
-    mergedBytes += Buffer.byteLength(raw);
-    if (mergedBytes > maxMergedBytes) throw logTooLargeError(mergedBytes, maxMergedBytes);
-    unitRaws.push(raw);
-  }
-
-  if (unitRaws.length > 0) {
-    const text = parseLogLines(unitRaws.join("\n")).trim();
     if (text) {
-      log.info("Resolved logs by merging command-unit blob keys", {
+      return mode === "snippet" ? tailLogLines(text, snippetLines) : text;
+    }
+  }
+
+  if (mode === "snippet") {
+    const order = snippetUnitKeyOrder(baseKey!, unitKeys, options?.failedUnitNames);
+    const failedSet = new Set(failedUnitKeysToTry(baseKey!, unitKeys, options?.failedUnitNames));
+    for (const candidate of order) {
+      const raw = await fetchKey(candidate);
+      if (!raw) continue;
+      const text = parseLogLines(raw).trim();
+      if (!text) continue;
+      log.info("Resolved logs via command-unit key", {
         baseKey: key,
-        keysFetched: unitKeys.length,
-        keysWithContent: unitRaws.length,
+        key: candidate,
+        reason: failedSet.has(candidate) ? "failed_unit_status" : "last_non_empty",
       });
-      return text;
+      return formatUnitSection(candidate, tailLogLines(text, snippetLines));
+    }
+  } else {
+    const order = fullModeUnitKeyOrder(baseKey!, unitKeys, options?.failedUnitNames);
+    const sections: string[] = [];
+    for (const candidate of order) {
+      const raw = await fetchKey(candidate);
+      if (!raw) continue;
+      const text = parseLogLines(raw).trim();
+      if (!text) continue;
+      // No per-unit / overall line soft-trim — harness_get must return the full
+      // recovered unit text (within the per-key byte tail) for escalation.
+      sections.push(formatUnitSection(candidate, text));
+    }
+    if (sections.length > 0) {
+      log.info("Resolved logs as labeled command-unit sections", {
+        baseKey: key,
+        keysFetched: order.length,
+        keysWithContent: sections.length,
+      });
+      return sections.join("\n\n");
     }
   }
 
