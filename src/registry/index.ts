@@ -721,7 +721,8 @@ export class Registry {
     // Pass registry-resolved accountId so hooks do not depend on client.account,
     // which is the process placeholder in multi-tenant chat MCP.
     if (spec.preflight) {
-      await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
+      const answered = await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
+      if (answered) return answered.result;
     }
 
     // When explicit resource_scope resolved org/project from config defaults,

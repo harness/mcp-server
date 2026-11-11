@@ -400,12 +400,13 @@ export interface EndpointSpec {
    * Optional preflight hook that runs before the request is sent.
    * Use for server-side invariants (e.g. duplicate-check before creating a
    * resource). Throw from the hook to block the operation — the error message
-   * is surfaced directly to the agent.
+   * is surfaced directly to the agent. Return `{ result }` when the hook already
+   * knows the answer; the request is then not sent and the extractor does not run.
    *
    * Typed loosely to avoid a circular import back into the registry/dispatcher.
    * The runtime shape is `{ client: HarnessClient, input, registry: Registry, signal? }`.
    */
-  preflight?: (ctx: PreflightContext) => Promise<void>;
+  preflight?: (ctx: PreflightContext) => Promise<void | { result: unknown }>;
   /**
    * When true, the MCP layer controls ELK→Mongo fallback for this endpoint:
    *  1. First request sent with `enforce_elasticsearch=true` (ELK path).
