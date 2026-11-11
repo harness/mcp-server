@@ -263,6 +263,8 @@ export type PathBuilderConfig = {
   HARNESS_PROJECT?: string;
   HARNESS_APPSEC_BASE_URL?: string;
   HARNESS_APPSEC_UI_URL?: string;
+  /** Harness UI/API base URL, for path builders that compose deep links. */
+  HARNESS_BASE_URL?: string;
 };
 
 /**
