@@ -377,6 +377,11 @@ export interface EndpointSpec {
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**
+   * Replaces the default warning line in this operation's approval prompt, when the default is wrong
+   * for it (e.g. a delete that archives: "cannot be undone" would misinform the user).
+   */
+  confirmNote?: string;
+  /**
    * Declarative input expansion rules. When present, matching shorthand keys
    * in user input are expanded into full nested structures before resolution.
    */
