@@ -393,7 +393,7 @@ function fmeDeleteGovernanceBody(input: Record<string, unknown>): Record<string,
 }
 
 const FME_DELETE_GOVERNANCE_NOTE =
-  " Optional params.title and params.comment are recorded with the change; they are required when the project enforces titles and comments (400 Missing required title/comment otherwise).";
+  " Optional params.title and params.comment are recorded with the change.";
 
 const fmeSegmentDefinitionCreateSchema: BodySchema = {
   description: "Create a segment definition in an environment. Omit the body (or send {}) to create an empty/default shell.",
@@ -849,7 +849,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Delete a feature flag from a workspace (legacy) or org_id+project_id-scoped project (Harness-native)." +
-            " Harness-native only: optional params.title and params.comment are recorded with the change; they are required when the project enforces titles and comments (400 Missing required title/comment otherwise).",
+            " Harness-native only: optional params.title and params.comment are recorded with the change.",
         },
         update: {
           method: "PATCH",
@@ -1191,7 +1191,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Delete a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id." +
-            FME_DELETE_GOVERNANCE_NOTE,
+            FME_DELETE_GOVERNANCE_NOTE +
+            " They are required when the project enforces titles and comments (400 Missing required title/comment otherwise).",
         },
       },
       executeActions: {
