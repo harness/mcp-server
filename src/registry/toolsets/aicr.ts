@@ -31,6 +31,7 @@ import {
   aicrRepositoryCompact,
   aicrRepositoryListExtract,
   aicrReviewExtract,
+  aicrReviewStatusExtract,
   aicrRuleCompact,
   aicrRuleCreateExtract,
   aicrRuleExtract,
@@ -1084,7 +1085,10 @@ function refuseUrlOnAicrWrites(toolset: ToolsetDefinition): ToolsetDefinition {
     guard(resource.operations.create);
     guard(resource.operations.update);
     guard(resource.operations.delete);
-    for (const action of Object.values(resource.executeActions ?? {})) guard(action);
+    // Read actions (review_status) change nothing, so they take a URL like the other reads.
+    for (const action of Object.values(resource.executeActions ?? {})) {
+      if (action.operationPolicy?.risk !== "read") guard(action);
+    }
   }
   return toolset;
 }
@@ -1093,7 +1097,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
   name: "aicr",
   displayName: "AI Code Review",
   description:
-    "AI Code Review for Harness Code pull requests: review, findings (dismiss and undo), review runs, repositories, merge gates, team rules, coding conventions and settings",
+    "AI Code Review for Harness Code pull requests: review (get, request, status), findings (dismiss and undo), review runs, repositories, merge gates, team rules, coding conventions and settings",
   optIn: true,
   resources: [
     {
@@ -1101,7 +1105,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       displayName: "AI Code Review",
       description:
         "Latest AI Code Review of a pull request: criteria checks, overview (risk, status, summary), finding counts, and up to 100 open issues. " +
-        "Get only; pass repo_id + pr_number (with the repo's org_id/project_id) or a Harness PR URL. " +
+        "Pass repo_id + pr_number (with the repo's org_id/project_id) or a Harness PR URL. " +
+        "Execute request_review to review the PR's current commit now, and review_status to follow it. " +
         "Grade, score, and per-issue gate results are not exposed by the API yet.",
       toolset: "aicr",
       scope: "account",
@@ -1135,6 +1140,43 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           responseExtractor: aicrReviewExtract,
           description:
             "Get the latest AI Code Review. If the overview or findings fail to load, the error is reported under `unavailable` and the checks are still returned.",
+          paramsSchema: { fields: PR_PARAM_FIELDS },
+        },
+      },
+      executeActions: {
+        request_review: {
+          method: "POST",
+          path: `${AICR_BASE}/pullreqs/{prNumber}/review/start`,
+          pathBuilder: (input) =>
+            `${AICR_BASE}/pullreqs/${aicrPrNumber(input)}/review/start`,
+          // Starts the repo's AI Code Review pipeline as the caller. A retry after a lost response
+          // could start a second pipeline, so it is never retried.
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: aicrNamedRepoPreflight(aicrPrNumber),
+          bodyBuilder: hoistAicrRepoPath,
+          queryParams: { repo_path: "repo_path" },
+          responseExtractor: aicrReviewStatusExtract,
+          actionDescription:
+            "Start an AI Code Review of the pull request's current commit, run by the repo's AI Code Review pipeline as you. " +
+            "Works only for an open PR in a project repository with AI Code Review enabled. " +
+            "If a review of that commit is already running, that one is returned and no new one starts. " +
+            "Returns status running with the run; follow it with review_status.",
+          paramsSchema: { fields: PR_PARAM_FIELDS },
+        },
+        review_status: {
+          method: "GET",
+          path: `${AICR_BASE}/pullreqs/{prNumber}/review/status`,
+          pathBuilder: (input) =>
+            `${AICR_BASE}/pullreqs/${aicrPrNumber(input)}/review/status`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          preflight: aicrNamedRepoPreflight(aicrPrNumber),
+          bodyBuilder: hoistAicrRepoPath,
+          queryParams: { repo_path: "repo_path" },
+          responseExtractor: aicrReviewStatusExtract,
+          actionDescription:
+            "Status of the pull request's latest review run: running, success, failure, or none. " +
+            "Read-only, takes a Harness PR URL. run.head_sha is the commit reviewed; if the PR has newer commits, request_review again. " +
+            "A running review whose pipeline has ended is marked failed here, when you can edit reviews.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
         },
       },
@@ -1313,7 +1355,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrRunGetExtract,
           description:
-            "Get one review run by run_id; use it to poll a run's status.",
+            "Get one review run by run_id. To follow a review started with request_review, use aicr_review review_status.",
           paramsSchema: {
             fields: [
               ...REPO_PARAM_FIELDS,

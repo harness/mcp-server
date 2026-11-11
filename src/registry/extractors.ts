@@ -2687,6 +2687,39 @@ export function aicrRunCompact(item: Record<string, unknown>): Record<string, un
   return pickPresent(item, AICR_RUN_FIELDS);
 }
 
+const AICR_REVIEW_STATUS_CALL =
+  'harness_execute(resource_type="aicr_review", action="review_status") with the same repo and pr_number';
+
+/** What to do next for each on-demand review status. */
+const AICR_REVIEW_STATUS_NOTES: Record<string, string> = {
+  none:
+    'No AI Code Review run for this pull request yet. harness_execute(resource_type="aicr_review", action="request_review") starts one.',
+  running:
+    `The review is running. Check again with ${AICR_REVIEW_STATUS_CALL} until status is success or failure.`,
+  success:
+    'The review finished. Read it with harness_get(resource_type="aicr_review"). run.head_sha is the commit it reviewed.',
+  failure:
+    "The review did not finish: run.status and run.error_message say why. request_review starts a new one.",
+};
+
+/**
+ * `POST /pullreqs/{n}/review/start` and `GET /pullreqs/{n}/review/status` → `{pr_number, status?, run?}`.
+ * `status` (running, success, failure) is absent until a review has been started.
+ */
+export function aicrReviewStatusExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const r = asRecord(raw) ?? {};
+  const status = typeof r.status === "string" && r.status ? r.status : "none";
+  const run = isRecord(r.run) ? aicrRunCompact(aicrRunView(r.run) as Record<string, unknown>) : undefined;
+  const note = AICR_REVIEW_STATUS_NOTES[status];
+  return {
+    pr_number: r.pr_number,
+    status,
+    ...(run ? { run } : {}),
+    ...(note ? { note } : {}),
+    ...aicrLink(input),
+  };
+}
+
 /**
  * `GET /prs` rows. State, draft, and branch fields are always zero values
  * (the AICR store has no such columns), so they are dropped.

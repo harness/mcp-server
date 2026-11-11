@@ -171,10 +171,13 @@ describe("aicr toolset registration", () => {
         else writes[`${res.resourceType}.${op}`] = spec?.operationPolicy;
       }
       for (const [action, spec] of Object.entries(res.executeActions ?? {})) {
-        writes[`${res.resourceType}.${action}`] = spec.operationPolicy;
+        if (spec.operationPolicy?.risk === "read") expect(spec.operationPolicy.retryPolicy).toBe("safe");
+        else writes[`${res.resourceType}.${action}`] = spec.operationPolicy;
       }
     }
     expect(writes).toEqual({
+      // Starts the review pipeline; a retry could start a second one.
+      "aicr_review.request_review": { risk: "low_write", retryPolicy: "do_not_retry" },
       // Dismissing can let a PR pass the gate, so it needs confirmation; undo only reopens.
       "aicr_finding.dismiss": { risk: "medium_write", retryPolicy: "do_not_retry" },
       "aicr_finding.undo_dismiss": { risk: "low_write", retryPolicy: "do_not_retry" },
@@ -210,12 +213,13 @@ describe("aicr toolset registration", () => {
         writes++;
         await expect(reg.dispatch(client, res.resourceType, op, { ...input }), `${res.resourceType}.${op}`).rejects.toThrow(/don't take a Harness URL/);
       }
-      for (const action of Object.keys(res.executeActions ?? {})) {
+      for (const [action, spec] of Object.entries(res.executeActions ?? {})) {
+        if (spec.operationPolicy?.risk === "read") continue;
         writes++;
         await expect(reg.dispatchExecute(client, res.resourceType, action, { ...input }), `${res.resourceType}.${action}`).rejects.toThrow(/don't take a Harness URL/);
       }
     }
-    expect(writes).toBe(13);
+    expect(writes).toBe(14);
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -896,6 +900,49 @@ describe("aicr_run", () => {
     expect(compact.config).toBeUndefined();
     expect(compact.pullreq_id).toBeUndefined();
     expect(compact).toMatchObject({ id: RUN.id, status: "success", head_sha: RUN.head_sha, diff_type: "commit" });
+  });
+});
+
+describe("aicr_review request_review / review_status", () => {
+  const RUNNING = { id: RUN_ID, pullreq_id: 2521, status: "running", head_sha: "abc123", pipeline_ref: "exec-1", config: { x: 1 } };
+  const exists = (body: unknown) => (opts: RequestOpts) =>
+    opts.path.startsWith("/code/api/v1/repos/") ? { identifier: "aicr-runs-fixtures" } : body;
+
+  it("starts a review: POST with repo_path, no body, never retried, and says how to follow it", async () => {
+    const { client, request } = makeClient(exists({ pr_number: 7, status: "running", run: RUNNING }));
+    const result = await registry().dispatchExecute(client, "aicr_review", "request_review", { ...SCOPE, pr_number: 7 }) as Record<string, unknown>;
+    const start = request.mock.calls.map((c) => c[0]).find((o) => o.path.endsWith("/review/start"))!;
+    expect(start).toMatchObject({ method: "POST", path: "/gateway/aicr/api/v1/pullreqs/7/review/start", params: { repo_path: REPO_PATH }, retryPolicy: "do_not_retry" });
+    expect(start.body).toBeUndefined();
+    expect(result).toMatchObject({ pr_number: 7, status: "running", run: { id: RUN_ID, status: "running", head_sha: "abc123" } });
+    expect((result.run as Record<string, unknown>).config).toBeUndefined();
+    expect(result.note).toMatch(/review_status/);
+  });
+
+  it("checks a typed repo exists before starting", async () => {
+    const { client, request } = makeClient((opts) => {
+      if (opts.path.startsWith("/code/api/v1/repos/")) throw new HarnessApiError("Not Found", 404);
+      return {};
+    });
+    await expect(registry().dispatchExecute(client, "aicr_review", "request_review", { ...SCOPE, pr_number: 7 })).rejects.toThrow(/No repository/);
+    expect(request.mock.calls.some((c) => c[0].path.endsWith("/review/start"))).toBe(false);
+  });
+
+  it("reads the status with a GET, takes a URL, and points to request_review when there is no run", async () => {
+    const url = `https://qa0.harness.io/ng/account/${ACCOUNT}/module/code/orgs/code/projects/DeepSourceAICR/repos/aicr-runs-fixtures/pulls/7`;
+    const { client, request } = makeClient(exists({ pr_number: 7 }));
+    const result = await registry().dispatchExecute(client, "aicr_review", "review_status", { ...SCOPE, pr_number: 7, url }) as Record<string, unknown>;
+    expect(request.mock.calls.at(-1)![0]).toMatchObject({ method: "GET", path: "/gateway/aicr/api/v1/pullreqs/7/review/status", params: { repo_path: REPO_PATH } });
+    expect(result).toMatchObject({ pr_number: 7, status: "none" });
+    expect(result.note).toMatch(/request_review/);
+  });
+
+  it("reports a failed run with its error", async () => {
+    const run = { ...RUNNING, status: "error", error_message: "The review pipeline ended with status aborted." };
+    const { client } = makeClient(exists({ pr_number: 7, status: "failure", run }));
+    const result = await registry().dispatchExecute(client, "aicr_review", "review_status", { ...SCOPE, pr_number: 7 }) as Record<string, unknown>;
+    expect(result).toMatchObject({ status: "failure", run: { status: "error", error_message: run.error_message } });
+    expect(result.note).toMatch(/error_message/);
   });
 });
 
