@@ -1840,6 +1840,21 @@ describe("harness_delete", () => {
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
   });
 
+  it("uses the operation's confirmNote in the approval prompt, else the default warning", async () => {
+    const declineServer = makeMcpServer("decline");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(declineServer, new Registry(makeConfig({ HARNESS_TOOLSETS: "aicr" })), client, makeConfig());
+    await declineServer.call("harness_delete", { resource_type: "aicr_rule", resource_id: "5" });
+    expect(declineServer.server.elicitInput.mock.calls[0][0].message).toBe(
+      'Delete aicr_rule "5"?\n\nThis archives the rule: reviews stop using it in every repository that inherits it. Update with status active restores it.',
+    );
+
+    const plain = makeMcpServer("decline");
+    registerDeleteTool(plain, registry, client, makeConfig());
+    await plain.call("harness_delete", { resource_type: "pipeline", resource_id: "my-pipe" });
+    expect(plain.server.elicitInput.mock.calls[0][0].message).toContain("This is destructive and cannot be undone.");
+  });
+
   it("deletes resource when confirmed", async () => {
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",

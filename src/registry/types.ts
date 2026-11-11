@@ -171,7 +171,8 @@ export type ToolsetName =
   | "appsec"
   | "knowledge-graph"
   | "semantic-layer"
-  | "unified-search";
+  | "unified-search"
+  | "aicr";
 
 export type ProductName = "harness" | "fme" | "appsec";
 

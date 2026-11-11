@@ -2045,8 +2045,9 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 44 of 50 toolsets are enabled. Five toolsets are opt-in and excluded from the defaults:
+By default, 44 of 51 toolsets are enabled. Seven toolsets are opt-in and excluded from the defaults:
 
+- **`aicr`** — AI Code Review results for Harness Code pull requests (review, findings, runs, reviewed PRs, enabled repositories, merge gates, team rules, coding conventions, settings; dismiss and undo a finding dismissal; enable or disable AI Code Review on a repository; set merge gates; create, update and archive team rules, and turn an inherited rule off for one repository; create, update and archive coding conventions; change the excluded and test paths, model connector and review triggers of a space or repository). Opt-in while AI Code Review is in beta.
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`appsec`** — Traceable Application & API Security (API inventory, OpenAPI specs, sample spans, sensitive data types, runtime threat activities, security events, AST scans, and inventory trends). Opt-in because it requires a dedicated `HARNESS_APPSEC_API_KEY` and targets `api.traceable.ai`.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
@@ -2129,6 +2130,7 @@ Available toolset names:
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
 | `unified-search` *(opt-in)*        | unified_search, unified_search_source                                                                                                                                                                                                                                                                        |
+| `aicr` *(opt-in)*       | aicr_review, aicr_finding, aicr_run, aicr_pull_request, aicr_repository, aicr_gate, aicr_rule, aicr_convention, aicr_setting |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_git_registration, eval_prompt, online_eval |
 | `observability-evaluations` *(opt-in)* | observability_eval                                                                                                                                                                                                                                                               |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
@@ -2155,7 +2157,7 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 50 Toolsets (44 default) |
+                | 51 Toolsets (44 default) |
                 |  274 Resource Types|
                  +--------+---------+
                           |

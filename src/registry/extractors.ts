@@ -2573,3 +2573,426 @@ export {
   sanitizeAndBoundSpanBody,
   unwrapAppSecGraphql,
 } from "./appsec/extractors.js";
+
+// ---------------------------------------------------------------------------
+// AI Code Review (AICR)
+// ---------------------------------------------------------------------------
+
+/**
+ * A PR with no completed review returns an empty 200 (`run_id: ""`), which
+ * looks like "no issues". Say so explicitly.
+ */
+export const AICR_NO_REVIEW_NOTE =
+  "No completed AI Code Review for this pull request yet, so an empty result does not mean there are no issues. " +
+  "Check harness_list(resource_type=\"aicr_run\") for a pending, running, or failed run.";
+
+/** Input keys the aicr toolset uses to pass data from request building to the extractors. */
+export const AICR_LINK_KEY = "_aicr_pr_url";
+export const AICR_OVERVIEW_KEY = "_aicr_overview";
+export const AICR_FINDINGS_KEY = "_aicr_findings";
+
+const AICR_FINDING_FIELDS = [
+  "key", "status", "severity", "category", "source", "issue_code", "language",
+  "path", "line_start", "line_end", "column_start", "column_end",
+  "title", "summary", "text", "fix", "dismissal",
+] as const;
+
+const AICR_RUN_FIELDS = [
+  "id", "status", "head_sha", "merge_base_sha", "diff_type", "from_run_id",
+  "languages", "stats", "error_message", "started", "finished", "created", "updated",
+] as const;
+
+const AICR_OVERVIEW_FIELDS = ["status", "risk", "commit_sha", "content", "error_message", "updated"] as const;
+
+function pickPresent(record: Record<string, unknown>, fields: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(
+    fields.filter((k) => record[k] !== undefined && record[k] !== null && record[k] !== "").map((k) => [k, record[k]]),
+  );
+}
+
+function aicrLink(input?: Record<string, unknown>): { openInHarness?: string } {
+  const link = input?.[AICR_LINK_KEY];
+  return typeof link === "string" ? { openInHarness: link } : {};
+}
+
+/** Drop per-agent token and cost usage from each language's run stats. */
+function aicrRunView(run: unknown): unknown {
+  if (!isRecord(run) || !isRecord(run.stats)) return run;
+  const stats = Object.fromEntries(
+    Object.entries(run.stats).map(([language, s]) => {
+      if (!isRecord(s)) return [language, s];
+      const { usage: _usage, ...rest } = s;
+      return [language, rest];
+    }),
+  );
+  return { ...run, stats };
+}
+
+/** `GET /pullreqs/{n}/runs` returns a bare array; `headerPagination` supplies the real total. */
+export function aicrRunListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const runs = Array.isArray(raw) ? raw : [];
+  return { items: runs.map(aicrRunView), total: runs.length, ...aicrLink(input) };
+}
+
+export function aicrRunGetExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const run = aicrRunView(raw);
+  return isRecord(run) ? { ...run, ...aicrLink(input) } : run;
+}
+
+/** The severities a finding list was filtered to (comma-separated or an array), lower-cased. */
+function aicrSeverityFilter(value: unknown): string[] {
+  const parts = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return parts.map((p) => String(p).trim().toLowerCase()).filter(Boolean);
+}
+
+/**
+ * `GET /pullreqs/{n}/findings` → `{run_id, counts, dismissed, findings}` for the latest successful
+ * run. Findings are paged but no pagination headers are sent. `counts` apply every filter except
+ * severity (so they still break down by severity), so the total is `counts.total`, or the sum of
+ * the chosen severities' counts.
+ */
+export function aicrFindingsExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const r = asRecord(raw) ?? {};
+  const findings = Array.isArray(r.findings) ? r.findings : [];
+  const runId = typeof r.run_id === "string" ? r.run_id : "";
+  const counts = asRecord(r.counts);
+  const severities = aicrSeverityFilter(input?.severity);
+  const total = !counts ? undefined
+    : severities.length > 0 ? severities.reduce((sum, s) => sum + (typeof counts[s] === "number" ? counts[s] : 0), 0)
+    : typeof counts.total === "number" ? counts.total : undefined;
+  const page = Number(input?.page ?? 0);
+  const size = Number(input?.size ?? 0);
+
+  return {
+    run_id: runId,
+    ...(counts ? { counts } : {}),
+    ...(typeof r.dismissed === "number" ? { dismissed: r.dismissed } : {}),
+    items: findings,
+    total: total ?? findings.length,
+    ...(total !== undefined && size > 0 ? { has_more: page * size + findings.length < total } : {}),
+    ...(runId ? {} : { note: AICR_NO_REVIEW_NOTE }),
+    ...aicrLink(input),
+  };
+}
+
+/** Static-analysis findings carry their text in `message`; it is kept only when it adds to the title. */
+export function aicrFindingCompact(item: Record<string, unknown>): Record<string, unknown> {
+  const out = pickPresent(item, AICR_FINDING_FIELDS);
+  if (typeof item.message === "string" && item.message && item.message !== item.title) out.message = item.message;
+  if (item.is_duplicate === true) out.is_duplicate = true;
+  return out;
+}
+
+export function aicrRunCompact(item: Record<string, unknown>): Record<string, unknown> {
+  return pickPresent(item, AICR_RUN_FIELDS);
+}
+
+/**
+ * `GET /prs` rows. State, draft, and branch fields are always zero values
+ * (the AICR store has no such columns), so they are dropped.
+ */
+const AICR_PR_FIELDS = ["number", "title", "repo_path", "source_sha", "author", "risk", "created", "updated"] as const;
+
+/** `GET /repos` rows are full repo settings; prompt, MCP servers, and criteria are config, not repo identity. */
+const AICR_REPOSITORY_FIELDS = [
+  "repo_path", "source", "connector_ref", "provider_repo", "has_linked_repo", "created", "updated",
+] as const;
+
+/** Bare array → `{items, total}`; `headerPagination` replaces `total` with the server's count. */
+function aicrPickList(raw: unknown, fields: readonly string[]): { items: unknown[]; total: number } {
+  const rows = Array.isArray(raw) ? raw.filter(isRecord) : [];
+  return { items: rows.map((row) => pickPresent(row, fields)), total: rows.length };
+}
+
+export function aicrPullRequestListExtract(raw: unknown): unknown {
+  return aicrPickList(raw, AICR_PR_FIELDS);
+}
+
+export function aicrRepositoryListExtract(raw: unknown): unknown {
+  return aicrPickList(raw, AICR_REPOSITORY_FIELDS);
+}
+
+export function aicrPullRequestCompact(item: Record<string, unknown>): Record<string, unknown> {
+  const author = asRecord(item.author);
+  const name = author?.display_name || author?.uid;
+  return {
+    ...pickPresent(item, ["number", "title", "repo_path", "risk", "updated"]),
+    ...(name ? { author: name } : {}),
+  };
+}
+
+export function aicrRepositoryCompact(item: Record<string, unknown>): Record<string, unknown> {
+  return pickPresent(item, ["repo_path", "source", "provider_repo", "updated"]);
+}
+
+type AicrSideCall = { ok: true; value: unknown } | { ok: false; error: string };
+
+function aicrSideCall(input: Record<string, unknown> | undefined, key: string): AicrSideCall | undefined {
+  const value = input?.[key];
+  return isRecord(value) && typeof value.ok === "boolean" ? (value as AicrSideCall) : undefined;
+}
+
+/**
+ * aicr_review.get: criteria checks from `GET /review` (the main response) merged
+ * with the overview and findings the preflight fetched. A failed side call is
+ * reported under `unavailable` rather than failing the whole review.
+ */
+export function aicrReviewExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const review = asRecord(raw) ?? {};
+  const result: Record<string, unknown> = {
+    pr_number: review.pr_number ?? input?.pr_number,
+    repo_path: input?.repo_path,
+    ...(review.source_sha ? { source_sha: review.source_sha } : {}),
+    checks: Array.isArray(review.criteria) ? review.criteria : [],
+  };
+  const unavailable: Record<string, string> = {};
+
+  const overview = aicrSideCall(input, AICR_OVERVIEW_KEY);
+  if (overview?.ok) {
+    const o = pickPresent(asRecord(overview.value) ?? {}, AICR_OVERVIEW_FIELDS);
+    // Rows written before `status` existed: the backend reads a set risk as success, else running.
+    if (Object.keys(o).length && !o.status) o.status = o.risk ? "success" : "running";
+    result.overview = o;
+  }
+  else if (overview) unavailable.overview = overview.error;
+
+  const findings = aicrSideCall(input, AICR_FINDINGS_KEY);
+  if (findings?.ok) {
+    const f = asRecord(findings.value) ?? {};
+    const all = Array.isArray(f.findings) ? f.findings.filter(isRecord) : [];
+    const counts = asRecord(f.counts);
+    if (f.run_id) result.run_id = f.run_id;
+    if (counts) result.counts = counts;
+    if (typeof f.dismissed === "number") result.dismissed = f.dismissed;
+    result.open_issues = all.filter((x) => x.status !== "dismissed").map(aicrFindingCompact);
+    // The preflight fetches one page; point to aicr_finding when the review has more.
+    if (typeof counts?.total === "number" && counts.total > all.length) result.open_issues_truncated = true;
+    if (!f.run_id) result.note = AICR_NO_REVIEW_NOTE;
+  } else if (findings) {
+    unavailable.findings = findings.error;
+  }
+
+  if (Object.keys(unavailable).length > 0) result.unavailable = unavailable;
+  return { ...result, ...aicrLink(input) };
+}
+
+/** Dismiss returns the Dismissal: finding_key, reason, note, dismissed_by, dismissed. */
+export function aicrDismissExtract(raw: unknown): unknown {
+  const d = asRecord(raw);
+  return d ? { ...d, status: "dismissed" } : raw;
+}
+
+/** Undo answers 204 with no body; report the finding as reopened. */
+export function aicrUndoDismissExtract(_raw: unknown, input?: Record<string, unknown>): unknown {
+  return { finding_key: input?.finding_key, status: "open" };
+}
+
+/**
+ * v2 onboard of one repo. A repo that fails to onboard comes back as a 200 with
+ * `repositories[0].error`; surface that as an error instead of a success.
+ */
+export function aicrEnableExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const out = asRecord(raw);
+  const repo = out && Array.isArray(out.repositories) ? asRecord(out.repositories[0]) : undefined;
+  if (!out || !repo) return raw;
+  if (typeof repo.error === "string" && repo.error !== "") {
+    throw new Error(`Enabling AI Code Review on "${repo.repo_path ?? input?.repo_path}" failed: ${repo.error}`);
+  }
+  // trigger_created is also true when an existing trigger was updated; a failed trigger comes back as `error`.
+  const settingOn = repo.setting_enabled === true;
+  return {
+    repo_path: repo.repo_path,
+    enabled: settingOn,
+    trigger_created: repo.trigger_created,
+    setting_enabled: repo.setting_enabled,
+    pipeline_created: out.pipeline_created,
+    service_account_created: out.service_account_created,
+    ...(settingOn ? {} : {
+      warning: "The pull request trigger is in place, but the repository's AI review setting could not be turned on, " +
+        "so AI Code Review is not fully enabled. Run enable again, or turn on AI review in the repository's settings.",
+    }),
+  };
+}
+
+/** v2 offboard answers 204 with no body. */
+export function aicrDisableExtract(_raw: unknown, input?: Record<string, unknown>): unknown {
+  return { repo_path: input?.repo_path, enabled: false };
+}
+
+/** Gates: the per-category thresholds only; config ids and SCM connector fields are internal. */
+export function aicrGateExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const g = asRecord(raw) ?? {};
+  const scope = input?.repo_path ? { repo_path: input.repo_path } : { space_path: input?.space_path };
+  return { ...scope, categories: Array.isArray(g.categories) ? g.categories : [] };
+}
+
+export const AICR_GATE_CATEGORIES: readonly string[] = ["security", "reliability", "complexity", "hygiene"];
+
+/**
+ * A repository with no AI Code Review config row is gated with nothing reported
+ * (aicr-server `gating.ForRepo(nil)`); its spaces' gates do not apply to it.
+ */
+export function aicrGateNoRepoConfig(repoPath: string): unknown {
+  return {
+    repo_path: repoPath,
+    categories: AICR_GATE_CATEGORIES.map((category) => ({
+      category, reported: false, fail_at: "never", org_reported: false, org_fail_at: "never", set_by: "organization",
+    })),
+    note: "This repository has no AI Code Review config of its own, so its check never fails on a finding; " +
+      "gates set on its org or project do not apply to it. aicr_repository enable creates the config.",
+  };
+}
+
+/**
+ * Rules and conventions of a space or repository. Each row belongs to a space (`space_path`) or to a
+ * repository (`repo_config_id` only). It is labelled with the named repository's repo_path only when
+ * its config id is that repository's; a by-id read can name any scope. Provider and connector fields
+ * are copied from the repo config and say nothing new. An override's own id is left out: it is
+ * changed only through execute override on the rule it overrides.
+ */
+function aicrPolicyView(raw: unknown, fields: readonly string[], input?: Record<string, unknown>): unknown {
+  const row = asRecord(raw);
+  if (!row) return raw;
+  const out = pickPresent(row, fields);
+  if (!row.space_path && row.repo_config_id != null) {
+    if (input?.repo_path && input.repo_config_id === row.repo_config_id) out.repo_path = input.repo_path;
+    else out.repo_config_id = row.repo_config_id;
+  }
+  for (const key of ["created_by", "updated_by"]) {
+    const who = asRecord(row[key]);
+    const name = who?.name || who?.uid;
+    if (name) out[key] = name;
+  }
+  if (row.inherited === true) out.inherited = true;
+  const override = asRecord(row.overridden_by);
+  if (override) out.repo_override = { enabled: override.enabled };
+  return out;
+}
+
+const AICR_RULE_FIELDS = [
+  "id", "title", "description", "enabled", "overridable", "paths", "status", "source",
+  "space_path", "overrides_id", "created", "updated",
+] as const;
+
+export function aicrRuleExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  return aicrPolicyView(raw, AICR_RULE_FIELDS, input);
+}
+
+/** `POST /rules` and `POST /conventions` answer before `space_path` is joined in; a space row lands on the space the call named. */
+function withCreatedSpacePath(out: unknown, raw: unknown, input?: Record<string, unknown>): unknown {
+  const row = asRecord(raw);
+  if (row && !row.space_path && row.space_config_id != null && typeof input?.space_path === "string") {
+    return { ...(out as Record<string, unknown>), space_path: input.space_path };
+  }
+  return out;
+}
+
+export function aicrRuleCreateExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  return withCreatedSpacePath(aicrRuleExtract(raw, input), raw, input);
+}
+
+/** `GET /rules` and `GET /conventions` are bare arrays; `headerPagination` supplies the total from `x-total`. */
+export function aicrRuleListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const rows = Array.isArray(raw) ? raw : [];
+  return { items: rows.map((r) => aicrRuleExtract(r, input)), total: rows.length };
+}
+
+export function aicrRuleCompact(item: Record<string, unknown>): Record<string, unknown> {
+  return pickPresent(item, ["id", "title", "enabled", "overridable", "status", "space_path", "repo_path", "inherited", "repo_override"]);
+}
+
+/** DELETE archives the row and answers 204. */
+export function aicrArchiveExtract(idField: "rule_id" | "convention_id") {
+  return (_raw: unknown, input?: Record<string, unknown>): unknown => ({ id: input?.[idField], status: "archived" });
+}
+
+const AICR_CONVENTION_FIELDS = [
+  "id", "title", "body", "enabled", "languages", "repos", "paths", "status", "source",
+  "space_path", "created", "updated",
+] as const;
+
+export function aicrConventionExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  return aicrPolicyView(raw, AICR_CONVENTION_FIELDS, input);
+}
+
+export function aicrConventionCreateExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  return withCreatedSpacePath(aicrConventionExtract(raw, input), raw, input);
+}
+
+export function aicrConventionListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const rows = Array.isArray(raw) ? raw : [];
+  return { items: rows.map((r) => aicrConventionExtract(r, input)), total: rows.length };
+}
+
+export function aicrConventionCompact(item: Record<string, unknown>): Record<string, unknown> {
+  return pickPresent(item, ["id", "title", "enabled", "status", "languages", "space_path", "repo_path", "inherited"]);
+}
+
+/** Prepare (aicr-bridge `writePolicy`) gives a repository with no config row of its own no rules or conventions. */
+export function aicrPolicyNoRepoConfig(kind: "rules" | "conventions", repoPath: string): unknown {
+  return {
+    items: [],
+    total: 0,
+    repo_path: repoPath,
+    note: `This repository has no AI Code Review config of its own, so its reviews use no ${kind}; ` +
+      `${kind} set on its org or project do not apply to it. aicr_repository enable creates the config.`,
+  };
+}
+
+/** The scope an AICR config value is set on; the API leaves it empty (or out) for the built-in default. */
+function aicrConfigScope(scope: unknown): string {
+  return typeof scope === "string" && scope !== "" ? scope : "default";
+}
+
+/**
+ * AICR settings of a space or repository. mcp_servers (the MCP connectors the review agent itself
+ * calls) are not shown. `resolved` is a recursive read: every value is the effective one, with the
+ * scope it is set on. Otherwise it is the scope's own row, where null (or an empty connector) inherits.
+ */
+function aicrSettingView(raw: unknown, input: Record<string, unknown> | undefined, resolved: boolean): Record<string, unknown> {
+  const c = asRecord(raw) ?? {};
+  const repo = Boolean(input?.repo_path);
+  const out: Record<string, unknown> = repo ? { repo_path: input?.repo_path } : { space_path: input?.space_path };
+
+  if (resolved) {
+    const triggersScope = asRecord(c.review_triggers_scope) ?? {};
+    out.llm_connector_ref = c.llm_connector_ref;
+    out.llm_connector_ref_scope = aicrConfigScope(c.llm_connector_ref_scope);
+    out.review_triggers = c.review_triggers;
+    out.review_triggers_scope = Object.fromEntries(
+      ["on_pr_open", "on_push", "drafts"].map((k) => [k, aicrConfigScope(triggersScope[k])]),
+    );
+    out.dismissable = c.dismissable;
+    out.dismissable_scope = aicrConfigScope(c.dismissable_scope);
+  } else {
+    if (!repo) out.llm_connector_ref = c.llm_connector_ref || null;
+    out.review_triggers = c.review_triggers;
+    out.dismissable = c.dismissable ?? null;
+  }
+  out.paths = (Array.isArray(c.paths) ? c.paths : []).map((p) => {
+    const path = asRecord(p) ?? {};
+    const view = pickPresent(path, ["pattern", "type", "source"]);
+    return resolved ? { ...view, scope: aicrConfigScope(path.scope) } : view;
+  });
+
+  if (c.updated) out.updated = c.updated;
+  const who = asRecord(c.updated_by);
+  if (who?.name || who?.uid) out.updated_by = who.name || who.uid;
+  return out;
+}
+
+/** Recursive `GET /config/space|repo`. A repository without a row of its own answers with id 0 and inherited values. */
+export function aicrSettingExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const out = aicrSettingView(raw, input, true);
+  if (input?.repo_path && asRecord(raw)?.id === 0) {
+    out.note = "This repository has no AI Code Review config of its own, so every value here is inherited. " +
+      "To set any on the repository itself, run aicr_repository enable on it first; that creates the config. " +
+      "A repository that does not exist answers the same way: if this one should already be reviewed, check repo_id and org_id/project_id.";
+  }
+  return out;
+}
+
+/** `PUT /config/space|repo` answers with the scope's own row. */
+export function aicrSettingSetExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  return aicrSettingView(raw, input, false);
+}
