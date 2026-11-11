@@ -50,6 +50,30 @@ describe("AppSec Toolset & Config", () => {
       expect(optInReg.getAllResourceTypes()).not.toContain("appsec_query");
     });
 
+    it("pins the appsec toolset to read-only resources", () => {
+      const reg = new Registry(makeConfig());
+      const appsecToolset = reg.getAllToolsets().find((t) => t.name === "appsec")!;
+
+      expect(appsecToolset.resources.map((resource) => resource.resourceType)).toEqual([
+        "appsec_api",
+        "appsec_api_spec",
+        "appsec_api_span",
+        "appsec_entity",
+        "appsec_vulnerability",
+        "appsec_threat_activity",
+        "appsec_security_event",
+        "appsec_ast_scan",
+        "appsec_inventory_trend",
+        "appsec_datatype",
+      ]);
+
+      for (const resource of appsecToolset.resources) {
+        expect(resource.operations.create, resource.resourceType).toBeUndefined();
+        expect(resource.operations.update, resource.resourceType).toBeUndefined();
+        expect(resource.operations.delete, resource.resourceType).toBeUndefined();
+      }
+    });
+
     it("defines compactItem on every AppSec list resource and never sets skipCompact", () => {
       const reg = new Registry(makeConfig());
       const appsecToolset = reg.getAllToolsets().find((t) => t.name === "appsec")!;
