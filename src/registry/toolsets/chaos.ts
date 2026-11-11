@@ -3610,6 +3610,8 @@ export const chaosToolset: ToolsetDefinition = {
           // Stateless: nothing is persisted, so retries are safe.
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { load_test_identity: "loadTestIdentity" },
+          // Scope goes on the query string only; the body is just the estimate inputs.
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const b = coerceBody(input);
 

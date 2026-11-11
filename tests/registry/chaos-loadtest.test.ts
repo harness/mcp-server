@@ -1281,6 +1281,20 @@ describe("chaos_loadtest execute actions", () => {
     expect(call.params.loadTestIdentity).toBe("lt-from-resource-id");
   });
 
+  it("estimate_workers: sends scope in the query only, never in the JSON body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "estimate_workers", {
+      org_id: "my-org", project_id: "my-project",
+      tool_type: "K6", target_users: 10,
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.organizationIdentifier).toBe("my-org");
+    expect(call.params.projectIdentifier).toBe("my-project");
+    const wire = JSON.parse(JSON.stringify(call.body));
+    expect(Object.keys(wire).sort()).toEqual(["targetUsers", "toolType"]);
+  });
+
   it("estimate_workers: accepts tool_type case-insensitively", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
