@@ -378,10 +378,13 @@ export interface EndpointSpec {
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**
-   * Replaces the default warning line in this operation's approval prompt, when the default is wrong
-   * for it (e.g. a delete that archives: "cannot be undone" would misinform the user).
+   * Extra line in this operation's approval prompt, saying what the call changes and where.
+   * On delete it replaces the default "cannot be undone" warning (e.g. a delete that archives);
+   * on create, update and execute it is added after the question. A function gets a copy of
+   * the call's input (named args, params and body; before preflight); returning undefined, or
+   * throwing, means no note. Operations without it keep their prompt unchanged.
    */
-  confirmNote?: string;
+  confirmNote?: string | ((input: Record<string, unknown>) => string | undefined);
   /**
    * Declarative input expansion rules. When present, matching shorthand keys
    * in user input are expanded into full nested structures before resolution.
