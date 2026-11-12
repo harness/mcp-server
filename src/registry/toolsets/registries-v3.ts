@@ -20,6 +20,8 @@ const statsBody = (inputKey: string, bodyKey: string) => (input: Record<string, 
   return { [bodyKey]: ids };
 };
 
+const CONAN_BASE = "/har/api/v3/versions/{id}/conan/recipe-revisions";
+
 // Deployments carry prod / non-prod environment counts in `meta`, which
 // harV3ListExtract deliberately does not forward.
 const versionDeploymentsExtract = (raw: unknown): unknown => {
@@ -563,6 +565,115 @@ export const registriesV3Toolset: ToolsetDefinition = {
           skipCompact: true,
           responseExtractor: harV3ListExtract,
           description: "Get stats for versions (v3)",
+        },
+      },
+    },
+    // Conan drill-down under a version: recipe revisions (RREV) → packages
+    // (PKGID) → package revisions (PREV). All account-scoped, CONAN-only.
+    // `conan_package_id` is the Conan PKGID, not a v3 package UUID — named apart
+    // from `package_id` so agents don't pass one where the other belongs.
+    {
+      resourceType: "conan_recipe_revision_v3",
+      displayName: "Conan Recipe Revision (v3)",
+      description:
+        "Conan recipe revisions (RREV) of a CONAN version, with package count, size and download stats. Only CONAN versions return data.",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: ["version_id", "recipe_revision_id"],
+      listFilterFields: [
+        { name: "version_id", description: "Version UUID of a CONAN package version (required)", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: CONAN_BASE,
+          pathParams: { version_id: "id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page: "page", size: "size" },
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "List finalized Conan recipe revisions for a version (v3)",
+        },
+        get: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/details`,
+          pathParams: { version_id: "id", recipe_revision_id: "recipe_revision_id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get a Conan recipe revision (v3). Requires version_id and recipe_revision_id.",
+        },
+      },
+    },
+    {
+      resourceType: "conan_package_v3",
+      displayName: "Conan Package (v3)",
+      description: "Conan binary packages (PKGID) under a recipe revision. Only CONAN versions return data.",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: ["version_id", "recipe_revision_id", "conan_package_id"],
+      listFilterFields: [
+        { name: "version_id", description: "Version UUID (required)", required: true },
+        { name: "recipe_revision_id", description: "Recipe revision ID from conan_recipe_revision_v3 (required)", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/packages`,
+          pathParams: { version_id: "id", recipe_revision_id: "recipe_revision_id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page: "page", size: "size" },
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "List Conan packages under a recipe revision (v3)",
+        },
+        get: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/packages/{package_id}/details`,
+          pathParams: { version_id: "id", recipe_revision_id: "recipe_revision_id", conan_package_id: "package_id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get a Conan package with its package revisions (v3). Requires version_id, recipe_revision_id and conan_package_id.",
+        },
+      },
+    },
+    {
+      resourceType: "conan_package_revision_v3",
+      displayName: "Conan Package Revision (v3)",
+      description: "Conan package revisions (PREV) under a Conan package. Only CONAN versions return data.",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: ["version_id", "recipe_revision_id", "conan_package_id", "package_revision_id"],
+      listFilterFields: [
+        { name: "version_id", description: "Version UUID (required)", required: true },
+        { name: "recipe_revision_id", description: "Recipe revision ID (required)", required: true },
+        { name: "conan_package_id", description: "Conan package ID (PKGID) from conan_package_v3 (required)", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/packages/{package_id}/package-revisions`,
+          pathParams: { version_id: "id", recipe_revision_id: "recipe_revision_id", conan_package_id: "package_id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page: "page", size: "size" },
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "List Conan package revisions under a package (v3)",
+        },
+        get: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/packages/{package_id}/package-revisions/{package_revision_id}/details`,
+          pathParams: {
+            version_id: "id",
+            recipe_revision_id: "recipe_revision_id",
+            conan_package_id: "package_id",
+            package_revision_id: "package_revision_id",
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get a Conan package revision (v3). Requires version_id, recipe_revision_id, conan_package_id and package_revision_id.",
         },
       },
     },
