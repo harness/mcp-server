@@ -21,6 +21,8 @@ import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 import { buildResultView, createAppViewContext } from "../apps/mcp-apps.js";
+import { buildPendingExecutionView } from "../apps/pipeline-execution.js";
+import type { HarnessView } from "../apps/view-types.js";
 
 const log = createLogger("execute");
 
@@ -589,6 +591,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
         const payload = Object.keys(envelope).length === 0 ? result : { ...(asRecord(result) ?? {}), ...envelope };
         return appView.attach(jsonResult(payload), () =>
+          executionView(registry, resourceType, args.action, input, result, envelope) ??
           buildResultView(payload, {
             displayName: def.displayName,
             action: args.action,
@@ -603,6 +606,39 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       }
     },
   );
+}
+
+const INTERRUPT_LABELS: Record<string, string> = { AbortAll: "Aborting", UserMarkedFailure: "Marking failed" };
+
+/** Execution card for pipeline run/retry and execution interrupt; undefined for every other action. */
+function executionView(
+  registry: Registry,
+  resourceType: string,
+  action: string,
+  input: Record<string, unknown>,
+  result: unknown,
+  envelope: Record<string, unknown>,
+): HarnessView | undefined {
+  const isPipeline = resourceType === "pipeline" || resourceType === "pipeline_v1";
+  const isRun = isPipeline && (action === "run" || action === "retry");
+  const isInterrupt = resourceType === "execution" && action === "interrupt";
+  if (!isRun && !isInterrupt) return undefined;
+
+  const executionId = isRun
+    ? asString(envelope.execution_id) ?? extractExecutionId(result, resourceType)
+    : asString(input.execution_id) ?? asString(input.resource_id);
+  if (!executionId) return undefined;
+
+  const planStatus = asString(asRecord(asRecord(result)?.planExecution)?.status);
+  const interruptType = asString(input.interrupt_type);
+  return buildPendingExecutionView(executionId, {
+    orgId: asString(input.org_id) || registry.orgId,
+    projectId: asString(input.project_id) || registry.projectId,
+    deepLink: (template, params) => registry.deepLink(template, params),
+    pipelineId: asString(input.pipeline_id) ?? (isRun ? asString(input.resource_id) : undefined),
+    status: isRun ? asString(envelope.execution_status) ?? planStatus ?? "Queued" : undefined,
+    label: isInterrupt ? INTERRUPT_LABELS[interruptType ?? ""] ?? "Updating" : undefined,
+  });
 }
 
 function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void {

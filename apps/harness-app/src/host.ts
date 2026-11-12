@@ -64,6 +64,11 @@ export class HostConnection {
     await this.app.openLink({ url });
   }
 
+  /** Post a user message to the chat so the agent picks up the next step. */
+  async sendMessage(text: string): Promise<void> {
+    await this.app.sendMessage({ role: "user", content: [{ type: "text", text }] });
+  }
+
   private applyTheme(context: McpUiHostContext | undefined): void {
     if (!context) return;
     if (context.theme) applyDocumentTheme(context.theme);

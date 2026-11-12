@@ -19,13 +19,16 @@ interface CardProps {
   aside?: ComponentChildren;
   footer?: string;
   openInHarness?: string;
+  openLabel?: string;
   refresh?: ViewRefresh;
+  /** Called after a successful manual refresh. */
+  onRefreshed?: () => void;
   actions?: ComponentChildren;
   children?: ComponentChildren;
 }
 
 /** Shared frame: header (title, badge, status), body, footer (meta text and actions). */
-export function Card({ title, badge, status, aside, footer, openInHarness, refresh, actions, children }: CardProps) {
+export function Card({ title, badge, status, aside, footer, openInHarness, openLabel, refresh, onRefreshed, actions, children }: CardProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -35,6 +38,7 @@ export function Card({ title, badge, status, aside, footer, openInHarness, refre
     setError(undefined);
     try {
       await host.refresh(refresh);
+      onRefreshed?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refresh failed");
     } finally {
@@ -70,7 +74,7 @@ export function Card({ title, badge, status, aside, footer, openInHarness, refre
               )}
               {openInHarness && (
                 <button type="button" class="btn btn--outline" onClick={() => void host.openLink(openInHarness)}>
-                  Open in Harness
+                  {openLabel ?? "Open in Harness"}
                 </button>
               )}
             </div>

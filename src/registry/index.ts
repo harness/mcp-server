@@ -258,6 +258,15 @@ export class Registry {
     return this.accountIdResolver?.() ?? this.config.HARNESS_ACCOUNT_ID;
   }
 
+  /** Harness UI link for a deep-link template, or undefined when it cannot be built. */
+  deepLink(template: string, params: Record<string, string>): string | undefined {
+    try {
+      return buildDeepLink(this.config.HARNESS_BASE_URL, this.getAccountId(), template, params);
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * Parse HARNESS_TOOLSETS env var. Supports three modes:
    *

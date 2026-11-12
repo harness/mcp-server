@@ -4438,13 +4438,92 @@ describe("MCP Apps view data", () => {
     });
   });
 
-  it("never offers refresh on harness_execute views, so a view cannot repeat a write", async () => {
-    const { server } = await registerViewTools({}, UI_CAPS);
-    const result = await server.call("harness_execute", { resource_type: "pipeline", action: "run", resource_id: "build_app" });
-    expect(result.isError).toBeUndefined();
-    const view = (result._meta as Record<string, unknown> | undefined)?.["harness.io/view"] as Record<string, unknown> | undefined;
-    expect(view?.subtitle).toContain("run");
+  it("never offers refresh on generic harness_execute views, so a view cannot repeat a write", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { identifier: "approval-1", name: "Prod approval", status: "APPROVED" } });
+    const result = await server.call("harness_execute", {
+      resource_type: "approval_instance",
+      action: "approve",
+      params: { approval_id: "approval-1" },
+      body: { comments: "ok" },
+    });
+    expect(result.isError, result.content[0]!.text).toBeUndefined();
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"] as Record<string, unknown>;
+    expect(view).toMatchObject({ kind: "result", title: "Prod approval", subtitle: expect.stringContaining("approve") });
     expect(view).not.toHaveProperty("refresh");
+  });
+
+  it("starts a live execution card after a pipeline run; its refresh is a harness_get read", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { planExecution: { uuid: "exec-123", status: "RUNNING" } } });
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "build_app",
+      org_id: "default",
+      project_id: "test-project",
+    });
+    expect(result.isError).toBeUndefined();
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"];
+    expect(view).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-123",
+      pipeline: { identifier: "build_app" },
+      terminal: false,
+      stages: [],
+      open_in_harness: expect.stringContaining("/pipelines/build_app/deployments/exec-123/pipeline"),
+      refresh: {
+        tool: "harness_get",
+        arguments: { resource_type: "execution", resource_id: "exec-123", org_id: "default", project_id: "test-project" },
+      },
+    });
+  });
+
+  it("shows Aborting after an execution interrupt", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { status: "SUCCESS" } });
+    const result = await server.call("harness_execute", {
+      resource_type: "execution",
+      action: "interrupt",
+      resource_id: "exec-running",
+      params: { interrupt_type: "AbortAll" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-running",
+      status: { label: "Aborting", live: true },
+      terminal: false,
+      refresh: { tool: "harness_get" },
+    });
+  });
+
+  it("renders harness_get execution results as the execution card", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({
+      data: {
+        pipelineExecutionSummary: {
+          planExecutionId: "exec-9",
+          pipelineIdentifier: "build_app",
+          name: "Build App",
+          runSequence: 180,
+          status: "Running",
+          startTs: 1_000,
+          startingNodeId: "s1",
+          layoutNodeMap: {
+            s1: { nodeGroup: "STAGE", nodeIdentifier: "build", name: "Build", status: "Running", startTs: 1_000, edgeLayoutList: { currentNodeChildren: [], nextIds: [] } },
+          },
+        },
+      },
+    });
+    const result = await server.call("harness_get", { resource_type: "execution", resource_id: "exec-9" });
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-9",
+      run_sequence: 180,
+      status: { label: "Running", tone: "info", live: true },
+      stages: [{ id: "build", name: "Build" }],
+    });
   });
 
   it("adds no view to error results", async () => {

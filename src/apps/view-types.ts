@@ -28,4 +28,42 @@ export interface ResultView {
   refresh?: ViewRefresh;
 }
 
-export type HarnessView = ResultView;
+export interface ExecutionStageView {
+  id: string;
+  name: string;
+  status: ViewStatus;
+  /** Stages that run side by side share a group id. */
+  parallel_group?: string;
+  skipped?: boolean;
+  started_at?: number;
+  ended_at?: number;
+  steps_done?: number;
+  steps_total?: number;
+  current_step?: string;
+  failure_message?: string;
+}
+
+/** Live pipeline run: header, stage bar, failure, and a 30-second refresh while not terminal. */
+export interface PipelineExecutionView {
+  kind: "pipeline_execution";
+  execution_id: string;
+  run_sequence?: number;
+  pipeline: { name?: string; identifier?: string };
+  scope: { org?: string; project?: string };
+  status: ViewStatus;
+  /** Terminal runs stop refreshing. */
+  terminal: boolean;
+  /** Waiting on a human (approval, input, intervention) in Harness. */
+  awaiting_action?: boolean;
+  /** Epoch milliseconds. */
+  started_at?: number;
+  ended_at?: number;
+  trigger?: { type?: string; by?: string };
+  stages: ExecutionStageView[];
+  current_stage_index?: number;
+  failure?: { stage?: string; step?: string; message: string };
+  open_in_harness?: string;
+  refresh?: ViewRefresh;
+}
+
+export type HarnessView = ResultView | PipelineExecutionView;
