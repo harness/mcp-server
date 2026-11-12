@@ -4438,7 +4438,7 @@ describe("MCP Apps view data", () => {
     });
   });
 
-  it("never offers refresh on generic harness_execute views, so a view cannot repeat a write", async () => {
+  it("adds no card for execute results without a Harness link, and never a refresh", async () => {
     const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
     mockRequest.mockResolvedValue({ data: { identifier: "approval-1", name: "Prod approval", status: "APPROVED" } });
     const result = await server.call("harness_execute", {
@@ -4448,9 +4448,8 @@ describe("MCP Apps view data", () => {
       body: { comments: "ok" },
     });
     expect(result.isError, result.content[0]!.text).toBeUndefined();
-    const view = (result._meta as Record<string, unknown>)["harness.io/view"] as Record<string, unknown>;
-    expect(view).toMatchObject({ kind: "result", title: "Prod approval", subtitle: expect.stringContaining("approve") });
-    expect(view).not.toHaveProperty("refresh");
+    const view = (result._meta as Record<string, unknown> | undefined)?.["harness.io/view"] as Record<string, unknown> | undefined;
+    expect(view).toBeUndefined();
   });
 
   it("starts a live execution card after a pipeline run; its refresh is a harness_get read", async () => {
