@@ -150,6 +150,17 @@ describe("release metadata", () => {
     }
   });
 
+  it("exposes MCP Apps config in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.HARNESS_MCP_APPS).toBe("${user_config.HARNESS_MCP_APPS}");
+      expect(manifest.user_config.HARNESS_MCP_APPS).toMatchObject({
+        default: "auto",
+        required: false,
+        sensitive: false,
+      });
+    }
+  });
+
   it("exposes HTTP session TTL config in packaged manifests", () => {
     for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
       expect(manifest.server.mcp_config.env.MCP_SESSION_TTL_MS).toBe("${user_config.MCP_SESSION_TTL_MS}");

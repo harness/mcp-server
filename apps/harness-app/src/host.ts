@@ -22,7 +22,7 @@ export function readView(result: ToolResultLike | undefined): HarnessView | unde
   return view && typeof view === "object" && typeof view.kind === "string" ? view : undefined;
 }
 
-class HostConnection {
+export class HostConnection {
   readonly app = new App({ name: "Harness", version: "1.0.0" }, { availableDisplayModes: ["inline"] });
   private view: HarnessView | undefined;
   private listeners = new Set<Listener>();
