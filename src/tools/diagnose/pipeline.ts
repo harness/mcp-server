@@ -4,12 +4,8 @@ import type { Config } from "../../config.js";
 import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
 import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
-import {
-  packageSnippetForDiagnose,
-  resolveLogContent,
-  resolveLogDownloadUrl,
-} from "../../utils/log-resolver.js";
-import { failedUnitNamesFromNode, logKeysFromNode } from "../../utils/log-keys.js";
+import { resolveLogContent, resolveLogDownloadUrl } from "../../utils/log-resolver.js";
+import { logKeysFromNode } from "../../utils/log-keys.js";
 import { TERMINAL_STATUSES } from "../../utils/poll-execution.js";
 import { classifyFailure } from "../../utils/diagnose-triage.js";
 
@@ -107,8 +103,6 @@ interface FailedNodeDetail {
   command_unit_names?: string[];
   /** Exact log keys from executableResponses — preferred GET /blob unit keys. */
   log_keys?: string[];
-  /** unitProgresses names with failed/error status — snippet fetch preference. */
-  failed_unit_names?: string[];
   delegate?: string;
   script_context?: {
     name?: string;
@@ -273,7 +267,6 @@ function findFailedNodes(nodeMap: Record<string, ExecGraphNode>): FailedNodeDeta
       log_key: node.logBaseKey,
       command_unit_names: commandUnitNamesFromNode(node),
       log_keys: logKeysFromNode(node),
-      failed_unit_names: failedUnitNamesFromNode(node),
       delegate,
     };
 
@@ -453,6 +446,26 @@ function buildExecutionSummary(
   return { summary, failedNodes, childRef };
 }
 
+function tailLines(text: string, n: number): { text: string; truncated: boolean; totalLines: number } {
+  if (n <= 0) return { text, truncated: false, totalLines: text.split("\n").length };
+  const lines = text.split("\n");
+  if (lines.length <= n) return { text, truncated: false, totalLines: lines.length };
+  return {
+    text: `... (${lines.length - n} lines omitted) ...\n` + lines.slice(-n).join("\n"),
+    truncated: true,
+    totalLines: lines.length,
+  };
+}
+
+function truncateLog(raw: unknown, maxLines: number): unknown {
+  if (typeof raw === "string") {
+    const result = tailLines(raw, maxLines);
+    if (!result.truncated) return raw;
+    return { log_snippet: result.text, total_lines: result.totalLines, truncated: true };
+  }
+  return raw;
+}
+
 async function resolveDiagnoseLog(
   client: HarnessClient,
   prefix: string,
@@ -462,7 +475,6 @@ async function resolveDiagnoseLog(
     logSnippetLines: number;
     commandUnitNames?: string[];
     logKeys?: string[];
-    failedUnitNames?: string[];
   },
 ): Promise<unknown> {
   if (options.returnDownloadUrl) {
@@ -473,14 +485,8 @@ async function resolveDiagnoseLog(
     signal: options.signal,
     commandUnitNames: options.commandUnitNames,
     logKeys: options.logKeys,
-    failedUnitNames: options.failedUnitNames,
-    mode: "snippet",
-    snippetLines: options.logSnippetLines,
   });
-  // Resolver already line-tails in snippet mode. Package without a second trim
-  // so unit headers / omitted markers survive and total_lines reflects the
-  // pre-trim unit size.
-  return packageSnippetForDiagnose(logText, options.logSnippetLines);
+  return truncateLog(logText, options.logSnippetLines);
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -499,7 +505,7 @@ export const pipelineHandler: DiagnoseHandler = {
     const includeYaml = args.include_yaml ?? !isSummary;
     const includeLogs = args.include_logs ?? !isSummary;
     const returnDownloadUrl = args.return_download_url === true;
-    const logSnippetLines = asNumber(args.log_snippet_lines) ?? 200;
+    const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
     const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
     const maxAllStepLogs = asNumber(args.max_all_step_logs) ?? 25;
 
@@ -675,7 +681,6 @@ export const pipelineHandler: DiagnoseHandler = {
                 logSnippetLines,
                 commandUnitNames: fn.command_unit_names,
                 logKeys: fn.log_keys,
-                failedUnitNames: fn.failed_unit_names,
               });
               return { key, value: logValue };
             } catch (err) {
@@ -710,12 +715,7 @@ export const pipelineHandler: DiagnoseHandler = {
         capped.map((fn) => {
           const key = `${fn.stage}/${fn.step}`;
           const logValue = stepLogs[key];
-          const logSnippet =
-            typeof logValue === "string"
-              ? logValue
-              : isRecord(logValue) && typeof logValue.log_snippet === "string"
-                ? logValue.log_snippet
-                : undefined;
+          const logSnippet = typeof logValue === "string" ? logValue : undefined;
           return classifyFailure(
             {
               stage: fn.stage,
@@ -762,7 +762,6 @@ export const pipelineHandler: DiagnoseHandler = {
             logSnippetLines,
             commandUnitNames: commandUnitNamesFromNode(requestedNode),
             logKeys: logKeysFromNode(requestedNode),
-            failedUnitNames: failedUnitNamesFromNode(requestedNode),
           });
           diagnostic.requested_step_log = {
             step_id: requestedStepId,
@@ -837,7 +836,6 @@ export const pipelineHandler: DiagnoseHandler = {
             logSnippetLines,
             commandUnitNames: commandUnitNamesFromNode(bestNode),
             logKeys: logKeysFromNode(bestNode),
-            failedUnitNames: failedUnitNamesFromNode(bestNode),
           });
           diagnostic.requested_step_log = {
             step_id: bestNodeId,
@@ -898,7 +896,6 @@ export const pipelineHandler: DiagnoseHandler = {
                 logSnippetLines,
                 commandUnitNames: commandUnitNamesFromNode(node),
                 logKeys: logKeysFromNode(node),
-                failedUnitNames: failedUnitNamesFromNode(node),
               });
               return { nodeId, logValue };
             } catch (err) {

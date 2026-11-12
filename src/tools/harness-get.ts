@@ -101,7 +101,6 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
             // we resolve via execution_id. Explicit prefix falls back to Execute only.
             let commandUnitNames: string[] | undefined;
             let logKeys: string[] | undefined;
-            let failedUnitNames: string[] | undefined;
             // GET /blob reads one exact key; without a step the resolved key is a
             // pipeline/stage prefix whose own blob is empty, so use the zip download.
             let downloadFallback = false;
@@ -115,7 +114,6 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               prefix = resolved.prefix;
               commandUnitNames = resolved.commandUnitNames;
               logKeys = resolved.logKeys;
-              failedUnitNames = resolved.failedUnitNames;
               downloadFallback = !asString(input.step_id);
             }
             if (isTrue(input.return_download_url) || downloadFallback) {
@@ -128,12 +126,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               }
               return jsonResult({ download_url: downloadUrl });
             }
-            const logText = await resolveLogContent(client, prefix, {
-              commandUnitNames,
-              logKeys,
-              failedUnitNames,
-              mode: "full",
-            });
+            const logText = await resolveLogContent(client, prefix, { commandUnitNames, logKeys });
             return jsonResult({ log_content: logText });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
