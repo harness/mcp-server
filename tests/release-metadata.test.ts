@@ -154,7 +154,7 @@ describe("release metadata", () => {
     for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
       expect(manifest.server.mcp_config.env.HARNESS_MCP_APPS).toBe("${user_config.HARNESS_MCP_APPS}");
       expect(manifest.user_config.HARNESS_MCP_APPS).toMatchObject({
-        default: "auto",
+        default: "off",
         required: false,
         sensitive: false,
       });

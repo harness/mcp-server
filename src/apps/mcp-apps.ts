@@ -20,7 +20,7 @@ export const MCP_APP_RESOURCE_URI = "ui://harness/app";
 export const VIEW_META_KEY = "harness.io/view";
 
 export function mcpAppsEnabled(config: Config): boolean {
-  return config.HARNESS_MCP_APPS !== "off";
+  return config.HARNESS_MCP_APPS === "auto";
 }
 
 /** True when the client declared io.modelcontextprotocol/ui with the HTML MIME type. */

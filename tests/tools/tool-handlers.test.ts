@@ -4374,7 +4374,7 @@ describe("MCP Apps view data", () => {
   async function registerViewTools(overrides: Partial<Config> = {}, caps?: unknown) {
     const server = makeMcpServer("accept");
     if (caps) server.server.getClientCapabilities = () => caps;
-    const config = makeConfig({ HARNESS_TOOLSETS: "pipelines", ...overrides });
+    const config = makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_MCP_APPS: "auto", ...overrides });
     const registry = new Registry(config);
     const mockRequest = vi.fn().mockResolvedValue({
       data: { identifier: "build_app", name: "Build App", storeType: "INLINE" },
@@ -4394,6 +4394,15 @@ describe("MCP Apps view data", () => {
     for (const name of ["harness_get", "harness_execute", "harness_status"]) {
       expect((server.schema(name) as { _meta?: unknown })._meta, name).toEqual({ ui: { resourceUri: "ui://harness/app" } });
     }
+  });
+
+  it("is off by default: no UI link and no view data, even for UI hosts", async () => {
+    const { server } = await registerViewTools({ HARNESS_MCP_APPS: undefined }, UI_CAPS);
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toBeUndefined();
+    }
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result._meta).toBeUndefined();
   });
 
   it("omits the UI link when HARNESS_MCP_APPS=off", async () => {

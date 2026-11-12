@@ -161,8 +161,8 @@
     "HARNESS_MCP_APPS": {
       "type": "string",
       "title": "MCP Apps Views",
-      "description": "auto (default) or off. auto shows interactive views (pipeline execution card, dashboards) in hosts that support MCP Apps; other clients get the same text results. Set off for text-only results everywhere.",
-      "default": "auto",
+      "description": "off (default) or auto. off keeps text-only results. Set auto to show interactive views (pipeline execution card, dashboards) in hosts that support MCP Apps; other clients get the same text results.",
+      "default": "off",
       "required": false,
       "sensitive": false
     },

@@ -32,8 +32,9 @@ describe("ui://harness/app resource", () => {
     expect(result.contents[0].text).toMatch(/^<!DOCTYPE html>/);
   });
 
-  it("is not registered when HARNESS_MCP_APPS=off", () => {
+  it("is not registered when HARNESS_MCP_APPS=off or unset (the default)", () => {
     expect(capture({ HARNESS_MCP_APPS: "off" })).not.toHaveBeenCalled();
+    expect(capture({})).not.toHaveBeenCalled();
   });
 
   it("serves the built bundle when present and an empty document when it is missing", () => {
