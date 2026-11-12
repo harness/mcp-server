@@ -15,6 +15,7 @@ import type { PreflightContext } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { toUtcDateString, parseCustomWindow } from "../utils/ccm-time.js";
 import { redactSensitiveFields } from "../utils/redact.js";
+import { buildRunStatus, buildLiveMetrics } from "./loadtest-live.js";
 
 /** Vibe returns unwrapped, mixed-case DTOs. Keep contract fields without forwarding internal metadata. */
 function pickVibeFields(value: unknown, fields: readonly string[]): Record<string, unknown> {
@@ -1669,6 +1670,50 @@ export const chaosLoadTestExtract = (raw: unknown): unknown => {
 export const chaosLoadTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
   const items = (r.items ?? []).map(chaosLoadTestExtract);
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
+/**
+ * HAR conversion response. The backend returns the script base64-encoded;
+ * decode it so it can be passed straight to chaos_loadtest.create as `script`.
+ */
+export const chaosHarConvertExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.scriptContent !== "string") return raw;
+  return {
+    toolType: r.toolType,
+    fileName: r.fileName,
+    script: Buffer.from(r.scriptContent, "base64").toString("utf8"),
+  };
+};
+
+/**
+ * Load test run — passed through, with identity mirrored to run_id.
+ * resolvedVariables can hold resolved secret values, so only the names are kept.
+ */
+export const chaosLoadTestRunExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const t = raw as Record<string, unknown>;
+  const run: Record<string, unknown> = { run_id: t.identity, ...t };
+  const vars = t.resolvedVariables;
+  if (vars && typeof vars === "object" && !Array.isArray(vars)) {
+    run.resolvedVariables = Object.fromEntries(Object.keys(vars).map((k) => [k, "[REDACTED]"]));
+  }
+  return run;
+};
+
+/** Run status view for polling. See loadtest-live.ts. */
+export const chaosLoadTestRunStatusExtract = (raw: unknown): unknown => buildRunStatus(raw);
+
+/** Live metrics view for polling. See loadtest-live.ts. */
+export const chaosLoadTestRunLiveMetricsExtract = (raw: unknown, input?: Record<string, unknown>): unknown =>
+  buildLiveMetrics(raw, input ?? {});
+
+/** Load test run list: { items, pagination: { totalItems } } → { items, total }. */
+export const chaosLoadTestRunListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
+  const items = (r.items ?? []).map(chaosLoadTestRunExtract);
   return { items, total: r.pagination?.totalItems ?? items.length };
 };
 

@@ -18,6 +18,11 @@ import {
   chaosK8sInfraListExtract,
   chaosLoadTestListExtract,
   chaosLoadTestExtract,
+  chaosLoadTestRunListExtract,
+  chaosLoadTestRunExtract,
+  chaosLoadTestRunStatusExtract,
+  chaosLoadTestRunLiveMetricsExtract,
+  chaosHarConvertExtract,
   chaosServiceListExtract,
   chaosHubListExtract,
   chaosMetadataListExtract,
@@ -30,6 +35,11 @@ import {
   chaosRunTimeInputsExtract,
   chaosActionExtract,
 } from "../extractors.js";
+import {
+  validateLiveMetricsInput,
+  LIVE_SERIES_INPUT_KEY,
+  type LiveSeriesFetch,
+} from "../loadtest-live.js";
 import {
   descToolsetChaos,
   // Resource descriptions
@@ -106,13 +116,14 @@ import {
   descEnableProbe, descVerifyProbe,
   descCreateFromTemplate,
   descListRevisions, descListExperimentTemplateRevisions, descGetVariables, descGetYaml, descCompareRevisions,
-  descRunLoadtest, descStopLoadtest, descCheckK8sHealth,
+  descRunLoadtest, descStopLoadtest, descCheckK8sHealth, descEstimateWorkers, descConvertHar,
   descEnableGuardRule,
   descGetProbeTemplateVariables,
   descListActionTemplateRevisions, descGetActionTemplateVariables, descCompareActionTemplateRevisions,
   // Body schema descriptions
   descBodyExperimentRun, descBodyNoBody, descBodyExperimentCreate,
-  descBodyCreateFromTemplate, descBodyLoadtestDefinition,
+  descBodyCreateFromTemplate, descBodyLoadtestDefinition, descBodyEstimateWorkers, descBodyConvertHar,
+  descConvertHarToolType, descConvertHarContent,
   descBodyProbeEnable, descBodyProbeVerify, descBodyProbesInRun, descBodyProbeCreate,
   // Field descriptions
   descInputsetIdentity, descRuntimeInputs,
@@ -129,6 +140,12 @@ import {
   descLoadtestHostUrl, descLoadtestRpsLimit, descLoadtestIterations, descLoadtestEnvVars,
   descLoadtestProperties, descLoadtestThresholds,
   descLoadtestCleanupPolicy, descLoadtestResources,
+  descEstimateToolType, descEstimateTargetUsers, descEstimateTargetRps,
+  descEstimateResources, descEstimateHeadroom, descEstimateLoadTestIdentity,
+  descChaosLoadtestRun, descListLoadtestRuns, descGetLoadtestRun,
+  descGetRunAIInsights, descGenerateRunAIInsights,
+  descRunStatus, descRunLiveMetrics, descRunLiveSince, descRunLiveMaxPoints, descRunLiveMaxEndpoints,
+  descRunLoadtestId, descRunStatusFilter, descRunSearch, descRunId, descRunAIInsightsLoadTestIdentity,
   descHubIdentityExact, descHubName, descHubNameUpdate,
   descHubDescription, descHubDescriptionUpdate,
   descHubTags, descHubTagsReplace,
@@ -273,6 +290,22 @@ function compactLoadTest(item: Record<string, unknown>): Record<string, unknown>
     "environmentIdentifier", "infraIdentifier", "infraType", "targetType",
     "toolType", "scriptSource", "cleanupPolicy", "latestRevisionIdentifier",
     "createdAt", "updatedAt", "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
+/** Compact projection for chaos_loadtest_run list items — keeps aiInsights,
+ * toolType and the tunables, which the generic compactItems() whitelist drops. */
+function compactLoadTestRun(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "run_id", "uniqueId", "identity", "name", "runSequence",
+    "loadTestIdentity", "loadTestName", "toolType", "targetType",
+    "status", "thresholdVerdict", "isAIUsed", "aiInsights",
+    "targetUsers", "durationSeconds", "workerCount",
+    "startedAt", "finishedAt", "createdAt", "updatedAt", "openInHarness",
   ]) {
     if (item[key] !== undefined) slim[key] = item[key];
   }
@@ -578,6 +611,51 @@ function buildRiskRuleBody(
     category: b.category,
     spec: { ...spec, dataSource },
   };
+}
+
+/** Matches tool_type case-insensitively and returns the canonical casing. */
+function normalizeLoadTestToolType(value: unknown): "Locust" | "JMeter" | "K6" {
+  if (value == null || value === "") {
+    throw new Error("tool_type is required: 'Locust', 'JMeter', or 'K6'.");
+  }
+  const toolType = (["Locust", "JMeter", "K6"] as const).find(
+    (t) => t.toLowerCase() === String(value).trim().toLowerCase(),
+  );
+  if (!toolType) {
+    throw new Error(`tool_type '${String(value)}' must be 'Locust', 'JMeter', or 'K6'.`);
+  }
+  return toolType;
+}
+
+/**
+ * Adds snake_case copies of required fields so the registry's required-field
+ * check passes. They are non-enumerable, so they are not serialized.
+ */
+function withRequiredFieldAliases(
+  body: Record<string, unknown>,
+  aliases: Record<string, unknown>,
+): Record<string, unknown> {
+  for (const [key, value] of Object.entries(aliases)) {
+    Object.defineProperty(body, key, { value, enumerable: false });
+  }
+  return body;
+}
+
+/**
+ * The backend expects harContent as base64. JSON text (starts with "{") or an
+ * object is encoded here; any other string is sent as-is.
+ */
+function encodeHarContent(value: unknown): string {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return Buffer.from(JSON.stringify(value), "utf8").toString("base64");
+  }
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(
+      "har_content is required: pass the HAR file's JSON text (or object), or its base64 encoding.",
+    );
+  }
+  const trimmed = value.trim();
+  return trimmed.startsWith("{") ? Buffer.from(trimmed, "utf8").toString("base64") : trimmed;
 }
 
 /**
@@ -3155,6 +3233,12 @@ export const chaosToolset: ToolsetDefinition = {
           description:
             "Resilience Testing Services attached to a load test. List with infrastructure_ids='<environment_id>/<infra_id>' to see services already onboarded on the chosen load-runner infra. A user may pick one or more identities from the list, OR onboard a brand-new service via chaos_service's create flow (see chaos_service.relatedResources for the discovered_agent/discovered_service chain) regardless of whether the list is empty -- creating a new service is a user-intent decision, not gated on list length. The chosen identity/identities are passed on the load test as service_references (required when the account has CHAOS_RISK_SERVICES_ENABLED on).",
         },
+        {
+          resourceType: "chaos_loadtest_run",
+          relationship: "child",
+          description:
+            "Runs of this load test, started via the run action above. List with loadtest_id=<this load test's identity> to find run identities, then check a run's status and AI-generated performance insights on chaos_loadtest_run itself.",
+        },
       ],
       operations: {
         list: {
@@ -3519,6 +3603,270 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: descStopLoadtest,
           bodySchema: { description: descBodyNoBody, fields: [] },
+        },
+        estimate_workers: {
+          method: "POST",
+          path: `${CHAOS_LOADTEST}/v1/load-tests/worker-estimate`,
+          // Stateless: nothing is persisted, so retries are safe.
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { load_test_identity: "loadTestIdentity" },
+          // Scope goes on the query string only; the body is just the estimate inputs.
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+
+            // load_test_identity is a query param; accept it inside body, or as resource_id.
+            if (input.load_test_identity === undefined) {
+              const identity = b.load_test_identity ?? input.loadtest_id;
+              if (identity !== undefined) input.load_test_identity = identity;
+            }
+
+            const toolType = normalizeLoadTestToolType(b.tool_type ?? b.toolType);
+
+            const targetUsers = (b.target_users ?? b.targetUsers) as number | undefined;
+            if (typeof targetUsers !== "number" || !Number.isFinite(targetUsers) || targetUsers <= 0) {
+              throw new Error(`target_users must be greater than zero, got ${targetUsers}.`);
+            }
+
+            const targetRps = (b.target_rps ?? b.targetRps) as number | undefined;
+            if (targetRps != null && (typeof targetRps !== "number" || !Number.isFinite(targetRps) || targetRps < 0)) {
+              throw new Error(`target_rps must not be negative, got ${targetRps}.`);
+            }
+
+            // Omitted means the backend default (0.8).
+            const headroom = b.headroom as number | undefined;
+            if (headroom != null && (typeof headroom !== "number" || !(headroom > 0 && headroom <= 1))) {
+              throw new Error(`headroom must be within (0, 1], got ${headroom}.`);
+            }
+
+            const body: Record<string, unknown> = { toolType, targetUsers };
+            if (targetRps != null) body.targetRps = targetRps;
+            if (b.resources != null) body.resources = b.resources;
+            if (headroom != null) body.headroom = headroom;
+            return withRequiredFieldAliases(body, { tool_type: toolType, target_users: targetUsers });
+          },
+          responseExtractor: passthrough,
+          actionDescription: descEstimateWorkers,
+          bodySchema: {
+            description: descBodyEstimateWorkers,
+            fields: [
+              { name: "tool_type", type: "string", required: true, description: descEstimateToolType },
+              { name: "target_users", type: "number", required: true, description: descEstimateTargetUsers },
+              { name: "target_rps", type: "number", required: false, description: descEstimateTargetRps },
+              { name: "resources", type: "object", required: false, description: descEstimateResources },
+              { name: "headroom", type: "number", required: false, description: descEstimateHeadroom },
+              { name: "load_test_identity", type: "string", required: false, description: descEstimateLoadTestIdentity },
+            ],
+          },
+          paramsSchema: {
+            fields: [
+              { name: "load_test_identity", required: false, description: descEstimateLoadTestIdentity },
+            ],
+          } satisfies ParamsSchema,
+        },
+
+        // Stateless: generates a script and persists nothing.
+        convert_har: {
+          method: "POST",
+          path: `${CHAOS_LOADTEST}/v1/load-tests/convert-har`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          // Scope is read from the query string; the body is only toolType + harContent.
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+
+            const toolType = normalizeLoadTestToolType(b.tool_type ?? b.toolType);
+
+            const harContent = encodeHarContent(b.har_content ?? b.harContent);
+
+            return withRequiredFieldAliases({ toolType, harContent }, { tool_type: toolType, har_content: harContent });
+          },
+          responseExtractor: chaosHarConvertExtract,
+          actionDescription: descConvertHar,
+          bodySchema: {
+            description: descBodyConvertHar,
+            fields: [
+              { name: "tool_type", type: "string", required: true, description: descConvertHarToolType },
+              { name: "har_content", type: "string", required: true, description: descConvertHarContent },
+            ],
+          },
+        },
+      },
+    },
+
+    // ── Chaos Load Test Run (read-only view of a chaos_loadtest.run instance) ──
+    // Runs are created/stopped via chaos_loadtest's own run/stop actions --
+    // this resource exists to check a run's status and its AI insights.
+    //   GET  /v1/load-tests/{identity}/runs        (list, scoped to one load test)
+    //   GET  /v1/runs/{identity}                    (get)
+    //   GET  /v1/runs/{identity}/ai-insights        (ai_insights action)
+    //   POST /v1/runs/{identity}/ai-insights        (generate_ai_insights action)
+    //   GET  /v1/runs/{identity}                    (status + live_metrics actions)
+    //   GET  /v1/runs/{identity}/metrics/timeseries (live_metrics, series points)
+    {
+      resourceType: "chaos_loadtest_run",
+      displayName: "Chaos Load Test Run",
+      description: descChaosLoadtestRun,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["run_id"],
+      compactItem: compactLoadTestRun,
+      diagnosticHint:
+        "generate_ai_insights 409s mean one of: insights already Ready (read them via ai_insights instead of retrying), insights already Generating (poll ai_insights instead of retrying), or the run has not finished (Pending/Running/Stopping -- Finished/Stopped/Failed all count as finished). A 501 means AI insights are not enabled for this deployment at all; do not retry either.",
+      relatedResources: [
+        {
+          resourceType: "chaos_loadtest",
+          relationship: "parent",
+          description:
+            "The load test this run belongs to -- its identity is loadtest_id, required on list. chaos_loadtest.run creates a run of it and returns the run's own identity to use here as run_id.",
+        },
+      ],
+      listFilterFields: [
+        { name: "loadtest_id", required: true, description: descRunLoadtestId },
+        {
+          name: "status",
+          description: descRunStatusFilter,
+          enum: ["Pending", "Running", "Stopping", "Stopped", "Finished", "Failed"],
+        },
+        { name: "search", description: descRunSearch },
+        {
+          name: "sort_field",
+          description: descSortField,
+          enum: ["name", "createdAt", "updatedAt", "runSequence", "startedAt", "lastExecuted", "lastUpdated"],
+        },
+        { name: "sort_ascending", description: descSortAsc, type: "boolean" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}/runs`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { loadtest_id: "loadtestId" },
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            size: "limit",
+            search: "search",
+            search_term: "search",
+            status: "status",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
+          },
+          responseExtractor: chaosLoadTestRunListExtract,
+          description: descListLoadtestRuns,
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS_LOADTEST}/v1/runs/{runId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { run_id: "runId" },
+          queryParams: { load_test_identity: "loadTestIdentity" },
+          responseExtractor: chaosLoadTestRunExtract,
+          description: descGetLoadtestRun,
+        },
+      },
+      executeActions: {
+        ai_insights: {
+          method: "GET",
+          path: `${CHAOS_LOADTEST}/v1/runs/{runId}/ai-insights`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { run_id: "runId" },
+          queryParams: { load_test_identity: "loadTestIdentity" },
+          // No request body; scope goes on the query string.
+          skipScopeBodyInjection: true,
+          bodyBuilder: () => ({}),
+          responseExtractor: passthrough,
+          actionDescription: descGetRunAIInsights,
+          bodySchema: { description: descBodyNoBody, fields: [] },
+          paramsSchema: {
+            fields: [
+              { name: "load_test_identity", required: false, description: descRunAIInsightsLoadTestIdentity },
+            ],
+          } satisfies ParamsSchema,
+        },
+        generate_ai_insights: {
+          method: "POST",
+          path: `${CHAOS_LOADTEST}/v1/runs/{runId}/ai-insights`,
+          // A repeat request while generating or after Ready returns 409.
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: { run_id: "runId" },
+          queryParams: { load_test_identity: "loadTestIdentity" },
+          // No request body; scope goes on the query string.
+          skipScopeBodyInjection: true,
+          bodyBuilder: () => ({}),
+          responseExtractor: passthrough,
+          actionDescription: descGenerateRunAIInsights,
+          bodySchema: { description: descBodyNoBody, fields: [] },
+          paramsSchema: {
+            fields: [
+              { name: "load_test_identity", required: false, description: descRunAIInsightsLoadTestIdentity },
+            ],
+          } satisfies ParamsSchema,
+        },
+        status: {
+          method: "GET",
+          path: `${CHAOS_LOADTEST}/v1/runs/{runId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { run_id: "runId" },
+          queryParams: { load_test_identity: "loadTestIdentity" },
+          // Compaction would drop most of the structured fields.
+          skipCompact: true,
+          responseExtractor: chaosLoadTestRunStatusExtract,
+          actionDescription: descRunStatus,
+          paramsSchema: {
+            fields: [
+              { name: "load_test_identity", required: false, description: descRunAIInsightsLoadTestIdentity },
+            ],
+          } satisfies ParamsSchema,
+        },
+        live_metrics: {
+          method: "GET",
+          path: `${CHAOS_LOADTEST}/v1/runs/{runId}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { run_id: "runId" },
+          queryParams: { load_test_identity: "loadTestIdentity" },
+          skipCompact: true,
+          // The run GET has the latest snapshot; the time series is fetched here
+          // (best-effort) and filtered by `since` in the extractor, because the
+          // endpoint's from/to filter does not match stored timestamps.
+          preflight: async ({ client, input, registry, signal }) => {
+            validateLiveMetricsInput(input);
+            const runId = input.run_id;
+            if (typeof runId !== "string" || runId === "") {
+              throw new Error(
+                'Missing required field "run_id" for chaos_loadtest_run.live_metrics. Pass the run identity returned by chaos_loadtest.run or chaos_loadtest_run list.',
+              );
+            }
+            let fetched: LiveSeriesFetch;
+            try {
+              const raw = await client.request<unknown>({
+                method: "GET",
+                path: `${CHAOS_LOADTEST}/v1/runs/${encodePathSegment(runId)}/metrics/timeseries`,
+                params: {
+                  organizationIdentifier: (input.org_id as string | undefined) ?? registry.orgId,
+                  projectIdentifier: (input.project_id as string | undefined) ?? registry.projectId,
+                },
+                retryPolicy: "safe",
+                signal,
+              });
+              fetched = { ok: true, raw };
+            } catch (err) {
+              if (signal?.aborted) throw err;
+              fetched = { ok: false, error: err instanceof Error ? err.message : String(err) };
+            }
+            input[LIVE_SERIES_INPUT_KEY] = fetched;
+          },
+          responseExtractor: chaosLoadTestRunLiveMetricsExtract,
+          actionDescription: descRunLiveMetrics,
+          paramsSchema: {
+            fields: [
+              { name: "load_test_identity", required: false, description: descRunAIInsightsLoadTestIdentity },
+              { name: "since", required: false, description: descRunLiveSince },
+              { name: "max_points", required: false, description: descRunLiveMaxPoints },
+              { name: "max_endpoints", required: false, description: descRunLiveMaxEndpoints },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
