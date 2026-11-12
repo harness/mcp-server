@@ -34,6 +34,8 @@ function executionLink(ctx: ExecutionViewContext, pipelineId: string | undefined
 const AWAITING_ACTION = new Set(["ApprovalWaiting", "InterventionWaiting", "InputWaiting", "WaitingOnApproval"]);
 const STEP_DONE = new Set([...TERMINAL_STATUSES]);
 const CONTAINER_STEP_TYPES = new Set(["STEP_GROUP", "NG_SECTION", "NG_EXECUTION", "NG_FORK", "STAGES_STEP", "PIPELINE_SECTION"]);
+/** Harness-internal setup steps that the Harness UI does not count as pipeline steps. */
+const INTERNAL_STEP_TYPES = new Set(["liteEngineTask", "LITE_ENGINE_TASK", "InitializeContainer"]);
 
 interface LayoutNode {
   nodeType?: string;
@@ -58,7 +60,7 @@ interface GraphNode {
 }
 
 function refreshFor(executionId: string, ctx: ExecutionViewContext): ViewRefresh {
-  const args: Record<string, unknown> = { resource_type: "execution", resource_id: executionId };
+  const args: Record<string, unknown> = { resource_type: "execution", resource_id: executionId, params: { render_full_graph: true } };
   if (ctx.orgId) args.org_id = ctx.orgId;
   if (ctx.projectId) args.project_id = ctx.projectId;
   return { tool: "harness_get", arguments: args };
@@ -94,7 +96,7 @@ function stepsByStage(nodeMap: Record<string, GraphNode> | undefined): Map<strin
   for (const node of Object.values(nodeMap)) {
     const fqn = node.baseFqn ?? "";
     const match = /^pipeline\.stages\.([^.]+)\..*\.steps\.[^.]+$/.exec(fqn);
-    if (!match || CONTAINER_STEP_TYPES.has(node.stepType ?? "")) continue;
+    if (!match || CONTAINER_STEP_TYPES.has(node.stepType ?? "") || INTERNAL_STEP_TYPES.has(node.stepType ?? "")) continue;
     const list = byStage.get(match[1]!) ?? [];
     list.push(node);
     byStage.set(match[1]!, list);
@@ -162,6 +164,7 @@ export function buildPipelineExecutionView(raw: unknown, ctx: ExecutionViewConte
     status: viewStatus(rawStatus) ?? { label: rawStatus, tone: "neutral" },
     terminal: TERMINAL_STATUSES.has(rawStatus),
     stages,
+    steps_loaded: nodeMap !== undefined,
     refresh: refreshFor(executionId, scoped),
   };
   if (AWAITING_ACTION.has(rawStatus)) view.awaiting_action = true;

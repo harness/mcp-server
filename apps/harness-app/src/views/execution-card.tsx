@@ -48,11 +48,11 @@ function useNow(active: boolean): number {
   return now;
 }
 
-/** Refresh every 30 seconds while the run is live, for up to an hour; an empty stage list refreshes at once. */
+/** Refresh every 30 seconds while the run is live, for up to an hour; a missing stage or step graph is fetched once at once. */
 function useLiveRefresh(view: PipelineExecutionView): { paused: boolean; resume: () => void } {
   const [windowStart, setWindowStart] = useState(() => Date.now());
   const [paused, setPaused] = useState(false);
-  const needsGraph = view.stages.length === 0;
+  const needsGraph = view.stages.length === 0 || view.steps_loaded === false;
   const fetchedGraph = useRef(false);
 
   useEffect(() => {

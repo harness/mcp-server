@@ -60,6 +60,8 @@ export interface PipelineExecutionView {
   ended_at?: number;
   trigger?: { type?: string; by?: string };
   stages: ExecutionStageView[];
+  /** False when the response had no step graph; the card fetches it once through refresh. */
+  steps_loaded?: boolean;
   current_stage_index?: number;
   failure?: { stage?: string; step?: string; message: string };
   open_in_harness?: string;

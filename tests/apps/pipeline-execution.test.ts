@@ -50,6 +50,7 @@ function failedExecution() {
         a: { baseFqn: "pipeline.stages.build.spec.execution.steps.clone", name: "Clone", status: "Failed", stepType: "GitClone", startTs: 1, failureInfo: { message: "clone failed" } },
         b: { baseFqn: "pipeline.stages.build.spec.execution.steps.compile", name: "Compile", status: "NotStarted", stepType: "Run", startTs: 2 },
         c: { baseFqn: "pipeline.stages.build.spec.execution", name: "Execution", status: "Failed", stepType: "NG_EXECUTION" },
+        d: { baseFqn: "pipeline.stages.build.spec.execution.steps.liteEngineTask", name: "liteEngineTask", status: "Success", stepType: "liteEngineTask", startTs: 0 },
       },
     },
   };
@@ -97,7 +98,7 @@ describe("buildPipelineExecutionView", () => {
     );
     expect(view.refresh).toEqual({
       tool: "harness_get",
-      arguments: { resource_type: "execution", resource_id: "hXQzWgq5", org_id: "sandbox", project_id: "luisredda" },
+      arguments: { resource_type: "execution", resource_id: "hXQzWgq5", params: { render_full_graph: true }, org_id: "sandbox", project_id: "luisredda" },
     });
   });
 
@@ -128,6 +129,15 @@ describe("buildPipelineExecutionView", () => {
     expect(view.failure).toBeUndefined();
   });
 
+  it("marks steps as not loaded when the response has no execution graph", () => {
+    const raw = failedExecution() as Record<string, unknown>;
+    expect(buildPipelineExecutionView(raw, ctx)!.steps_loaded).toBe(true);
+    delete raw.executionGraph;
+    const view = buildPipelineExecutionView(raw, ctx)!;
+    expect(view.steps_loaded).toBe(false);
+    expect(view.stages[0]!.steps_total).toBeUndefined();
+  });
+
   it("returns undefined for responses that are not executions", () => {
     expect(buildPipelineExecutionView({ identifier: "p1" }, ctx)).toBeUndefined();
     expect(buildPipelineExecutionView(null, ctx)).toBeUndefined();
@@ -151,7 +161,7 @@ describe("buildPendingExecutionView", () => {
       status: { label: "Queued", tone: "neutral", live: true },
       terminal: false,
       stages: [],
-      refresh: { tool: "harness_get", arguments: { resource_type: "execution", resource_id: "exec-1" } },
+      refresh: { tool: "harness_get", arguments: { resource_type: "execution", resource_id: "exec-1", params: { render_full_graph: true } } },
     });
     expect(view.open_in_harness).toContain("/pipelines/build_app/deployments/exec-1/pipeline");
   });

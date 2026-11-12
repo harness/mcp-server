@@ -4474,7 +4474,7 @@ describe("MCP Apps view data", () => {
       open_in_harness: expect.stringContaining("/pipelines/build_app/deployments/exec-123/pipeline"),
       refresh: {
         tool: "harness_get",
-        arguments: { resource_type: "execution", resource_id: "exec-123", org_id: "default", project_id: "test-project" },
+        arguments: { resource_type: "execution", resource_id: "exec-123", params: { render_full_graph: true }, org_id: "default", project_id: "test-project" },
       },
     });
   });
