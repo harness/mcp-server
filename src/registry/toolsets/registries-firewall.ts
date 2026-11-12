@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, harV3ListExtract, harV3DataObjectUnwrap } from "../extractors.js";
+import { passthrough, harV3ListExtract, harV3DataArrayUnwrap, harV3DataObjectUnwrap } from "../extractors.js";
 import { V3_SCOPE_PARAMS, V3_PACKAGE_TYPES, V3_SORT_DESC, V3_PACKAGE_TYPES_DESC } from "./registries-v3.js";
 
 const V3_SCAN_STATUSES = ["ALLOWED", "BLOCKED", "WARN", "UNKNOWN"];
@@ -44,6 +44,69 @@ const firewallExceptionApprovalSchema: BodySchema = {
   ],
 };
 
+// Server-side limits: the sync endpoint evaluates inline, the async one queues a job.
+const SYNC_EVALUATE_MAX_ARTIFACTS = 50;
+const ASYNC_EVALUATE_MAX_ARTIFACTS = 10000;
+
+const evaluateBodySchema = (max: number, withSkipCache: boolean): BodySchema => ({
+  description: `Artifacts to evaluate against the registry's firewall policies (max ${max}).`,
+  fields: [
+    { name: "registryId", type: "string", required: true, description: "UUID of the registry whose firewall policies to apply" },
+    {
+      name: "artifacts",
+      type: "array",
+      required: true,
+      description: `Artifacts to evaluate, each { packageName, version } (max ${max})`,
+    },
+    ...(withSkipCache
+      ? [{ name: "skipCache", type: "boolean" as const, required: false, description: "Bypass cached scan results and re-evaluate" }]
+      : []),
+  ],
+});
+
+const evaluateBody = (max: number, allowSkipCache: boolean) => (input: Record<string, unknown>) => {
+  const body = (input.body ?? {}) as Record<string, unknown>;
+  const artifacts = body.artifacts;
+  if (!Array.isArray(artifacts) || artifacts.length === 0) {
+    throw new Error("body.artifacts must be a non-empty array of { packageName, version }.");
+  }
+  if (artifacts.length > max) {
+    throw new Error(`body.artifacts accepts at most ${max} artifacts per call (got ${artifacts.length}). Split the request.`);
+  }
+  const invalid = artifacts.findIndex((a) => {
+    const item = a as Record<string, unknown> | null;
+    return typeof item?.packageName !== "string" || typeof item?.version !== "string";
+  });
+  if (invalid !== -1) {
+    throw new Error(`body.artifacts[${invalid}] must have string packageName and version.`);
+  }
+  return {
+    registryId: body.registryId,
+    artifacts: artifacts.map((a) => {
+      const item = a as Record<string, unknown>;
+      return { packageName: item.packageName, version: item.version };
+    }),
+    ...(allowSkipCache && typeof body.skipCache === "boolean" ? { skipCache: body.skipCache } : {}),
+  };
+};
+
+// Build-info rows live under `pipelineData` with blocked totals in `meta`.
+const pipelineBuildInfoExtract = (raw: unknown): unknown => {
+  if (typeof raw !== "object" || raw === null) return raw;
+  const r = raw as Record<string, unknown>;
+  const items = Array.isArray(r.pipelineData) ? r.pipelineData : [];
+  const meta = r.meta as Record<string, unknown> | undefined;
+  return {
+    items,
+    total: items.length,
+    page: r.page,
+    size: r.size,
+    hasMore: r.hasMore,
+    ...(typeof meta?.totalBlockedPipelines === "number" ? { totalBlockedPipelines: meta.totalBlockedPipelines } : {}),
+    ...(typeof meta?.totalBlockedDependencies === "number" ? { totalBlockedDependencies: meta.totalBlockedDependencies } : {}),
+  };
+};
+
 const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
   if (item.exceptionId != null) out.exceptionId = item.exceptionId;
@@ -79,15 +142,16 @@ const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<strin
  * External gateway prefix: `/har/api/v3/…`.
  *
  * Write operations included: firewall exception create/update/delete and
- * approve/reject (all account-scoped).
+ * approve/reject (all account-scoped), and the async bulk_evaluate action,
+ * which queues an evaluation job. The sync evaluate action writes nothing.
  * `x-internal: true` operations are excluded on purpose.
  */
 export const registriesFirewallToolset: ToolsetDefinition = {
   name: "registries-firewall",
   displayName: "Artifact Registry Firewall (v3)",
   description:
-    "Harness Artifact Registry v3 firewall — artifact scans, bulk scan evaluations, and firewall " +
-    "exception create/update/delete/approve/reject (account-scoped writes).",
+    "Harness Artifact Registry v3 firewall — artifact scans, sync and async firewall evaluation, " +
+    "pipeline build info, and firewall exception create/update/delete/approve/reject (account-scoped writes).",
   optIn: false,
   resources: [
     {
@@ -151,6 +215,35 @@ export const registriesFirewallToolset: ToolsetDefinition = {
           // Response is `{ data: { packageName, scanStatus, ... } }`; unwrap.
           responseExtractor: harV3DataObjectUnwrap,
           description: "Get scan details for a single artifact scan (v3)",
+        },
+      },
+      executeActions: {
+        evaluate: {
+          method: "POST",
+          path: "/har/api/v3/scans/bulk-evaluate-sync",
+          // Evaluates inline and writes nothing, so it stays available in read-only mode.
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: evaluateBody(SYNC_EVALUATE_MAX_ARTIFACTS, true),
+          responseExtractor: harV3DataArrayUnwrap,
+          actionDescription:
+            `Check whether up to ${SYNC_EVALUATE_MAX_ARTIFACTS} package versions would be allowed, warned or blocked by a registry's firewall policies, ` +
+            "without pulling them. Nothing is stored. Body: { registryId, artifacts: [{ packageName, version }], skipCache? }. " +
+            "For larger batches use bulk_evaluate.",
+          bodySchema: evaluateBodySchema(SYNC_EVALUATE_MAX_ARTIFACTS, true),
+        },
+        bulk_evaluate: {
+          method: "POST",
+          path: "/har/api/v3/scans/bulk-evaluate",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: evaluateBody(ASYNC_EVALUATE_MAX_ARTIFACTS, false),
+          responseExtractor: harV3DataObjectUnwrap,
+          actionDescription:
+            `Queue firewall policy evaluation for up to ${ASYNC_EVALUATE_MAX_ARTIFACTS} package versions. Returns an evaluationId; ` +
+            "poll harness_get resource_type=bulk_scan_evaluation_v3 with evaluation_id for results. " +
+            "Body: { registryId, artifacts: [{ packageName, version }] }.",
+          bodySchema: evaluateBodySchema(ASYNC_EVALUATE_MAX_ARTIFACTS, false),
         },
       },
     },
@@ -319,6 +412,51 @@ export const registriesFirewallToolset: ToolsetDefinition = {
           },
           responseExtractor: harV3ListExtract,
           description: "List versions available for firewall exception creation (v3)",
+        },
+      },
+    },
+    {
+      resourceType: "firewall_build_info_v3",
+      displayName: "Firewall Pipeline Build Info (v3)",
+      description:
+        "Pipeline builds that pulled firewall-blocked dependencies, with totalBlockedPipelines / totalBlockedDependencies. " +
+        "Use it to find which pipelines a blocked package or scan affects.",
+      toolset: "registries-firewall",
+      scope: "project",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "package_name", description: "Filter by package name" },
+        { name: "version", description: "Filter by package version" },
+        { name: "registry_id", description: "Filter by registry UUID" },
+        { name: "pipeline_id", description: "Filter by pipeline identifier" },
+        { name: "scan_id", description: "Filter by scan ID (from artifact_scan_v3)" },
+        { name: "projects", description: "Comma-separated project identifiers" },
+        { name: "categories", description: "Security violation categories to include", enum: V3_POLICY_CATEGORIES },
+        { name: "package_types", description: V3_PACKAGE_TYPES_DESC, enum: V3_PACKAGE_TYPES },
+        { name: "scope", description: "Registry scope", enum: ["none", "ancestors", "descendants"] },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/har/api/v3/build-info/pipeline/details",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            package_name: "package_name",
+            version: "version",
+            registry_id: "registry_id",
+            pipeline_id: "pipeline_id",
+            scan_id: "scan_id",
+            projects: "projects",
+            categories: "categories",
+            package_types: "package_types",
+            scope: "scope",
+            page: "page",
+            size: "size",
+          },
+          skipCompact: true,
+          responseExtractor: pipelineBuildInfoExtract,
+          description: "List pipeline build info for firewall-blocked dependencies (v3)",
         },
       },
     },
