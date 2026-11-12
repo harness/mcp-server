@@ -44,6 +44,35 @@ const firewallExceptionApprovalSchema: BodySchema = {
   ],
 };
 
+// The default `compactItems()` whitelist keeps only ids/timestamps here, dropping `packageName`, `version`,
+// `scanStatus` and `exemptionStatus` — without them an agent can't tell what is blocked or whether it is
+// already exempted. Verbose `policySets`/`buildDetails`/`rootPackages` are left to `get` (scan details).
+const compactArtifactScanV3 = (item: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (item.id != null) { out.scan_id = item.id; out.id = item.id; }
+  if (item.packageName != null) out.packageName = item.packageName;
+  if (item.packageType != null) out.packageType = item.packageType;
+  if (item.version != null) out.version = item.version;
+  if (item.versionId != null) out.versionId = item.versionId;
+  if (item.purl != null) out.purl = item.purl;
+  if (item.scanStatus != null) out.scanStatus = item.scanStatus;
+  if (item.securityViolationCategories != null) out.securityViolationCategories = item.securityViolationCategories;
+  if (item.exemptionStatus != null) out.exemptionStatus = item.exemptionStatus;
+  if (item.totalAffectedPipelines != null) out.totalAffectedPipelines = item.totalAffectedPipelines;
+  if (item.registryId != null) out.registryId = item.registryId;
+  if (item.registryName != null) out.registryName = item.registryName;
+  if (item.parentRegistryId != null) out.parentRegistryId = item.parentRegistryId;
+  if (item.parentRegistryName != null) out.parentRegistryName = item.parentRegistryName;
+  // Backend emits these two with a capital R (see ArtifactScanV3 in the v3 spec).
+  if (item.RegistryOrgId != null) out.RegistryOrgId = item.RegistryOrgId;
+  if (item.RegistryProjectId != null) out.RegistryProjectId = item.RegistryProjectId;
+  if (item.parentRegistryOrgId != null) out.parentRegistryOrgId = item.parentRegistryOrgId;
+  if (item.parentRegistryProjectId != null) out.parentRegistryProjectId = item.parentRegistryProjectId;
+  if (item.lastEvaluatedAt != null) out.lastEvaluatedAt = item.lastEvaluatedAt;
+  if (item.lastEvaluatedBy != null) out.lastEvaluatedBy = item.lastEvaluatedBy;
+  return out;
+};
+
 const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
   if (item.exceptionId != null) out.exceptionId = item.exceptionId;
@@ -98,6 +127,7 @@ export const registriesFirewallToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["scan_id"],
+      compactItem: compactArtifactScanV3,
       listFilterFields: [
         { name: "search_term", description: "Filter scans by keyword" },
         { name: "registry_ids", description: "Comma-separated registry IDs" },

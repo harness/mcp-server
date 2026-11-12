@@ -9,6 +9,7 @@ import { Registry } from "../../src/registry/index.js";
 import { registriesV3Toolset } from "../../src/registry/toolsets/registries-v3.js";
 import { registriesFirewallToolset } from "../../src/registry/toolsets/registries-firewall.js";
 import { compactItems } from "../../src/utils/compact.js";
+import { registerAllTools } from "../../src/tools/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -316,6 +317,97 @@ describe("registries-v3 compactItem projection", () => {
     expect(items[0].status).toBe("PENDING");
     expect(items[0].businessJustification).toBe("urgent hotfix");
     expect(items[0].extra).toBeUndefined();
+  });
+
+  it("artifact_scan_v3.compactItem keeps package/status/exemption fields and adds scan_id", () => {
+    const resource = getResource("artifact_scan_v3");
+    expect(resource.compactItem).toBeDefined();
+    const items = compactItems([BLOCKED_SCAN], resource.compactItem) as Record<string, unknown>[];
+    expect(items[0]).toEqual({
+      scan_id: BLOCKED_SCAN.id,
+      id: BLOCKED_SCAN.id,
+      packageName: "lodash",
+      packageType: "NPM",
+      version: "4.17.15",
+      versionId: BLOCKED_SCAN.versionId,
+      purl: "pkg:npm/lodash@4.17.15",
+      scanStatus: "BLOCKED",
+      securityViolationCategories: ["Security"],
+      exemptionStatus: { id: "e1e1e1e1-0000-4000-8000-000000000003", status: "PENDING" },
+      totalAffectedPipelines: 3,
+      registryId: BLOCKED_SCAN.registryId,
+      registryName: "npm-upstream",
+      parentRegistryId: BLOCKED_SCAN.parentRegistryId,
+      parentRegistryName: "npm-virtual",
+      RegistryOrgId: "default",
+      RegistryProjectId: "proj",
+      parentRegistryOrgId: "default",
+      parentRegistryProjectId: "proj",
+      lastEvaluatedAt: "1762900000000",
+      lastEvaluatedBy: "policy-engine",
+    });
+  });
+});
+
+// Raw `ArtifactScanV3` list item, field names as returned by QA's /har/api/v3/scans.
+const BLOCKED_SCAN = {
+  id: "6f1c2a9e-0000-4000-8000-000000000001",
+  packageName: "lodash",
+  packageType: "NPM",
+  purl: "pkg:npm/lodash@4.17.15",
+  version: "4.17.15",
+  versionId: "9a8b7c6d-0000-4000-8000-000000000002",
+  registryId: "0183d3a8-91d8-4c49-8025-057b0e16fca8",
+  registryName: "npm-upstream",
+  parentRegistryId: "1183d3a8-91d8-4c49-8025-057b0e16fca8",
+  parentRegistryName: "npm-virtual",
+  RegistryOrgId: "default",
+  RegistryProjectId: "proj",
+  parentRegistryOrgId: "default",
+  parentRegistryProjectId: "proj",
+  scanStatus: "BLOCKED",
+  securityViolationCategories: ["Security"],
+  policySets: [{ policySetRef: "default", policySetName: "Default" }],
+  rootPackages: ["my-app@1.0.0"],
+  totalAffectedPipelines: 3,
+  buildDetails: { pipelineId: "build", executionId: "exec-1" },
+  lastEvaluatedAt: "1762900000000",
+  lastEvaluatedBy: "policy-engine",
+  exemptionStatus: { id: "e1e1e1e1-0000-4000-8000-000000000003", status: "PENDING" },
+};
+
+describe("harness_list artifact_scan_v3 with default compaction", () => {
+  it("returns package, status and exemption fields agents need to triage blocked dependencies", async () => {
+    const config = makeConfig({ HARNESS_TOOLSETS: undefined });
+    const handlers = new Map<string, (args: unknown, extra: unknown) => Promise<unknown>>();
+    const server = {
+      server: { getClientCapabilities: () => ({}) },
+      registerTool: (name: string, _def: unknown, cb: (args: unknown, extra: unknown) => Promise<unknown>) => {
+        handlers.set(name, cb);
+      },
+    };
+    const client = {
+      account: "acct123",
+      request: vi.fn().mockResolvedValue({ data: [BLOCKED_SCAN], itemCount: 1, pageIndex: 0, pageSize: 20, pageCount: 1 }),
+    } as unknown as HarnessClient;
+    registerAllTools(server as never, new Registry(config), client, config);
+
+    const res = (await handlers.get("harness_list")!(
+      { resource_type: "artifact_scan_v3", filters: { scan_status: "BLOCKED" } },
+      { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} },
+    )) as { content: { type: string; text: string }[]; structuredContent?: { items: Record<string, unknown>[] } };
+    const body = res.structuredContent ?? JSON.parse(res.content.find((c) => c.type === "text")!.text);
+    const item = body.items[0];
+
+    expect(item.packageName).toBe("lodash");
+    expect(item.version).toBe("4.17.15");
+    expect(item.scanStatus).toBe("BLOCKED");
+    expect(item.registryName).toBe("npm-upstream");
+    expect(item.exemptionStatus).toEqual(BLOCKED_SCAN.exemptionStatus);
+    expect(item.scan_id).toBe(BLOCKED_SCAN.id);
+    expect(item.policySets).toBeUndefined();
+    expect(item.buildDetails).toBeUndefined();
+    expect(item.rootPackages).toBeUndefined();
   });
 });
 
