@@ -267,12 +267,12 @@ const updateRootCauseTheorySchema: BodySchema = {
     + "one of message, status, confidence or relatedActivities",
   fields: [
     { name: "message", type: "string", required: false, description: "The new theory text" },
-    { name: "status", type: "string", required: false, description: "INVESTIGATING or CONFIRMED" },
+    { name: "status", type: "string", required: false, description: "CONFIRMED, to confirm the theory" },
     {
       name: "confidence",
       type: "number",
       required: false,
-      description: "Integer from 0 to 100. When omitted, a status change resets it to the new status's default",
+      description: "Integer from 0 to 100. When omitted, confirming resets it to CONFIRMED's default",
     },
     {
       name: "relatedActivities",
@@ -477,7 +477,7 @@ export const incidentsToolset: ToolsetDefinition = {
           bodySchema: updateRootCauseTheorySchema,
           responseExtractor: addRootCauseTheoryExtract,
           actionDescription:
-            "Change a root-cause theory's message, status, confidence or cited items. Pass theory_id via params "
+            "Change a root-cause theory's message, confidence or cited items, or confirm it. Pass theory_id via params "
             + "and only the parts that change in the body. Confirming a theory records its cited items as the "
             + "incident's cause. "
             + THEORY_EDIT_RULES
