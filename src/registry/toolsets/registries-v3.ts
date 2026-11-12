@@ -393,29 +393,9 @@ export const registriesV3Toolset: ToolsetDefinition = {
         },
       },
     },
-    // GetVersionV3 / GetFileDetailsV3 / ListVersionDeploymentsV3 / GetSystemInfoV3
-    // declare only AccountIdentifierV3, so they live on their own account-scoped
-    // resource types instead of as `get` on the project-scoped list resources.
-    {
-      resourceType: "version_detail_v3",
-      displayName: "Version Detail (v3)",
-      description:
-        "Full detail for a single version by UUID: size, download count, purl, pull command, and package-type specific metadata.",
-      toolset: "registries-v3",
-      scope: "account",
-      scopeParams: V3_SCOPE_PARAMS,
-      identifierFields: ["version_id"],
-      operations: {
-        get: {
-          method: "GET",
-          path: "/har/api/v3/versions/{id}",
-          pathParams: { version_id: "id" },
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: harV3DataObjectUnwrap,
-          description: "Get a version by UUID (v3). Get version_id from version_v3 list.",
-        },
-      },
-    },
+    // GetFileDetailsV3 / ListVersionDeploymentsV3 / GetSystemInfoV3 declare only
+    // AccountIdentifierV3, so they live on their own account-scoped resource
+    // types instead of as `get` on the project-scoped list resources.
     {
       resourceType: "file_detail_v3",
       displayName: "File Detail (v3)",

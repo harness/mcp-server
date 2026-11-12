@@ -47,18 +47,6 @@ function expectAccountOnly(call: { params: Record<string, unknown> }) {
 describe("HAR v3 detail resources", () => {
   const registry = new Registry(makeConfig());
 
-  it("version_detail_v3.get hits /versions/{id}, is account-scoped, and unwraps data", async () => {
-    const client = mockClient({ data: { id: "ver-1", name: "1.0.0", packageType: "NPM", pullCommand: "npm i x@1.0.0" } });
-    const result = (await registry.dispatch(client, "version_detail_v3", "get", { version_id: "ver-1" })) as Record<string, unknown>;
-
-    const call = lastCall(client);
-    expect(call.method).toBe("GET");
-    expect(call.path).toBe("/har/api/v3/versions/ver-1");
-    expectAccountOnly(call);
-    expect(result.pullCommand).toBe("npm i x@1.0.0");
-    expect(result.data).toBeUndefined();
-  });
-
   it("file_detail_v3.get hits /files/{id} and returns downloadUrl, not bytes", async () => {
     const client = mockClient({ data: { id: "f-1", name: "x.tgz", downloadUrl: "https://pkg/x.tgz", contentType: "application/gzip" } });
     const result = (await registry.dispatch(client, "file_detail_v3", "get", { file_id: "f-1" })) as Record<string, unknown>;
@@ -165,7 +153,7 @@ describe("HAR v3 stats resources", () => {
 
   it("new resources stay behind the registries-v3 opt-in", () => {
     const defaults = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined })).getAllResourceTypes();
-    for (const t of ["version_detail_v3", "file_detail_v3", "system_info_v3", "version_deployment_v3", "registry_stats_v3", "package_stats_v3", "version_stats_v3"]) {
+    for (const t of ["file_detail_v3", "system_info_v3", "version_deployment_v3", "registry_stats_v3", "package_stats_v3", "version_stats_v3"]) {
       expect(defaults).not.toContain(t);
     }
   });
