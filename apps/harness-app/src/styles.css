@@ -517,5 +517,6 @@ html, body {
   cursor: pointer;
 }
 
+.table td { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 .table .num { text-align: right; }
 .table tbody tr:last-child td { border-bottom: 0; }

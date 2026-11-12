@@ -1,4 +1,4 @@
-import type { DashboardColumn, DashboardPanel, PanelCell } from "../../../../src/apps/view-types.js";
+import type { DashboardColumn, DashboardPanel, PanelCell, StatusTone } from "../../../../src/apps/view-types.js";
 
 const MAX_SERIES = 8;
 
@@ -108,6 +108,24 @@ function categoryData(panel: DashboardPanel): ChartData {
     keys: rows.map((r) => r[x] ?? null),
     series: ys.map((i) => ({ label: panel.columns[i]!.name, data: rows.map((r) => number(r[i] ?? null)) })),
   };
+}
+
+const STATUS_TONES: Array<[RegExp, StatusTone]> = [
+  [/^(success|succeeded|passed|completed)$/, "success"],
+  [/^(failed|failure|errored|error|expired|approvalrejected|rejected)$/, "danger"],
+  [/^(running|asyncwaiting|taskwaiting|inprogress)$/, "info"],
+  [/(waiting|queued|paused|ignorefailed|pending)/, "warning"],
+  [/^(aborted|abortedbyfreeze|skipped|cancelled|canceled|notstarted|suspended)$/, "neutral"],
+];
+
+/** Status colours for category labels, when every label is a known status (SUCCESS, FAILED, …). */
+export function statusTones(labels: string[]): StatusTone[] | undefined {
+  if (labels.length === 0) return undefined;
+  const tones = labels.map((label) => {
+    const key = label.toLowerCase().replace(/[\s_-]/g, "");
+    return STATUS_TONES.find(([pattern]) => pattern.test(key))?.[1];
+  });
+  return tones.every((t): t is StatusTone => t !== undefined) ? tones : undefined;
 }
 
 export function chartData(panel: DashboardPanel): ChartData {

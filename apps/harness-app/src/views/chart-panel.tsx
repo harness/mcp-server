@@ -16,7 +16,7 @@ import {
 } from "chart.js";
 import { useEffect, useRef } from "preact/hooks";
 import type { DashboardPanel, PanelCell } from "../../../../src/apps/view-types.js";
-import { chartData, formatCompact } from "./chart-data.js";
+import { chartData, formatCompact, statusTones } from "./chart-data.js";
 
 Chart.register(
   ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, Legend,
@@ -63,6 +63,8 @@ function config(panel: DashboardPanel, onDrill: (target: DrillTarget) => void): 
   const font = { family: fontFamily(), size: 12 };
   const many = data.series.length > 1;
   const horizontal = panel.chart === "bar" && data.labels.length > 8;
+  const tones = data.series.length === 1 ? statusTones(data.labels) : undefined;
+  const toneColors = tones?.map((tone) => color(tone === "neutral" ? "--hx-text-muted" : `--hx-${tone}`));
 
   const onClick: NonNullable<ChartConfiguration["options"]>["onClick"] = (_event, elements) => {
     const hit = elements[0];
@@ -81,7 +83,7 @@ function config(panel: DashboardPanel, onDrill: (target: DrillTarget) => void): 
       type: "doughnut",
       data: {
         labels: data.labels,
-        datasets: [{ data: data.series[0]?.data ?? [], backgroundColor: palette, borderColor: color("--hx-bg"), borderWidth: 2 }],
+        datasets: [{ data: data.series[0]?.data ?? [], backgroundColor: toneColors ?? palette, borderColor: color("--hx-bg"), borderWidth: 2 }],
       },
       options: {
         responsive: true,
@@ -101,7 +103,7 @@ function config(panel: DashboardPanel, onDrill: (target: DrillTarget) => void): 
         label: s.label,
         data: s.data,
         borderColor: series(i),
-        backgroundColor: panel.chart === "bar" ? series(i) : series(i, isArea ? 0.35 : 0.12),
+        backgroundColor: panel.chart === "bar" ? toneColors ?? series(i) : series(i, isArea ? 0.35 : 0.12),
         fill: isArea ? (i === 0 ? "origin" : "-1") : false,
         borderWidth: 2,
         borderRadius: panel.chart === "bar" ? 3 : 0,
@@ -116,12 +118,12 @@ function config(panel: DashboardPanel, onDrill: (target: DrillTarget) => void): 
       interaction: { mode: "index", intersect: false },
       onClick,
       scales: {
-        x: { stacked: isArea, grid: { display: horizontal, color: grid }, ticks: { color: text, font, maxRotation: 0, autoSkip: true } },
-        y: {
+        [horizontal ? "y" : "x"]: { stacked: isArea, grid: { display: false }, ticks: { color: text, font, maxRotation: 0, autoSkip: !horizontal } },
+        [horizontal ? "x" : "y"]: {
           stacked: isArea,
           beginAtZero: true,
-          grid: { display: !horizontal, color: grid },
-          ticks: { color: text, font, callback: (v) => (typeof v === "number" ? formatCompact(v) : v) },
+          grid: { color: grid },
+          ticks: { color: text, font, callback: (v: string | number) => (typeof v === "number" ? formatCompact(v) : v) },
         },
       },
       plugins: {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildBatchDashboard, buildPanel, buildSingleQueryDashboard, PANEL_ROW_CAP } from "../../src/apps/kg-dashboard.js";
-import { chartData, summarizePanel } from "../../apps/harness-app/src/views/chart-data.js";
+import { chartData, statusTones, summarizePanel } from "../../apps/harness-app/src/views/chart-data.js";
 
 const Q = 'find view "cd:deployments" | select {service, count()}';
 
@@ -111,6 +111,13 @@ describe("view chart data", () => {
     const data = chartData(panel([{ name: "week" }, { name: "service" }, { name: "deploys" }], rows));
     expect(data.series.map((s) => s.label)).toEqual(["svc-0", "svc-1", "svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "Other"]);
     expect(data.series.at(-1)!.data).toEqual([3 + 2 + 1]);
+  });
+
+  it("colours status categories by meaning, and only when every label is a status", () => {
+    expect(statusTones(["SUCCESS", "FAILED", "IGNOREFAILED", "ABORTED", "RUNNING", "APPROVALWAITING", "Expired"]))
+      .toEqual(["success", "danger", "warning", "neutral", "info", "warning", "danger"]);
+    expect(statusTones(["SUCCESS", "payments"])).toBeUndefined();
+    expect(statusTones([])).toBeUndefined();
   });
 
   it("summarizes panels for the model, flagging partial results", () => {

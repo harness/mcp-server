@@ -55,7 +55,9 @@ function DataTable({ panel }: { panel: DashboardPanel }) {
           {rows.map((row, r) => (
             <tr key={r}>
               {panel.columns.map((column, c) => (
-                <td key={column.name} class={column.kind === "number" ? "num" : undefined}>{formatCell(row[c] ?? null, column)}</td>
+                <td key={column.name} class={column.kind === "number" ? "num" : undefined} title={formatCell(row[c] ?? null, column)}>
+                  {formatCell(row[c] ?? null, column)}
+                </td>
               ))}
             </tr>
           ))}
