@@ -97,6 +97,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
+    "chart.js": "^4.6.1",
     "preact": "^11.2.0",
     "typescript": "^5.7.3",
     "vite": "^7.3.7",

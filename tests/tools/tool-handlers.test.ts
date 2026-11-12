@@ -4525,6 +4525,65 @@ describe("MCP Apps view data", () => {
     });
   });
 
+  it("renders an HQL run as a one-panel dashboard, applying the params.view hint", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest.mockResolvedValue({ columns: [{ name: "service" }, { name: "deploys" }], rows: [["api", 9], ["web", 2]] });
+    const plain = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" });
+    plain.mockRequest.mockResolvedValue({ columns: [{ name: "service" }, { name: "deploys" }], rows: [["api", 9], ["web", 2]] });
+    const args = {
+      resource_type: "hql_query",
+      action: "run",
+      body: { query_string: 'find view "cd:deployments" | select {service, count()}' },
+      params: { view: { title: "Deploys by service", chart: "pie" } },
+    };
+
+    const result = await server.call("harness_execute", args);
+    const textOnly = await plain.server.call("harness_execute", args);
+
+    expect(result.content).toEqual(textOnly.content);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({ body: { query_string: args.body.query_string } });
+    expect(JSON.stringify(mockRequest.mock.calls[0]![0])).not.toContain("Deploys by service");
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "kg_dashboard",
+      panels: [{ title: "Deploys by service", chart: "pie", rows: [["api", 9], ["web", 2]], refresh: { tool: "harness_execute" } }],
+    });
+  });
+
+  it("renders a batch HQL run as a dashboard with one panel per query and errors kept in their panel", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest
+      .mockResolvedValueOnce({ columns: [{ name: "count" }], rows: [[42]] })
+      .mockRejectedValueOnce(new Error("syntax error"));
+    const result = await server.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "run",
+      queries: [{ query_string: 'find view "cd:deployments" | select {count()}' }, { query_string: "find nope" }],
+      params: { view: { title: "Delivery health", panels: [{ title: "Deploys" }, { title: "Broken" }] } },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ summary: { total: 2, succeeded: 1, failed: 1 } });
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "kg_dashboard",
+      title: "Delivery health",
+      panels: [
+        { title: "Deploys", chart: "kpi", rows: [[42]] },
+        { title: "Broken", error: expect.stringContaining("syntax error") },
+      ],
+    });
+  });
+
+  it("adds no dashboard for HQL validate", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest.mockResolvedValue({ is_valid: true, errors: [] });
+    const result = await server.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "validate",
+      body: { query_string: 'find view "cd:deployments"' },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result._meta).toBeUndefined();
+  });
+
   it("adds no view to error results", async () => {
     const { server } = await registerViewTools({}, UI_CAPS);
     const result = await server.call("harness_get", { resource_type: "nonexistent" });

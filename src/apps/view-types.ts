@@ -68,4 +68,39 @@ export interface PipelineExecutionView {
   refresh?: ViewRefresh;
 }
 
-export type HarnessView = ResultView | PipelineExecutionView;
+export type PanelChart = "kpi" | "line" | "area" | "bar" | "pie" | "table";
+export type ColumnKind = "time" | "number" | "category";
+export type PanelCell = string | number | boolean | null;
+
+export interface DashboardColumn {
+  name: string;
+  kind: ColumnKind;
+}
+
+/** One HQL query result. */
+export interface DashboardPanel {
+  id: string;
+  title: string;
+  query_string: string;
+  chart: PanelChart;
+  columns: DashboardColumn[];
+  rows: PanelCell[][];
+  /** Rows returned by the engine before the view cap. */
+  row_count: number;
+  /** The engine returned a prefix of the result. */
+  truncated?: boolean;
+  /** Rows were cut to the view cap. */
+  capped?: boolean;
+  error?: string;
+  /** Re-runs this query (read-only HQL). */
+  refresh?: ViewRefresh;
+}
+
+/** Knowledge Graph dashboard: one panel per HQL query. */
+export interface KgDashboardView {
+  kind: "kg_dashboard";
+  title?: string;
+  panels: DashboardPanel[];
+}
+
+export type HarnessView = ResultView | PipelineExecutionView | KgDashboardView;

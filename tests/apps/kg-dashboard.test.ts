@@ -1,0 +1,122 @@
+import { describe, it, expect } from "vitest";
+import { buildBatchDashboard, buildPanel, buildSingleQueryDashboard, PANEL_ROW_CAP } from "../../src/apps/kg-dashboard.js";
+import { chartData, summarizePanel } from "../../apps/harness-app/src/views/chart-data.js";
+
+const Q = 'find view "cd:deployments" | select {service, count()}';
+
+function panel(columns: Array<{ name: string; type?: string }>, rows: unknown[], hint?: { chart?: string; title?: string }) {
+  return buildPanel({ query_string: Q, result: { columns, rows } }, 0, hint);
+}
+
+describe("chart inference", () => {
+  it("1 row, 1 numeric column → KPI", () => {
+    expect(panel([{ name: "count" }], [[42]]).chart).toBe("kpi");
+  });
+
+  it("time + numeric → line", () => {
+    const p = panel([{ name: "day" }, { name: "deploys" }, { name: "failures" }], [["2026-11-01", 3, 1], ["2026-11-02", 5, 0]]);
+    expect(p.columns.map((c) => c.kind)).toEqual(["time", "number", "number"]);
+    expect(p.chart).toBe("line");
+  });
+
+  it("time + category + numeric → area", () => {
+    expect(panel([{ name: "week" }, { name: "service" }, { name: "deploys" }], [["2026-11-02", "payments", 4]]).chart).toBe("area");
+  });
+
+  it("category + numeric (≤25 rows) → bar; more rows → table", () => {
+    const rows = (n: number) => Array.from({ length: n }, (_, i) => [`svc-${i}`, i]);
+    expect(panel([{ name: "service" }, { name: "deploys" }], rows(25)).chart).toBe("bar");
+    expect(panel([{ name: "service" }, { name: "deploys" }], rows(26)).chart).toBe("table");
+  });
+
+  it("anything else → table", () => {
+    expect(panel([{ name: "id" }, { name: "name" }], [["a", "b"]]).chart).toBe("table");
+    expect(panel([{ name: "count" }], []).chart).toBe("table");
+  });
+
+  it("uses declared column types and epoch-millisecond time columns", () => {
+    const p = panel([{ name: "created_at", type: "LONG" }, { name: "value", type: "DOUBLE" }], [[1_762_000_000_000, 1.5]]);
+    expect(p.columns.map((c) => c.kind)).toEqual(["time", "number"]);
+  });
+
+  it("reads object rows and protobuf-style cells", () => {
+    const fromObjects = panel([{ name: "service" }, { name: "n" }], [{ service: "api", n: 2 }]);
+    const fromCells = panel([{ name: "service" }, { name: "n" }], [{ values: [{ string_value: "api" }, { int64_value: 2 }] }]);
+    expect(fromObjects.rows).toEqual([["api", 2]]);
+    expect(fromCells.rows).toEqual([["api", 2]]);
+  });
+});
+
+describe("hints", () => {
+  it("applies a chart and title the data supports", () => {
+    const p = panel([{ name: "service" }, { name: "deploys" }], [["api", 4], ["web", 2]], { chart: "pie", title: "Deploys by service" });
+    expect(p).toMatchObject({ chart: "pie", title: "Deploys by service" });
+  });
+
+  it("ignores a chart the data cannot support and falls back to inference", () => {
+    expect(panel([{ name: "id" }, { name: "name" }], [["a", "b"]], { chart: "line" }).chart).toBe("table");
+    expect(panel([{ name: "service" }, { name: "n" }], [["a", 1], ["b", 2]], { chart: "kpi" }).chart).toBe("bar");
+    expect(panel([{ name: "service" }, { name: "n" }], [["a", 1]], { chart: "sparkline" }).chart).toBe("bar");
+  });
+});
+
+describe("panels", () => {
+  it("caps rows sent to the view and keeps the engine truncation flag", () => {
+    const rows = Array.from({ length: PANEL_ROW_CAP + 10 }, (_, i) => [`id-${i}`, "x"]);
+    const p = buildPanel({ query_string: Q, result: { columns: [{ name: "id" }, { name: "n" }], rows, truncated: true } }, 0);
+    expect(p.rows).toHaveLength(PANEL_ROW_CAP);
+    expect(p).toMatchObject({ row_count: PANEL_ROW_CAP + 10, capped: true, truncated: true });
+  });
+
+  it("titles a panel from the queried type, and re-runs the same read-only query", () => {
+    const p = panel([{ name: "count" }], [[1]]);
+    expect(p.title).toBe("Deployments");
+    expect(p.refresh).toEqual({
+      tool: "harness_execute",
+      arguments: { resource_type: "hql_query", action: "run", body: { query_string: Q } },
+    });
+  });
+
+  it("keeps a failed query inside its own panel", () => {
+    const view = buildBatchDashboard(
+      [
+        { query_string: Q, result: { columns: [{ name: "count" }], rows: [[7]] } },
+        { query_string: "find bad", error: "syntax error at 'bad'" },
+      ],
+      { title: "Delivery health", panels: [{ title: "Deploys" }, { title: "Broken" }] },
+    )!;
+    expect(view.title).toBe("Delivery health");
+    expect(view.panels.map((p) => [p.title, p.chart, p.error])).toEqual([
+      ["Deploys", "kpi", undefined],
+      ["Broken", "table", "syntax error at 'bad'"],
+    ]);
+  });
+
+  it("builds a single-panel dashboard only for a real query result", () => {
+    expect(buildSingleQueryDashboard(Q, { columns: [{ name: "count" }], rows: [[1]] }, { chart: "kpi" })?.panels).toHaveLength(1);
+    expect(buildSingleQueryDashboard("", { columns: [], rows: [] }, undefined)).toBeUndefined();
+    expect(buildSingleQueryDashboard(Q, "text", undefined)).toBeUndefined();
+  });
+});
+
+describe("view chart data", () => {
+  it("sorts bars by value, descending", () => {
+    const data = chartData(panel([{ name: "service" }, { name: "deploys" }], [["web", 2], ["api", 9], ["db", 5]]));
+    expect(data.labels).toEqual(["api", "db", "web"]);
+    expect(data.series).toEqual([{ label: "deploys", data: [9, 5, 2] }]);
+  });
+
+  it("stacks the top 7 categories and groups the rest as Other", () => {
+    const rows = Array.from({ length: 10 }, (_, i) => ["2026-11-02", `svc-${i}`, 10 - i]);
+    const data = chartData(panel([{ name: "week" }, { name: "service" }, { name: "deploys" }], rows));
+    expect(data.series.map((s) => s.label)).toEqual(["svc-0", "svc-1", "svc-2", "svc-3", "svc-4", "svc-5", "svc-6", "Other"]);
+    expect(data.series.at(-1)!.data).toEqual([3 + 2 + 1]);
+  });
+
+  it("summarizes panels for the model, flagging partial results", () => {
+    expect(summarizePanel(panel([{ name: "service" }, { name: "deploys" }], [["web", 2], ["api", 9]], { title: "Deploys" })))
+      .toBe("Deploys: 2 service; highest api (9 deploys)");
+    const partial = buildPanel({ query_string: Q, result: { columns: [{ name: "id" }, { name: "x" }], rows: [["a", "b"]], truncated: true } }, 0);
+    expect(summarizePanel(partial)).toContain("(partial result)");
+  });
+});
