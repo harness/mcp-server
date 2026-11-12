@@ -122,7 +122,7 @@ function config(panel: DashboardPanel, onDrill: (target: DrillTarget) => void): 
       responsive: true,
       maintainAspectRatio: false,
       indexAxis: horizontal ? "y" : "x",
-      interaction: { mode: "index", intersect: false },
+      interaction: { mode: "index", intersect: false, axis: horizontal ? "y" : "x" },
       onClick,
       scales: {
         [horizontal ? "y" : "x"]: {
