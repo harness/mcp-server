@@ -202,3 +202,8 @@
 
 ## Version-bump Git sequencing
 - If staging or committing fails because the sandbox blocks the Git index, retry with approved escalation and verify the commit succeeded before pushing or creating the PR.
+
+## MCP Apps View Coverage
+- **Issue**: Server tests covered the `_meta` view data, but nothing exercised the view's own behavior (refresh replacing the displayed view), so UI regressions could ship unnoticed. The new `HARNESS_MCP_APPS` knob also missed the packaged manifests (see Public Config Surface Alignment).
+- **Fix**: Keep view logic in DOM-free modules (`apps/harness-app/src/host.ts`, `chart-data.ts`) and test them from `tests/apps/` with the ext-apps `App` call stubbed.
+- **Rule**: Every view action that calls back to the server (refresh, re-run) needs a test asserting what the view displays after success, empty, and error results.

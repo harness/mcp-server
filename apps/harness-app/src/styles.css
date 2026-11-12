@@ -1,0 +1,160 @@
+/* Host theme variables (MCP Apps hostContext.styles) with Harness fallbacks. */
+:root {
+  color-scheme: light dark;
+  --hx-bg: var(--color-background-primary, light-dark(#ffffff, #111827));
+  --hx-bg-subtle: var(--color-background-secondary, light-dark(#f4f6f9, #1a2233));
+  --hx-text: var(--color-text-primary, light-dark(#0b0b0d, #f3f4f6));
+  --hx-text-muted: var(--color-text-secondary, light-dark(#5c6370, #9aa3b2));
+  --hx-border: var(--color-border-primary, light-dark(#d9dde3, #2c3647));
+  --hx-info: var(--color-text-info, light-dark(#0064d1, #3dabff));
+  --hx-info-bg: var(--color-background-info, light-dark(#e6f2ff, #0b2a4a));
+  --hx-success: var(--color-text-success, light-dark(#1b8a3e, #42c76c));
+  --hx-success-bg: var(--color-background-success, light-dark(#e8f6ec, #0f3320));
+  --hx-danger: var(--color-text-danger, light-dark(#c4182c, #ff5c6c));
+  --hx-danger-bg: var(--color-background-danger, light-dark(#fdecee, #3a1520));
+  --hx-warning: var(--color-text-warning, light-dark(#a35d00, #ffb14a));
+  --hx-warning-bg: var(--color-background-warning, light-dark(#fff4e0, #3a2a0f));
+  --hx-neutral-bg: var(--color-background-tertiary, light-dark(#eceff3, #252f40));
+  --hx-radius: var(--border-radius-lg, 12px);
+  --hx-radius-sm: var(--border-radius-sm, 6px);
+  --hx-font: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+  --hx-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--hx-text);
+  font-family: var(--hx-font);
+  font-size: var(--font-text-md-size, 14px);
+  line-height: 1.4;
+}
+
+#root:empty { display: none; }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 2px;
+  padding: 16px 18px;
+  background: var(--hx-bg);
+  border: 1px solid var(--hx-border);
+  border-radius: var(--hx-radius);
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.card__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-heading-sm-size, 16px);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.card__title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__badge {
+  flex: none;
+  color: var(--hx-text-muted);
+  font-family: var(--hx-mono);
+  font-size: var(--font-text-sm-size, 13px);
+  font-weight: var(--font-weight-normal, 400);
+}
+
+.card__status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.card__meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--hx-text-muted);
+  font-size: var(--font-text-sm-size, 13px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--border-radius-full, 999px);
+  font-size: var(--font-text-sm-size, 13px);
+  font-weight: var(--font-weight-semibold, 600);
+  white-space: nowrap;
+}
+
+.pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: hx-pulse 1.4s ease-in-out infinite;
+}
+
+.pill--info { color: var(--hx-info); background: var(--hx-info-bg); }
+.pill--success { color: var(--hx-success); background: var(--hx-success-bg); }
+.pill--danger { color: var(--hx-danger); background: var(--hx-danger-bg); }
+.pill--warning { color: var(--hx-warning); background: var(--hx-warning-bg); }
+.pill--neutral { color: var(--hx-text-muted); background: var(--hx-neutral-bg); }
+
+.btn {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--hx-radius-sm);
+  background: transparent;
+  color: var(--hx-text);
+  font: inherit;
+  font-size: var(--font-text-sm-size, 13px);
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) { background: var(--hx-bg-subtle); }
+.btn:disabled { cursor: default; opacity: 0.6; }
+.btn:focus-visible { outline: 2px solid var(--color-ring-primary, var(--hx-info)); outline-offset: 1px; }
+.btn--outline { border-color: var(--hx-border); }
+
+@keyframes hx-pulse {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill__dot { animation: none; }
+}
