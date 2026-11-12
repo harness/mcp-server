@@ -47,6 +47,13 @@ function fontFamily(): string {
   return getComputedStyle(document.body).fontFamily || "system-ui";
 }
 
+const LABEL_MAX = 24;
+
+/** Axis labels only; tooltips keep the full value. */
+function shortLabel(label: string): string {
+  return label.length > LABEL_MAX ? `${label.slice(0, LABEL_MAX - 1)}…` : label;
+}
+
 export interface DrillTarget {
   key: PanelCell;
   label: string;
@@ -118,7 +125,11 @@ function config(panel: DashboardPanel, onDrill: (target: DrillTarget) => void): 
       interaction: { mode: "index", intersect: false },
       onClick,
       scales: {
-        [horizontal ? "y" : "x"]: { stacked: isArea, grid: { display: false }, ticks: { color: text, font, maxRotation: 0, autoSkip: !horizontal } },
+        [horizontal ? "y" : "x"]: {
+          stacked: isArea,
+          grid: { display: false },
+          ticks: { color: text, font, maxRotation: 0, autoSkip: !horizontal, callback: (_v: string | number, i: number) => shortLabel(data.labels[i] ?? "") },
+        },
         [horizontal ? "x" : "y"]: {
           stacked: isArea,
           beginAtZero: true,
