@@ -592,6 +592,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           buildResultView(payload, {
             displayName: def.displayName,
             action: args.action,
+            resourceId,
             status: asString(envelope.execution_status),
           }),
         );

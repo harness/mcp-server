@@ -8,6 +8,7 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { parse as parseYaml } from "yaml";
 import type { Config } from "../config.js";
 import type { ToolResult } from "../utils/response-formatter.js";
 import { asRecord, asString } from "../utils/type-guards.js";
@@ -81,18 +82,48 @@ export function viewStatus(status: string | undefined): ViewStatus | undefined {
   return { label, tone: "neutral" };
 }
 
+/** Name and identifier from the record, a nested entity ({service: {...}}), or a YAML-only body (yamlPipeline). */
+function entityLabels(record: Record<string, unknown>): { name?: string; identifier?: string } {
+  const read = (r: Record<string, unknown> | undefined) => ({
+    name: asString(r?.name) ?? asString(r?.displayName),
+    identifier: asString(r?.identifier) ?? asString(r?.id),
+  });
+  const top = read(record);
+  if (top.name || top.identifier) return top;
+  for (const value of Object.values(record)) {
+    const nested = asRecord(value);
+    if (nested && ("identifier" in nested || "name" in nested)) {
+      const labels = read(nested);
+      if (labels.name || labels.identifier) return labels;
+    }
+  }
+  for (const [key, value] of Object.entries(record)) {
+    if (!/^yaml/i.test(key) || typeof value !== "string") continue;
+    try {
+      const root = asRecord(parseYaml(value));
+      const entity = root ? asRecord(Object.values(root)[0]) : undefined;
+      const labels = read(entity);
+      if (labels.name || labels.identifier) return labels;
+    } catch {
+      // not YAML; ignore
+    }
+  }
+  return {};
+}
+
 /**
  * Generic card for a single-resource result: name or identifier, status, and the
  * openInHarness deep link. Returns undefined when there is nothing worth showing.
  */
 export function buildResultView(
   data: unknown,
-  options: { displayName: string; action?: string; refresh?: ViewRefresh; status?: string },
+  options: { displayName: string; action?: string; refresh?: ViewRefresh; status?: string; resourceId?: string },
 ): ResultView | undefined {
   const record = asRecord(data);
   if (!record) return undefined;
-  const name = asString(record.name) ?? asString(record.displayName);
-  const identifier = asString(record.identifier) ?? asString(record.id);
+  const labels = entityLabels(record);
+  const name = labels.name;
+  const identifier = labels.identifier ?? options.resourceId;
   const link = asString(record.openInHarness);
   if (!link && !name && !identifier) return undefined;
 

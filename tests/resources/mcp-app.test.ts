@@ -90,6 +90,23 @@ describe("buildResultView", () => {
     });
   });
 
+  it("reads the name from a YAML-only pipeline get response", () => {
+    const view = buildResultView(
+      {
+        yamlPipeline: "pipeline:\n  name: AI Platform On-Call Slack\n  identifier: ai_platform_oncall_slack\n  stages: []\n",
+        storeType: "INLINE",
+        openInHarness: "https://app.harness.io/p",
+      },
+      { displayName: "Pipeline", resourceId: "ai_platform_oncall_slack" },
+    );
+    expect(view).toMatchObject({ title: "AI Platform On-Call Slack", subtitle: "Pipeline · ai_platform_oncall_slack" });
+  });
+
+  it("reads the name from a nested entity and falls back to the requested id", () => {
+    expect(buildResultView({ service: { name: "Payments", identifier: "payments" } }, { displayName: "Service" })?.title).toBe("Payments");
+    expect(buildResultView({ openInHarness: "https://app.harness.io/x", yamlPipeline: "not: [valid" }, { displayName: "Pipeline", resourceId: "build_app" })?.title).toBe("build_app");
+  });
+
   it("returns undefined when the result has nothing to show", () => {
     expect(buildResultView({ items: [] }, { displayName: "Pipeline" })).toBeUndefined();
     expect(buildResultView("text", { displayName: "Pipeline" })).toBeUndefined();

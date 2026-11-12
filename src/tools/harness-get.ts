@@ -166,6 +166,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         return appView.attach(jsonResult(result), () =>
           buildResultView(result, {
             displayName: def.displayName,
+            resourceId,
             refresh: { tool: "harness_get", arguments: rawArgs as Record<string, unknown> },
           }),
         );
