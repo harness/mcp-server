@@ -245,6 +245,47 @@ describe("HAR v3 toolset", () => {
     expect(result.data).toBeUndefined();
   });
 
+  it("artifact_scan_v3 evaluate POSTs {scanId} to /scans/evaluate and unwraps the status", async () => {
+    const client = mockClient({ data: { status: "PENDING" } });
+
+    const result = (await registry.dispatchExecute(client, "artifact_scan_v3", "evaluate", {
+      scan_id: "scan-9",
+    })) as Record<string, unknown>;
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/har/api/v3/scans/evaluate");
+    expect(call.body).toEqual({ scanId: "scan-9" });
+    expect(call.params.account_identifier).toBe("acct123");
+    expect(result).toEqual({ status: "PENDING" });
+  });
+
+  it("artifact_scan_v3 evaluate accepts version_id instead of a scan", async () => {
+    const client = mockClient({ data: { status: "PENDING" } });
+
+    await registry.dispatchExecute(client, "artifact_scan_v3", "evaluate", {
+      resource_scope: "account",
+      version_id: "ver-uuid-1",
+    });
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.body).toEqual({ versionId: "ver-uuid-1" });
+    expect(call.params.org_identifier).toBeUndefined();
+    expect(call.params.project_identifier).toBeUndefined();
+  });
+
+  it.each([
+    ["neither", {}],
+    ["both", { scan_id: "scan-9", version_id: "ver-uuid-1" }],
+  ])("artifact_scan_v3 evaluate rejects %s of scan_id/version_id without calling the API", async (_label, input) => {
+    const client = mockClient({ data: { status: "PENDING" } });
+
+    await expect(registry.dispatchExecute(client, "artifact_scan_v3", "evaluate", input)).rejects.toThrow(
+      /exactly one of scan_id/,
+    );
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
   it("bulk_scan_evaluation_v3.get substitutes evaluation_id into path", async () => {
     const client = mockClient({ status: "COMPLETED" });
 
@@ -437,6 +478,29 @@ describe("harness_list artifact_scan_v3 with default compaction", () => {
     expect(item.policySets).toBeUndefined();
     expect(item.buildDetails).toBeUndefined();
     expect(item.rootPackages).toBeUndefined();
+  });
+
+  it("harness_execute evaluate maps resource_id to scanId", async () => {
+    const config = makeConfig({ HARNESS_TOOLSETS: undefined });
+    const handlers = new Map<string, (args: unknown, extra: unknown) => Promise<unknown>>();
+    const server = {
+      server: { getClientCapabilities: () => ({}) },
+      registerTool: (name: string, _def: unknown, cb: (args: unknown, extra: unknown) => Promise<unknown>) => {
+        handlers.set(name, cb);
+      },
+    };
+    const request = vi.fn().mockResolvedValue({ data: { status: "PENDING" } });
+    const client = { account: "acct123", request } as unknown as HarnessClient;
+    registerAllTools(server as never, new Registry(config), client, config);
+
+    const res = (await handlers.get("harness_execute")!(
+      { resource_type: "artifact_scan_v3", action: "evaluate", resource_id: "scan-9", confirm: true },
+      { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} },
+    )) as { isError?: boolean; content: { type: string; text: string }[] };
+
+    expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+    expect(request.mock.calls[0][0].path).toBe("/har/api/v3/scans/evaluate");
+    expect(request.mock.calls[0][0].body).toEqual({ scanId: "scan-9" });
   });
 });
 

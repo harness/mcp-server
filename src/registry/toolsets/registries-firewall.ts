@@ -22,6 +22,14 @@ const firewallExceptionCreateSchema: BodySchema = {
   ],
 };
 
+const artifactScanEvaluateSchema: BodySchema = {
+  description: "Re-evaluate one artifact against firewall policies. Provide exactly one of scanId or versionId.",
+  fields: [
+    { name: "scanId", type: "string", required: false, description: "Scan to re-evaluate (same as resource_id)" },
+    { name: "versionId", type: "string", required: false, description: "Artifact version UUID to evaluate instead of a scan" },
+  ],
+};
+
 // Only allowed server-side while status is PENDING — once approved/rejected the
 // exception is immutable via this endpoint (use the status endpoint instead).
 const firewallExceptionUpdateSchema: BodySchema = {
@@ -107,16 +115,16 @@ const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<strin
  *
  * External gateway prefix: `/har/api/v3/…`.
  *
- * Write operations included: firewall exception create/update/delete and
- * approve/reject (all account-scoped).
+ * Write operations included: on-demand artifact scan re-evaluation, and firewall exception
+ * create/update/delete and approve/reject (account-scoped).
  * `x-internal: true` operations are excluded on purpose.
  */
 export const registriesFirewallToolset: ToolsetDefinition = {
   name: "registries-firewall",
   displayName: "Artifact Registry Firewall (v3)",
   description:
-    "Harness Artifact Registry v3 firewall — artifact scans, bulk scan evaluations, and firewall " +
-    "exception create/update/delete/approve/reject (account-scoped writes).",
+    "Harness Artifact Registry v3 firewall — artifact scans with on-demand re-evaluation, bulk scan " +
+    "evaluations, and firewall exception create/update/delete/approve/reject (account-scoped writes).",
   optIn: false,
   resources: [
     {
@@ -188,6 +196,32 @@ export const registriesFirewallToolset: ToolsetDefinition = {
           // Response is `{ data: { packageName, scanStatus, ... } }`; unwrap.
           responseExtractor: harV3DataObjectUnwrap,
           description: "Get scan details for a single artifact scan (v3)",
+        },
+      },
+      executeActions: {
+        evaluate: {
+          method: "POST",
+          path: "/har/api/v3/scans/evaluate",
+          // Re-running an evaluation only re-queues the same policy check, so a retry is harmless.
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            const scanId = input.scan_id ?? body?.scanId;
+            const versionId = input.version_id ?? body?.versionId;
+            if ((scanId == null) === (versionId == null)) {
+              throw new Error("evaluate needs exactly one of scan_id (resource_id) or version_id");
+            }
+            return scanId != null ? { scanId } : { versionId };
+          },
+          // Response is `{ data: { status } }`; unwrap.
+          responseExtractor: harV3DataObjectUnwrap,
+          actionDescription:
+            "Re-run the firewall policy evaluation for one artifact on demand, e.g. after a policy change, an " +
+            "exemption, or to refresh fixVersionDetails. Pass exactly one of resource_id (scan_id) or " +
+            "params.version_id. Asynchronous: returns a status (PENDING/PROCESSING/SUCCESS/FAILED) right away; " +
+            "re-check the result with harness_get on the scan (lastEvaluatedAt, scanStatus, fixVersionDetails).",
+          bodySchema: artifactScanEvaluateSchema,
         },
       },
     },
