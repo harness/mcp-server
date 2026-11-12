@@ -824,27 +824,58 @@ describe("incident — harness_execute (root-cause theory status actions)", () =
     expect((parseResult(result) as Record<string, unknown>).rootCauseTheoriesSha).toBe("sha-2");
   });
 
-  it("update_root_cause_theory patches the theory and projects the changed theory", async () => {
+  it("update_root_cause_theory patches citation changes and projects the changed theory", async () => {
     mockRequest.mockResolvedValueOnce({
-      theory: { id: "theory-1", message: "db", status: "CONFIRMED", confidence: 95, aiGenerated: true },
+      theory: {
+        id: "theory-1",
+        message: "db",
+        status: "INVESTIGATING",
+        confidence: 80,
+        aiGenerated: true,
+        relatedActivities: [{ type: "DEPLOY", id: "DEP-9", displayId: "DEP-9", url: "", internal: "x" }],
+      },
       notLinked: [],
       unverified: [],
+      notRemoved: [{ reference: { type: "PR", id: "checkout-service#7" }, reason: "The theory doesn't cite this item." }],
     });
+    const body = {
+      addRelatedActivities: [{ type: "DEPLOY", id: "DEP-9" }],
+      removeRelatedActivities: [{ type: "DEPLOY", id: "DEP-7" }, { type: "PR", id: "checkout-service#7" }],
+      reason: "DEP-9 is the deploy that broke it",
+    };
     const result = await server.call("harness_execute", {
       resource_type: "incident",
       action: "update_root_cause_theory",
       resource_id: "INC-42",
       params: { theory_id: "theory-1" },
-      body: { status: "CONFIRMED", reason: "the deploy matches" },
+      body,
     });
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
     expect(callArgs.method).toBe("PATCH");
     expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories/theory-1");
-    expect(callArgs.body).toEqual({ status: "CONFIRMED", reason: "the deploy matches" });
+    expect(callArgs.body).toEqual(body);
     expect(parseResult(result)).toEqual({
-      theory: { id: "theory-1", message: "db", status: "CONFIRMED", confidence: 95, aiGenerated: true },
+      theory: {
+        id: "theory-1",
+        message: "db",
+        status: "INVESTIGATING",
+        confidence: 80,
+        aiGenerated: true,
+        relatedActivities: [{ type: "DEPLOY", id: "DEP-9", displayId: "DEP-9", url: "" }],
+      },
+      notRemoved: [{ reference: { type: "PR", id: "checkout-service#7" }, reason: "The theory doesn't cite this item." }],
     });
+  });
+
+  it("update_root_cause_theory documents citation deltas and no status", () => {
+    const spec = new Registry(makeConfig()).getResource("incident").executeActions?.update_root_cause_theory;
+    const names = spec?.bodySchema?.fields.map((f) => f.name);
+    expect(names).toEqual(
+      expect.arrayContaining(["addRelatedActivities", "removeRelatedActivities", "clearRelatedActivities"]),
+    );
+    expect(names).not.toContain("status");
+    expect(names).not.toContain("relatedActivities");
   });
 
   it("remove_root_cause_theory posts the reason to the theory's remove path", async () => {

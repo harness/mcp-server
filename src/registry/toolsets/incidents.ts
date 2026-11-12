@@ -15,6 +15,7 @@ function projectTheoryRelatedActivity(a: unknown): unknown {
   if (!isRecord(a)) return a;
   const out: Record<string, unknown> = {};
   if (typeof a.type === "string") out.type = a.type;
+  if (typeof a.id === "string") out.id = a.id;
   if (typeof a.displayId === "string") out.displayId = a.displayId;
   if (typeof a.url === "string") out.url = a.url;
   return out;
@@ -145,7 +146,7 @@ function addRootCauseTheoryExtract(raw: unknown): unknown {
   const out: Record<string, unknown> = {};
   if (raw.theory !== undefined) out.theory = projectRootCauseTheory(raw.theory);
   if (typeof raw.created === "boolean") out.created = raw.created;
-  for (const key of ["notLinked", "unverified"] as const) {
+  for (const key of ["notLinked", "unverified", "notRemoved"] as const) {
     const issues = raw[key];
     if (Array.isArray(issues) && issues.length > 0) out[key] = issues.map(projectRelatedActivityIssue);
   }
@@ -264,25 +265,36 @@ const addRootCauseTheorySchema: BodySchema = {
 const updateRootCauseTheorySchema: BodySchema = {
   description:
     "Parts of the theory to change (UpdateRootCauseTheoryRequest). Omitted fields are unchanged; give at least "
-    + "one of message, status, confidence or relatedActivities",
+    + "one of message, confidence, addRelatedActivities, removeRelatedActivities or clearRelatedActivities",
   fields: [
     { name: "message", type: "string", required: false, description: "The new theory text" },
-    { name: "status", type: "string", required: false, description: "CONFIRMED, to confirm the theory" },
+    { name: "confidence", type: "number", required: false, description: "Integer from 0 to 100" },
     {
-      name: "confidence",
-      type: "number",
-      required: false,
-      description: "Integer from 0 to 100. When omitted, confirming resets it to CONFIRMED's default",
-    },
-    {
-      name: "relatedActivities",
+      name: "addRelatedActivities",
       type: "array",
       required: false,
       description:
-        "Replaces the items the theory cites, as a whole: include every item it should cite. Items that can't "
-        + "be found are returned in notLinked",
+        "Items to cite in addition to the current ones. Items that can't be found are returned in notLinked",
       itemType: "object",
       fields: theoryCitationFields,
+    },
+    {
+      name: "removeRelatedActivities",
+      type: "array",
+      required: false,
+      description:
+        "Current citations to drop, each as the type and id of the theory's relatedActivities entry. Any the "
+        + "theory doesn't cite are returned in notRemoved. An item can't be both added and removed",
+      itemType: "object",
+      fields: theoryCitationFields,
+    },
+    {
+      name: "clearRelatedActivities",
+      type: "boolean",
+      required: false,
+      description:
+        "true to drop every current citation; with addRelatedActivities, replaces them. Can't be combined with "
+        + "removeRelatedActivities",
     },
     { name: "reason", type: "string", required: false, description: "Why the theory is being changed" },
   ],
@@ -477,11 +489,13 @@ export const incidentsToolset: ToolsetDefinition = {
           bodySchema: updateRootCauseTheorySchema,
           responseExtractor: addRootCauseTheoryExtract,
           actionDescription:
-            "Change a root-cause theory's message, confidence or cited items, or confirm it. Pass theory_id via params "
-            + "and only the parts that change in the body. Confirming a theory records its cited items as the "
-            + "incident's cause. "
+            "Change a root-cause theory's message, confidence or cited items. Pass theory_id via params and only "
+            + "the parts that change in the body. Citations not named in removeRelatedActivities are kept; name "
+            + "one to remove by the type and id of its relatedActivities entry from harness_get. To confirm a "
+            + "theory, use confirm_root_cause_theory. "
             + THEORY_EDIT_RULES
-            + " Returns the theory as changed, with notLinked and unverified as for add_root_cause_theory.",
+            + " Returns the theory as changed, with notLinked and unverified as for add_root_cause_theory, and "
+            + "notRemoved for removeRelatedActivities items the theory doesn't cite.",
         },
         remove_root_cause_theory: {
           method: "POST",
