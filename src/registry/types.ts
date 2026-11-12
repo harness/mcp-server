@@ -135,6 +135,7 @@ export type ToolsetName =
   | "registries"
   | "registries-v3"
   | "registries-firewall"
+  | "registries-lifecycle"
   | "templates"
   | "dashboards"
   | "idp"

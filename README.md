@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 274 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 278 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 274 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 44 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
+- **11 tools, 278 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 45 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1304,7 +1304,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-274 resource types organized across 44 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+278 resource types organized across 45 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -2044,7 +2044,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 44 of 50 toolsets are enabled. Five toolsets are opt-in and excluded from the defaults:
+By default, 45 of 51 toolsets are enabled. Five toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`appsec`** — Traceable Application & API Security (API inventory, OpenAPI specs, sample spans, sensitive data types, runtime threat activities, security events, AST scans, and inventory trends). Opt-in because it requires a dedicated `HARNESS_APPSEC_API_KEY` and targets `api.traceable.ai`.
@@ -2136,6 +2136,7 @@ Available toolset names:
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 | `vibe`                | vibe_project, vibe_app_lifecycle |
 | `timelines`           | activity_timeline |
+| `registries-lifecycle` | lifecycle_rule_v3, lifecycle_execution_v3, lifecycle_execution_item_v3, lifecycle_stats_v3 |
 | `appsec` *(opt-in)*   | appsec_api, appsec_api_spec, appsec_api_span, appsec_entity, appsec_vulnerability, appsec_threat_activity, appsec_security_event, appsec_ast_scan, appsec_inventory_trend, appsec_datatype |
 
 
@@ -2154,8 +2155,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 50 Toolsets (44 default) |
-                |  274 Resource Types|
+                | 51 Toolsets (45 default) |
+                |  278 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
