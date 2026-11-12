@@ -113,7 +113,7 @@ function entityLabels(record: Record<string, unknown>): { name?: string; identif
 
 /**
  * Generic card for a single-resource result: name or identifier, status, and the
- * openInHarness deep link. Returns undefined when there is nothing worth showing.
+ * openInHarness deep link. Returns undefined without a deep link.
  */
 export function buildResultView(
   data: unknown,
@@ -125,7 +125,8 @@ export function buildResultView(
   const name = labels.name;
   const identifier = labels.identifier ?? options.resourceId;
   const link = asString(record.openInHarness);
-  if (!link && !name && !identifier) return undefined;
+  // Without a deep link the card has nothing to offer (schemas, type discovery, grammar).
+  if (!link) return undefined;
 
   const subtitleParts = [options.displayName, options.action, name && identifier && name !== identifier ? identifier : undefined];
   const view: ResultView = {
@@ -135,7 +136,7 @@ export function buildResultView(
   };
   const status = viewStatus(options.status ?? asString(record.status));
   if (status) view.status = status;
-  if (link) view.open_in_harness = link;
+  view.open_in_harness = link;
   if (options.refresh) view.refresh = options.refresh;
   return view;
 }

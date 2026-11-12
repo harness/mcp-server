@@ -103,12 +103,13 @@ describe("buildResultView", () => {
   });
 
   it("reads the name from a nested entity and falls back to the requested id", () => {
-    expect(buildResultView({ service: { name: "Payments", identifier: "payments" } }, { displayName: "Service" })?.title).toBe("Payments");
+    expect(buildResultView({ service: { name: "Payments", identifier: "payments" }, openInHarness: "https://app.harness.io/s" }, { displayName: "Service" })?.title).toBe("Payments");
     expect(buildResultView({ openInHarness: "https://app.harness.io/x", yamlPipeline: "not: [valid" }, { displayName: "Pipeline", resourceId: "build_app" })?.title).toBe("build_app");
   });
 
   it("returns undefined when the result has nothing to show", () => {
     expect(buildResultView({ items: [] }, { displayName: "Pipeline" })).toBeUndefined();
+    expect(buildResultView({ id: "ci:pipeline_execution_summary_ci", name: "CI Pipeline Executions" }, { displayName: "KG Type" })).toBeUndefined();
     expect(buildResultView("text", { displayName: "Pipeline" })).toBeUndefined();
   });
 });
