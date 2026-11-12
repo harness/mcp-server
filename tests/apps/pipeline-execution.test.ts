@@ -35,7 +35,7 @@ function failedExecution() {
       startTs: 1_000_000,
       endTs: 1_009_000,
       executionTriggerInfo: { triggerType: "MANUAL", triggeredBy: { identifier: "luis", extraInfo: { email: "luis.redda@harness.io" } } },
-      executionErrorInfo: { message: "Manual codebase git task needs one of PR number, branch, commitSha or tag." },
+      executionErrorInfo: { message: "Manual codebase git task needs one of PR number, branch, commitSha or tag.\n\n" },
       startingNodeId: "n-build",
       layoutNodeMap: {
         "n-build": { ...layoutNode("build", "Build", "Failed", { startTs: 1_000_000, endTs: 1_009_000 }), edgeLayoutList: { currentNodeChildren: [], nextIds: ["n-par"] } },

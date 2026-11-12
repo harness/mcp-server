@@ -117,7 +117,8 @@ function stageView(entry: { node: LayoutNode; id: string; group?: string }, step
   if (raw === "Skipped") stage.skipped = true;
   if (node.startTs) stage.started_at = node.startTs;
   if (node.endTs) stage.ended_at = node.endTs;
-  if (node.failureInfo?.message) stage.failure_message = node.failureInfo.message;
+  const stageFailure = node.failureInfo?.message?.trim();
+  if (stageFailure) stage.failure_message = stageFailure;
   if (steps?.length) {
     stage.steps_total = steps.length;
     stage.steps_done = steps.filter((s) => STEP_DONE.has(s.status ?? "")).length;
@@ -186,11 +187,12 @@ export function buildPipelineExecutionView(raw: unknown, ctx: ExecutionViewConte
 
   const failedStage = stages.find((s) => s.status.tone === "danger");
   const failedStep = failedStage ? steps.get(failedStage.id)?.find((s) => viewStatus(s.status)?.tone === "danger") : undefined;
-  const message =
+  const message = (
     asString(asRecord(pes.executionErrorInfo)?.message) ??
     asString(asRecord(pes.failureInfo)?.message) ??
     failedStep?.failureInfo?.message ??
-    failedStage?.failure_message;
+    failedStage?.failure_message
+  )?.trim();
   if (message && view.status.tone === "danger") {
     view.failure = { message };
     if (failedStage) view.failure.stage = failedStage.name;
