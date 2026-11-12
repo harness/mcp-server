@@ -2,43 +2,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   blobKeysToTry,
   commandUnitLogKey,
-  fullModeUnitKeyOrder,
-  packageSnippetForDiagnose,
   resolveLogContent,
   resolveLogDownloadUrl,
-  snippetUnitKeyOrder,
 } from "../../src/utils/log-resolver.js";
-import { failedUnitNamesFromNode, logKeysFromNode } from "../../src/utils/log-keys.js";
+import { logKeysFromNode } from "../../src/utils/log-keys.js";
 import { gzipSync, deflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
-
-function toBlobResponse(result: unknown): Response {
-  if (result instanceof Response) return result;
-  if (result instanceof ArrayBuffer) {
-    return new Response(Buffer.from(result), { status: 200 });
-  }
-  if (Buffer.isBuffer(result)) {
-    return new Response(result, { status: 200 });
-  }
-  if (typeof result === "string") {
-    return new Response(result, { status: 200 });
-  }
-  return new Response("", { status: 200 });
-}
 
 function makeClient(
   requestFn: (...args: unknown[]) => unknown,
   overrides?: Partial<Pick<HarnessClient, "baseURL" | "requestStream" | "account">>,
 ): HarnessClient {
-  const request = vi.fn().mockImplementation(requestFn);
-  const requestStream = vi.fn().mockImplementation(async (opts: unknown) => {
-    const result = await requestFn(opts);
-    return toBlobResponse(result);
-  });
   return {
-    request,
-    requestStream,
+    request: requestFn,
+    requestStream: vi.fn().mockResolvedValue(new Response("", { status: 200 })),
     account: "test-account",
     baseURL: "https://custom.harness.example/gateway",
     ...overrides,
@@ -79,34 +57,32 @@ describe("resolveLogContent", () => {
   it("GETs /blob with key and returns plain text log content", async () => {
     const logText = "line 1\nline 2\nline 3";
     const requestFn = vi.fn().mockResolvedValue(Buffer.from(logText).buffer);
-    const client = makeClient(requestFn);
 
-    const result = await resolveLogContent(client, "acct/pipeline/p1/1/-exec1");
+    const result = await resolveLogContent(
+      makeClient(requestFn),
+      "acct/pipeline/p1/1/-exec1",
+    );
 
     expect(result).toContain("line 1");
     expect(result).toContain("line 2");
     expect(result).toContain("line 3");
-    expect(client.requestStream).toHaveBeenCalledWith(
+    expect(requestFn).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "GET",
         path: "/gateway/log-service/blob",
         params: { key: "acct/pipeline/p1/1/-exec1" },
+        responseType: "buffer",
+        maxResponseBytes: 2 * 1024 * 1024,
         retryPolicy: "safe",
       }),
-    );
-    expect((client.requestStream as ReturnType<typeof vi.fn>).mock.calls[0]![0]).not.toHaveProperty(
-      "maxResponseBytes",
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("does not call /blob/download", async () => {
     const requestFn = vi.fn().mockResolvedValue(Buffer.from("ok").buffer);
-    const client = makeClient(requestFn);
-    await resolveLogContent(client, "prefix");
-    const paths = (client.requestStream as ReturnType<typeof vi.fn>).mock.calls.map(
-      (c) => (c[0] as { path: string }).path,
-    );
+    await resolveLogContent(makeClient(requestFn), "prefix");
+    const paths = requestFn.mock.calls.map((c) => (c[0] as { path: string }).path);
     expect(paths).toEqual(["/gateway/log-service/blob"]);
   });
 
@@ -179,7 +155,7 @@ describe("resolveLogContent", () => {
     expect(requestFn).toHaveBeenCalledTimes(1);
   });
 
-  it("full mode returns labeled sections for every non-empty unitProgresses key", async () => {
+  it("fetches every unitProgresses key plus default Execute when base is empty", async () => {
     const requestFn = vi
       .fn()
       .mockResolvedValueOnce(new ArrayBuffer(0))
@@ -188,17 +164,14 @@ describe("resolveLogContent", () => {
 
     const result = await resolveLogContent(makeClient(requestFn), "base", {
       commandUnitNames: ["CustomUnit"],
-      mode: "full",
     });
-    expect(result).toContain("--- commandUnit: CustomUnit ---");
     expect(result).toContain("from unitProgresses");
-    expect(result).toContain("--- commandUnit: Execute ---");
     expect(result).toContain("from execute");
     const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
     expect(keys).toEqual(["base", "base-commandUnit:CustomUnit", "base-commandUnit:Execute"]);
   });
 
-  it("snippet mode returns the last non-empty unit so a late Helm failure is not dropped", async () => {
+  it("merges all command units so a failure in a later unit is not dropped (Helm deploy)", async () => {
     const base = "acct/pipeline/p1/7/-exec/stage/-helmDeployment";
     const line = (time: string, out: string) =>
       JSON.stringify({ level: "INFO", time, out });
@@ -222,200 +195,17 @@ describe("resolveLogContent", () => {
     });
 
     const result = await resolveLogContent(makeClient(requestFn), base, {
-      logKeys: Object.keys(units).filter((k) => k !== base),
-      mode: "snippet",
-      snippetLines: 50,
+      logKeys: Object.keys(units),
     });
 
-    expect(result).toContain("--- commandUnit: Install / Upgrade ---");
-    expect(result).toContain('ConfigMap in version "v1" cannot be handled as a ConfigMap');
-    expect(result).not.toContain("Fetching values.yaml");
-    // base + Wrap Up (empty) + Wait (empty) + Install (hit) — stop early
-    expect(requestFn).toHaveBeenCalledTimes(4);
-  });
-
-  it("snippet mode finds an early failure when later units never logged", async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValueOnce(new ArrayBuffer(0)) // base
-      .mockResolvedValueOnce(new ArrayBuffer(0)) // Wrap (from end)
-      .mockResolvedValueOnce(Buffer.from("prepare failed here").buffer); // Prepare
-
-    const result = await resolveLogContent(makeClient(requestFn), "base", {
-      logKeys: [
-        "base-commandUnit:Fetch Files",
-        "base-commandUnit:Prepare",
-        "base-commandUnit:Wrap Up",
-      ],
-      mode: "snippet",
-    });
-    expect(result).toContain("--- commandUnit: Prepare ---");
-    expect(result).toContain("prepare failed here");
-    expect(requestFn).toHaveBeenCalledTimes(3);
-  });
-
-  it("snippet mode prefers a failed unitProgresses unit over a later non-empty unit", async () => {
-    const requestFn = vi
-      .fn()
-      .mockResolvedValueOnce(new ArrayBuffer(0)) // base
-      .mockResolvedValueOnce(Buffer.from("prepare is the real failure").buffer);
-
-    const result = await resolveLogContent(makeClient(requestFn), "base", {
-      logKeys: [
-        "base-commandUnit:Fetch Files",
-        "base-commandUnit:Prepare",
-        "base-commandUnit:Wrap Up",
-      ],
-      failedUnitNames: ["Prepare"],
-      mode: "snippet",
-    });
-    expect(result).toContain("--- commandUnit: Prepare ---");
-    expect(result).toContain("prepare is the real failure");
-    const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
-    expect(keys).toEqual(["base", "base-commandUnit:Prepare"]);
-  });
-
-  it("full mode returns labeled sections for all non-empty Helm units", async () => {
-    const base = "acct/pipeline/p1/7/-exec/stage/-helmDeployment";
-    const line = (time: string, out: string) =>
-      JSON.stringify({ level: "INFO", time, out });
-    const units: Record<string, string> = {
-      [base]: "",
-      [`${base}-commandUnit:Fetch Files`]: line("2026-10-20T10:00:01Z", "Fetching values.yaml"),
-      [`${base}-commandUnit:Install / Upgrade`]: line(
-        "2026-10-20T10:00:04Z",
-        'ConfigMap in version "v1" cannot be handled as a ConfigMap',
-      ),
-      [`${base}-commandUnit:Wrap Up`]: "",
-    };
-    const requestFn = vi.fn(async (opts: unknown) => {
-      const key = (opts as { params: { key: string } }).params.key;
-      const buf = Buffer.from(units[key] ?? "");
-      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    });
-
-    const result = await resolveLogContent(makeClient(requestFn), base, {
-      logKeys: Object.keys(units).filter((k) => k !== base),
-      mode: "full",
-    });
-    expect(result).toContain("--- commandUnit: Fetch Files ---");
-    expect(result).toContain("--- commandUnit: Install / Upgrade ---");
-    expect(result).toContain("Fetching values.yaml");
-    expect(result).toContain("ConfigMap");
-  });
-
-  it("full mode still fetches a failed unit dropped by the 10-key end cap", async () => {
-    // 15 unit keys → blobKeysToTry keeps the last 10. U0 is Failed but capped away;
-    // failedUnitNames must still pull it in for diagnose→get escalation.
-    const logKeys = Array.from({ length: 15 }, (_, i) => `base-commandUnit:U${i}`);
-    const bodies: Record<string, string> = {
-      "base-commandUnit:U0": "early unit is the real failure",
-      "base-commandUnit:U14": "late unit noise",
-    };
-    const requestFn = vi.fn(async (opts: unknown) => {
-      const key = (opts as { params: { key: string } }).params.key;
-      const buf = Buffer.from(bodies[key] ?? "");
-      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    });
-
-    const result = await resolveLogContent(makeClient(requestFn), "base", {
-      logKeys,
-      failedUnitNames: ["U0"],
-      mode: "full",
-    });
-
-    expect(result).toContain("--- commandUnit: U0 ---");
-    expect(result).toContain("early unit is the real failure");
-    expect(result).toContain("--- commandUnit: U14 ---");
-    const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
-    expect(keys[0]).toBe("base");
-    expect(keys).toContain("base-commandUnit:U0");
-    // Cap still applies to the non-failed slice — U1 is among the dropped early keys.
-    expect(keys).not.toContain("base-commandUnit:U1");
-    expect(fullModeUnitKeyOrder("base", logKeys.slice(-10), ["U0"])[0]).toBe(
-      "base-commandUnit:U0",
-    );
-  });
-
-  it("full mode does not soft-trim long early units (diagnose→get escalation)", async () => {
-    const early = Array.from({ length: 800 }, (_, i) => `early-${i}`).join("\n");
-    const late = Array.from({ length: 900 }, (_, i) => `late-${i}`).join("\n");
-    const asAb = (s: string) => {
-      const buf = Buffer.from(s);
-      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    };
-    const requestFn = vi
-      .fn()
-      .mockResolvedValueOnce(new ArrayBuffer(0))
-      .mockResolvedValueOnce(asAb(early))
-      .mockResolvedValueOnce(asAb(late));
-
-    const result = await resolveLogContent(makeClient(requestFn), "base", {
-      logKeys: ["base-commandUnit:Fetch Files", "base-commandUnit:Install / Upgrade"],
-      mode: "full",
-    });
-
-    expect(result).toContain("early-0");
-    expect(result).toContain("early-799");
-    expect(result).toContain("late-0");
-    expect(result).toContain("late-899");
-    expect(result).not.toContain("lines omitted");
-    // Both units fully present — well above the old 500/2000 soft budgets.
-    expect(result.split("\n").length).toBeGreaterThan(1700);
-  });
-
-  it("rejects plain blob bodies that exceed the compressed wire ceiling", async () => {
-    const huge = Buffer.alloc(250, 0x61);
-    const requestFn = vi.fn().mockResolvedValue(huge);
-    await expect(
-      resolveLogContent(makeClient(requestFn), "prefix", {
-        maxWireBytes: 100,
-        maxLogSizeBytes: 50,
-      }),
-    ).rejects.toThrow(/too large/i);
-  });
-
-  it("aborts a stalled blob body when bodyTimeoutMs elapses", async () => {
-    const requestStream = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode("partial-"));
-          // Never close — body hangs until AbortSignal fires on read.
-        },
-      });
-      return new Response(stream, { status: 200 });
-    });
-    const client = {
-      request: vi.fn(),
-      requestStream,
-      account: "test-account",
-      baseURL: "https://custom.harness.example/gateway",
-    } as unknown as HarnessClient;
-
-    await expect(
-      resolveLogContent(client, "prefix", { bodyTimeoutMs: 30 }),
-    ).rejects.toThrow(/timed out|aborted|cancelled/i);
-  });
-
-  it("aborts when the body hangs before any bytes (peek must not look like empty)", async () => {
-    const requestStream = vi.fn().mockImplementation(async () => {
-      const stream = new ReadableStream<Uint8Array>({
-        start() {
-          // Never enqueue and never close — timeout cancels the reader during peek.
-        },
-      });
-      return new Response(stream, { status: 200 });
-    });
-    const client = {
-      request: vi.fn(),
-      requestStream,
-      account: "test-account",
-      baseURL: "https://custom.harness.example/gateway",
-    } as unknown as HarnessClient;
-
-    await expect(
-      resolveLogContent(client, "prefix", { bodyTimeoutMs: 30 }),
-    ).rejects.toThrow(/timed out|aborted|cancelled/i);
+    expect(result.split("\n")).toEqual([
+      "[2026-10-20T10:00:01Z] info: Fetching values.yaml",
+      "[2026-10-20T10:00:02Z] info: Initializing helm client",
+      "[2026-10-20T10:00:03Z] info: Rendering chart",
+      '[2026-10-20T10:00:04Z] info: ConfigMap in version "v1" cannot be handled as a ConfigMap',
+    ]);
+    // Base key once, then each unit key once — no duplicates.
+    expect(requestFn).toHaveBeenCalledTimes(7);
   });
 
   it("prefers exact logKeys over unitProgresses names", async () => {
@@ -427,27 +217,22 @@ describe("resolveLogContent", () => {
     await resolveLogContent(makeClient(requestFn), "base", {
       commandUnitNames: ["FromProgress"],
       logKeys: ["base", "base-commandUnit:Exact", "base-commandUnit:Exact"],
-      mode: "full",
     });
     const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
     expect(keys).toEqual(["base", "base-commandUnit:Exact"]);
   });
 
-  it("caps command-unit keys at 10 from the end and always reserves Execute", async () => {
+  it("caps command-unit keys at 10 and always reserves Execute", async () => {
     const requestFn = vi.fn().mockResolvedValue(new ArrayBuffer(0));
     const names = Array.from({ length: 15 }, (_, i) => `U${i}`);
-    await resolveLogContent(makeClient(requestFn), "base", {
-      commandUnitNames: names,
-      mode: "full",
-    });
+    await resolveLogContent(makeClient(requestFn), "base", { commandUnitNames: names });
     const keys = requestFn.mock.calls.map((c) => (c[0] as { params: { key: string } }).params.key);
     expect(keys).toHaveLength(11);
     expect(keys[0]).toBe("base");
-    expect(keys.slice(1, 10)).toEqual(names.slice(-9).map((n) => `base-commandUnit:${n}`));
     expect(keys.at(-1)).toBe("base-commandUnit:Execute");
   });
 
-  it("full mode skips a 404 unit key and still returns the others", async () => {
+  it("skips a 404 unit key and still merges the others", async () => {
     const requestFn = vi
       .fn()
       .mockResolvedValueOnce(new ArrayBuffer(0))
@@ -457,12 +242,9 @@ describe("resolveLogContent", () => {
 
     const result = await resolveLogContent(makeClient(requestFn), "base", {
       logKeys: ["base-commandUnit:A", "base-commandUnit:B", "base-commandUnit:C"],
-      mode: "full",
     });
     expect(result).toContain("unit A");
     expect(result).toContain("unit C");
-    expect(result).toContain("--- commandUnit: A ---");
-    expect(result).toContain("--- commandUnit: C ---");
   });
 
   it("stops on a rate-limit while fetching unit keys", async () => {
@@ -475,10 +257,23 @@ describe("resolveLogContent", () => {
     await expect(
       resolveLogContent(makeClient(requestFn), "base", {
         logKeys: ["base-commandUnit:A", "base-commandUnit:B", "base-commandUnit:C"],
-        mode: "full",
       }),
     ).rejects.toThrow(/Too Many Requests|429/);
     expect(requestFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("throws when merged unit logs exceed 4x the per-blob limit", async () => {
+    const requestFn = vi
+      .fn()
+      .mockResolvedValueOnce(new ArrayBuffer(0))
+      .mockResolvedValue(Buffer.from("x".repeat(900)).buffer);
+
+    await expect(
+      resolveLogContent(makeClient(requestFn), "base", {
+        maxLogSizeBytes: 1000,
+        logKeys: ["base-1", "base-2", "base-3", "base-4", "base-5"],
+      }),
+    ).rejects.toThrow(/too large/);
   });
 
   it("falls through on 404 to the next key", async () => {
@@ -504,72 +299,12 @@ describe("resolveLogContent", () => {
     expect(requestFn).toHaveBeenCalledTimes(2); // base + Execute
   });
 
-  it("keeps only the last maxLogSizeBytes of a streamed plain blob", async () => {
-    // Unique marker at the end so we can assert the sliding tail kept it.
-    const head = "H".repeat(2000);
-    const tail = "TAIL_MARKER_OK";
-    const buf = Buffer.from(head + tail);
-    const requestFn = vi.fn().mockResolvedValue(buf);
-    const result = await resolveLogContent(makeClient(requestFn), "prefix", {
-      maxLogSizeBytes: 100,
-    });
-    expect(result.endsWith("TAIL_MARKER_OK")).toBe(true);
-    expect(Buffer.byteLength(result, "utf-8")).toBeLessThanOrEqual(100);
+  it("throws when log file exceeds max size", async () => {
+    const requestFn = vi.fn().mockResolvedValue(new ArrayBuffer(2048));
+    await expect(
+      resolveLogContent(makeClient(requestFn), "prefix", { maxLogSizeBytes: 1024 }),
+    ).rejects.toThrow(/too large/);
     expect(requestFn).toHaveBeenCalledTimes(1);
-  });
-
-  it("streams gzip and keeps a trailing byte window", async () => {
-    const head = "G".repeat(3000);
-    const marker = "GZIP_TAIL_OK";
-    const gzipped = gzipSync(Buffer.from(head + marker));
-    const requestFn = vi.fn().mockResolvedValue(
-      gzipped.buffer.slice(gzipped.byteOffset, gzipped.byteOffset + gzipped.byteLength),
-    );
-    const result = await resolveLogContent(makeClient(requestFn), "prefix", {
-      maxLogSizeBytes: 64,
-    });
-    expect(result).toContain("GZIP_TAIL_OK");
-    expect(Buffer.byteLength(result, "utf-8")).toBeLessThanOrEqual(64);
-  });
-});
-
-describe("packageSnippetForDiagnose", () => {
-  it("preserves pre-tailed snippet markers and reports pre-trim total_lines", () => {
-    const kept = Array.from({ length: 200 }, (_, i) => `line-${1801 + i}`).join("\n");
-    const text = `--- commandUnit: Install / Upgrade ---\n... (1800 lines omitted) ...\n${kept}`;
-    const result = packageSnippetForDiagnose(text, 200);
-    expect(result).toEqual({
-      log_snippet: text,
-      total_lines: 2000,
-      truncated: true,
-    });
-  });
-
-  it("does not double-trim when the omitted marker is already present", () => {
-    const text =
-      "--- commandUnit: Prepare ---\n... (10 lines omitted) ...\nkeep-a\nkeep-b\nkeep-c";
-    const result = packageSnippetForDiagnose(text, 2);
-    expect(result).toEqual({
-      log_snippet: text,
-      total_lines: 13,
-      truncated: true,
-    });
-    expect((result as { log_snippet: string }).log_snippet).toContain("commandUnit: Prepare");
-    expect((result as { log_snippet: string }).log_snippet).toContain("lines omitted");
-  });
-
-  it("applies a single tail when the resolver returned an untrimmed body", () => {
-    const text = Array.from({ length: 100 }, (_, i) => `raw-${i}`).join("\n");
-    const result = packageSnippetForDiagnose(text, 20);
-    expect(result).toMatchObject({ truncated: true, total_lines: 100 });
-    const snippet = (result as { log_snippet: string }).log_snippet;
-    expect(snippet).toContain("lines omitted");
-    expect(snippet).toContain("raw-99");
-    expect(snippet).not.toContain("raw-0");
-  });
-
-  it("returns the raw string when under the line budget", () => {
-    expect(packageSnippetForDiagnose("a\nb\nc", 50)).toBe("a\nb\nc");
   });
 });
 
@@ -582,11 +317,11 @@ describe("blobKeysToTry / commandUnitLogKey", () => {
     expect(blobKeysToTry("base-commandUnit:Execute")).toEqual(["base-commandUnit:Execute"]);
   });
 
-  it("keeps the last unit names inside the cap and reserves Execute", () => {
+  it("reserves Execute inside the cap when unit list is long", () => {
     const names = Array.from({ length: 12 }, (_, i) => `U${i}`);
     const keys = blobKeysToTry("base", names);
     expect(keys).toHaveLength(11);
-    expect(keys.slice(1, 10)).toEqual(names.slice(-9).map((n) => `base-commandUnit:${n}`));
+    expect(keys.slice(1, 10)).toEqual(names.slice(0, 9).map((n) => `base-commandUnit:${n}`));
     expect(keys[10]).toBe("base-commandUnit:Execute");
   });
 
@@ -608,7 +343,7 @@ describe("blobKeysToTry / commandUnitLogKey", () => {
   });
 });
 
-describe("logKeysFromNode / failedUnitNamesFromNode", () => {
+describe("logKeysFromNode", () => {
   it("collects de-duplicated keys across executableResponses variants", () => {
     expect(
       logKeysFromNode({
@@ -625,30 +360,6 @@ describe("logKeysFromNode / failedUnitNamesFromNode", () => {
   it("returns undefined when the node has no log keys", () => {
     expect(logKeysFromNode({})).toBeUndefined();
     expect(logKeysFromNode({ executableResponses: [{ task: {} }] })).toBeUndefined();
-  });
-
-  it("collects failed/error unit names from unitProgresses status", () => {
-    expect(
-      failedUnitNamesFromNode({
-        unitProgresses: [
-          { unitName: "Fetch Files", status: "Success" },
-          { unitName: "Prepare", status: "Failed" },
-          { unitName: "Wrap Up", status: "Expired" },
-          { unitName: "Install / Upgrade", status: "Error" },
-        ],
-      }),
-    ).toEqual(["Prepare", "Install / Upgrade"]);
-    expect(failedUnitNamesFromNode({ unitProgresses: [{ unitName: "Execute", status: "Success" }] })).toBeUndefined();
-  });
-
-  it("orders snippet keys with failed units before reverse last-non-empty", () => {
-    expect(
-      snippetUnitKeyOrder(
-        "base",
-        ["base-commandUnit:A", "base-commandUnit:B", "base-commandUnit:C"],
-        ["B"],
-      ),
-    ).toEqual(["base-commandUnit:B", "base-commandUnit:C", "base-commandUnit:A"]);
   });
 });
 
