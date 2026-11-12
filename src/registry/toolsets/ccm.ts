@@ -2778,13 +2778,14 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
           pathBuilder: aiBudgetPath("/me/budgets/override/request"),
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
+          // bodyBuilder renames budget_id -> policy_id, so validate required fields on the caller's body.
+          validateInputBody: true,
           bodyBuilder: (input) => {
             const body = (input.body as Record<string, unknown> | undefined) ?? {};
-            const budgetId = input.budget_id ?? body.budget_id ?? body.policy_id;
             return {
-              policy_id: budgetId,
-              amount: input.amount ?? body.amount,
-              reason: input.reason ?? body.reason,
+              policy_id: body.budget_id,
+              amount: body.amount,
+              reason: body.reason,
             };
           },
           bodySchema: {
