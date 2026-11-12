@@ -122,9 +122,14 @@ export const registriesFirewallToolset: ToolsetDefinition = {
     {
       resourceType: "artifact_scan_v3",
       displayName: "Artifact Scan (v3)",
-      description: "Firewall / policy scan results for artifacts.",
+      description:
+        "Firewall / policy scan results for artifacts. To list across every org and project, use " +
+        "resource_scope=account with filter scope=descendants; without it only that level's registries are included.",
       toolset: "registries-firewall",
       scope: "project",
+      // org/project are optional on GetArtifactScansV3, and GetArtifactScanDetailsV3 takes neither. The backend
+      // lists only the requested space's registries unless `scope=descendants` widens it to child spaces.
+      supportedScopes: ["account", "org", "project"],
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["scan_id"],
       compactItem: compactArtifactScanV3,
@@ -146,7 +151,9 @@ export const registriesFirewallToolset: ToolsetDefinition = {
         },
         {
           name: "scope",
-          description: "Registry scope",
+          description:
+            "Which registries to include relative to the requested scope: none (default, that level only), " +
+            "ancestors (plus parent levels), descendants (plus all child orgs/projects)",
           enum: ["none", "ancestors", "descendants"],
         },
         { name: "sort", description: V3_SORT_DESC },

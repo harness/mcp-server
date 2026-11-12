@@ -113,6 +113,35 @@ describe("HAR v3 toolset", () => {
     expect(result.hasMore).toBe(false);
   });
 
+  it("artifact_scan_v3.list at account scope omits org/project and forwards scope=descendants", async () => {
+    // Backend only widens past the requested space when `scope=descendants` is passed.
+    const client = mockClient({ data: [], itemCount: 0, pageIndex: 0, pageSize: 20, pageCount: 0 });
+
+    await registry.dispatch(client, "artifact_scan_v3", "list", {
+      resource_scope: "account",
+      scope: "descendants",
+      scan_status: "BLOCKED",
+    });
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.path).toBe("/har/api/v3/scans");
+    expect(call.params.account_identifier).toBe("acct123");
+    expect(call.params.org_identifier).toBeUndefined();
+    expect(call.params.project_identifier).toBeUndefined();
+    expect(call.params.scope).toBe("descendants");
+    expect(call.params.scan_status).toBe("BLOCKED");
+  });
+
+  it("artifact_scan_v3.list at org scope sends org but not project", async () => {
+    const client = mockClient({ data: [], itemCount: 0, pageIndex: 0, pageSize: 20, pageCount: 0 });
+
+    await registry.dispatch(client, "artifact_scan_v3", "list", { resource_scope: "org" });
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.params.org_identifier).toBe("PROD");
+    expect(call.params.project_identifier).toBeUndefined();
+  });
+
   it("harV3ListExtract surfaces total from meta.totalCount for native v3 responses", async () => {
     const client = mockClient({
       items: [{ id: "p-1" }],
