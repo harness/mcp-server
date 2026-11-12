@@ -15,6 +15,7 @@ import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } fr
 import { getOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 import { buildResultView, createAppViewContext } from "../apps/mcp-apps.js";
+import { buildPipelineExecutionView } from "../apps/pipeline-execution.js";
 
 function isTrue(value: unknown): boolean {
   return value === true || value === "true";
@@ -157,6 +158,13 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         }
 
         return appView.attach(jsonResult(result), () =>
+          (resourceType === "execution"
+            ? buildPipelineExecutionView(result, {
+                orgId: asString(input.org_id) ?? registry.orgId,
+                projectId: asString(input.project_id) ?? registry.projectId,
+                deepLink: (template, linkParams) => registry.deepLink(template, linkParams),
+              })
+            : undefined) ??
           buildResultView(result, {
             displayName: def.displayName,
             resourceId,
