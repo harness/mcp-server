@@ -502,7 +502,8 @@ export const incidentsToolset: ToolsetDefinition = {
         remove_root_cause_theory: {
           method: "POST",
           path: "/gateway/ir/tp/api/v1/mc/incidents/{incidentId}/root-cause-theories/{theoryId}/remove",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          // Deletes the theory with no undo, so it prompts (or needs confirm: true) like any delete.
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { incident_id: "incidentId", theory_id: "theoryId" },
           paramsSchema: rootCauseTheoryParamsSchema,
           bodyBuilder: buildBodyNormalized(),

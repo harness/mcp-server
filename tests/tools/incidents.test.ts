@@ -885,12 +885,25 @@ describe("incident — harness_execute (root-cause theory status actions)", () =
       resource_id: "INC-42",
       params: { theory_id: "theory-1" },
       body: { reason: "superseded" },
+      confirm: true,
     });
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
     expect(callArgs.method).toBe("POST");
     expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories/theory-1/remove");
     expect(callArgs.body).toEqual({ reason: "superseded" });
+  });
+
+  it("remove_root_cause_theory is blocked without confirmation", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "remove_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: { reason: "superseded" },
+    });
+    expect(result.isError).toBe(true);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("remove_root_cause_theory requires a reason before calling the API", async () => {
@@ -905,14 +918,14 @@ describe("incident — harness_execute (root-cause theory status actions)", () =
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it.each(["update_root_cause_theory", "remove_root_cause_theory"])(
-    "%s requires theory_id and is a non-retried low_write",
-    (action) => {
-      const spec = new Registry(makeConfig()).getResource("incident").executeActions?.[action];
-      expect(spec?.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "do_not_retry" });
-      expect(spec?.paramsSchema?.fields.find((f) => f.name === "theory_id")?.required).toBe(true);
-    },
-  );
+  it.each([
+    ["update_root_cause_theory", "low_write"],
+    ["remove_root_cause_theory", "destructive"],
+  ])("%s requires theory_id and is a non-retried %s", (action, risk) => {
+    const spec = new Registry(makeConfig()).getResource("incident").executeActions?.[action];
+    expect(spec?.operationPolicy).toEqual({ risk, retryPolicy: "do_not_retry" });
+    expect(spec?.paramsSchema?.fields.find((f) => f.name === "theory_id")?.required).toBe(true);
+  });
 
   it.each(["confirm_root_cause_theory", "rule_out_root_cause_theory", "undo_root_cause_theory_status"])(
     "%s requires theory_id and expectedOldRcaSha and is a non-retried low_write",
