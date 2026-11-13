@@ -1,5 +1,39 @@
 import type { ToolsetDefinition } from "../types.js";
-import { harV3ListExtract, harV3DataArrayUnwrap } from "../extractors.js";
+import { harV3ListExtract, harV3DataArrayUnwrap, harV3DataObjectUnwrap } from "../extractors.js";
+
+// The stats endpoints reject more than 100 UUIDs per request.
+const V3_STATS_MAX_IDS = 100;
+
+const toIdList = (value: unknown): string[] => {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return raw.map((v) => String(v).trim()).filter((v) => v.length > 0);
+};
+
+const statsBody = (inputKey: string, bodyKey: string) => (input: Record<string, unknown>) => {
+  const ids = toIdList(input[inputKey]);
+  if (ids.length === 0) {
+    throw new Error(`${inputKey} must contain at least one UUID.`);
+  }
+  if (ids.length > V3_STATS_MAX_IDS) {
+    throw new Error(`${inputKey} accepts at most ${V3_STATS_MAX_IDS} UUIDs per call (got ${ids.length}). Split the request.`);
+  }
+  return { [bodyKey]: ids };
+};
+
+const CONAN_BASE = "/har/api/v3/versions/{id}/conan/recipe-revisions";
+
+// Deployments carry prod / non-prod environment counts in `meta`, which
+// harV3ListExtract deliberately does not forward.
+const versionDeploymentsExtract = (raw: unknown): unknown => {
+  const base = harV3ListExtract(raw);
+  if (typeof raw !== "object" || raw === null || typeof base !== "object" || base === null) return base;
+  const meta = (raw as Record<string, unknown>).meta as Record<string, unknown> | undefined;
+  return {
+    ...(base as Record<string, unknown>),
+    ...(typeof meta?.prodEnvCount === "number" ? { prodEnvCount: meta.prodEnvCount } : {}),
+    ...(typeof meta?.nonProdEnvCount === "number" ? { nonProdEnvCount: meta.nonProdEnvCount } : {}),
+  };
+};
 
 // Projects a raw v3 package list item down to the fields agents actually need.
 // The default `compactItems()` whitelist keeps `id`/`name`/timestamps but drops
@@ -356,6 +390,270 @@ export const registriesV3Toolset: ToolsetDefinition = {
           },
           responseExtractor: harV3ListExtract,
           description: "List possible values for a metadata key (v3)",
+        },
+      },
+    },
+    // GetFileDetailsV3 / ListVersionDeploymentsV3 / GetSystemInfoV3 declare only
+    // AccountIdentifierV3, so they live on their own account-scoped resource
+    // types instead of as `get` on the project-scoped list resources.
+    {
+      resourceType: "file_detail_v3",
+      displayName: "File Detail (v3)",
+      description:
+        "Detail for a single file by UUID: checksums, size, content type, and a downloadUrl / downloadCmd. File bytes are never returned — share the downloadUrl instead.",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: ["file_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/har/api/v3/files/{id}",
+          pathParams: { file_id: "id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get file details by UUID (v3). Get file_id from file_v3 list.",
+        },
+      },
+    },
+    {
+      resourceType: "version_deployment_v3",
+      displayName: "Version Deployment (v3)",
+      description:
+        "Harness CD environments and services currently running a version, with prodEnvCount / nonProdEnvCount totals. " +
+        "For Docker and Helm versions pass package_tag (the image or chart tag) — without it the list is empty.",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: ["version_id"],
+      listFilterFields: [
+        { name: "version_id", description: "Version UUID (required)", required: true },
+        { name: "package_tag", description: "Tag to resolve deployments for. Required in practice for DOCKER and HELM versions." },
+        { name: "env_type", description: "Environment type filter", enum: ["PRODUCTION", "PRE_PRODUCTION"] },
+        { name: "search_term", description: "Filter deployments by keyword" },
+        { name: "sort", description: V3_SORT_DESC },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/har/api/v3/versions/{id}/deployments",
+          pathParams: { version_id: "id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            package_tag: "package_tag",
+            env_type: "env_type",
+            search_term: "search_term",
+            sort: "sort",
+            page: "page",
+            size: "size",
+          },
+          skipCompact: true,
+          responseExtractor: versionDeploymentsExtract,
+          description: "List CD deployments of a version (v3)",
+        },
+      },
+    },
+    {
+      resourceType: "system_info_v3",
+      displayName: "System Info (v3)",
+      description:
+        "Artifact Registry system info for the account: registryHost and registryUrl. Use it to build push/pull hostnames (e.g. docker login <registryHost>).",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: [],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/har/api/v3/system/info",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get the account's registry host and URL (v3)",
+        },
+      },
+    },
+    // Stats endpoints are read-only POSTs that hydrate up to 100 UUIDs at a time.
+    {
+      resourceType: "registry_stats_v3",
+      displayName: "Registry Stats (v3)",
+      description: "Package count, size, download count and artifact count for up to 100 registries by UUID.",
+      toolset: "registries-v3",
+      scope: "project",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "registry_ids", description: `Comma-separated registry UUIDs, max ${V3_STATS_MAX_IDS} (required)`, required: true },
+        { name: "scope", description: "Registry scope", enum: ["none", "ancestors", "descendants"] },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: "/har/api/v3/registries/stats",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { scope: "scope" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: statsBody("registry_ids", "registryIds"),
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "Get stats for registries (v3)",
+        },
+      },
+    },
+    {
+      resourceType: "package_stats_v3",
+      displayName: "Package Stats (v3)",
+      description: "Artifact count, size and download count for up to 100 packages by UUID.",
+      toolset: "registries-v3",
+      scope: "project",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "package_ids", description: `Comma-separated package UUIDs, max ${V3_STATS_MAX_IDS} (required)`, required: true },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: "/har/api/v3/packages/stats",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: statsBody("package_ids", "packageIds"),
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "Get stats for packages (v3)",
+        },
+      },
+    },
+    {
+      resourceType: "version_stats_v3",
+      displayName: "Version Stats (v3)",
+      description:
+        "Download count, file count, size, scan status / scan ID and deployment metadata for up to 100 versions by UUID.",
+      toolset: "registries-v3",
+      scope: "project",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "version_ids", description: `Comma-separated version UUIDs, max ${V3_STATS_MAX_IDS} (required)`, required: true },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: "/har/api/v3/versions/stats",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: statsBody("version_ids", "versionIds"),
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "Get stats for versions (v3)",
+        },
+      },
+    },
+    // Conan drill-down under a version: recipe revisions (RREV) → packages
+    // (PKGID) → package revisions (PREV). All account-scoped, CONAN-only.
+    // `conan_package_id` is the Conan PKGID, not a v3 package UUID — named apart
+    // from `package_id` so agents don't pass one where the other belongs.
+    {
+      resourceType: "conan_recipe_revision_v3",
+      displayName: "Conan Recipe Revision (v3)",
+      description:
+        "Conan recipe revisions (RREV) of a CONAN version, with package count, size and download stats. Only CONAN versions return data.",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: ["version_id", "recipe_revision_id"],
+      listFilterFields: [
+        { name: "version_id", description: "Version UUID of a CONAN package version (required)", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: CONAN_BASE,
+          pathParams: { version_id: "id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page: "page", size: "size" },
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "List finalized Conan recipe revisions for a version (v3)",
+        },
+        get: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/details`,
+          pathParams: { version_id: "id", recipe_revision_id: "recipe_revision_id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get a Conan recipe revision (v3). Requires version_id and recipe_revision_id.",
+        },
+      },
+    },
+    {
+      resourceType: "conan_package_v3",
+      displayName: "Conan Package (v3)",
+      description: "Conan binary packages (PKGID) under a recipe revision. Only CONAN versions return data.",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: ["version_id", "recipe_revision_id", "conan_package_id"],
+      listFilterFields: [
+        { name: "version_id", description: "Version UUID (required)", required: true },
+        { name: "recipe_revision_id", description: "Recipe revision ID from conan_recipe_revision_v3 (required)", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/packages`,
+          pathParams: { version_id: "id", recipe_revision_id: "recipe_revision_id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page: "page", size: "size" },
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "List Conan packages under a recipe revision (v3)",
+        },
+        get: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/packages/{package_id}/details`,
+          pathParams: { version_id: "id", recipe_revision_id: "recipe_revision_id", conan_package_id: "package_id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get a Conan package with its package revisions (v3). Requires version_id, recipe_revision_id and conan_package_id.",
+        },
+      },
+    },
+    {
+      resourceType: "conan_package_revision_v3",
+      displayName: "Conan Package Revision (v3)",
+      description: "Conan package revisions (PREV) under a Conan package. Only CONAN versions return data.",
+      toolset: "registries-v3",
+      scope: "account",
+      scopeParams: V3_SCOPE_PARAMS,
+      identifierFields: ["version_id", "recipe_revision_id", "conan_package_id", "package_revision_id"],
+      listFilterFields: [
+        { name: "version_id", description: "Version UUID (required)", required: true },
+        { name: "recipe_revision_id", description: "Recipe revision ID (required)", required: true },
+        { name: "conan_package_id", description: "Conan package ID (PKGID) from conan_package_v3 (required)", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/packages/{package_id}/package-revisions`,
+          pathParams: { version_id: "id", recipe_revision_id: "recipe_revision_id", conan_package_id: "package_id" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { page: "page", size: "size" },
+          skipCompact: true,
+          responseExtractor: harV3ListExtract,
+          description: "List Conan package revisions under a package (v3)",
+        },
+        get: {
+          method: "GET",
+          path: `${CONAN_BASE}/{recipe_revision_id}/packages/{package_id}/package-revisions/{package_revision_id}/details`,
+          pathParams: {
+            version_id: "id",
+            recipe_revision_id: "recipe_revision_id",
+            conan_package_id: "package_id",
+            package_revision_id: "package_revision_id",
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get a Conan package revision (v3). Requires version_id, recipe_revision_id, conan_package_id and package_revision_id.",
         },
       },
     },
