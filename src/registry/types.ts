@@ -171,7 +171,8 @@ export type ToolsetName =
   | "appsec"
   | "knowledge-graph"
   | "semantic-layer"
-  | "unified-search";
+  | "unified-search"
+  | "aicr";
 
 export type ProductName = "harness" | "fme" | "appsec";
 
@@ -263,6 +264,8 @@ export type PathBuilderConfig = {
   HARNESS_PROJECT?: string;
   HARNESS_APPSEC_BASE_URL?: string;
   HARNESS_APPSEC_UI_URL?: string;
+  /** Harness UI/API base URL, for path builders that compose deep links. */
+  HARNESS_BASE_URL?: string;
 };
 
 /**
@@ -375,6 +378,14 @@ export interface EndpointSpec {
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**
+   * Extra line in this operation's approval prompt, saying what the call changes and where.
+   * On delete it replaces the default "cannot be undone" warning (e.g. a delete that archives);
+   * on create, update and execute it is added after the question. A function gets a copy of
+   * the call's input (named args, params and body; before preflight); returning undefined, or
+   * throwing, means no note. Operations without it keep their prompt unchanged.
+   */
+  confirmNote?: string | ((input: Record<string, unknown>) => string | undefined);
+  /**
    * Declarative input expansion rules. When present, matching shorthand keys
    * in user input are expanded into full nested structures before resolution.
    */
@@ -400,12 +411,13 @@ export interface EndpointSpec {
    * Optional preflight hook that runs before the request is sent.
    * Use for server-side invariants (e.g. duplicate-check before creating a
    * resource). Throw from the hook to block the operation — the error message
-   * is surfaced directly to the agent.
+   * is surfaced directly to the agent. Return `{ result }` when the hook already
+   * knows the answer; the request is then not sent and the extractor does not run.
    *
    * Typed loosely to avoid a circular import back into the registry/dispatcher.
    * The runtime shape is `{ client: HarnessClient, input, registry: Registry, signal? }`.
    */
-  preflight?: (ctx: PreflightContext) => Promise<void>;
+  preflight?: (ctx: PreflightContext) => Promise<void | { result: unknown }>;
   /**
    * When true, the MCP layer controls ELK→Mongo fallback for this endpoint:
    *  1. First request sent with `enforce_elasticsearch=true` (ELK path).

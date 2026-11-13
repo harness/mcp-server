@@ -7,6 +7,7 @@ import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
+import { resolveConfirmNote, withConfirmNote } from "../utils/confirm-note.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
@@ -268,7 +269,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_execute",
-          message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
+          message: withConfirmNote(
+            `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
+            resolveConfirmNote(actionSpec, input),
+          ),
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
