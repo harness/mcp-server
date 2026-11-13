@@ -8,7 +8,7 @@ import { registerAllTools } from "../../src/tools/index.js";
 
 // Pinned hash of the full-mode tool schemas (descriptions, input and output schemas as advertised by tools/list). Full mode must stay byte-identical when compact-mode
 // copy changes; update this only for an intentional full-mode contract change.
-const FULL_MODE_SCHEMA_SHA256 = "e66813b0c97e3f702c2b959966ca42888de529212950cd5bee9f75294d3da76a";
+const FULL_MODE_SCHEMA_SHA256 = "bedc73a6dd0fb7ac9242f866047c2c081aeb567ffdb876b2dbc685ebe4cbcf38";
 
 // Measured: tool descriptions + input and output schemas in compact mode. Measured 21372 B total, 3585 B largest tool; headroom is deliberately small (~5%).
 const COMPACT_TOTAL_BUDGET_BYTES = 22500;

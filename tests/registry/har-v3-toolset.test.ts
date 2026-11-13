@@ -9,6 +9,7 @@ import { Registry } from "../../src/registry/index.js";
 import { registriesV3Toolset } from "../../src/registry/toolsets/registries-v3.js";
 import { registriesFirewallToolset } from "../../src/registry/toolsets/registries-firewall.js";
 import { compactItems } from "../../src/utils/compact.js";
+import { registerAllTools } from "../../src/tools/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -110,6 +111,35 @@ describe("HAR v3 toolset", () => {
     expect(result.page).toBe(0);
     expect(result.size).toBe(20);
     expect(result.hasMore).toBe(false);
+  });
+
+  it("artifact_scan_v3.list at account scope omits org/project and forwards scope=descendants", async () => {
+    // Backend only widens past the requested space when `scope=descendants` is passed.
+    const client = mockClient({ data: [], itemCount: 0, pageIndex: 0, pageSize: 20, pageCount: 0 });
+
+    await registry.dispatch(client, "artifact_scan_v3", "list", {
+      resource_scope: "account",
+      scope: "descendants",
+      scan_status: "BLOCKED",
+    });
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.path).toBe("/har/api/v3/scans");
+    expect(call.params.account_identifier).toBe("acct123");
+    expect(call.params.org_identifier).toBeUndefined();
+    expect(call.params.project_identifier).toBeUndefined();
+    expect(call.params.scope).toBe("descendants");
+    expect(call.params.scan_status).toBe("BLOCKED");
+  });
+
+  it("artifact_scan_v3.list at org scope sends org but not project", async () => {
+    const client = mockClient({ data: [], itemCount: 0, pageIndex: 0, pageSize: 20, pageCount: 0 });
+
+    await registry.dispatch(client, "artifact_scan_v3", "list", { resource_scope: "org" });
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.params.org_identifier).toBe("PROD");
+    expect(call.params.project_identifier).toBeUndefined();
   });
 
   it("harV3ListExtract surfaces total from meta.totalCount for native v3 responses", async () => {
@@ -215,6 +245,47 @@ describe("HAR v3 toolset", () => {
     expect(result.data).toBeUndefined();
   });
 
+  it("artifact_scan_v3 evaluate POSTs {scanId} to /scans/evaluate and unwraps the status", async () => {
+    const client = mockClient({ data: { status: "PENDING" } });
+
+    const result = (await registry.dispatchExecute(client, "artifact_scan_v3", "evaluate", {
+      scan_id: "scan-9",
+    })) as Record<string, unknown>;
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/har/api/v3/scans/evaluate");
+    expect(call.body).toEqual({ scanId: "scan-9" });
+    expect(call.params.account_identifier).toBe("acct123");
+    expect(result).toEqual({ status: "PENDING" });
+  });
+
+  it("artifact_scan_v3 evaluate accepts version_id instead of a scan", async () => {
+    const client = mockClient({ data: { status: "PENDING" } });
+
+    await registry.dispatchExecute(client, "artifact_scan_v3", "evaluate", {
+      resource_scope: "account",
+      version_id: "ver-uuid-1",
+    });
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.body).toEqual({ versionId: "ver-uuid-1" });
+    expect(call.params.org_identifier).toBeUndefined();
+    expect(call.params.project_identifier).toBeUndefined();
+  });
+
+  it.each([
+    ["neither", {}],
+    ["both", { scan_id: "scan-9", version_id: "ver-uuid-1" }],
+  ])("artifact_scan_v3 evaluate rejects %s of scan_id/version_id without calling the API", async (_label, input) => {
+    const client = mockClient({ data: { status: "PENDING" } });
+
+    await expect(registry.dispatchExecute(client, "artifact_scan_v3", "evaluate", input)).rejects.toThrow(
+      /exactly one of scan_id/,
+    );
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
   it("bulk_scan_evaluation_v3.get substitutes evaluation_id into path", async () => {
     const client = mockClient({ status: "COMPLETED" });
 
@@ -316,6 +387,120 @@ describe("registries-v3 compactItem projection", () => {
     expect(items[0].status).toBe("PENDING");
     expect(items[0].businessJustification).toBe("urgent hotfix");
     expect(items[0].extra).toBeUndefined();
+  });
+
+  it("artifact_scan_v3.compactItem keeps package/status/exemption fields and adds scan_id", () => {
+    const resource = getResource("artifact_scan_v3");
+    expect(resource.compactItem).toBeDefined();
+    const items = compactItems([BLOCKED_SCAN], resource.compactItem) as Record<string, unknown>[];
+    expect(items[0]).toEqual({
+      scan_id: BLOCKED_SCAN.id,
+      id: BLOCKED_SCAN.id,
+      packageName: "lodash",
+      packageType: "NPM",
+      version: "4.17.15",
+      versionId: BLOCKED_SCAN.versionId,
+      purl: "pkg:npm/lodash@4.17.15",
+      scanStatus: "BLOCKED",
+      securityViolationCategories: ["Security"],
+      exemptionStatus: { id: "e1e1e1e1-0000-4000-8000-000000000003", status: "PENDING" },
+      totalAffectedPipelines: 3,
+      registryId: BLOCKED_SCAN.registryId,
+      registryName: "npm-upstream",
+      parentRegistryId: BLOCKED_SCAN.parentRegistryId,
+      parentRegistryName: "npm-virtual",
+      RegistryOrgId: "default",
+      RegistryProjectId: "proj",
+      parentRegistryOrgId: "default",
+      parentRegistryProjectId: "proj",
+      lastEvaluatedAt: "1762900000000",
+      lastEvaluatedBy: "policy-engine",
+    });
+  });
+});
+
+// Raw `ArtifactScanV3` list item, field names as returned by QA's /har/api/v3/scans.
+const BLOCKED_SCAN = {
+  id: "6f1c2a9e-0000-4000-8000-000000000001",
+  packageName: "lodash",
+  packageType: "NPM",
+  purl: "pkg:npm/lodash@4.17.15",
+  version: "4.17.15",
+  versionId: "9a8b7c6d-0000-4000-8000-000000000002",
+  registryId: "0183d3a8-91d8-4c49-8025-057b0e16fca8",
+  registryName: "npm-upstream",
+  parentRegistryId: "1183d3a8-91d8-4c49-8025-057b0e16fca8",
+  parentRegistryName: "npm-virtual",
+  RegistryOrgId: "default",
+  RegistryProjectId: "proj",
+  parentRegistryOrgId: "default",
+  parentRegistryProjectId: "proj",
+  scanStatus: "BLOCKED",
+  securityViolationCategories: ["Security"],
+  policySets: [{ policySetRef: "default", policySetName: "Default" }],
+  rootPackages: ["my-app@1.0.0"],
+  totalAffectedPipelines: 3,
+  buildDetails: { pipelineId: "build", executionId: "exec-1" },
+  lastEvaluatedAt: "1762900000000",
+  lastEvaluatedBy: "policy-engine",
+  exemptionStatus: { id: "e1e1e1e1-0000-4000-8000-000000000003", status: "PENDING" },
+};
+
+describe("harness_list artifact_scan_v3 with default compaction", () => {
+  it("returns package, status and exemption fields agents need to triage blocked dependencies", async () => {
+    const config = makeConfig({ HARNESS_TOOLSETS: undefined });
+    const handlers = new Map<string, (args: unknown, extra: unknown) => Promise<unknown>>();
+    const server = {
+      server: { getClientCapabilities: () => ({}) },
+      registerTool: (name: string, _def: unknown, cb: (args: unknown, extra: unknown) => Promise<unknown>) => {
+        handlers.set(name, cb);
+      },
+    };
+    const client = {
+      account: "acct123",
+      request: vi.fn().mockResolvedValue({ data: [BLOCKED_SCAN], itemCount: 1, pageIndex: 0, pageSize: 20, pageCount: 1 }),
+    } as unknown as HarnessClient;
+    registerAllTools(server as never, new Registry(config), client, config);
+
+    const res = (await handlers.get("harness_list")!(
+      { resource_type: "artifact_scan_v3", filters: { scan_status: "BLOCKED" } },
+      { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} },
+    )) as { content: { type: string; text: string }[]; structuredContent?: { items: Record<string, unknown>[] } };
+    const body = res.structuredContent ?? JSON.parse(res.content.find((c) => c.type === "text")!.text);
+    const item = body.items[0];
+
+    expect(item.packageName).toBe("lodash");
+    expect(item.version).toBe("4.17.15");
+    expect(item.scanStatus).toBe("BLOCKED");
+    expect(item.registryName).toBe("npm-upstream");
+    expect(item.exemptionStatus).toEqual(BLOCKED_SCAN.exemptionStatus);
+    expect(item.scan_id).toBe(BLOCKED_SCAN.id);
+    expect(item.policySets).toBeUndefined();
+    expect(item.buildDetails).toBeUndefined();
+    expect(item.rootPackages).toBeUndefined();
+  });
+
+  it("harness_execute evaluate maps resource_id to scanId", async () => {
+    const config = makeConfig({ HARNESS_TOOLSETS: undefined });
+    const handlers = new Map<string, (args: unknown, extra: unknown) => Promise<unknown>>();
+    const server = {
+      server: { getClientCapabilities: () => ({}) },
+      registerTool: (name: string, _def: unknown, cb: (args: unknown, extra: unknown) => Promise<unknown>) => {
+        handlers.set(name, cb);
+      },
+    };
+    const request = vi.fn().mockResolvedValue({ data: { status: "PENDING" } });
+    const client = { account: "acct123", request } as unknown as HarnessClient;
+    registerAllTools(server as never, new Registry(config), client, config);
+
+    const res = (await handlers.get("harness_execute")!(
+      { resource_type: "artifact_scan_v3", action: "evaluate", resource_id: "scan-9", confirm: true },
+      { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} },
+    )) as { isError?: boolean; content: { type: string; text: string }[] };
+
+    expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+    expect(request.mock.calls[0][0].path).toBe("/har/api/v3/scans/evaluate");
+    expect(request.mock.calls[0][0].body).toEqual({ scanId: "scan-9" });
   });
 });
 

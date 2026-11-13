@@ -5,8 +5,6 @@ import { HarnessClient } from "../../src/client/harness-client.js";
 import { mergeConfigWithSessionHeaders } from "../../src/utils/session-headers.js";
 import type { HarnessClientInterface } from "../../src/registry/types.js";
 
-const VALID_API_UUID = "c7e8f4ca-f821-332c-8510-84d79605d652";
-
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     HARNESS_MCP_MODE: "single-user",
@@ -50,6 +48,30 @@ describe("AppSec Toolset & Config", () => {
       expect(optInReg.getAllResourceTypes()).toContain("appsec_api");
       expect(optInReg.getAllResourceTypes()).toContain("appsec_vulnerability");
       expect(optInReg.getAllResourceTypes()).not.toContain("appsec_query");
+    });
+
+    it("pins the appsec toolset to read-only resources", () => {
+      const reg = new Registry(makeConfig());
+      const appsecToolset = reg.getAllToolsets().find((t) => t.name === "appsec")!;
+
+      expect(appsecToolset.resources.map((resource) => resource.resourceType)).toEqual([
+        "appsec_api",
+        "appsec_api_spec",
+        "appsec_api_span",
+        "appsec_entity",
+        "appsec_vulnerability",
+        "appsec_threat_activity",
+        "appsec_security_event",
+        "appsec_ast_scan",
+        "appsec_inventory_trend",
+        "appsec_datatype",
+      ]);
+
+      for (const resource of appsecToolset.resources) {
+        expect(resource.operations.create, resource.resourceType).toBeUndefined();
+        expect(resource.operations.update, resource.resourceType).toBeUndefined();
+        expect(resource.operations.delete, resource.resourceType).toBeUndefined();
+      }
     });
 
     it("defines compactItem on every AppSec list resource and never sets skipCompact", () => {
@@ -745,116 +767,6 @@ describe("AppSec Toolset & Config", () => {
         dataTypeId: "dt-1",
         name: "VISA Credit Card",
       });
-    });
-  });
-
-  describe("appsec_fraud_policy & appsec_derivation_config (JEXL Injection & Validation)", () => {
-    it("creates a fraud policy, validates SELECT SQL query, and requires a UUID api_id", async () => {
-      const { client, calls } = makeMockClient(() => ({
-        data: {
-          CreateFraudPolicy: {
-            fraud_policy: {
-              id: "fp-1",
-              name: "high-velocity-transfers",
-              disabled: true,
-            },
-          },
-        },
-      }));
-      const registry = new Registry(makeConfig());
-      const res = (await registry.dispatch(client, "appsec_fraud_policy", "create", {
-        body: {
-          policy_name: "high-velocity-transfers",
-          description: "Detect rapid wire transfers",
-          sql_query: "SELECT actor_id, COUNT(*) FROM customer_events GROUP BY actor_id",
-          api_id: VALID_API_UUID,
-        },
-      })) as Record<string, unknown>;
-
-      expect(calls).toHaveLength(1);
-      expect(res).toMatchObject({
-        status: "SUCCESS",
-        id: "fp-1",
-        name: "high-velocity-transfers",
-        disabled: true,
-      });
-
-      await expect(
-        registry.dispatch(client, "appsec_fraud_policy", "create", {
-          body: {
-            policy_name: "bad-policy",
-            description: "Invalid SQL",
-            sql_query: "DROP TABLE customer_events",
-            api_id: VALID_API_UUID,
-          },
-        }),
-      ).rejects.toThrow(/sql_query must be a valid SELECT query/);
-
-      await expect(
-        registry.dispatch(client, "appsec_fraud_policy", "create", {
-          body: {
-            policy_name: "bad-api-id",
-            description: "Non-UUID API ID",
-            sql_query: "SELECT * FROM customer_events",
-            api_id: "not-a-uuid",
-          },
-        }),
-      ).rejects.toThrow(/must be a valid UUID/);
-    });
-
-    it("creates a derivation config with a valid UUID api_id and blocks JEXL quote injection in api_id", async () => {
-      const { client, calls } = makeMockClient(() => ({
-        data: {
-          CreateDerivationConfig: {
-            derivation_config: {
-              id: "dc-1",
-              name: "ai-generated-derivation-config-1",
-              disabled: true,
-            },
-          },
-        },
-      }));
-      const registry = new Registry(makeConfig());
-
-      const res = (await registry.dispatch(client, "appsec_derivation_config", "create", {
-        body: {
-          api_id: VALID_API_UUID,
-          features: [
-            {
-              name: "payment_amount",
-              expression: "$s.request_body.amount",
-              explanation: "Extracts payment amount",
-              type: "number",
-            },
-          ],
-        },
-      })) as Record<string, unknown>;
-
-      expect(res.status).toBe("SUCCESS");
-      const innerJson = JSON.parse(
-        (calls[0]!.body as { variables: { derivation_config: string } }).variables.derivation_config,
-      );
-      expect(innerJson.scope).toBe(`$s.api_id.equals('${VALID_API_UUID}')`);
-      expect(innerJson.attributes[0].name).toBe("payment_amount");
-
-      // Block JEXL injection payload in api_id
-      await expect(
-        registry.dispatch(client, "appsec_derivation_config", "create", {
-          body: {
-            api_id: "x') || true || ('",
-            features: [{ name: "payment_amount", expression: "$s.id" }],
-          },
-        }),
-      ).rejects.toThrow(/must be a valid UUID/);
-
-      await expect(
-        registry.dispatch(client, "appsec_derivation_config", "create", {
-          body: {
-            api_id: VALID_API_UUID,
-            features: [{ name: "InvalidCamelCase", expression: "$s.id" }],
-          },
-        }),
-      ).rejects.toThrow(/snake_case/);
     });
   });
 

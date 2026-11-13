@@ -21,6 +21,7 @@ RUN pnpm install --frozen-lockfile
 # Copy source and compile
 COPY tsconfig.json ./
 COPY src/ src/
+COPY apps/ apps/
 COPY scripts/preload-hf-model.mjs scripts/
 RUN pnpm build
 

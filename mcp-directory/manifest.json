@@ -54,6 +54,7 @@
         "HARNESS_PROJECT": "${user_config.HARNESS_PROJECT}",
         "HARNESS_BASE_URL": "${user_config.HARNESS_BASE_URL}",
         "HARNESS_SCHEMA_MODE": "${user_config.HARNESS_SCHEMA_MODE}",
+        "HARNESS_MCP_APPS": "${user_config.HARNESS_MCP_APPS}",
         "MCP_SESSION_TTL_MS": "${user_config.MCP_SESSION_TTL_MS}"
       }
     }
@@ -154,6 +155,14 @@
       "type": "string",
       "title": "Tool Schema Mode",
       "description": "compact (default) or full. Compact shrinks the tool list sent to the model by about half; resource types are discovered via harness_describe. Set full to inline every resource type.",
+      "required": false,
+      "sensitive": false
+    },
+    "HARNESS_MCP_APPS": {
+      "type": "string",
+      "title": "MCP Apps Views",
+      "description": "off (default) or auto. off keeps text-only results. Set auto to show interactive views (pipeline execution card, dashboards) in hosts that support MCP Apps; other clients get the same text results.",
+      "default": "off",
       "required": false,
       "sensitive": false
     },

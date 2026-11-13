@@ -529,6 +529,18 @@ describe("ConfigSchema — boolean env var coercion", () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.HARNESS_SCHEMA_MODE).toBe("full");
   });
+
+  it("HARNESS_MCP_APPS defaults to off when unset or empty, and accepts auto", () => {
+    for (const [extra, expected] of [[{}, "off"], [{ HARNESS_MCP_APPS: "" }, "off"], [{ HARNESS_MCP_APPS: "auto" }, "auto"]] as const) {
+      const result = ConfigSchema.safeParse({ ...validConfig, ...extra });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.HARNESS_MCP_APPS).toBe(expected);
+    }
+  });
+
+  it("HARNESS_MCP_APPS rejects unknown values", () => {
+    expect(ConfigSchema.safeParse({ ...validConfig, HARNESS_MCP_APPS: "on" }).success).toBe(false);
+  });
 });
 
 describe("ConfigSchema — HTTPS enforcement", () => {

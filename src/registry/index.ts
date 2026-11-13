@@ -258,6 +258,15 @@ export class Registry {
     return this.accountIdResolver?.() ?? this.config.HARNESS_ACCOUNT_ID;
   }
 
+  /** Harness UI link for a deep-link template, or undefined when it cannot be built. */
+  deepLink(template: string, params: Record<string, string>): string | undefined {
+    try {
+      return buildDeepLink(this.config.HARNESS_BASE_URL, this.getAccountId(), template, params);
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * Parse HARNESS_TOOLSETS env var. Supports three modes:
    *
@@ -338,6 +347,7 @@ export class Registry {
   get projectId(): string | undefined { return this.config.HARNESS_PROJECT; }
   /** True when tool schemas should not inline the resource_type enum. */
   get compactSchemas(): boolean { return this.config.HARNESS_SCHEMA_MODE !== "full"; }
+  get mcpAppsEnabled(): boolean { return this.config.HARNESS_MCP_APPS === "auto"; }
   get schemaProfile(): "full" | "compact" { return this.compactSchemas ? "compact" : "full"; }
 
   /** Get a resource definition by type, or throw. */

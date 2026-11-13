@@ -12,6 +12,8 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString } from "../utils/type-guards.js";
 import { orgIdField, projectIdField } from "./input-schemas.js";
 import { statusOutputSchema, compactOutputSchema } from "./output-schemas.js";
+import { createAppViewContext } from "../apps/mcp-apps.js";
+import type { StatusTone } from "../apps/view-types.js";
 
 const log = createLogger("status");
 
@@ -23,6 +25,9 @@ interface ExecutionItem {
   startTs?: number;
   endTs?: number;
 }
+
+const HEALTH_LABELS = { healthy: "Healthy", degraded: "Degraded", failing: "Failing" } as const;
+const HEALTH_TONES: Record<keyof typeof HEALTH_LABELS, StatusTone> = { healthy: "success", degraded: "warning", failing: "danger" };
 
 interface ListResult {
   items?: ExecutionItem[];
@@ -70,6 +75,7 @@ export function registerStatusTool(
   client: HarnessClient,
   config: Config,
 ): void {
+  const appView = createAppViewContext(server, registry.mcpAppsEnabled);
   server.registerTool(
     "harness_status",
     {
@@ -81,6 +87,7 @@ export function registerStatusTool(
         limit: z.number().default(5).optional().describe("Max items per section (default 5, max 20)"),
       },
       outputSchema: compactOutputSchema(statusOutputSchema, registry.compactSchemas),
+      ...appView.toolMeta,
       annotations: {
         title: "Project Health Status",
         readOnlyHint: true,
@@ -220,7 +227,14 @@ export function registerStatusTool(
           status._errors = errors;
         }
 
-        return jsonResult(status);
+        return appView.attach(jsonResult(status), () => ({
+          kind: "result",
+          title: "Project health",
+          subtitle: `${orgId} / ${projectId} · ${totalFailed} failed · ${totalRunning} running`,
+          status: { label: HEALTH_LABELS[health], tone: HEALTH_TONES[health] },
+          ...(deploymentsLink ? { open_in_harness: deploymentsLink } : {}),
+          refresh: { tool: "harness_status", arguments: args as Record<string, unknown> },
+        }));
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);

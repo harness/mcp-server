@@ -309,7 +309,10 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "do_not_retry" },
           actionDescription:
             "Execute an HQL query and return results. Returns columns, rows, stats. " +
-            "Optionally pass timeout_ms and max_results in body.",
+            "Optionally pass timeout_ms and max_results in body. " +
+            "In hosts that render MCP Apps, results show as a chart; optionally label it with " +
+            "params.view={title, chart: kpi|line|area|bar|pie|table}, or for a queries batch " +
+            "params.view={title, panels: [{title, chart}, ...]} in query order. The query engine ignores params.view.",
           description: "Execute HQL query and return results",
           bodySchema: {
             description: "HQL query to execute with optional execution options",

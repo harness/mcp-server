@@ -499,7 +499,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
-      { commandUnitNames: undefined, logKeys: undefined, failedUnitNames: undefined, mode: "full" },
+      { commandUnitNames: undefined },
     );
     expect(buildLogPrefixMock).not.toHaveBeenCalled();
   });
@@ -537,7 +537,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
-      { commandUnitNames: undefined, logKeys: undefined, failedUnitNames: undefined, mode: "full" },
+      { commandUnitNames: undefined },
     );
   });
 
@@ -558,7 +558,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
-      { commandUnitNames: undefined, logKeys: undefined, failedUnitNames: undefined, mode: "full" },
+      { commandUnitNames: undefined },
     );
   });
 
@@ -575,7 +575,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "acct1/pipeline/my-pipe/42/-exec-123",
-      { commandUnitNames: ["Initialize", "Execute"], logKeys: undefined, failedUnitNames: undefined, mode: "full" },
+      { commandUnitNames: ["Initialize", "Execute"] },
     );
   });
 
@@ -595,8 +595,6 @@ describe("harness_get — execution_log", () => {
       {
         commandUnitNames: undefined,
         logKeys: ["acct1/steps/helm-commandUnit:Fetch Files", "acct1/steps/helm-commandUnit:Install / Upgrade"],
-        failedUnitNames: undefined,
-        mode: "full",
       },
     );
   });
@@ -701,7 +699,7 @@ describe("harness_get — execution_log", () => {
     expect(resolveLogContentMock).toHaveBeenCalledWith(
       client,
       "explicit/log/prefix/key",
-      { commandUnitNames: undefined, logKeys: undefined, failedUnitNames: undefined, mode: "full" },
+      { commandUnitNames: undefined },
     );
     expect(buildLogPrefixMock).not.toHaveBeenCalled();
   });
@@ -4362,5 +4360,247 @@ describe("harness_diagnose", () => {
         expect(data.error).not.toContain("Cannot diagnose execution with status");
       }
     }
+  });
+});
+
+describe("MCP Apps view data", () => {
+  const UI_CAPS = {
+    elicitation: { form: {} },
+    extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } },
+  };
+
+  async function registerViewTools(overrides: Partial<Config> = {}, caps?: unknown) {
+    const server = makeMcpServer("accept");
+    if (caps) server.server.getClientCapabilities = () => caps;
+    const config = makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_MCP_APPS: "auto", ...overrides });
+    const registry = new Registry(config);
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { identifier: "build_app", name: "Build App", storeType: "INLINE" },
+    });
+    const client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const { registerStatusTool } = await import("../../src/tools/harness-status.js");
+    registerGetTool(server, registry, client);
+    registerExecuteTool(server, registry, client, config);
+    registerStatusTool(server, registry, client, config);
+    return { server, mockRequest };
+  }
+
+  it("links harness_get, harness_execute, and harness_status to ui://harness/app", async () => {
+    const { server } = await registerViewTools();
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toEqual({ ui: { resourceUri: "ui://harness/app" } });
+    }
+  });
+
+  it("is off by default: no UI link and no view data, even for UI hosts", async () => {
+    const { server } = await registerViewTools({ HARNESS_MCP_APPS: undefined }, UI_CAPS);
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toBeUndefined();
+    }
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("omits the UI link when HARNESS_MCP_APPS=off", async () => {
+    const { server } = await registerViewTools({ HARNESS_MCP_APPS: "off" }, UI_CAPS);
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toBeUndefined();
+    }
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("returns text-only results to hosts without the MCP Apps extension", async () => {
+    const { server } = await registerViewTools();
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result.isError).toBeUndefined();
+    expect(result._meta).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ identifier: "build_app" });
+  });
+
+  it("adds a result view with a read-only refresh for UI hosts, leaving the text unchanged", async () => {
+    const plain = await registerViewTools();
+    const ui = await registerViewTools({}, UI_CAPS);
+    const args = { resource_type: "pipeline", resource_id: "build_app" };
+    const textOnly = await plain.server.call("harness_get", args);
+    const result = await ui.server.call("harness_get", args);
+
+    expect(result.content).toEqual(textOnly.content);
+    expect(result.structuredContent).toEqual(textOnly.structuredContent);
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"] as Record<string, unknown>;
+    expect(view).toMatchObject({
+      kind: "result",
+      title: "Build App",
+      open_in_harness: expect.stringContaining("/pipelines/build_app/"),
+      refresh: { tool: "harness_get", arguments: args },
+    });
+  });
+
+  it("adds no card for execute results without a Harness link, and never a refresh", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { identifier: "approval-1", name: "Prod approval", status: "APPROVED" } });
+    const result = await server.call("harness_execute", {
+      resource_type: "approval_instance",
+      action: "approve",
+      params: { approval_id: "approval-1" },
+      body: { comments: "ok" },
+    });
+    expect(result.isError, result.content[0]!.text).toBeUndefined();
+    const view = (result._meta as Record<string, unknown> | undefined)?.["harness.io/view"] as Record<string, unknown> | undefined;
+    expect(view).toBeUndefined();
+  });
+
+  it("starts a live execution card after a pipeline run; its refresh is a harness_get read", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { planExecution: { uuid: "exec-123", status: "RUNNING" } } });
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "build_app",
+      org_id: "default",
+      project_id: "test-project",
+    });
+    expect(result.isError).toBeUndefined();
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"];
+    expect(view).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-123",
+      pipeline: { identifier: "build_app" },
+      terminal: false,
+      stages: [],
+      open_in_harness: expect.stringContaining("/pipelines/build_app/deployments/exec-123/pipeline"),
+      refresh: {
+        tool: "harness_get",
+        arguments: { resource_type: "execution", resource_id: "exec-123", params: { render_full_graph: true }, org_id: "default", project_id: "test-project" },
+      },
+    });
+  });
+
+  it("shows Aborting after an execution interrupt", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { status: "SUCCESS" } });
+    const result = await server.call("harness_execute", {
+      resource_type: "execution",
+      action: "interrupt",
+      resource_id: "exec-running",
+      params: { interrupt_type: "AbortAll" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-running",
+      status: { label: "Aborting", live: true },
+      terminal: false,
+      refresh: { tool: "harness_get" },
+    });
+  });
+
+  it("renders harness_get execution results as the execution card", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({
+      data: {
+        pipelineExecutionSummary: {
+          planExecutionId: "exec-9",
+          pipelineIdentifier: "build_app",
+          name: "Build App",
+          runSequence: 180,
+          status: "Running",
+          startTs: 1_000,
+          startingNodeId: "s1",
+          layoutNodeMap: {
+            s1: { nodeGroup: "STAGE", nodeIdentifier: "build", name: "Build", status: "Running", startTs: 1_000, edgeLayoutList: { currentNodeChildren: [], nextIds: [] } },
+          },
+        },
+      },
+    });
+    const result = await server.call("harness_get", { resource_type: "execution", resource_id: "exec-9" });
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-9",
+      run_sequence: 180,
+      status: { label: "Running", tone: "info", live: true },
+      stages: [{ id: "build", name: "Build" }],
+    });
+  });
+
+  it("renders an HQL run as a one-panel dashboard, applying the params.view hint", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest.mockResolvedValue({ columns: [{ name: "service" }, { name: "deploys" }], rows: [["api", 9], ["web", 2]] });
+    const plain = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" });
+    plain.mockRequest.mockResolvedValue({ columns: [{ name: "service" }, { name: "deploys" }], rows: [["api", 9], ["web", 2]] });
+    const args = {
+      resource_type: "hql_query",
+      action: "run",
+      body: { query_string: 'find view "cd:deployments" | select {service, count()}' },
+      params: { view: { title: "Deploys by service", chart: "pie" } },
+    };
+
+    const result = await server.call("harness_execute", args);
+    const textOnly = await plain.server.call("harness_execute", args);
+
+    expect(result.content).toEqual(textOnly.content);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({ body: { query_string: args.body.query_string } });
+    expect(JSON.stringify(mockRequest.mock.calls[0]![0])).not.toContain("Deploys by service");
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "kg_dashboard",
+      panels: [{ title: "Deploys by service", chart: "pie", rows: [["api", 9], ["web", 2]], refresh: { tool: "harness_execute" } }],
+    });
+  });
+
+  it("renders a batch HQL run as a dashboard with one panel per query and errors kept in their panel", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest
+      .mockResolvedValueOnce({ columns: [{ name: "count" }], rows: [[42]] })
+      .mockRejectedValueOnce(new Error("syntax error"));
+    const result = await server.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "run",
+      queries: [{ query_string: 'find view "cd:deployments" | select {count()}', max_results: 50 }, { query_string: "find nope" }],
+      params: { view: { title: "Delivery health", panels: [{ title: "Deploys" }, { title: "Broken" }] } },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ summary: { total: 2, succeeded: 1, failed: 1 } });
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "kg_dashboard",
+      title: "Delivery health",
+      panels: [
+        { title: "Deploys", chart: "kpi", rows: [[42]], refresh: { arguments: { body: { query_string: 'find view "cd:deployments" | select {count()}', max_results: 50 } } } },
+        { title: "Broken", error: expect.stringContaining("syntax error") },
+      ],
+    });
+  });
+
+  it("adds no dashboard for HQL validate", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest.mockResolvedValue({ is_valid: true, errors: [] });
+    const result = await server.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "validate",
+      body: { query_string: 'find view "cd:deployments"' },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("adds no view to error results", async () => {
+    const { server } = await registerViewTools({}, UI_CAPS);
+    const result = await server.call("harness_get", { resource_type: "nonexistent" });
+    expect(result.isError).toBe(true);
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("shows project health on harness_status views", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    const result = await server.call("harness_status", { org_id: "default", project_id: "test-project" });
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"];
+    expect(view).toMatchObject({
+      kind: "result",
+      title: "Project health",
+      status: { label: "Healthy", tone: "success" },
+      refresh: { tool: "harness_status", arguments: { org_id: "default", project_id: "test-project" } },
+    });
   });
 });

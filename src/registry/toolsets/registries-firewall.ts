@@ -22,6 +22,14 @@ const firewallExceptionCreateSchema: BodySchema = {
   ],
 };
 
+const artifactScanEvaluateSchema: BodySchema = {
+  description: "Re-evaluate one artifact against firewall policies. Provide exactly one of scanId or versionId.",
+  fields: [
+    { name: "scanId", type: "string", required: false, description: "Scan to re-evaluate (same as resource_id)" },
+    { name: "versionId", type: "string", required: false, description: "Artifact version UUID to evaluate instead of a scan" },
+  ],
+};
+
 // Only allowed server-side while status is PENDING — once approved/rejected the
 // exception is immutable via this endpoint (use the status endpoint instead).
 const firewallExceptionUpdateSchema: BodySchema = {
@@ -42,6 +50,35 @@ const firewallExceptionApprovalSchema: BodySchema = {
   fields: [
     { name: "notes", type: "string", required: false, description: "Note from the approver explaining the decision" },
   ],
+};
+
+// The default `compactItems()` whitelist keeps only ids/timestamps here, dropping `packageName`, `version`,
+// `scanStatus` and `exemptionStatus` — without them an agent can't tell what is blocked or whether it is
+// already exempted. Verbose `policySets`/`buildDetails`/`rootPackages` are left to `get` (scan details).
+const compactArtifactScanV3 = (item: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (item.id != null) { out.scan_id = item.id; out.id = item.id; }
+  if (item.packageName != null) out.packageName = item.packageName;
+  if (item.packageType != null) out.packageType = item.packageType;
+  if (item.version != null) out.version = item.version;
+  if (item.versionId != null) out.versionId = item.versionId;
+  if (item.purl != null) out.purl = item.purl;
+  if (item.scanStatus != null) out.scanStatus = item.scanStatus;
+  if (item.securityViolationCategories != null) out.securityViolationCategories = item.securityViolationCategories;
+  if (item.exemptionStatus != null) out.exemptionStatus = item.exemptionStatus;
+  if (item.totalAffectedPipelines != null) out.totalAffectedPipelines = item.totalAffectedPipelines;
+  if (item.registryId != null) out.registryId = item.registryId;
+  if (item.registryName != null) out.registryName = item.registryName;
+  if (item.parentRegistryId != null) out.parentRegistryId = item.parentRegistryId;
+  if (item.parentRegistryName != null) out.parentRegistryName = item.parentRegistryName;
+  // Backend emits these two with a capital R (see ArtifactScanV3 in the v3 spec).
+  if (item.RegistryOrgId != null) out.RegistryOrgId = item.RegistryOrgId;
+  if (item.RegistryProjectId != null) out.RegistryProjectId = item.RegistryProjectId;
+  if (item.parentRegistryOrgId != null) out.parentRegistryOrgId = item.parentRegistryOrgId;
+  if (item.parentRegistryProjectId != null) out.parentRegistryProjectId = item.parentRegistryProjectId;
+  if (item.lastEvaluatedAt != null) out.lastEvaluatedAt = item.lastEvaluatedAt;
+  if (item.lastEvaluatedBy != null) out.lastEvaluatedBy = item.lastEvaluatedBy;
+  return out;
 };
 
 const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<string, unknown> => {
@@ -78,26 +115,32 @@ const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<strin
  *
  * External gateway prefix: `/har/api/v3/…`.
  *
- * Write operations included: firewall exception create/update/delete and
- * approve/reject (all account-scoped).
+ * Write operations included: on-demand artifact scan re-evaluation, and firewall exception
+ * create/update/delete and approve/reject (account-scoped).
  * `x-internal: true` operations are excluded on purpose.
  */
 export const registriesFirewallToolset: ToolsetDefinition = {
   name: "registries-firewall",
   displayName: "Artifact Registry Firewall (v3)",
   description:
-    "Harness Artifact Registry v3 firewall — artifact scans, bulk scan evaluations, and firewall " +
-    "exception create/update/delete/approve/reject (account-scoped writes).",
+    "Harness Artifact Registry v3 firewall — artifact scans with on-demand re-evaluation, bulk scan " +
+    "evaluations, and firewall exception create/update/delete/approve/reject (account-scoped writes).",
   optIn: false,
   resources: [
     {
       resourceType: "artifact_scan_v3",
       displayName: "Artifact Scan (v3)",
-      description: "Firewall / policy scan results for artifacts.",
+      description:
+        "Firewall / policy scan results for artifacts. To list across every org and project, use " +
+        "resource_scope=account with filter scope=descendants; without it only that level's registries are included.",
       toolset: "registries-firewall",
       scope: "project",
+      // org/project are optional on GetArtifactScansV3, and GetArtifactScanDetailsV3 takes neither. The backend
+      // lists only the requested space's registries unless `scope=descendants` widens it to child spaces.
+      supportedScopes: ["account", "org", "project"],
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["scan_id"],
+      compactItem: compactArtifactScanV3,
       listFilterFields: [
         { name: "search_term", description: "Filter scans by keyword" },
         { name: "registry_ids", description: "Comma-separated registry IDs" },
@@ -116,7 +159,9 @@ export const registriesFirewallToolset: ToolsetDefinition = {
         },
         {
           name: "scope",
-          description: "Registry scope",
+          description:
+            "Which registries to include relative to the requested scope: none (default, that level only), " +
+            "ancestors (plus parent levels), descendants (plus all child orgs/projects)",
           enum: ["none", "ancestors", "descendants"],
         },
         { name: "sort", description: V3_SORT_DESC },
@@ -151,6 +196,32 @@ export const registriesFirewallToolset: ToolsetDefinition = {
           // Response is `{ data: { packageName, scanStatus, ... } }`; unwrap.
           responseExtractor: harV3DataObjectUnwrap,
           description: "Get scan details for a single artifact scan (v3)",
+        },
+      },
+      executeActions: {
+        evaluate: {
+          method: "POST",
+          path: "/har/api/v3/scans/evaluate",
+          // Re-running an evaluation only re-queues the same policy check, so a retry is harmless.
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            const scanId = input.scan_id ?? body?.scanId;
+            const versionId = input.version_id ?? body?.versionId;
+            if ((scanId == null) === (versionId == null)) {
+              throw new Error("evaluate needs exactly one of scan_id (resource_id) or version_id");
+            }
+            return scanId != null ? { scanId } : { versionId };
+          },
+          // Response is `{ data: { status } }`; unwrap.
+          responseExtractor: harV3DataObjectUnwrap,
+          actionDescription:
+            "Re-run the firewall policy evaluation for one artifact on demand, e.g. after a policy change, an " +
+            "exemption, or to refresh fixVersionDetails. Pass exactly one of resource_id (scan_id) or " +
+            "params.version_id. Asynchronous: returns a status (PENDING/PROCESSING/SUCCESS/FAILED) right away; " +
+            "re-check the result with harness_get on the scan (lastEvaluatedAt, scanStatus, fixVersionDetails).",
+          bodySchema: artifactScanEvaluateSchema,
         },
       },
     },
