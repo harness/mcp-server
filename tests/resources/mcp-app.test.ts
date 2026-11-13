@@ -71,6 +71,16 @@ describe("viewStatus", () => {
     expect(viewStatus(status)).toEqual({ label, tone, ...(live ? { live } : {}) });
   });
 
+  it.each([
+    ["RUNNING", "Running", "info"],
+    ["SUCCESS", "Succeeded", "success"],
+    ["FAILED", "Failed", "danger"],
+    ["APPROVAL_WAITING", "Waiting for approval", "warning"],
+    ["ABORTEDBYFREEZE", "Blocked by freeze", "neutral"],
+  ])("normalizes trigger-response status %s", (status, label, tone) => {
+    expect(viewStatus(status)).toMatchObject({ label, tone });
+  });
+
   it("returns undefined without a status", () => {
     expect(viewStatus(undefined)).toBeUndefined();
   });

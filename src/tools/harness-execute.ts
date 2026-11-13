@@ -22,6 +22,7 @@ import { executeOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 import { buildResultView, createAppViewContext } from "../apps/mcp-apps.js";
 import { buildPendingExecutionView } from "../apps/pipeline-execution.js";
+import { buildBatchDashboard, buildSingleQueryDashboard } from "../apps/kg-dashboard.js";
 import type { HarnessView } from "../apps/view-types.js";
 
 const log = createLogger("execute");
@@ -311,7 +312,20 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               return { query_string, success: false, error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
             });
             const succeeded = results.filter((r) => r.success).length;
-            return jsonResult({ results, summary: { total: results.length, succeeded, failed: results.length - succeeded } });
+            return appView.attach(
+              jsonResult({ results, summary: { total: results.length, succeeded, failed: results.length - succeeded } }),
+              () =>
+                args.action === "run"
+                  ? buildBatchDashboard(
+                      allResults.map((r, i) => ({
+                        query_string: batchQueries[i]!.query_string,
+                        options: { timeout_ms: batchQueries[i]!.timeout_ms, max_results: batchQueries[i]!.max_results },
+                        ...(r.status === "fulfilled" ? { result: r.value } : { error: results[i]!.error as string }),
+                      })),
+                      input.view,
+                    )
+                  : undefined,
+            );
           } catch (err) {
             if (isUserError(err) || isUserFixableApiError(err)) return errorResult((err as Error).message);
             throw toMcpError(err);
@@ -592,6 +606,9 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const payload = Object.keys(envelope).length === 0 ? result : { ...(asRecord(result) ?? {}), ...envelope };
         return appView.attach(jsonResult(payload), () =>
           executionView(registry, resourceType, args.action, input, result, envelope) ??
+          (resourceType === "hql_query" && args.action === "run"
+            ? buildSingleQueryDashboard(hqlQueryString(input), result, input.view, hqlQueryOptions(input))
+            : undefined) ??
           buildResultView(payload, {
             displayName: def.displayName,
             action: args.action,
@@ -606,6 +623,17 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       }
     },
   );
+}
+
+function hqlQueryString(input: Record<string, unknown>): string {
+  const body = asRecord(input.body);
+  return asString(body?.query_string) ?? asString(body?.queryString) ?? asString(body?.query) ?? "";
+}
+
+function hqlQueryOptions(input: Record<string, unknown>): { timeout_ms?: number; max_results?: number } {
+  const body = asRecord(input.body);
+  const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? undefined : Number(v));
+  return { timeout_ms: num(body?.timeout_ms ?? body?.timeoutMs), max_results: num(body?.max_results ?? body?.maxResults) };
 }
 
 const INTERRUPT_LABELS: Record<string, string> = { AbortAll: "Aborting", UserMarkedFailure: "Marking failed" };

@@ -176,4 +176,9 @@ describe("buildPendingExecutionView", () => {
   it("is terminal when a waited run already finished", () => {
     expect(buildPendingExecutionView("exec-1", { ...ctx, status: "Success" }).terminal).toBe(true);
   });
+
+  it("reads uppercase trigger-response statuses", () => {
+    expect(buildPendingExecutionView("exec-1", { ...ctx, status: "SUCCESS" })).toMatchObject({ terminal: true, status: { label: "Succeeded", tone: "success" } });
+    expect(buildPendingExecutionView("exec-1", { ...ctx, status: "RUNNING" })).toMatchObject({ terminal: false, status: { label: "Running", tone: "info", live: true } });
+  });
 });
