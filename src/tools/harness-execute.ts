@@ -319,6 +319,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
                   ? buildBatchDashboard(
                       allResults.map((r, i) => ({
                         query_string: batchQueries[i]!.query_string,
+                        options: { timeout_ms: batchQueries[i]!.timeout_ms, max_results: batchQueries[i]!.max_results },
                         ...(r.status === "fulfilled" ? { result: r.value } : { error: results[i]!.error as string }),
                       })),
                       input.view,
@@ -606,7 +607,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         return appView.attach(jsonResult(payload), () =>
           executionView(registry, resourceType, args.action, input, result, envelope) ??
           (resourceType === "hql_query" && args.action === "run"
-            ? buildSingleQueryDashboard(hqlQueryString(input), result, input.view)
+            ? buildSingleQueryDashboard(hqlQueryString(input), result, input.view, hqlQueryOptions(input))
             : undefined) ??
           buildResultView(payload, {
             displayName: def.displayName,
@@ -627,6 +628,12 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 function hqlQueryString(input: Record<string, unknown>): string {
   const body = asRecord(input.body);
   return asString(body?.query_string) ?? asString(body?.queryString) ?? asString(body?.query) ?? "";
+}
+
+function hqlQueryOptions(input: Record<string, unknown>): { timeout_ms?: number; max_results?: number } {
+  const body = asRecord(input.body);
+  const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? undefined : Number(v));
+  return { timeout_ms: num(body?.timeout_ms ?? body?.timeoutMs), max_results: num(body?.max_results ?? body?.maxResults) };
 }
 
 const INTERRUPT_LABELS: Record<string, string> = { AbortAll: "Aborting", UserMarkedFailure: "Marking failed" };

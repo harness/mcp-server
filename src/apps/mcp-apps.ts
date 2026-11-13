@@ -69,9 +69,20 @@ const STATUS_LABELS: Record<string, string> = {
   Success: "Succeeded",
 };
 
+const statusKey = (status: string) => status.toLowerCase().replace(/[\s_-]/g, "");
+const CANONICAL_STATUS = new Map(
+  [...RUNNING, ...QUEUED, ...WAITING, ...SUCCESS, ...FAILED, ...ABORTED, "Discontinued"].map((s) => [statusKey(s), s]),
+);
+
+/** Harness status in its title-case form; trigger responses use RUNNING / SUCCESS, execution responses use Running / Success. */
+export function canonicalStatus(status: string): string {
+  return CANONICAL_STATUS.get(statusKey(status)) ?? status;
+}
+
 /** Map a Harness execution/resource status to a display pill. */
-export function viewStatus(status: string | undefined): ViewStatus | undefined {
-  if (!status) return undefined;
+export function viewStatus(raw: string | undefined): ViewStatus | undefined {
+  if (!raw) return undefined;
+  const status = canonicalStatus(raw);
   const label = STATUS_LABELS[status] ?? status.replace(/([a-z])([A-Z])/g, "$1 $2");
   if (RUNNING.has(status)) return { label, tone: "info", live: true };
   if (QUEUED.has(status)) return { label, tone: "neutral", live: true };

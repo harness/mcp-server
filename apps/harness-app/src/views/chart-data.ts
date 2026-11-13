@@ -20,7 +20,7 @@ const number = (value: PanelCell): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-function timeValue(value: PanelCell): number {
+export function timeValue(value: PanelCell): number {
   if (typeof value === "number") return value < 1e12 ? value * 1000 : value;
   return Date.parse(String(value));
 }
@@ -82,11 +82,13 @@ function areaData(panel: DashboardPanel): ChartData {
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
   const top = new Set(ranked.slice(0, MAX_SERIES - 1));
   const hasOther = ranked.length > MAX_SERIES - 1;
-  const names = [...top, ...(hasOther ? ["Other"] : [])];
+  let other = "Other";
+  while (top.has(other)) other = `${other} (rest)`;
+  const names = [...top, ...(hasOther ? [other] : [])];
   const cells = new Map(names.map((n) => [n, new Map<PanelCell, number>()]));
   for (const row of panel.rows) {
     const raw = String(row[c] ?? "—");
-    const name = top.has(raw) ? raw : "Other";
+    const name = top.has(raw) ? raw : other;
     const bucket = cells.get(name)!;
     const t = row[x] ?? null;
     bucket.set(t, (bucket.get(t) ?? 0) + (number(row[y] ?? null) ?? 0));
@@ -139,7 +141,7 @@ export function summarizePanel(panel: DashboardPanel): string {
   if (panel.error) return `${panel.title}: query failed (${panel.error})`;
   if (panel.rows.length === 0) return `${panel.title}: no rows`;
   const partial = panel.truncated || panel.capped ? " (partial result)" : "";
-  if (panel.chart === "kpi") return `${panel.title}: ${formatCell(panel.rows[0]![0] ?? null, panel.columns[0])}`;
+  if (panel.chart === "kpi") return `${panel.title}: ${formatCell(panel.rows[0]![0] ?? null, panel.columns[0])}${partial}`;
   if (panel.chart === "bar" || panel.chart === "pie") {
     const data = categoryData(panel);
     const first = data.series[0];

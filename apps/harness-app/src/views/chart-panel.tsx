@@ -15,8 +15,9 @@ import {
   type ChartConfiguration,
 } from "chart.js";
 import { useEffect, useRef } from "preact/hooks";
-import type { DashboardPanel, PanelCell } from "../../../../src/apps/view-types.js";
+import type { DashboardPanel } from "../../../../src/apps/view-types.js";
 import { chartData, formatCompact, statusTones } from "./chart-data.js";
+import type { DrillTarget } from "./dashboard-actions.js";
 
 Chart.register(
   ArcElement, BarController, BarElement, CategoryScale, DoughnutController, Filler, Legend,
@@ -54,12 +55,6 @@ function shortLabel(label: string): string {
   return label.length > LABEL_MAX ? `${label.slice(0, LABEL_MAX - 1)}…` : label;
 }
 
-export interface DrillTarget {
-  key: PanelCell;
-  label: string;
-  series: string;
-  value: number | null;
-}
 
 function config(panel: DashboardPanel, onDrill: (target: DrillTarget) => void): ChartConfiguration {
   const data = chartData(panel);

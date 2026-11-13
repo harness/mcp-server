@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { DashboardColumn, DashboardPanel, KgDashboardView, PanelCell } from "../../../../src/apps/view-types.js";
 import { host } from "../host.js";
-import { ChartPanel, type DrillTarget } from "./chart-panel.js";
-import { formatCell, summarizePanel } from "./chart-data.js";
+import { ChartPanel } from "./chart-panel.js";
+import { formatCell, summarizePanel, timeValue } from "./chart-data.js";
+import { drillMessage, rerunPanel, type DrillTarget } from "./dashboard-actions.js";
 
 const FULLSCREEN_MIN_PANELS = 5;
 
@@ -16,7 +17,7 @@ function compare(a: PanelCell, b: PanelCell, column: DashboardColumn): number {
   if (a === null) return 1;
   if (b === null) return -1;
   if (column.kind === "number") return Number(a) - Number(b);
-  if (column.kind === "time") return Date.parse(String(a)) - Date.parse(String(b));
+  if (column.kind === "time") return timeValue(a) - timeValue(b);
   return String(a).localeCompare(String(b));
 }
 
@@ -96,10 +97,7 @@ function Panel({ panel, version, onReplace }: { panel: DashboardPanel; version: 
     setBusy(true);
     setError(undefined);
     try {
-      const next = await host.fetchView(panel.refresh);
-      const fresh = next?.kind === "kg_dashboard" ? next.panels[0] : undefined;
-      if (!fresh) throw new Error("Query returned no result");
-      onReplace({ ...fresh, id: panel.id, title: panel.title });
+      onReplace(await rerunPanel(panel, (refresh) => host.fetchView(refresh)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Re-run failed");
     } finally {
@@ -107,12 +105,7 @@ function Panel({ panel, version, onReplace }: { panel: DashboardPanel; version: 
     }
   };
 
-  const drill = (target: DrillTarget) => {
-    const value = target.value === null ? "" : ` (${target.series}: ${target.value.toLocaleString()})`;
-    void host.sendMessage(
-      `Drill into "${panel.title}" for ${target.label}${value}. Base query: ${panel.query_string}`,
-    );
-  };
+  const drill = (target: DrillTarget) => void host.sendMessage(drillMessage(panel, target));
 
   return (
     <section class={`panel${panel.chart === "kpi" ? " panel--kpi" : ""}`} aria-label={panel.title}>

@@ -31,8 +31,15 @@ export interface DashboardHint extends PanelHint {
   panels?: PanelHint[];
 }
 
+export interface QueryOptions {
+  timeout_ms?: number;
+  max_results?: number;
+}
+
 export interface QueryResultInput {
   query_string: string;
+  /** Execution options the query ran with; re-runs send the same ones. */
+  options?: QueryOptions;
   result?: unknown;
   error?: string;
 }
@@ -100,11 +107,15 @@ function resolveChart(hint: string | undefined, columns: DashboardColumn[], rowC
   const chart = hint?.toLowerCase() as PanelChart | undefined;
   if (!chart || !CHARTS.has(chart)) return inferred;
   const numbers = columns.filter((c) => c.kind === "number").length;
+  const times = columns.filter((c) => c.kind === "time").length;
+  const categories = columns.filter((c) => c.kind === "category").length;
   if (chart === "table") return "table";
   if (numbers === 0 || rowCount === 0) return inferred;
   if (chart === "kpi") return rowCount === 1 ? "kpi" : inferred;
-  if (chart === "pie") return columns.length === 2 && numbers === 1 && rowCount <= PIE_MAX_ROWS ? "pie" : inferred;
-  return chart;
+  if (chart === "pie") return columns.length === 2 && categories === 1 && numbers === 1 && rowCount <= PIE_MAX_ROWS ? "pie" : inferred;
+  if (chart === "line") return times === 1 ? "line" : inferred;
+  if (chart === "area") return times === 1 && categories === 1 ? "area" : inferred;
+  return categories >= 1 && times === 0 ? "bar" : inferred;
 }
 
 function defaultTitle(query: string, index: number): string {
@@ -114,7 +125,7 @@ function defaultTitle(query: string, index: number): string {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-function panelRefresh(query: string, hint: PanelHint | undefined): DashboardPanel["refresh"] {
+function panelRefresh(query: string, options: QueryOptions | undefined, hint: PanelHint | undefined): DashboardPanel["refresh"] {
   const view: Record<string, string> = {};
   if (hint?.title) view.title = hint.title;
   if (hint?.chart) view.chart = hint.chart;
@@ -123,7 +134,7 @@ function panelRefresh(query: string, hint: PanelHint | undefined): DashboardPane
     arguments: {
       resource_type: "hql_query",
       action: "run",
-      body: { query_string: query },
+      body: { query_string: query, ...(options?.timeout_ms != null ? { timeout_ms: options.timeout_ms } : {}), ...(options?.max_results != null ? { max_results: options.max_results } : {}) },
       ...(Object.keys(view).length > 0 ? { params: { view } } : {}),
     },
   };
@@ -131,7 +142,7 @@ function panelRefresh(query: string, hint: PanelHint | undefined): DashboardPane
 
 export function buildPanel(input: QueryResultInput, index: number, hint?: PanelHint): DashboardPanel {
   const title = hint?.title?.trim() || defaultTitle(input.query_string, index);
-  const base = { id: `p${index}`, title, query_string: input.query_string, refresh: panelRefresh(input.query_string, hint) };
+  const base = { id: `p${index}`, title, query_string: input.query_string, refresh: panelRefresh(input.query_string, input.options, hint) };
   const result = asRecord(input.result);
   if (input.error || !result) {
     return { ...base, chart: "table", columns: [], rows: [], row_count: 0, error: input.error ?? "No result" };
@@ -180,10 +191,10 @@ function readHint(raw: unknown): DashboardHint | undefined {
 }
 
 /** Single hql_query.run result. The hint's title and chart apply to the panel. */
-export function buildSingleQueryDashboard(query: string, result: unknown, rawHint: unknown): KgDashboardView | undefined {
+export function buildSingleQueryDashboard(query: string, result: unknown, rawHint: unknown, options?: QueryOptions): KgDashboardView | undefined {
   if (!query || !isRecord(result)) return undefined;
   const hint = readHint(rawHint);
-  return { kind: "kg_dashboard", panels: [buildPanel({ query_string: query, result }, 0, hint)] };
+  return { kind: "kg_dashboard", panels: [buildPanel({ query_string: query, options, result }, 0, hint)] };
 }
 
 /** Batch result: the hint's title names the dashboard and `panels[i]` applies to query i. */

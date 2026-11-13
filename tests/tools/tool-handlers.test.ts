@@ -4557,7 +4557,7 @@ describe("MCP Apps view data", () => {
     const result = await server.call("harness_execute", {
       resource_type: "hql_query",
       action: "run",
-      queries: [{ query_string: 'find view "cd:deployments" | select {count()}' }, { query_string: "find nope" }],
+      queries: [{ query_string: 'find view "cd:deployments" | select {count()}', max_results: 50 }, { query_string: "find nope" }],
       params: { view: { title: "Delivery health", panels: [{ title: "Deploys" }, { title: "Broken" }] } },
     });
     expect(result.isError).toBeUndefined();
@@ -4566,7 +4566,7 @@ describe("MCP Apps view data", () => {
       kind: "kg_dashboard",
       title: "Delivery health",
       panels: [
-        { title: "Deploys", chart: "kpi", rows: [[42]] },
+        { title: "Deploys", chart: "kpi", rows: [[42]], refresh: { arguments: { body: { query_string: 'find view "cd:deployments" | select {count()}', max_results: 50 } } } },
         { title: "Broken", error: expect.stringContaining("syntax error") },
       ],
     });

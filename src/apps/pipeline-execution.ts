@@ -7,7 +7,7 @@
 
 import { asNumber, asRecord, asString, isRecord } from "../utils/type-guards.js";
 import { TERMINAL_STATUSES } from "../utils/poll-execution.js";
-import { viewStatus } from "./mcp-apps.js";
+import { canonicalStatus, viewStatus } from "./mcp-apps.js";
 import type { ExecutionStageView, PipelineExecutionView, ViewRefresh } from "./view-types.js";
 
 export const EXECUTION_DEEP_LINK =
@@ -121,7 +121,7 @@ function stageView(entry: { node: LayoutNode; id: string; group?: string }, step
   if (stageFailure) stage.failure_message = stageFailure;
   if (steps?.length) {
     stage.steps_total = steps.length;
-    stage.steps_done = steps.filter((s) => STEP_DONE.has(s.status ?? "")).length;
+    stage.steps_done = steps.filter((s) => STEP_DONE.has(canonicalStatus(s.status ?? ""))).length;
     const current = steps.find((s) => viewStatus(s.status)?.live);
     if (current) stage.current_step = current.name ?? current.identifier;
   }
@@ -163,12 +163,12 @@ export function buildPipelineExecutionView(raw: unknown, ctx: ExecutionViewConte
     pipeline: { name: asString(pes.name), identifier: pipelineId },
     scope: { org: orgId, project: projectId },
     status: viewStatus(rawStatus) ?? { label: rawStatus, tone: "neutral" },
-    terminal: TERMINAL_STATUSES.has(rawStatus),
+    terminal: TERMINAL_STATUSES.has(canonicalStatus(rawStatus)),
     stages,
     steps_loaded: nodeMap !== undefined,
     refresh: refreshFor(executionId, scoped),
   };
-  if (AWAITING_ACTION.has(rawStatus)) view.awaiting_action = true;
+  if (AWAITING_ACTION.has(canonicalStatus(rawStatus))) view.awaiting_action = true;
   const runSequence = asNumber(pes.runSequence);
   if (runSequence !== undefined) view.run_sequence = runSequence;
   const startTs = asNumber(pes.startTs);
@@ -215,7 +215,7 @@ export function buildPendingExecutionView(
 ): PipelineExecutionView {
   const rawStatus = options.status ?? "Queued";
   const status = viewStatus(rawStatus) ?? { label: rawStatus, tone: "neutral" as const };
-  const terminal = TERMINAL_STATUSES.has(rawStatus);
+  const terminal = TERMINAL_STATUSES.has(canonicalStatus(rawStatus));
   const view: PipelineExecutionView = {
     kind: "pipeline_execution",
     execution_id: executionId,

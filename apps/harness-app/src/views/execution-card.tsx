@@ -2,9 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ExecutionStageView, PipelineExecutionView } from "../../../../src/apps/view-types.js";
 import { Card, StatusPill } from "../components/card.js";
 import { host } from "../host.js";
-
-const REFRESH_INTERVAL_MS = 30_000;
-const LIVE_WINDOW_MS = 60 * 60_000;
+import { LiveRefresh } from "./live-refresh.js";
 
 export function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -48,39 +46,15 @@ function useNow(active: boolean): number {
   return now;
 }
 
-/** Refresh every 30 seconds while the run is live, for up to an hour; a missing stage or step graph is fetched once at once. */
 function useLiveRefresh(view: PipelineExecutionView): { paused: boolean; resume: () => void } {
-  const [windowStart, setWindowStart] = useState(() => Date.now());
   const [paused, setPaused] = useState(false);
-  const needsGraph = view.stages.length === 0 || view.steps_loaded === false;
-  const fetchedGraph = useRef(false);
+  const controller = useRef<LiveRefresh | undefined>(undefined);
+  controller.current ??= new LiveRefresh({ refresh: (v) => host.refresh(v.refresh!), onPausedChange: setPaused });
 
-  useEffect(() => {
-    if (!view.refresh || fetchedGraph.current || !needsGraph) return;
-    fetchedGraph.current = true;
-    void host.refresh(view.refresh).catch(() => undefined);
-  }, [needsGraph, view.refresh]);
+  useEffect(() => controller.current!.update(view), [view]);
+  useEffect(() => () => controller.current!.stop(), []);
 
-  useEffect(() => {
-    if (view.terminal || !view.refresh || paused) return;
-    const refresh = view.refresh;
-    const timer = setInterval(() => {
-      if (Date.now() - windowStart >= LIVE_WINDOW_MS) {
-        setPaused(true);
-        return;
-      }
-      void host.refresh(refresh).catch(() => undefined);
-    }, REFRESH_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, [view.terminal, view.refresh, paused, windowStart]);
-
-  return {
-    paused: paused && !view.terminal,
-    resume: () => {
-      setWindowStart(Date.now());
-      setPaused(false);
-    },
-  };
+  return { paused: paused && !view.terminal, resume: () => controller.current!.resume() };
 }
 
 function positionText(view: PipelineExecutionView, stage: ExecutionStageView | undefined): string {
