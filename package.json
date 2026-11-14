@@ -57,12 +57,12 @@
   },
   "homepage": "https://github.com/harness/mcp-server#readme",
   "dependencies": {
-    "@hono/node-server": "^2.1.3",
+    "@hono/node-server": "^2.1.6",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "adm-zip": "^0.6.1",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "hono": "^4.13.11",
+    "hono": "^4.13.16",
     "jsonwebtoken": "^9.0.3",
     "redis": "^6.3.0",
     "yaml": "^2.8.3",
@@ -111,9 +111,9 @@
   "pnpm": {
     "overrides": {
       "picomatch": ">=4.0.4",
-      "hono": ">=4.13.11",
+      "hono": ">=4.13.16",
       "path-to-regexp": ">=8.4.0",
-      "@hono/node-server": ">=2.1.3",
+      "@hono/node-server": ">=2.1.6",
       "express-rate-limit": ">=8.2.2",
       "ip-address": ">=10.7.4",
       "vite": "^7.3.7",

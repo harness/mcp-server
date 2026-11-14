@@ -8,12 +8,12 @@
       "name": "harness-mcp-v2",
       "version": "3.2.41",
       "dependencies": {
-        "@hono/node-server": "^2.1.3",
+        "@hono/node-server": "^2.1.6",
         "@modelcontextprotocol/sdk": "^1.31.0",
         "adm-zip": "^0.6.1",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
-        "hono": "^4.13.11",
+        "hono": "^4.13.16",
         "jsonwebtoken": "^9.0.3",
         "redis": "^6.3.0",
         "yaml": "^2.8.3",
@@ -34,9 +34,9 @@
       }
     },
     "node_modules/@hono/node-server": {
-      "version": "2.1.5",
-      "resolved": "https://registry.npmjs.org/@hono/node-server/-/node-server-2.1.5.tgz",
-      "integrity": "sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==",
+      "version": "2.1.8",
+      "resolved": "https://registry.npmjs.org/@hono/node-server/-/node-server-2.1.8.tgz",
+      "integrity": "sha512-jdf7FHh6A1lzjpHHQUgxsg2GeER2vMetnAOfeActzcoli6jamlK+NAwL6Dsr5Fl3BS3tYUQzCdtZjU8Qxv7bEA==",
       "license": "MIT",
       "engines": {
         "node": ">=20"
@@ -1373,10 +1373,11 @@
       }
     },
     "node_modules/hono": {
-      "version": "4.13.14",
-      "resolved": "https://registry.npmjs.org/hono/-/hono-4.13.14.tgz",
-      "integrity": "sha512-yhRLQ21U6qa9Hsu2N7Qcbh8tE+WKEcoErjIo56LeSGiGXGp9sA7UpE86Ui9uexb61KakiGwuHMn2QdV7w6i6kQ==",
+      "version": "4.13.18",
+      "resolved": "https://registry.npmjs.org/hono/-/hono-4.13.18.tgz",
+      "integrity": "sha512-H9q/E1XizaWstJxUW881dmLxEj+t/TrGGnyxINkm4+sK0qUwsMtFdo2BWI9Vs3cIS19MU6b6iCijoUoEf4f3DA==",
       "license": "MIT",
+      "peer": true,
       "engines": {
         "node": ">=16.9.0"
       }
