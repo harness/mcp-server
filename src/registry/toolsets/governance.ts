@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { v1ListExtract, passthrough } from "../extractors.js";
+import { v1ListExtract, passthrough, governanceEvaluationListExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // Body schemas (for harness_describe output)
@@ -277,17 +277,7 @@ export const governanceToolset: ToolsetDefinition = {
           defaultQueryParams: {
             created_date_from: "0",
           },
-          responseExtractor: (raw: unknown) => {
-            const result = v1ListExtract()(raw);
-            // Remap `id` → `evaluation_id` so compact mode preserves it.
-            // The compactor's IDENTIFIER_PATTERN matches `_id$` but not bare `id`.
-            result.items = result.items.map(item => {
-              if (typeof item !== "object" || item === null || !("id" in item)) return item;
-              const r = item as Record<string, unknown>;
-              return { ...r, evaluation_id: r.id };
-            });
-            return result;
-          },
+          responseExtractor: governanceEvaluationListExtract,
           description: "List OPA policy evaluation results. Covers BOTH pipeline-governance onrun evaluations AND STO scan-step onstep enforcement evaluations (type=securityTests). Filter by execution_id to find evaluations for a specific pipeline run.",
         },
         get: {

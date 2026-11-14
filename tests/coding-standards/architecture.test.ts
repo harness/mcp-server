@@ -59,17 +59,14 @@ const TOOLSET_HELPER_FILES = new Set([
   "src/registry/toolsets/scopes.ts",
 ]);
 
-/** Legacy inline responseExtractor arrow functions — new ones must live in extractors.ts. */
-const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
-  "src/registry/toolsets/ansible.ts": 4,
-  "src/registry/toolsets/chaos.ts": 2,
-  "src/registry/toolsets/ccm.ts": 1,
-  "src/registry/toolsets/governance.ts": 1,
-  "src/registry/toolsets/iacm.ts": 1,
-  "src/registry/toolsets/idp.ts": 1,
-  "src/registry/toolsets/knowledge-graph.ts": 1,
-  "src/registry/toolsets/sto.ts": 3,
-};
+/** Zero inline responseExtractor arrow functions allowed — all must live in extractors.ts. */
+const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {};
+
+/**
+ * Zero toolset-local responseExtractor functions allowed — all response extractors
+ * must be imported from `src/registry/extractors.ts` (Rule 3).
+ */
+const ALLOWED_LOCAL_EXTRACTOR_REF_COUNTS: Record<string, number> = {};
 
 const WRITE_TOOL_FILES = [
   "src/tools/harness-create.ts",
@@ -153,6 +150,20 @@ function extractRegisterToolNames(content: string): string[] {
 function countInlineResponseExtractors(content: string): number {
   const matches = content.match(/responseExtractor:\s*\(/g);
   return matches?.length ?? 0;
+}
+
+function findLocalResponseExtractorRefs(content: string): string[] {
+  const imported = new Set<string>();
+  const importRegex = /import\s*\{([^}]+)\}\s*from\s*["']\.\.\/extractors\.js["']/g;
+  let importMatch: RegExpExecArray | null;
+  while ((importMatch = importRegex.exec(content)) !== null) {
+    for (const part of importMatch[1]!.split(",")) {
+      const localName = part.trim().split(/\s+as\s+/).pop()?.trim();
+      if (localName) imported.add(localName);
+    }
+  }
+  const refs = [...content.matchAll(/responseExtractor:\s*([a-zA-Z_$][a-zA-Z0-9_$]*)/g)].map((m) => m[1]!);
+  return refs.filter((ref) => !imported.has(ref));
 }
 
 function extractToolsetNamesFromUnion(): Set<string> {
@@ -445,6 +456,31 @@ describe("Coding standards — toolset purity", () => {
 
     expect(violations, violations.join("\n")).toEqual([]);
   });
+
+  it("does not add new toolset-local responseExtractor functions (must import from ../extractors.js)", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const localRefs = findLocalResponseExtractorRefs(readFileSync(file, "utf8"));
+      if (localRefs.length === 0) continue;
+
+      const allowed = ALLOWED_LOCAL_EXTRACTOR_REF_COUNTS[fileRel];
+      if (allowed === undefined) {
+        violations.push(
+          `${fileRel}: local responseExtractor(s) [${[...new Set(localRefs)].join(", ")}] — move to src/registry/extractors.ts`,
+        );
+      } else if (localRefs.length > allowed) {
+        violations.push(
+          `${fileRel}: expected at most ${allowed} local responseExtractor reference(s), found ${localRefs.length} ([${[...new Set(localRefs)].join(", ")}]) — move new extractors to src/registry/extractors.ts`,
+        );
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
 });
 
 describe("Coding standards — Zod input schemas", () => {
@@ -581,5 +617,31 @@ describe("Coding standards — Zod and tool annotations", () => {
     }
 
     expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("ensures every local script imported by postinstall is included in Dockerfile pre-install COPY stages and package.json#files", () => {
+    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      files?: string[];
+    };
+    const dockerfile = readFileSync(join(REPO_ROOT, "Dockerfile"), "utf8");
+    const postinstallPath = "scripts/ensure-secure-adm-zip.mjs";
+    const postinstallSrc = readFileSync(join(REPO_ROOT, postinstallPath), "utf8");
+
+    const requiredScripts = [postinstallPath];
+    for (const m of postinstallSrc.matchAll(/from\s+["']\.\/([^"']+)["']/g)) {
+      if (m[1]) requiredScripts.push(`scripts/${m[1]}`);
+    }
+
+    const copyLines = dockerfile
+      .split("\n")
+      .filter((l) => l.startsWith("COPY ") && l.includes(postinstallPath));
+    expect(copyLines.length).toBeGreaterThan(0);
+
+    for (const scriptRel of requiredScripts) {
+      expect(pkg.files ?? [], `package.json#files is missing ${scriptRel}`).toContain(scriptRel);
+      for (const copyLine of copyLines) {
+        expect(copyLine, `Dockerfile line "${copyLine}" is missing ${scriptRel}`).toContain(scriptRel);
+      }
+    }
   });
 });

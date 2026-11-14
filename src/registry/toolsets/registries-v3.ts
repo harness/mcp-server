@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { harV3ListExtract, harV3DataArrayUnwrap } from "../extractors.js";
+import { harV3ListExtract, harV3DataArrayUnwrap, harV3DataObjectUnwrap } from "../extractors.js";
 
 // Projects a raw v3 package list item down to the fields agents actually need.
 // The default `compactItems()` whitelist keeps `id`/`name`/timestamps but drops
@@ -41,6 +41,15 @@ const compactVersionV3 = (item: Record<string, unknown>): Record<string, unknown
   if (item.createdAt != null) out.createdAt = item.createdAt;
   if (item.modifiedAt != null) out.modifiedAt = item.modifiedAt;
   if (item.deletedAt != null) out.deletedAt = item.deletedAt;
+  return out;
+};
+
+const compactFileV3 = (item: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (item.id != null) { out.file_id = item.id; out.id = item.id; }
+  for (const key of ["name", "path", "size", "contentType", "checksums", "downloadUrl", "downloadCmd", "createdAt", "modifiedAt"]) {
+    if (item[key] != null) out[key] = item[key];
+  }
   return out;
 };
 
@@ -92,7 +101,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
   optIn: true,
   resources: [
     {
-      resourceType: "package_v3",
+      resourceType: "package",
       displayName: "Package (v3)",
       description: "Package in a registry. v3 term for what v1 calls an artifact.",
       toolset: "registries-v3",
@@ -145,7 +154,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "version_v3",
+      resourceType: "package_version",
       displayName: "Version (v3)",
       description: "Version of a package.",
       toolset: "registries-v3",
@@ -192,13 +201,16 @@ export const registriesV3Toolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "file_v3",
+      resourceType: "package_file",
       displayName: "File (v3)",
-      description: "Files stored in a registry, scoped by registry / package / version.",
+      description:
+        "Files stored in a registry, scoped by registry / package / version. Use get by file_id for checksums, size, contentType, and downloadUrl (file bytes are not returned).",
       toolset: "registries-v3",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["file_id"],
+      compactItem: compactFileV3,
       listFilterFields: [
         { name: "search_term", description: "Filter files by name or keyword" },
         { name: "registry_id", description: "Registry ID to scope the file search" },
@@ -223,6 +235,15 @@ export const registriesV3Toolset: ToolsetDefinition = {
           responseExtractor: harV3ListExtract,
           description: "List files (v3)",
         },
+        get: {
+          method: "GET",
+          path: "/har/api/v3/files/{id}",
+          pathParams: { file_id: "id" },
+          scope: "account",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: harV3DataObjectUnwrap,
+          description: "Get file details by UUID (v3): checksums, size, contentType, and downloadUrl / downloadCmd.",
+        },
       },
     },
     // Metadata GETs (registry/package/version/file) are ACCOUNT-scoped in the
@@ -230,7 +251,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
     // Responses are `{ data: [{ id, key, type, value }] }` which we unwrap to
     // `{ items: [...] }` so the tool boundary matches every other v3 list.
     {
-      resourceType: "registry_metadata_v3",
+      resourceType: "registry_metadata",
       displayName: "Registry Metadata (v3)",
       description: "Metadata key-value pairs attached to a registry.",
       toolset: "registries-v3",
@@ -249,7 +270,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "package_metadata_v3",
+      resourceType: "package_metadata",
       displayName: "Package Metadata (v3)",
       description: "Metadata key-value pairs attached to a package.",
       toolset: "registries-v3",
@@ -268,7 +289,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "version_metadata_v3",
+      resourceType: "version_metadata",
       displayName: "Version Metadata (v3)",
       description: "Metadata key-value pairs attached to a version.",
       toolset: "registries-v3",
@@ -287,7 +308,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "file_metadata_v3",
+      resourceType: "file_metadata",
       displayName: "File Metadata (v3)",
       description: "Metadata key-value pairs attached to a file.",
       toolset: "registries-v3",
@@ -306,7 +327,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "metadata_key_v3",
+      resourceType: "metadata_key",
       displayName: "Metadata Key (v3)",
       description: "Discover metadata keys defined in the account/org/project scope.",
       toolset: "registries-v3",
@@ -332,7 +353,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "metadata_value_v3",
+      resourceType: "metadata_value",
       displayName: "Metadata Value (v3)",
       description: "Discover the values a metadata key has taken across the scope.",
       toolset: "registries-v3",

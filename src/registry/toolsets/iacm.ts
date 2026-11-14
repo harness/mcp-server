@@ -8,193 +8,20 @@ import type {
   PreflightContext,
 } from "../types.js";
 import { SCOPE_BEHAVIOR_DOC } from "../scope-utils.js";
-
-// ─── Response extractors ─────────────────────────────────────────────────────
-
-/** IaCM page size is fixed at 30 by the API. */
-const IACM_PAGE_SIZE = 30;
-
-/**
- * IACM workspace list: API returns a raw JSON array of workspace objects.
- * `page_count`  = items on THIS page only (never the real total).
- * `has_more`    = true when the page is full (another page likely exists).
- */
-const workspaceListExtract = (
-  raw: unknown,
-): { items: unknown[]; page_count: number; has_more: boolean; pagination_note: string } => {
-  const items = Array.isArray(raw) ? raw : [];
-  const has_more = items.length >= IACM_PAGE_SIZE;
-  return {
-    items,
-    page_count: items.length,
-    has_more,
-    pagination_note: has_more
-      ? `Only ${items.length} workspaces returned (page is full). Call again with page+1 to fetch the next batch. Do NOT report ${items.length} as the total count of workspaces.`
-      : `All workspaces on this page returned (${items.length} items). has_more=false means this is the last page.`,
-  };
-};
-
-/**
- * IACM workspace get: API returns a single workspace object directly.
- */
-const workspaceGetExtract = (raw: unknown): unknown => raw;
-
-/**
- * Workspace create/update return `{ policy_evaluation? }` only — not the workspace.
- * Project that stable shape so agents don't treat the write response as workspace
- * metadata; follow up with harness_get for the workspace itself.
- */
-const workspaceWriteExtract = (raw: unknown): unknown => {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return {};
-  }
-  const rec = raw as Record<string, unknown>;
-  return {
-    policy_evaluation: rec.policy_evaluation ?? null,
-  };
-};
-
-/**
- * Variable-set list: API returns `{ items: [...] }` with no pagination params.
- * Normalize to the shared list shape used by other IaCM resources.
- */
-const variableSetListExtract = (
-  raw: unknown,
-): { items: unknown[]; page_count: number; has_more: boolean; pagination_note: string } => {
-  const items = Array.isArray(raw)
-    ? raw
-    : raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown[] }).items)
-      ? ((raw as { items: unknown[] }).items)
-      : [];
-  return {
-    items,
-    page_count: items.length,
-    has_more: false,
-    pagination_note:
-      `Returned ${items.length} variable set(s). This endpoint is not paginated — treat page_count as the full result size for the selected scope.`,
-  };
-};
-
-/**
- * Variable-set get/create/update return the VariableSet resource directly
- * (identifier, name, variables, connectors, …) — not a policy_evaluation envelope.
- */
-const variableSetExtract = (raw: unknown): unknown => raw;
-
-/**
- * IACM resources list: API returns a ResourcesResponse with resources, outputs,
- * dataSources, and pagination metadata. Pass the full structure through so the
- * LLM sees outputs (Terraform outputs with descriptions) and data sources as well.
- * `total_items` is the REAL total from the API (not just this page's count).
- */
-const iacmResourcesExtract = (raw: unknown): unknown => {
-  const r = raw as {
-    resources?: unknown[];
-    outputs?: unknown[];
-    data_sources?: unknown[];
-    resourceCount?: number;
-    outputCount?: number;
-    dataSourceCount?: number;
-    hasMore?: boolean;
-    pageNumber?: number;
-    totalItems?: number;
-  };
-  const resources = r.resources ?? [];
-  const has_more = r.hasMore ?? false;
-  const page_count = resources.length;
-  return {
-    items: resources,
-    resources,
-    outputs: r.outputs ?? [],
-    data_sources: r.data_sources ?? [],
-    page_count,
-    output_count: r.outputCount ?? (r.outputs?.length ?? 0),
-    data_source_count: r.dataSourceCount ?? (r.data_sources?.length ?? 0),
-    has_more,
-    page_number: r.pageNumber ?? 1,
-    total_items: r.totalItems ?? -1,
-    pagination_note: has_more
-      ? `Only ${page_count} resources on this page. has_more=true — call again with page+1 to fetch the next batch. total_items=${r.totalItems ?? "unknown"} is the real total from the API.`
-      : `All resources on this page (${page_count} items). has_more=false means this is the last page.`,
-  };
-};
-
-/**
- * IACM module list: API returns a raw JSON array of module objects.
- * `page_count`  = items on THIS page only.
- * `has_more`    = true when page is full (another page likely exists).
- */
-const moduleListExtract = (
-  raw: unknown,
-): { items: unknown[]; page_count: number; has_more: boolean; pagination_note: string } => {
-  const items = Array.isArray(raw) ? raw : [];
-  const has_more = items.length >= IACM_PAGE_SIZE;
-  return {
-    items,
-    page_count: items.length,
-    has_more,
-    pagination_note: has_more
-      ? `Only ${items.length} modules returned (page is full). Call again with page+1 to fetch the next batch. Do NOT report ${items.length} as the total module count.`
-      : `All modules on this page returned (${items.length} items). has_more=false means this is the last page.`,
-  };
-};
-
-/** Module get/create/update return the module resource (or create result) directly. */
-const moduleExtract = (raw: unknown): unknown => raw;
-
-/**
- * Provider list: API returns a raw JSON array of provider objects.
- */
-const providerListExtract = (
-  raw: unknown,
-): { items: unknown[]; page_count: number; has_more: boolean; pagination_note: string } => {
-  const items = Array.isArray(raw) ? raw : [];
-  const has_more = items.length >= IACM_PAGE_SIZE;
-  return {
-    items,
-    page_count: items.length,
-    has_more,
-    pagination_note: has_more
-      ? `Only ${items.length} providers returned (page is full). Call again with page+1 to fetch the next batch. Do NOT report ${items.length} as the total provider count.`
-      : `All providers on this page returned (${items.length} items). has_more=false means this is the last page.`,
-  };
-};
-
-/** Provider get/create/version ops return the API payload directly. */
-const providerExtract = (raw: unknown): unknown => raw;
-
-/**
- * IACM workspace costs: API returns a raw JSON array of cost entries.
- * Costs are typically a small finite list so has_more acts as a safety signal only.
- */
-const costsListExtract = (
-  raw: unknown,
-): { items: unknown[]; page_count: number; has_more: boolean; pagination_note: string } => {
-  const items = Array.isArray(raw) ? raw : [];
-  const has_more = items.length >= IACM_PAGE_SIZE;
-  return {
-    items,
-    page_count: items.length,
-    has_more,
-    pagination_note: has_more
-      ? `Only ${items.length} cost entries returned (page is full). Call again with page+1 for more entries. Do NOT report ${items.length} as the total.`
-      : `All cost entries on this page returned (${items.length} items). has_more=false means this is the last page.`,
-  };
-};
-
-/**
- * IaCM execution resource changes: keep the documented response intact while
- * preserving the older resource_changes alias for agents that look for it.
- */
-const activityChangesExtract = (raw: unknown): unknown => {
-  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-    const r = raw as Record<string, unknown>;
-    if (!Array.isArray(r.resource_changes) && Array.isArray(r.planned_changes)) {
-      return { ...r, resource_changes: r.planned_changes };
-    }
-  }
-  return raw;
-};
+import {
+  activityChangesExtract,
+  costsListExtract,
+  iacmResourcesExtract,
+  moduleExtract,
+  moduleListExtract,
+  providerExtract,
+  providerListExtract,
+  variableSetExtract,
+  variableSetListExtract,
+  workspaceGetExtract,
+  workspaceListExtract,
+  workspaceWriteExtract,
+} from "../extractors.js";
 
 // ─── Preflight guards ────────────────────────────────────────────────────────
 

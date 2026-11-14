@@ -26,6 +26,8 @@ import {
   lwPaginatedExtract,
   aiBudgetConsumptionExtract,
   aiBudgetOverrideRequestListExtract,
+  ccmPerspectiveFilterValuesExtract,
+  extractCostCategoryFilterPanel,
 } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
@@ -548,101 +550,6 @@ const aiBudgetReviewBodySchema: BodySchema = {
     },
   ],
 };
-
-/**
- * Normalizes REST cost_category responses into the same {values} shape
- * that perspectiveFilters returns, so callers get a uniform interface.
- *
- * - No value_sub_type → list endpoint → extract category names from the list
- * - With value_sub_type → get endpoint → extract costTarget bucket names
- */
-function extractBusinessMappingValues(raw: unknown, valueSubType?: string): unknown {
-  // Unwrap NG envelope: response may be { data: ... } or { resource: ... }
-  const envelope = raw as { data?: unknown; resource?: unknown } | undefined;
-  const unwrapped = envelope?.data ?? envelope?.resource ?? raw;
-
-  if (valueSubType) {
-    // Single category GET: unwrapped is { costTargets: [{ name }], ... }
-    const entity = unwrapped as Record<string, unknown>;
-    const targets = entity.costTargets as Array<{ name?: string }> | undefined;
-    if (!Array.isArray(targets)) {
-      return { values: [], _error: "No costTargets found in response" };
-    }
-    return {
-      values: targets.map(t => t.name).filter(Boolean),
-    };
-  }
-  // List all categories: unwrapped is { businessMappings: [{ uuid, name }] }
-  const data = unwrapped as Record<string, unknown>;
-  const mappings = data.businessMappings as Array<{ uuid?: string; name?: string }> | undefined;
-  if (Array.isArray(mappings)) {
-    return {
-      values: mappings.map(m => m.name).filter(Boolean),
-    };
-  }
-  // Fallback: if unwrapped is already an array
-  if (Array.isArray(unwrapped)) {
-    return {
-      values: (unwrapped as Array<{ name?: string }>).map(m => m.name).filter(Boolean),
-    };
-  }
-  return { values: [], _error: "Unexpected response shape — no businessMappings or array found" };
-}
-
-/**
- * Normalizes /ccm/api/business-mapping/filter-panel responses into `{ values }`
- * so harness_get/list satisfy MCP structured output (objects only — raw arrays fail
- * outputSchema validation in strict clients like MCP Inspector).
- *
- * API shape (list and get are identical — only `data` meaning differs):
- *   { "status": "SUCCESS", "data": ["..."], "metaData": null, "correlationId": "..." }
- * - list (no costCategory): `data` = cost category names
- * - get (costCategory query param): `data` = bucket names within that category
- */
-function extractCostCategoryFilterPanel(raw: unknown): { values: string[] } {
-  const envelope = raw as { data?: unknown; resource?: unknown } | undefined;
-  const unwrapped = envelope?.data ?? envelope?.resource ?? raw;
-
-  if (Array.isArray(unwrapped)) {
-    const values = unwrapped
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object") {
-          const obj = item as { name?: string; costCategory?: string; costBucket?: string };
-          return obj.name ?? obj.costCategory ?? obj.costBucket;
-        }
-        return undefined;
-      })
-      .filter((v): v is string => typeof v === "string" && v.length > 0);
-    return { values };
-  }
-
-  if (unwrapped !== null && typeof unwrapped === "object") {
-    const obj = unwrapped as Record<string, unknown>;
-    if (Array.isArray(obj.costBuckets)) {
-      return { values: obj.costBuckets.filter((v): v is string => typeof v === "string") };
-    }
-    if (Array.isArray(obj.costTargets)) {
-      return {
-        values: (obj.costTargets as Array<{ name?: string }>)
-          .map((t) => t.name)
-          .filter((v): v is string => typeof v === "string" && v.length > 0),
-      };
-    }
-    if (Array.isArray(obj.businessMappings)) {
-      return {
-        values: (obj.businessMappings as Array<{ name?: string }>)
-          .map((m) => m.name)
-          .filter((v): v is string => typeof v === "string" && v.length > 0),
-      };
-    }
-    if (Array.isArray(obj.costCategories)) {
-      return { values: obj.costCategories.filter((v): v is string => typeof v === "string") };
-    }
-  }
-
-  return { values: [] };
-}
 
 // ---------------------------------------------------------------------------
 // Perspective preferences preflight — mirrors Go server's
@@ -2317,13 +2224,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
               },
             };
           },
-          responseExtractor: (raw: unknown, input?: Record<string, unknown>): unknown => {
-            const valueType = input?.value_type as string | undefined;
-            if (valueType === "business_mapping") {
-              return extractBusinessMappingValues(raw, input?.value_sub_type as string | undefined);
-            }
-            return gqlExtract("perspectiveFilters")(raw);
-          },
+          responseExtractor: ccmPerspectiveFilterValuesExtract,
           description: "Fetch perspective filter values. Examples: value_type='label_v2_key' returns all label keys; value_type='label_v2' with value_sub_type='env' returns all values for 'env' label; value_type='region' returns all regions; value_type='business_mapping' returns cost category names; value_type='business_mapping' with value_sub_type='<category_id>' returns bucket names.",
         },
       },

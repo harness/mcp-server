@@ -93,11 +93,12 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           );
           return errorResult(reason);
         }
+        const risk = def.operations.delete!.operationPolicy.risk;
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_delete",
           message: `Delete ${args.resource_type} "${resolvedResourceId}"?\n\nThis is destructive and cannot be undone.`,
-          risk: "destructive",
+          risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
         });

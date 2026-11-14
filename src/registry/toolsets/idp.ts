@@ -1,6 +1,6 @@
 import { encodePathSegment } from "../../utils/path.js";
 import type { BodySchema, PathBuilderConfig, ToolsetDefinition } from "../types.js";
-import { ngExtract, passthrough, v1ListExtract } from "../extractors.js";
+import { ngExtract, passthrough, v1ListExtract, idpScoresListExtract, scorecardStatsExtract } from "../extractors.js";
 import { parse as parseYaml } from "yaml";
 
 const CONFIG_API_KEY = "__config_api_key";
@@ -37,15 +37,6 @@ const extractAuthParamRefs = (yamlStr: string): { apikeyRefs: string[]; apiKeySe
   }
 
   return { apikeyRefs, apiKeySecretRefs };
-};
-
-const scorecardStatsExtract = (raw: unknown): unknown => {
-  const r = raw as { name?: string; stats?: unknown[]; timestamp?: number | null };
-  return {
-    name: r.name,
-    stats: r.stats ?? [],
-    time: r.timestamp != null ? new Date(r.timestamp).toISOString() : "",
-  };
 };
 
 const idpEntityMutateBodySchema: BodySchema = {
@@ -558,11 +549,7 @@ export const idpToolset: ToolsetDefinition = {
           queryParams: {
             entity_identifier: "entity_identifier",
           },
-          responseExtractor: (raw: unknown) => {
-            const r = raw as { overall_score?: number; scorecard_scores?: unknown[] };
-            const items = r.scorecard_scores ?? [];
-            return { overall_score: r.overall_score, items, total: items.length };
-          },
+          responseExtractor: idpScoresListExtract,
           description: "Get scores for every scorecard configured against an entity. Required filter: entity_identifier (format 'namespace/Kind/name', e.g. 'default/Component/my-service').",
         },
       },

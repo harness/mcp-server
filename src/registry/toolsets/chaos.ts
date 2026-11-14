@@ -34,6 +34,9 @@ import {
   sdV2PageExtract,
   chaosRunTimeInputsExtract,
   chaosActionExtract,
+  chaosComponentVarExtract,
+  chaosProbesInRunExtract,
+  chaosEnvironmentsListExtract,
 } from "../extractors.js";
 import {
   validateLiveMetricsInput,
@@ -271,12 +274,6 @@ const experimentTemplateParams = {
     { name: "hub_identity", required: true, description: "hubIdentity from the same list row. Pass as params.hub_identity." },
   ],
 } satisfies ParamsSchema;
-
-/** Unwrap single-item response from get-chaos-component-variable endpoint. */
-const chaosComponentVarExtract = (raw: unknown): unknown => {
-  const r = raw as { items?: Array<{ name: string; variables: unknown[] }> };
-  return r.items?.[0] ?? raw;
-};
 
 /** Compact projection for chaos_loadtest list items — keeps cheap discriminator
  * scalars (toolType/targetType/scriptSource/infraType/cleanupPolicy) that the
@@ -1776,11 +1773,10 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { experiment_id: "identity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "true" },
-          bodyBuilder: (input) => {
+          inputNormalizer: (input) => {
             if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
               (input as Record<string, unknown>).is_identity = false;
             }
-            return undefined;
           },
           responseExtractor: passthrough,
           description: descGetExperiment,
@@ -2601,13 +2597,7 @@ export const chaosToolset: ToolsetDefinition = {
             }
             return body;
           },
-          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
-            const r = raw as { data?: unknown[] };
-            return {
-              items: r.data ?? (Array.isArray(raw) ? raw : []),
-              total: Array.isArray(r.data) ? r.data.length : (Array.isArray(raw) ? (raw as unknown[]).length : 0),
-            };
-          },
+          responseExtractor: chaosProbesInRunExtract,
           description: descListProbesInRun,
           bodySchema: {
             description: descBodyProbesInRun,
@@ -2877,15 +2867,10 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { experiment_id: "identity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "true" },
-          // No request body for this GET — bodyBuilder is used purely to auto-detect
-          // UUID vs slug (same rationale as chaos_experiment.run above) before
-          // queryParams resolves is_identity from input. Runs regardless of HTTP
-          // method, so this is safe here.
-          bodyBuilder: (input) => {
+          inputNormalizer: (input) => {
             if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
               (input as Record<string, unknown>).is_identity = false;
             }
-            return undefined;
           },
           responseExtractor: chaosRunTimeInputsExtract,
           description: descListExperimentVariables,
@@ -3775,7 +3760,6 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: { load_test_identity: "loadTestIdentity" },
           // No request body; scope goes on the query string.
           skipScopeBodyInjection: true,
-          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: descGetRunAIInsights,
           bodySchema: { description: descBodyNoBody, fields: [] },
@@ -5487,13 +5471,7 @@ export const chaosToolset: ToolsetDefinition = {
             filterType: "Environment",
             ...(input.environment_type ? { environmentTypes: [input.environment_type] } : {}),
           }),
-          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
-            const r = raw as { data?: { content?: unknown[]; totalItems?: number } };
-            return {
-              items: r.data?.content ?? [],
-              total: r.data?.totalItems ?? 0,
-            };
-          },
+          responseExtractor: chaosEnvironmentsListExtract,
           description: descListChaosEnvironments,
         },
       },

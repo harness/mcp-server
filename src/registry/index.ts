@@ -72,9 +72,52 @@ const log = createLogger("registry");
 const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"];
 const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
 
-/** Backward-compatible aliases for renamed public toolset names. */
-const TOOLSET_ALIASES: Record<string, string> = {
+/**
+ * Backward-compatible & `harness-nav-config.yaml` aliases for toolset names.
+ * Maps nav aliases (`flags`, `infra-deploys`, `db-deploys`, `supply-chain`,
+ * `security-tests`, `protection`, `costs`, `dev-insights`, `devx`, `resilience`,
+ * `repos`, `code-reviews`, `builds`, `policies`, `access`, `kg`, `sre`,
+ * `worker-agents`, `artifacts`, `evals`, `account`) to their canonical toolset.
+ */
+export const TOOLSET_ALIASES: Readonly<Record<string, string>> = {
   "agent-pipelines": "agents",
+  builds: "pipelines",
+  repos: "repositories",
+  "code-reviews": "pull-requests",
+  "infra-deploys": "iacm",
+  "db-deploys": "dbops",
+  artifacts: "registries",
+  flags: "feature-flags",
+  evals: "ai-evals",
+  "security-tests": "sto",
+  "supply-chain": "scs",
+  protection: "appsec",
+  "api-discovery": "appsec",
+  "api-testing": "appsec",
+  costs: "ccm",
+  "dev-insights": "sei",
+  devx: "idp",
+  sre: "incidents",
+  resilience: "chaos",
+  "worker-agents": "autonomous_work",
+  kg: "knowledge-graph",
+  access: "access_control",
+  account: "platform",
+  policies: "governance",
+};
+
+/**
+ * Nav aliases from `harness-nav-config.yaml` that expand to multiple underlying
+ * toolsets when passed in `HARNESS_TOOLSETS` (e.g. `HARNESS_TOOLSETS=+artifacts`).
+ */
+export const TOOLSET_GROUP_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  artifacts: ["registries", "registries-v3", "registries-firewall"],
+  evals: ["ai-evals", "observability-evaluations"],
+  sre: ["incidents", "alerts", "deploys", "runbooks", "timelines"],
+  "worker-agents": ["autonomous_work", "agents"],
+  kg: ["knowledge-graph", "semantic-layer"],
+  access: ["access_control", "audit"],
+  account: ["platform", "settings", "freeze", "overrides", "file_store"],
 };
 
 function isResourceScope(value: unknown): value is ResourceScope {
@@ -216,7 +259,157 @@ export interface RegistryOptions {
 /**
  * The enabled registry — filtered by HARNESS_TOOLSETS config.
  */
-/** Common abbreviations/synonyms models use for resource types. */
+/**
+ * Deprecated legacy `resource_type` names that have been superseded by clean,
+ * version-free domain names. Calling these still works transparently, emits a
+ * one-time structured deprecation log to stderr, and is scheduled for removal
+ * in v4.0.0.
+ */
+export const DEPRECATED_RESOURCE_TYPE_ALIASES: Readonly<Record<string, string>> = {
+  package_v3: "package",
+  version_v3: "package_version",
+  file_v3: "package_file",
+  registry_metadata_v3: "registry_metadata",
+  package_metadata_v3: "package_metadata",
+  version_metadata_v3: "version_metadata",
+  file_metadata_v3: "file_metadata",
+  metadata_key_v3: "metadata_key",
+  metadata_value_v3: "metadata_value",
+  artifact_scan_v3: "artifact_scan",
+  bulk_scan_evaluation_v3: "bulk_scan_evaluation",
+  firewall_exception_v3: "firewall_exception",
+  firewall_exception_version_v3: "firewall_exception_version",
+};
+
+/**
+ * Preferred prefix-free (`harness-nav-config.yaml`-aligned) names for legacy
+ * module-prefixed resource types (`fme_*`, `iacm_*`, `scs_*`, `idp_*`, `sei_*`,
+ * `appsec_*`, `chaos_*`). Both the prefix-free name and the legacy prefixed
+ * name resolve to the same resource definition; the legacy prefixed names are
+ * deprecated and scheduled to become aliases in v4.0.0.
+ */
+export const PREFERRED_RESOURCE_TYPE_NAMES: Readonly<Record<string, string>> = {
+  // Feature Flags (`alias: flags`)
+  fme_workspace: "flag_workspace",
+  fme_environment: "flag_environment",
+  fme_feature_flag: "feature_flag",
+  fme_feature_flag_definition: "feature_flag_definition",
+  fme_rollout_status: "rollout_status",
+  fme_rule_based_segment: "rule_based_segment",
+  fme_rule_based_segment_definition: "rule_based_segment_definition",
+  fme_traffic_type: "traffic_type",
+  fme_identity: "flag_identity",
+  fme_standard_segment: "standard_segment",
+  fme_segment: "segment",
+  fme_segment_definition: "segment_definition",
+  fme_metric: "flag_metric",
+  fme_experiment: "flag_experiment",
+  fme_experiment_settings: "flag_experiment_settings",
+  fme_experiment_alerting: "flag_experiment_alerting",
+  fme_experiment_result: "flag_experiment_result",
+  fme_event_type: "event_type",
+  fme_segment_keys: "segment_keys",
+  // Infrastructure (`alias: infra-deploys`)
+  iacm_workspace: "workspace",
+  iacm_variable_set: "variable_set",
+  iacm_resource: "workspace_resource",
+  iacm_module: "terraform_module",
+  iacm_provider: "terraform_provider",
+  iacm_workspace_costs: "workspace_costs",
+  iacm_activity_resource_change: "workspace_resource_change",
+  // Supply Chain (`alias: supply-chain`)
+  scs_artifact_source: "artifact_source",
+  scs_artifact_component: "artifact_component",
+  scs_component_search: "component_search",
+  scs_component_dependencies: "component_dependencies",
+  scs_artifact_remediation: "artifact_remediation",
+  scs_chain_of_custody: "chain_of_custody",
+  scs_compliance_result: "compliance_result",
+  scs_bom_violation: "bom_violation",
+  scs_component_remediation: "component_remediation",
+  scs_remediation_pr: "remediation_pr",
+  scs_auto_pr_config: "auto_pr_config",
+  scs_component_enrichment: "component_enrichment",
+  scs_component_vulnerability: "component_vulnerability",
+  scs_oss_risk_summary: "oss_risk_summary",
+  scs_project_security_overview: "project_security_overview",
+  scs_sbom_drift: "sbom_drift",
+  scs_component_drift: "component_drift",
+  scs_sbom: "sbom",
+  // DevX Agent (`alias: devx`)
+  idp_entity: "catalog_entity",
+  idp_score: "catalog_score",
+  idp_score_summary: "catalog_score_summary",
+  idp_workflow: "workflow",
+  idp_tech_doc: "tech_doc",
+  // Engineering Insights (`alias: dev-insights`)
+  sei_metric: "engineering_metric",
+  sei_productivity_metric: "productivity_metric",
+  sei_dora_metric: "dora_metric",
+  sei_team: "engineering_team",
+  sei_team_detail: "engineering_team_detail",
+  sei_org_tree: "org_tree",
+  sei_org_tree_detail: "org_tree_detail",
+  sei_business_alignment: "business_alignment",
+  sei_ai_usage: "ai_usage",
+  sei_ai_adoption: "ai_adoption",
+  sei_ai_impact: "ai_impact",
+  sei_ai_raw_metric: "ai_raw_metric",
+  // Runtime Protection & API Discovery (`alias: protection`)
+  appsec_api: "discovered_api",
+  appsec_api_spec: "api_spec",
+  appsec_api_span: "api_span",
+  appsec_entity: "protection_entity",
+  appsec_vulnerability: "runtime_vulnerability",
+  appsec_threat_activity: "threat_activity",
+  appsec_security_event: "security_event",
+  appsec_ast_scan: "api_security_scan",
+  appsec_inventory_trend: "api_inventory_trend",
+  appsec_datatype: "sensitive_datatype",
+  // Resilience Agent (`alias: resilience`)
+  chaos_experiment: "experiment",
+  chaos_experiment_run: "experiment_run",
+  chaos_probe: "probe",
+  chaos_probe_in_run: "probe_in_run",
+  chaos_experiment_template: "experiment_template",
+  chaos_experiment_variable: "experiment_variable",
+  chaos_component_variable: "component_variable",
+  chaos_input_set: "experiment_input_set",
+  chaos_infrastructure: "resilience_infrastructure",
+  chaos_loadtest: "load_test",
+  chaos_loadtest_run: "load_test_run",
+  chaos_service: "resilience_service",
+  chaos_k8s_infrastructure: "resilience_k8s_infrastructure",
+  chaos_enabled_infrastructure: "resilience_enabled_infrastructure",
+  chaos_hub: "resilience_hub",
+  chaos_fault: "fault",
+  chaos_fault_experiment_run: "fault_experiment_run",
+  chaos_fault_template: "fault_template",
+  chaos_probe_template: "probe_template",
+  chaos_action_template: "resilience_action_template",
+  chaos_action: "resilience_action",
+  chaos_hub_fault: "hub_fault",
+  chaos_environment: "resilience_environment",
+  chaos_application_map: "application_map",
+  chaos_guard_condition: "guard_condition",
+  chaos_guard_rule: "guard_rule",
+  chaos_recommendation: "resilience_recommendation",
+  chaos_risk: "resilience_risk",
+  chaos_dr_test: "dr_test",
+  chaos_risk_rule: "risk_rule",
+  chaos_risk_scan: "risk_scan",
+  chaos_onboarding: "resilience_onboarding",
+  chaos_pipeline_onboarding: "resilience_pipeline_onboarding",
+  chaos_dashboard: "resilience_dashboard",
+  chaos_image_registry: "resilience_image_registry",
+};
+
+/** Reverse map: clean `harness-nav-config.yaml` domain name → registered resourceType. */
+export const NAV_DOMAIN_RESOURCE_ALIASES: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(PREFERRED_RESOURCE_TYPE_NAMES).map(([legacy, preferred]) => [preferred, legacy]),
+);
+
+/** Common abbreviations, nav-aligned domain names, and deprecated aliases. */
 const RESOURCE_TYPE_ALIASES: Record<string, string> = {
   repo: "repository",
   git_repo: "repository",
@@ -226,6 +419,20 @@ const RESOURCE_TYPE_ALIASES: Record<string, string> = {
   env: "environment",
   svc: "service",
   inputset: "input_set",
+  ...DEPRECATED_RESOURCE_TYPE_ALIASES,
+  ...NAV_DOMAIN_RESOURCE_ALIASES,
+};
+
+const warnedDeprecatedAliases = new Set<string>();
+
+/**
+ * Non-breaking execute redirects for legacy single-action resource types that
+ * were consolidated into `executeActions` on their parent entity.
+ */
+export const LEGACY_EXECUTE_REDIRECTS: Readonly<Record<string, { resourceType: string; action: string }>> = {
+  work_item_resume: { resourceType: "work_item", action: "resume" },
+  work_item_approve: { resourceType: "work_item", action: "approve" },
+  budget_grant: { resourceType: "budget", action: "grant" },
 };
 
 export class Registry {
@@ -294,17 +501,20 @@ export class Registry {
       for (const token of parsed) {
         const op = token[0];
         const rawName = (op === "+" || op === "-") ? token.slice(1) : token;
-        const name = TOOLSET_ALIASES[rawName] ?? rawName;
-        if (!validNames.has(name)) {
-          invalid.push(rawName);
-          continue;
-        }
-        if (op === "+") {
-          defaults.add(name);
-        } else if (op === "-") {
-          defaults.delete(name);
-        } else {
-          defaults.add(name);
+        const group = TOOLSET_GROUP_ALIASES[rawName];
+        const targets = group ?? [TOOLSET_ALIASES[rawName] ?? rawName];
+        for (const name of targets) {
+          if (!validNames.has(name)) {
+            invalid.push(rawName);
+            continue;
+          }
+          if (op === "+") {
+            defaults.add(name);
+          } else if (op === "-") {
+            defaults.delete(name);
+          } else {
+            defaults.add(name);
+          }
         }
       }
 
@@ -323,11 +533,14 @@ export class Registry {
     const invalid: string[] = [];
 
     for (const rawName of parsed) {
-      const name = TOOLSET_ALIASES[rawName] ?? rawName;
-      if (validNames.has(name)) {
-        valid.push(name);
-      } else {
-        invalid.push(rawName);
+      const group = TOOLSET_GROUP_ALIASES[rawName];
+      const targets = group ?? [TOOLSET_ALIASES[rawName] ?? rawName];
+      for (const name of targets) {
+        if (validNames.has(name)) {
+          valid.push(name);
+        } else {
+          invalid.push(rawName);
+        }
       }
     }
 
@@ -378,6 +591,14 @@ export class Registry {
    */
   private resolveAlias(input: string): string | undefined {
     const norm = input.trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const deprecatedTarget = DEPRECATED_RESOURCE_TYPE_ALIASES[norm];
+    if (deprecatedTarget && !warnedDeprecatedAliases.has(norm)) {
+      warnedDeprecatedAliases.add(norm);
+      log.warn("Deprecated resource_type alias used; migrate before v4.0.0", {
+        deprecated_resource_type: norm,
+        replacement_resource_type: deprecatedTarget,
+      });
+    }
     const stems = [norm];
     if (norm.endsWith("ies")) stems.push(`${norm.slice(0, -3)}y`);
     if (norm.endsWith("es")) stems.push(norm.slice(0, -2));
@@ -486,7 +707,7 @@ export class Registry {
     if (operation === "list") {
       assertListScopeResolved(
         resourceType,
-        def,
+        spec.scope ? { ...def, scope: spec.scope } : def,
         input,
         this.config.HARNESS_ORG,
         this.config.HARNESS_PROJECT,
@@ -523,6 +744,12 @@ export class Registry {
   ): Promise<unknown> {
     const auditCtx = signalOrAudit instanceof AbortSignal ? undefined : signalOrAudit;
     const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
+
+    const redirect = LEGACY_EXECUTE_REDIRECTS[resourceType];
+    if (redirect) {
+      resourceType = redirect.resourceType;
+      action = redirect.action;
+    }
 
     const def = this.getResource(resourceType);
     const actionSpec = def.executeActions?.[action];
@@ -659,7 +886,8 @@ export class Registry {
     httpStatus?: number,
   ): void {
     if (!this.auditManager) return;
-    const auditScope = isResourceScope(input.resource_scope) ? input.resource_scope : undefined;
+    const effectiveDefScope = spec.scope ?? def.scope;
+    const auditScope = spec.scope ? undefined : (isResourceScope(input.resource_scope) ? input.resource_scope : undefined);
 
     // Resolve path using pathBuilder if present, otherwise use static path
     const resolvedPath = spec.pathBuilder
@@ -678,16 +906,16 @@ export class Registry {
         ? shouldUseOrg(auditScope)
           ? (input.org_id as string | undefined) ?? this.config.HARNESS_ORG
           : undefined
-        : def.scope === "account"
+        : effectiveDefScope === "account"
           ? undefined
-          : (input.org_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_ORG),
+          : (input.org_id as string | undefined) ?? (def.scopeOptional && !spec.scope ? undefined : this.config.HARNESS_ORG),
       project_id: auditScope
         ? shouldUseProject(auditScope)
           ? (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT
           : undefined
-        : def.scope === "account" || def.scope === "org"
+        : effectiveDefScope === "account" || effectiveDefScope === "org"
           ? undefined
-          : (input.project_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_PROJECT),
+          : (input.project_id as string | undefined) ?? (def.scopeOptional && !spec.scope ? undefined : this.config.HARNESS_PROJECT),
       account_id: this.getAccountId(),
       risk: spec.operationPolicy?.risk ?? "read",
       confirmation: auditCtx?.confirmation,
@@ -711,9 +939,10 @@ export class Registry {
   ): Promise<unknown> {
     const resolvedAccountId = this.getAccountId();
     const resolvedConfig: Config = { ...this.config, HARNESS_ACCOUNT_ID: resolvedAccountId };
-    const requestedScope = getRequestedScope(def, input);
+    const effectiveDefScope = spec.scope ?? def.scope;
+    const requestedScope = spec.scope ? undefined : getRequestedScope(def, input);
     const explicitScopeValues = requestedScope ? getExplicitScopeValues(requestedScope, input, this.config) : undefined;
-    const pathDefaultScope = requestedScope ?? def.scope;
+    const pathDefaultScope = requestedScope ?? effectiveDefScope;
 
     const resolvedRoute = spec.routeResolver ? spec.routeResolver(input, resolvedConfig) : undefined;
 
@@ -722,6 +951,10 @@ export class Registry {
     // which is the process placeholder in multi-tenant chat MCP.
     if (spec.preflight) {
       await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
+    }
+
+    if (spec.inputNormalizer) {
+      spec.inputNormalizer(input, resolvedConfig);
     }
 
     // When explicit resource_scope resolved org/project from config defaults,
@@ -768,11 +1001,11 @@ export class Registry {
     // Build query params (values may be string[] for repeated query keys — see HarnessClient.buildUrl)
     const params: Record<string, string | number | boolean | string[] | undefined> = {};
 
-    // Add scope params (allow per-resource, or per-route via routeResolver, override
-    // of query param names). When scopeOptional is true, only add org/project if
+    // Add scope params (allow per-resource, per-operation, or per-route via routeResolver,
+    // override of query param names). When scopeOptional is true, only add org/project if
     // explicitly provided in input. Otherwise, fall back to config defaults based on
-    // the resource's scope level.
-    const effectiveScopeParams = resolvedRoute?.scopeParams ?? def.scopeParams;
+    // the effective scope level (spec.scope ?? def.scope).
+    const effectiveScopeParams = resolvedRoute?.scopeParams ?? spec.scopeParams ?? def.scopeParams;
     const orgParam = effectiveScopeParams?.org ?? "orgIdentifier";
     const projectParam = effectiveScopeParams?.project ?? "projectIdentifier";
     if (requestedScope) {
@@ -783,7 +1016,7 @@ export class Registry {
       if (shouldUseProject(requestedScope)) {
         params[projectParam] = explicitScopeValues?.projectId;
       }
-    } else if (def.scopeOptional) {
+    } else if (def.scopeOptional && !spec.scope) {
       // Dynamic scoping: only inject when caller explicitly provides them.
       // A legacy workspace_id (FME's Split.io identifier) takes precedence over
       // any org/project incidentally picked up from a UI URL — these are two
@@ -799,10 +1032,10 @@ export class Registry {
       }
     } else {
       // Standard scoping: always inject based on scope level, falling back to config defaults
-      if (def.scope === "project" || def.scope === "org") {
+      if (effectiveDefScope === "project" || effectiveDefScope === "org") {
         params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_ORG;
       }
-      if (def.scope === "project") {
+      if (effectiveDefScope === "project") {
         params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_PROJECT;
       }
     }
@@ -815,7 +1048,7 @@ export class Registry {
 
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
     if (spec.injectOrgQueryFallback) {
-      const orgKey = def.scopeParams?.org ?? "orgIdentifier";
+      const orgKey = effectiveScopeParams?.org ?? "orgIdentifier";
       const cur = params[orgKey];
       if (cur === undefined || cur === "") {
         const fallback = (input.org_id as string) ?? this.config.HARNESS_ORG;
@@ -1285,6 +1518,55 @@ export class Registry {
     };
   }
 
+  /**
+   * Describe a single toolset for `harness_describe(toolset=...)`.
+   * In compact schema mode (`compact=true`), omits per-resource `listFilterFields`,
+   * `diagnosticHint`, and `relatedResources` and bounds `description` to its first
+   * sentence (≤ 200 chars) so large toolsets (e.g. `chaos` at 108.9 KB full) stay
+   * compact while directing callers to `harness_describe(resource_type='<type>')`.
+   */
+  describeToolset(toolsetName: string, compact = false): Record<string, unknown> {
+    const resolvedName = TOOLSET_ALIASES[toolsetName] ?? toolsetName;
+    const ts = this.toolsets.find((t) => t.name === resolvedName);
+    if (!ts) {
+      const available = this.toolsets.map((t) => t.name);
+      return {
+        error: `Unknown toolset "${toolsetName}". Available: ${available.join(", ")}`,
+        available_toolsets: available,
+      };
+    }
+    if (!compact) {
+      const full = (this.describe().toolsets as Record<string, object>)[resolvedName]!;
+      return { toolset: resolvedName, ...full };
+    }
+    const truncateDesc = (text: string): string => {
+      const firstLine = text.split("\n")[0]!.trim();
+      const sentenceEnd = firstLine.indexOf(". ");
+      const candidate = sentenceEnd !== -1 && sentenceEnd <= 200 ? firstLine.slice(0, sentenceEnd + 1) : firstLine;
+      return candidate.length > 200 ? `${candidate.slice(0, 197)}...` : candidate;
+    };
+    return {
+      toolset: ts.name,
+      displayName: ts.displayName,
+      description: truncateDesc(ts.description),
+      resources: ts.resources.map((r) => ({
+        resource_type: r.resourceType,
+        ...(PREFERRED_RESOURCE_TYPE_NAMES[r.resourceType]
+          ? { preferred_alias: PREFERRED_RESOURCE_TYPE_NAMES[r.resourceType] }
+          : {}),
+        displayName: r.displayName,
+        description: truncateDesc(r.description),
+        scope: r.scope,
+        supportedScopes: getSupportedScopes(r).length > 1 ? getSupportedScopes(r) : undefined,
+        operations: Object.keys(r.operations),
+        executeActions: r.executeActions ? Object.keys(r.executeActions) : undefined,
+        identifierFields: r.identifierFields,
+        ...(r.searchAliases?.length ? { aliases: r.searchAliases } : {}),
+      })),
+      hint: "Call harness_describe(resource_type='<type>') for full details including listFilterFields, bodySchema, diagnosticHint, and relatedResources.",
+    };
+  }
+
   /** Search resource types by keyword — matches type, display name, toolset, description. */
   searchResources(query: string): Array<{ type: string; name: string; toolset: string; ops: string[]; description: string }> {
     const q = query.toLowerCase();
@@ -1333,7 +1615,13 @@ export class Registry {
     toolset?: string;
     searchTerm?: string;
   }): Record<string, unknown> {
-    if (filter.toolset && !this.toolsets.some((ts) => ts.name === filter.toolset)) {
+    const resolvedToolsetTargets = filter.toolset
+      ? (TOOLSET_GROUP_ALIASES[filter.toolset] ?? [TOOLSET_ALIASES[filter.toolset] ?? filter.toolset])
+      : undefined;
+    const matchedToolsetNames = resolvedToolsetTargets
+      ? new Set(this.toolsets.filter((ts) => resolvedToolsetTargets.includes(ts.name)).map((ts) => ts.name))
+      : undefined;
+    if (filter.toolset && (!matchedToolsetNames || matchedToolsetNames.size === 0)) {
       const available = this.toolsets.map((ts) => ts.name);
       return {
         error: `Unknown toolset "${filter.toolset}". Available: ${available.join(", ")}`,
@@ -1346,7 +1634,7 @@ export class Registry {
       : undefined;
     const matches: Array<{ entry: Record<string, unknown> & { type: string }; rank: number }> = [];
     for (const ts of this.toolsets) {
-      if (filter.toolset && ts.name !== filter.toolset) continue;
+      if (matchedToolsetNames && !matchedToolsetNames.has(ts.name)) continue;
       for (const resource of ts.resources) {
         if (ranked && !ranked.has(resource.resourceType)) continue;
         const actions = resource.executeActions ? Object.keys(resource.executeActions) : [];

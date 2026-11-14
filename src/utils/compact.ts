@@ -42,6 +42,28 @@ const ALWAYS_KEEP = new Set(["openInHarness", "_summary", "_message", "_result"]
 /** Identifier-like key pattern: pipelineIdentifier, projectId, env_id, etc. */
 const IDENTIFIER_PATTERN = /(?:Identifier|Id|_id)$/;
 
+/**
+ * Harness NG V2 list endpoints wrap entity fields inside a nested object
+ * (`{ environment: { identifier, name, type, ... }, createdAt, lastModifiedAt }`)
+ * while keeping timestamps/status at the outer envelope. Promote whitelisted
+ * keys from the nested entity wrapper so default compaction does not strip
+ * `identifier`, `name`, `type`, and `description`.
+ */
+const NG_ENTITY_WRAPPER_KEYS = [
+  "environment",
+  "service",
+  "connector",
+  "secret",
+  "infrastructure",
+  "role",
+  "resourceGroup",
+  "organization",
+  "project",
+  "template",
+  "artifact",
+  "pipeline",
+] as const;
+
 function isWhitelistedKey(key: string): boolean {
   return (
       IDENTITY_FIELDS.has(key) ||
@@ -74,6 +96,18 @@ export function compactItems(
     if (compactFn) return mergeOpenInHarness(compactFn(item as Record<string, unknown>));
     const full = item as Record<string, unknown>;
     const slim: Record<string, unknown> = {};
+    for (const wrapperKey of NG_ENTITY_WRAPPER_KEYS) {
+      const nested = full[wrapperKey];
+      if (nested !== null && typeof nested === "object" && !Array.isArray(nested)) {
+        const nestedRecord = nested as Record<string, unknown>;
+        for (const key of Object.keys(nestedRecord)) {
+          if (isWhitelistedKey(key) && slim[key] === undefined) {
+            slim[key] = nestedRecord[key];
+          }
+        }
+        break;
+      }
+    }
     for (const key of Object.keys(full)) {
       if (isWhitelistedKey(key)) {
         slim[key] = full[key];

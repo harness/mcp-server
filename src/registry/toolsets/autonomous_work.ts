@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough } from "../extractors.js";
+import { passthrough, workArtifactListExtract } from "../extractors.js";
 
 // Development Harness (ADLC) — autonomous AI-driven software work.
 // All routes are project-scoped under /adlc/api/* on the standard Harness
@@ -78,32 +78,6 @@ function yamlAskBodyBuilder(input: Record<string, unknown>): unknown {
   return body;
 }
 
-// ADLC list endpoints return { items: [...] } (verified for /workitems).
-// passthrough returns the raw object; harness_list reads .items automatically.
-const listResponseExtractor = passthrough;
-
-/** Guarantee `items` + `total` so skipCompact survives harness_list normalization. */
-function workArtifactListExtract(raw: unknown, input?: Record<string, unknown>): Record<string, unknown> {
-  const r = raw !== null && typeof raw === "object" && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : {};
-  const items = Array.isArray(r.items) ? r.items : [];
-  const total = typeof r.total === "number" ? r.total : items.length;
-  const size = typeof input?.size === "number" && input.size > 0 ? input.size : 20;
-  const page = typeof input?.page === "number" && input.page >= 0 ? input.page : 0;
-  const filters: Record<string, unknown> = { type: input?.type, page: page + 1, size };
-  if (input?.phase_id) filters.phase_id = input.phase_id;
-  const hasMore = (page + 1) * size < total;
-  return {
-    ...r,
-    items,
-    total,
-    _nextPageHint: hasMore
-      ? `For the next page, call harness_list with resource_type='work_artifact', params={"work_item_id":${JSON.stringify(input?.work_item_id ?? "")}} and filters=${JSON.stringify(filters)}. Keep type and size identical — this list uses offset = page × size, unlike work_item list which maps page to offset directly.`
-      : "No more pages — all matching artifacts have been returned.",
-  };
-}
-
 /** harness_list page is 0-indexed; ADLC paginates with offset = page × size. */
 function applyWorkArtifactListOffset(input: Record<string, unknown>): void {
   const size = typeof input.size === "number" && input.size > 0 ? input.size : 20;
@@ -164,7 +138,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/workitems",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { page: "offset", size: "limit" },
-          responseExtractor: listResponseExtractor,
+          responseExtractor: passthrough,
           description: "List work items in a project.",
         },
         get: {
@@ -176,19 +150,8 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           description: "Get a single work item by ID.",
         },
       },
-    },
-
-    // ── WorkItem lifecycle actions (resume / approve) ─────────────────────
-    {
-      resourceType: "work_item_resume",
-      displayName: "Work Item Resume",
-      description: "Resume a budget-blocked or gated work item.",
-      toolset: "autonomous_work",
-      scope: "project",
-      identifierFields: ["work_item_id"],
-      operations: {},
       executeActions: {
-        run: {
+        resume: {
           method: "POST",
           path: "/adlc/api/workitems/{workItemId}/resume",
           pathParams: { work_item_id: "workItemId" },
@@ -199,18 +162,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           actionDescription: "Resume a budget-blocked or gated work item.",
           bodySchema: emptyBodySchema,
         },
-      },
-    },
-    {
-      resourceType: "work_item_approve",
-      displayName: "Work Item Approve",
-      description: "Approve or reject a pending gate on a work item.",
-      toolset: "autonomous_work",
-      scope: "project",
-      identifierFields: ["work_item_id"],
-      operations: {},
-      executeActions: {
-        run: {
+        approve: {
           method: "POST",
           path: "/adlc/api/workitems/{workItemId}/approve",
           pathParams: { work_item_id: "workItemId" },
@@ -396,17 +348,8 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           description: "Get a single budget by ID.",
         },
       },
-    },
-    {
-      resourceType: "budget_grant",
-      displayName: "Budget Grant",
-      description: "Apply one approval increment to a budget.",
-      toolset: "autonomous_work",
-      scope: "project",
-      identifierFields: ["budget_id"],
-      operations: {},
       executeActions: {
-        run: {
+        grant: {
           method: "POST",
           path: "/adlc/api/budgets/{budgetId}/grant",
           pathParams: { budget_id: "budgetId" },

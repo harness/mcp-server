@@ -326,8 +326,21 @@ export interface EndpointSpec {
    * resources whose NG endpoints require `orgIdentifier` on the query string (e.g. POST /ng/api/projects).
    */
   injectOrgQueryFallback?: boolean;
+  /**
+   * Optional per-operation scope override when an endpoint's scope differs from
+   * the resource default (e.g. a project-scoped `list` paired with an
+   * account-scoped `get`-by-UUID on the same `resourceType`).
+   */
+  scope?: ResourceScope;
   /** Override default scope query param names (e.g. for APIs using snake_case) */
   scopeParams?: { account?: string; org?: string; project?: string };
+  /**
+   * Optional pre-resolution input normalizer. Use when an endpoint needs to
+   * normalize or hoist fields on `input` before path/query parameters are built
+   * (e.g. auto-detecting UUID vs slug on `GET` endpoints). Never use `bodyBuilder`
+   * on `GET` requests for input side effects.
+   */
+  inputNormalizer?: (input: Record<string, unknown>, config: PathBuilderConfig) => void;
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => unknown;
   /**

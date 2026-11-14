@@ -714,6 +714,8 @@ export const harV3ListExtract = (raw: unknown): unknown => {
   // backend `meta` envelope (which may gain new keys over time).
   const activeCount = typeof meta?.activeCount === "number" ? meta.activeCount : undefined;
   const deletedCount = typeof meta?.deletedCount === "number" ? meta.deletedCount : undefined;
+  const prodEnvCount = typeof meta?.prodEnvCount === "number" ? meta.prodEnvCount : undefined;
+  const nonProdEnvCount = typeof meta?.nonProdEnvCount === "number" ? meta.nonProdEnvCount : undefined;
   return {
     items,
     total,
@@ -722,6 +724,8 @@ export const harV3ListExtract = (raw: unknown): unknown => {
     hasMore: raw.hasMore,
     ...(activeCount !== undefined ? { activeCount } : {}),
     ...(deletedCount !== undefined ? { deletedCount } : {}),
+    ...(prodEnvCount !== undefined ? { prodEnvCount } : {}),
+    ...(nonProdEnvCount !== undefined ? { nonProdEnvCount } : {}),
   };
 };
 
@@ -2573,3 +2577,80 @@ export {
   sanitizeAndBoundSpanBody,
   unwrapAppSecGraphql,
 } from "./appsec/extractors.js";
+
+export {
+  ccmPerspectiveFilterValuesExtract,
+  chaosComponentVarExtract,
+  chaosEnvironmentsListExtract,
+  chaosProbesInRunExtract,
+  governanceEvaluationListExtract,
+  hqlValidateExtract,
+  idpScoresListExtract,
+  stoBulkExemptionExtract,
+  stoPipelineSecurityIssuesExtract,
+  stoPipelineSecurityStepsExtract,
+} from "./extractors/inline-migrated.js";
+
+export {
+  activityChangesExtract,
+  ansibleListExtract,
+  costsListExtract,
+  iacmResourcesExtract,
+  moduleExtract,
+  moduleListExtract,
+  providerExtract,
+  providerListExtract,
+  variableSetExtract,
+  variableSetListExtract,
+  workspaceGetExtract,
+  workspaceListExtract,
+  workspaceWriteExtract,
+} from "./extractors/iacm.js";
+
+export {
+  COMPONENT_DRIFT_LIST_FIELDS,
+  COMPONENT_ENRICHMENT_FIELDS,
+  artifactComponentListExtract,
+  artifactSecurityListExtract,
+  artifactSourceListExtract,
+  attestationDetailsExtract,
+  attestationDownloadExtract,
+  attestationListExtract,
+  bomViolationListExtract,
+  chainOfCustodyExtract,
+  codeRepoListExtract,
+  componentDependenciesExtract,
+  componentRemediationExtract,
+  componentVulnerabilityExtract,
+  projectAttestationListItem,
+  projectSecurityOverviewExtract,
+  remediationPrListExtract,
+  sbomDownloadExtract,
+} from "./extractors/scs.js";
+
+export {
+  addRootCauseTheoryExtract,
+  alertGetExtract,
+  deployGetExtract,
+  extractCostCategoryFilterPanel,
+  fmeActionExtract,
+  grammarExtract,
+  hqlRunExtract,
+  incidentGetExtract,
+  infrastructureExtract,
+  infrastructurePageExtract,
+  observabilityEvalExtract,
+  observabilityEvalListExtract,
+  projectAlert,
+  projectIncident,
+  queryableTypeSummaryExtract,
+  relatedTypesExtract,
+  schemaTypeExtract,
+  schemaTypesExtract,
+  scorecardStatsExtract,
+  securityIssueListExtract,
+  unifiedSearchExecuteExtract,
+  unifiedSearchListExtract,
+  unifiedSearchSourcesExtract,
+  workArtifactListExtract,
+} from "./extractors/domain.js";

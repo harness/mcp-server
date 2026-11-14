@@ -1,4 +1,8 @@
 import * as z from "zod/v4";
+import {
+  DEPRECATED_RESOURCE_TYPE_ALIASES,
+  PREFERRED_RESOURCE_TYPE_NAMES,
+} from "../registry/index.js";
 
 function hasConfiguredDefault(value: string | undefined): value is string {
   return typeof value === "string" && value.trim() !== "";
@@ -101,6 +105,18 @@ export function resourceTypeSchema(resourceTypes: string[], compact = false) {
   }
 
   if (compact) return z.string().min(1);
-  return z.enum(resourceTypes as [string, ...string[]]);
+  const typeSet = new Set(resourceTypes);
+  const withAliases = Array.from(
+    new Set([
+      ...resourceTypes,
+      ...resourceTypes.flatMap((rt) =>
+        PREFERRED_RESOURCE_TYPE_NAMES[rt] ? [PREFERRED_RESOURCE_TYPE_NAMES[rt]!] : [],
+      ),
+      ...Object.entries(DEPRECATED_RESOURCE_TYPE_ALIASES)
+        .filter(([, target]) => typeSet.has(target))
+        .map(([alias]) => alias),
+    ]),
+  );
+  return z.enum(withAliases as [string, ...string[]]);
 }
 

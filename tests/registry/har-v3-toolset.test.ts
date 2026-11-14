@@ -68,13 +68,13 @@ describe("HAR v3 toolset", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
-  it("harV3ListExtract projects activeCount/deletedCount and does NOT forward raw meta", async () => {
+  it("harV3ListExtract projects activeCount/deletedCount and prodEnvCount/nonProdEnvCount and does NOT forward raw meta", async () => {
     const client = mockClient({
       items: [{ id: "v-1" }, { id: "v-2" }],
       page: 1,
       size: 20,
       hasMore: true,
-      meta: { activeCount: 2, deletedCount: 0, futureBackendKey: "leak-me-if-you-dare" },
+      meta: { activeCount: 2, deletedCount: 0, prodEnvCount: 1, nonProdEnvCount: 3, futureBackendKey: "leak-me-if-you-dare" },
     });
 
     const result = (await registry.dispatch(client, "version_v3", "list", {})) as Record<string, unknown>;
@@ -84,6 +84,8 @@ describe("HAR v3 toolset", () => {
     expect(result.hasMore).toBe(true);
     expect(result.activeCount).toBe(2);
     expect(result.deletedCount).toBe(0);
+    expect(result.prodEnvCount).toBe(1);
+    expect(result.nonProdEnvCount).toBe(3);
     // Raw `meta` envelope must not cross the tool boundary.
     expect(result.meta).toBeUndefined();
     expect(JSON.stringify(result)).not.toContain("futureBackendKey");
@@ -184,6 +186,21 @@ describe("HAR v3 toolset", () => {
     expect(call.params.registry_id).toBe("reg-1");
     expect(call.params.package_id).toBe("pkg-1");
     expect(call.params.version_id).toBe("v-1");
+  });
+
+  it("file_v3.get hits /har/api/v3/files/{id} with account-only scope (via EndpointSpec.scope) and unwraps downloadUrl", async () => {
+    const client = mockClient({
+      data: { id: "f-1", name: "x.tgz", size: 2048, downloadUrl: "https://pkg.harness.io/x.tgz" },
+    });
+    const result = (await registry.dispatch(client, "file_v3", "get", {
+      file_id: "f-1",
+    })) as Record<string, unknown>;
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.path).toBe("/har/api/v3/files/f-1");
+    expect(call.params.account_identifier).toBe("acct123");
+    expect(call.params.org_identifier).toBeUndefined();
+    expect(call.params.project_identifier).toBeUndefined();
+    expect(result.downloadUrl).toBe("https://pkg.harness.io/x.tgz");
   });
 
   it("metadata_value_v3.list forwards the required `key` param", async () => {
@@ -304,13 +321,7 @@ describe("HAR v3 toolset", () => {
 // Verify our per-resource projectors keep them and rename `id` → `<x>_id`.
 
 describe("registries-v3 compactItem projection", () => {
-  const getResource = (rt: string) => {
-    const r =
-      registriesV3Toolset.resources.find((res) => res.resourceType === rt) ??
-      registriesFirewallToolset.resources.find((res) => res.resourceType === rt);
-    if (!r) throw new Error(`resource ${rt} not found`);
-    return r;
-  };
+  const getResource = (rt: string) => new Registry(makeConfig()).getResource(rt);
 
   it("package_v3.compactItem keeps packageType/latestVersion/registryName and adds package_id", () => {
     const resource = getResource("package_v3");
@@ -363,6 +374,41 @@ describe("registries-v3 compactItem projection", () => {
     expect(items[0].packageType).toBe("NPM");
     expect(items[0].registryType).toBe("VIRTUAL");
     expect(items[0].extra).toBeUndefined();
+  });
+
+  it("package_file.compactItem (compactFileV3) keeps file_id, size, path, downloadUrl, downloadCmd, checksums, and timestamps", () => {
+    const resource = getResource("package_file");
+    expect(resource.compactItem).toBeDefined();
+    const items = compactItems(
+      [
+        {
+          id: "file-uuid-1",
+          name: "lodash-4.17.21.tgz",
+          path: "/lodash/-/lodash-4.17.21.tgz",
+          size: "1.32MB",
+          downloadUrl: "https://app.harness.io/har/api/v3/files/file-uuid-1/content",
+          downloadCmd: "curl -L 'https://app.harness.io/har/api/v3/files/file-uuid-1/content' -O",
+          checksums: [{ algorithm: "SHA-256", value: "abc123" }],
+          createdAt: 1700000000000,
+          modifiedAt: 1700000001000,
+          extraInternalField: "dropped",
+        },
+      ],
+      resource.compactItem,
+    ) as Record<string, unknown>[];
+    expect(items[0]).toEqual({
+      file_id: "file-uuid-1",
+      id: "file-uuid-1",
+      name: "lodash-4.17.21.tgz",
+      path: "/lodash/-/lodash-4.17.21.tgz",
+      size: "1.32MB",
+      downloadUrl: "https://app.harness.io/har/api/v3/files/file-uuid-1/content",
+      downloadCmd: "curl -L 'https://app.harness.io/har/api/v3/files/file-uuid-1/content' -O",
+      checksums: [{ algorithm: "SHA-256", value: "abc123" }],
+      createdAt: 1700000000000,
+      modifiedAt: 1700000001000,
+    });
+    expect(items[0].extraInternalField).toBeUndefined();
   });
 
   it("firewall_exception_v3.compactItem keeps versionList/versionScanMap/status", () => {
@@ -510,15 +556,15 @@ describe("harness_list artifact_scan_v3 with default compaction", () => {
 
 describe("registries-v3 opt-in with Registry", () => {
   const V3_TYPES = [
-    "package_v3",
-    "version_v3",
-    "file_v3",
-    "registry_metadata_v3",
-    "package_metadata_v3",
-    "version_metadata_v3",
-    "file_metadata_v3",
-    "metadata_key_v3",
-    "metadata_value_v3",
+    "package",
+    "package_version",
+    "package_file",
+    "registry_metadata",
+    "package_metadata",
+    "version_metadata",
+    "file_metadata",
+    "metadata_key",
+    "metadata_value",
   ];
 
   it("toolset is marked optIn: true", () => {
@@ -543,7 +589,11 @@ describe("registries-v3 opt-in with Registry", () => {
 
   it("IS present when added to defaults with HARNESS_TOOLSETS=+registries-v3", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+registries-v3" }));
-    expect(registry.getAllResourceTypes()).toContain("package_v3");
+    expect(registry.getAllResourceTypes()).toContain("package");
+    // Legacy *_v3 aliases still resolve transparently
+    expect(registry.getResource("package_v3").resourceType).toBe("package");
+    expect(registry.getResource("version_v3").resourceType).toBe("package_version");
+    expect(registry.getResource("file_v3").resourceType).toBe("package_file");
   });
 });
 
@@ -553,10 +603,10 @@ describe("registries-v3 opt-in with Registry", () => {
 
 describe("registries-firewall is default-enabled", () => {
   const FIREWALL_TYPES = [
-    "artifact_scan_v3",
-    "bulk_scan_evaluation_v3",
-    "firewall_exception_v3",
-    "firewall_exception_version_v3",
+    "artifact_scan",
+    "bulk_scan_evaluation",
+    "firewall_exception",
+    "firewall_exception_version",
   ];
 
   it("toolset is marked optIn: false", () => {
@@ -569,5 +619,8 @@ describe("registries-firewall is default-enabled", () => {
     for (const t of FIREWALL_TYPES) {
       expect(types).toContain(t);
     }
+    // Legacy *_v3 aliases still resolve transparently
+    expect(registry.getResource("artifact_scan_v3").resourceType).toBe("artifact_scan");
+    expect(registry.getResource("firewall_exception_v3").resourceType).toBe("firewall_exception");
   });
 });

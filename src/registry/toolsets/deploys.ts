@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { offsetListExtract } from "../extractors.js";
+import { deployGetExtract, offsetListExtract } from "../extractors.js";
 import { MC_SCOPE } from "./scopes.js";
 import { projectRelatedActivity } from "./related-activities.js";
 import { isRecord } from "../../utils/type-guards.js";
@@ -36,44 +36,6 @@ function compactDeploy(item: Record<string, unknown>): Record<string, unknown> {
   if (typeof item.webLink === "string") slim.webLink = item.webLink;
   if (Array.isArray(item.relatedActivities) && item.relatedActivities.length > 0) {
     slim.relatedActivities = item.relatedActivities.map(projectRelatedActivity);
-  }
-  return slim;
-}
-
-/**
- * Extract deploy detail response for GET /deploys/{deployId}.
- * Projects a stable, documented shape (id, projectId, title, summary, status,
- * environments, buildVersions, deployTimestamp, webLink, relatedActivities)
- * and strips backend envelope/debug/meta fields. Unlike the list compactor,
- * this keeps the full summary and all buildVersions subfields since this is the
- * detail view.
- */
-function deployGetExtract(raw: unknown): unknown {
-  if (!isRecord(raw)) return raw;
-  const slim: Record<string, unknown> = {};
-  if (typeof raw.id === "string") slim.id = raw.id;
-  if (typeof raw.projectId === "string") slim.projectId = raw.projectId;
-  if (typeof raw.title === "string") slim.title = raw.title;
-  if (typeof raw.summary === "string") slim.summary = raw.summary;
-  if (raw.status !== undefined) slim.status = raw.status;
-  if (Array.isArray(raw.environments)) slim.environments = raw.environments;
-  if (Array.isArray(raw.buildVersions)) {
-    slim.buildVersions = raw.buildVersions.map((bv) => {
-      if (!isRecord(bv)) return bv;
-      const b: Record<string, unknown> = {};
-      if (typeof bv.service === "string") b.service = bv.service;
-      if (typeof bv.version === "string") b.version = bv.version;
-      if (typeof bv.commitSha === "string") b.commitSha = bv.commitSha;
-      if (typeof bv.branch === "string") b.branch = bv.branch;
-      if (typeof bv.repositoryName === "string") b.repositoryName = bv.repositoryName;
-      if (typeof bv.repositoryUrl === "string") b.repositoryUrl = bv.repositoryUrl;
-      return b;
-    });
-  }
-  if (typeof raw.deployTimestamp === "number") slim.deployTimestamp = raw.deployTimestamp;
-  if (typeof raw.webLink === "string") slim.webLink = raw.webLink;
-  if (Array.isArray(raw.relatedActivities) && raw.relatedActivities.length > 0) {
-    slim.relatedActivities = raw.relatedActivities.map(projectRelatedActivity);
   }
   return slim;
 }

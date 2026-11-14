@@ -167,6 +167,70 @@ describe("WebhookSink", () => {
 
     await sink.close();
   });
+
+  it("serializes concurrent flushes and awaits all in-flight POSTs on close (#117)", async () => {
+    const resolvers: Array<() => void> = [];
+    fetchSpy.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(() => resolve({ ok: true, status: 200 }));
+        }),
+    );
+
+    const sink = new WebhookSink({
+      url: "https://example.com/audit",
+      batchSize: 1,
+      flushIntervalMs: 60000,
+    });
+
+    sink.emit(makeEvent({ event_id: "e1" }));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Emit e2 while first POST is still in-flight
+    sink.emit(makeEvent({ event_id: "e2" }));
+
+    let closeFinished = false;
+    const closePromise = sink.close().then(() => {
+      closeFinished = true;
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(closeFinished).toBe(false);
+
+    // Resolve first POST -> triggers second queued flush
+    resolvers[0]!();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(closeFinished).toBe(false);
+
+    // Resolve second POST -> close() resolves
+    resolvers[1]!();
+    await closePromise;
+    expect(closeFinished).toBe(true);
+  });
+
+  it("discards failed batches on close() without leaving orphaned events in the buffer", async () => {
+    fetchSpy.mockResolvedValue({ ok: false, status: 503 });
+
+    const sink = new WebhookSink({
+      url: "https://example.com/audit",
+      batchSize: 10,
+      flushIntervalMs: 60000,
+    });
+
+    sink.emit(makeEvent({ event_id: "e-fail-1" }));
+    await sink.close();
+
+    // Subsequent flush() or emit() after close() must be a no-op with an empty buffer
+    const callsAtClose = fetchSpy.mock.calls.length;
+    expect(callsAtClose).toBeGreaterThanOrEqual(1);
+
+    sink.emit(makeEvent({ event_id: "e-after-close" }));
+    await sink.flush();
+    expect(fetchSpy).toHaveBeenCalledTimes(callsAtClose);
+  });
 });
 
 describe("OTelSink", () => {

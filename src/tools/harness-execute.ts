@@ -1,7 +1,7 @@
 import * as z from "zod/v4";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Registry } from "../registry/index.js";
+import { LEGACY_EXECUTE_REDIRECTS, type Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
@@ -211,6 +211,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         if (resourceType === "pipeline" && args.action === "interrupt") {
           resourceType = "execution";
           input.resource_type = "execution";
+        }
+        const legacyRedirect = LEGACY_EXECUTE_REDIRECTS[resourceType];
+        if (legacyRedirect) {
+          resourceType = legacyRedirect.resourceType;
+          args.action = legacyRedirect.action;
+          input.resource_type = legacyRedirect.resourceType;
+          input.action = legacyRedirect.action;
         }
         const resourceId = asString(input.resource_id);
         if (resourceType === "pipeline" && args.action === "retry" && !asString(input.execution_id) && resourceId) {
