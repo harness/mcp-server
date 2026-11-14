@@ -207,3 +207,8 @@
 - **Issue**: Server tests covered the `_meta` view data, but nothing exercised the view's own behavior (refresh replacing the displayed view), so UI regressions could ship unnoticed. The new `HARNESS_MCP_APPS` knob also missed the packaged manifests (see Public Config Surface Alignment).
 - **Fix**: Keep view logic in DOM-free modules (`apps/harness-app/src/host.ts`, `chart-data.ts`) and test them from `tests/apps/` with the ext-apps `App` call stubbed.
 - **Rule**: Every view action that calls back to the server (refresh, re-run) needs a test asserting what the view displays after success, empty, and error results.
+
+## Postinstall Imports Must Ship in Every Install Context
+- **Issue**: Adding a local import to the postinstall entrypoint broke both Docker install stages because their pre-install COPY lists omitted the new helper; the npm publish allowlist omitted it too.
+- **Fix**: Include every local postinstall dependency in both Docker install stages and the package `files` list.
+- **Rule**: Verify postinstall from isolated Docker-stage and published-package file sets whenever adding a local import; running it in the full checkout can hide missing artifacts.
