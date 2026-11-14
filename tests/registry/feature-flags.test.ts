@@ -2080,6 +2080,87 @@ describe("fme_segment_definition", () => {
   });
 });
 
+describe("FME delete title/comment forwarding", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  const deletes = [
+    { resourceType: "fme_feature_flag", path: "/fme/api/v4/feature-flags/my_flag", ids: { feature_flag_name: "my_flag" } },
+    {
+      resourceType: "fme_feature_flag_definition",
+      path: "/fme/api/v4/feature-flag-definitions/my_flag",
+      ids: { feature_flag_name: "my_flag", environment_id: "e1" },
+    },
+    { resourceType: "fme_environment", path: "/fme/api/v4/environments/e1", ids: { environment_id: "e1" } },
+    {
+      resourceType: "fme_segment_definition",
+      path: "/fme/api/v4/segment-definitions/seg1",
+      ids: { segment_name: "seg1", environment_id: "e1" },
+    },
+    { resourceType: "fme_segment", path: "/fme/api/v4/segments/seg1", ids: { segment_name: "seg1", segment_type: "STANDARD" } },
+  ];
+
+  it.each(deletes)("$resourceType: forwards flat title/comment params as the DELETE body", async ({ resourceType, path, ids }) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      ...ids,
+      title: "Cleanup",
+      comment: "Flag fully rolled out",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("DELETE");
+    expect(req.path).toBe(path);
+    expect(req.body).toEqual({ title: "Cleanup", comment: "Flag fully rolled out" });
+  });
+
+  it.each(deletes)("$resourceType: forwards title/comment nested under body", async ({ resourceType, ids }) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      ...ids,
+      body: { title: "Cleanup" },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ title: "Cleanup" });
+  });
+
+  it.each(deletes)("$resourceType: sends no body when title/comment are absent", async ({ resourceType, ids }) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "delete", { org_id: "o1", project_id: "p1", ...ids });
+
+    expect(firstRequest(mockRequest).body).toBeUndefined();
+  });
+
+  it("fme_feature_flag legacy delete does not send a body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "delete", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+      title: "Cleanup",
+      comment: "Flag fully rolled out",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag");
+    expect(req.body).toBeUndefined();
+  });
+});
+
 describe("fme_feature_flag deep link", () => {
   // A v4 FeatureFlag response: `id` is the flag UUID the UI's :splitId param expects.
   const flagPayload = {

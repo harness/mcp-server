@@ -375,6 +375,21 @@ function fmeSegmentDefinitionKeysBody(input: Record<string, unknown>, opts: { re
   };
 }
 
+/** harness_delete has no body argument, so title/comment arrive as params.title/params.comment or params.body.title/comment. */
+function fmeDeleteGovernanceBody(input: Record<string, unknown>): Record<string, unknown> | undefined {
+  const body = (input.body as Record<string, unknown> | undefined) ?? {};
+  const title = body.title ?? input.title;
+  const comment = body.comment ?? input.comment;
+  if (title === undefined && comment === undefined) return undefined;
+  return {
+    ...(comment !== undefined ? { comment } : {}),
+    ...(title !== undefined ? { title } : {}),
+  };
+}
+
+const FME_DELETE_GOVERNANCE_NOTE =
+  " Optional params.title and params.comment are recorded with the change.";
+
 const fmeSegmentDefinitionCreateSchema: BodySchema = {
   description: "Create a segment definition in an environment. Omit the body (or send {}) to create an empty/default shell.",
   fields: [{ name: "description", type: "string", required: false, description: "Optional description for the definition" }],
@@ -701,9 +716,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "delete"),
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          bodyBuilder: fmeDeleteGovernanceBody,
           responseExtractor: passthrough,
           description:
-            "Delete (archive) an environment by environment_id (Harness-native only). Returns 400 hasDependents while SDK API keys, flags, or segments still target it. Create via EnvironmentStarterKit always provisions client/server API keys, so a brand-new environment cannot be deleted until those keys are removed.",
+            "Delete (archive) an environment by environment_id (Harness-native only). Returns 400 hasDependents while SDK API keys, flags, or segments still target it. Create via EnvironmentStarterKit always provisions client/server API keys, so a brand-new environment cannot be deleted until those keys are removed." +
+            FME_DELETE_GOVERNANCE_NOTE,
         },
       },
     },
@@ -822,8 +839,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: `/fme/api/v4/feature-flags/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) =>
+            isFmeHarnessNativeSelected(input, "fme_feature_flag") ? fmeDeleteGovernanceBody(input) : undefined,
           responseExtractor: passthrough,
-          description: "Delete a feature flag from a workspace (legacy) or org_id+project_id-scoped project (Harness-native)",
+          description:
+            "Delete a feature flag from a workspace (legacy) or org_id+project_id-scoped project (Harness-native)." +
+            " Harness-native only: optional params.title and params.comment are recorded with the change.",
         },
         update: {
           method: "PATCH",
@@ -1161,9 +1182,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "delete"),
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { environment_id: "environment_id" },
+          bodyBuilder: fmeDeleteGovernanceBody,
           responseExtractor: passthrough,
           description:
-            "Delete a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id.",
+            "Delete a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id." +
+            FME_DELETE_GOVERNANCE_NOTE +
+            " They are required when the project enforces titles and comments (400 Missing required title/comment otherwise).",
         },
       },
       executeActions: {
@@ -1703,9 +1727,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { ...FME_SEGMENT_TYPE_QUERY_PARAMS },
           paramsSchema: fmeSegmentTypeParamsSchema,
+          bodyBuilder: fmeDeleteGovernanceBody,
           responseExtractor: passthrough,
           description:
-            "Delete a segment by name. Requires params.segment_type (STANDARD | LARGE | RULE_BASED). Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
+            "Delete a segment by name. Requires params.segment_type (STANDARD | LARGE | RULE_BASED). Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first." +
+            FME_DELETE_GOVERNANCE_NOTE,
         },
         create: {
           method: "POST",
@@ -1856,9 +1882,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { environment_id: "environment_id" },
+          bodyBuilder: fmeDeleteGovernanceBody,
           responseExtractor: passthrough,
           description:
-            "Delete a segment definition from an environment. Returns 400 hasDependents while membership keys remain — remove_keys (or add_keys with replace=true and empty keys) first.",
+            "Delete a segment definition from an environment. Returns 400 hasDependents while membership keys remain — remove_keys (or add_keys with replace=true and empty keys) first." +
+            FME_DELETE_GOVERNANCE_NOTE,
         },
       },
       executeActions: {
