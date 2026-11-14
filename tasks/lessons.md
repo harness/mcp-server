@@ -212,3 +212,9 @@
 - **Issue**: Adding a local import to the postinstall entrypoint broke both Docker install stages because their pre-install COPY lists omitted the new helper; the npm publish allowlist omitted it too.
 - **Fix**: Include every local postinstall dependency in both Docker install stages and the package `files` list.
 - **Rule**: Verify postinstall from isolated Docker-stage and published-package file sets whenever adding a local import; running it in the full checkout can hide missing artifacts.
+
+## Alias Additions Must Be Verified Across Both Schema Modes and All Entry Points
+- **Issue**: Adding `PREFERRED_RESOURCE_TYPE_NAMES` and `TOOLSET_ALIASES` / `TOOLSET_GROUP_ALIASES` only updated `resolveAlias`, `parseToolsetFilter`, and `describeToolset`. In `HARNESS_SCHEMA_MODE=full`, `resourceTypeSchema()` and `registerDescribeTool()` validate inputs against a `z.enum(...)` before Registry dispatch runs, rejecting the new aliases, and `describeByOperation()` checked `ts.name === filter.toolset` without resolving `TOOLSET_ALIASES`.
+- **Fix**: Include preferred/deprecated resource aliases in `resourceTypeSchema()`'s full-mode enum, include toolset/group aliases in `registerDescribeTool()`'s full-mode `toolset` enum, resolve `TOOLSET_ALIASES` and `TOOLSET_GROUP_ALIASES` in `describeByOperation()`, and test explicit/`+`/`-` group expansion in `registry-contract.test.ts`.
+- **Rule**: Whenever adding a `resource_type` or `toolset` alias, trace every entry point where that parameter enters the server (Zod input schema in both `compact` and `full` modes, `getResource`, `describeToolset`, `describeByOperation`, and `parseToolsetFilter`) and assert all of them in `registry-contract.test.ts`. Never modify security scanners or `postinstall` scripts to work around a stale local `node_modules/` directory.
+

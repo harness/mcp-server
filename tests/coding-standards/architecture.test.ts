@@ -618,4 +618,30 @@ describe("Coding standards — Zod and tool annotations", () => {
 
     expect(violations, violations.join("\n")).toEqual([]);
   });
+
+  it("ensures every local script imported by postinstall is included in Dockerfile pre-install COPY stages and package.json#files", () => {
+    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      files?: string[];
+    };
+    const dockerfile = readFileSync(join(REPO_ROOT, "Dockerfile"), "utf8");
+    const postinstallPath = "scripts/ensure-secure-adm-zip.mjs";
+    const postinstallSrc = readFileSync(join(REPO_ROOT, postinstallPath), "utf8");
+
+    const requiredScripts = [postinstallPath];
+    for (const m of postinstallSrc.matchAll(/from\s+["']\.\/([^"']+)["']/g)) {
+      if (m[1]) requiredScripts.push(`scripts/${m[1]}`);
+    }
+
+    const copyLines = dockerfile
+      .split("\n")
+      .filter((l) => l.startsWith("COPY ") && l.includes(postinstallPath));
+    expect(copyLines.length).toBeGreaterThan(0);
+
+    for (const scriptRel of requiredScripts) {
+      expect(pkg.files ?? [], `package.json#files is missing ${scriptRel}`).toContain(scriptRel);
+      for (const copyLine of copyLines) {
+        expect(copyLine, `Dockerfile line "${copyLine}" is missing ${scriptRel}`).toContain(scriptRel);
+      }
+    }
+  });
 });
