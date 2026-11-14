@@ -71,6 +71,32 @@ const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
   "src/registry/toolsets/sto.ts": 3,
 };
 
+/**
+ * Legacy toolset-local responseExtractor functions referenced by identifier.
+ * Rule 3 requires all response extractors to live in src/registry/extractors.ts;
+ * counts here are a ceiling that may only decrease as legacy extractors are migrated.
+ */
+const ALLOWED_LOCAL_EXTRACTOR_REF_COUNTS: Record<string, number> = {
+  "src/registry/toolsets/alerts.ts": 5,
+  "src/registry/toolsets/ansible.ts": 5,
+  "src/registry/toolsets/autonomous_work.ts": 2,
+  "src/registry/toolsets/ccm.ts": 2,
+  "src/registry/toolsets/chaos.ts": 1,
+  "src/registry/toolsets/deploys.ts": 1,
+  "src/registry/toolsets/evidence-vault.ts": 3,
+  "src/registry/toolsets/feature-flags.ts": 8,
+  "src/registry/toolsets/iacm.ts": 19,
+  "src/registry/toolsets/idp.ts": 2,
+  "src/registry/toolsets/incidents.ts": 8,
+  "src/registry/toolsets/infrastructure.ts": 4,
+  "src/registry/toolsets/knowledge-graph.ts": 3,
+  "src/registry/toolsets/observability-evaluations.ts": 4,
+  "src/registry/toolsets/scs.ts": 12,
+  "src/registry/toolsets/semantic-layer.ts": 3,
+  "src/registry/toolsets/sto.ts": 1,
+  "src/registry/toolsets/unified-search.ts": 3,
+};
+
 const WRITE_TOOL_FILES = [
   "src/tools/harness-create.ts",
   "src/tools/harness-update.ts",
@@ -153,6 +179,20 @@ function extractRegisterToolNames(content: string): string[] {
 function countInlineResponseExtractors(content: string): number {
   const matches = content.match(/responseExtractor:\s*\(/g);
   return matches?.length ?? 0;
+}
+
+function findLocalResponseExtractorRefs(content: string): string[] {
+  const imported = new Set<string>();
+  const importRegex = /import\s*\{([^}]+)\}\s*from\s*["']\.\.\/extractors\.js["']/g;
+  let importMatch: RegExpExecArray | null;
+  while ((importMatch = importRegex.exec(content)) !== null) {
+    for (const part of importMatch[1]!.split(",")) {
+      const localName = part.trim().split(/\s+as\s+/).pop()?.trim();
+      if (localName) imported.add(localName);
+    }
+  }
+  const refs = [...content.matchAll(/responseExtractor:\s*([a-zA-Z_$][a-zA-Z0-9_$]*)/g)].map((m) => m[1]!);
+  return refs.filter((ref) => !imported.has(ref));
 }
 
 function extractToolsetNamesFromUnion(): Set<string> {
@@ -440,6 +480,31 @@ describe("Coding standards — toolset purity", () => {
         violations.push(`${fileRel}: ${count} inline responseExtractor(s) — move to extractors.ts`);
       } else if (count > allowed) {
         violations.push(`${fileRel}: expected at most ${allowed} inline responseExtractor(s), found ${count}`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("does not add new toolset-local responseExtractor functions (must import from ../extractors.js)", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const localRefs = findLocalResponseExtractorRefs(readFileSync(file, "utf8"));
+      if (localRefs.length === 0) continue;
+
+      const allowed = ALLOWED_LOCAL_EXTRACTOR_REF_COUNTS[fileRel];
+      if (allowed === undefined) {
+        violations.push(
+          `${fileRel}: local responseExtractor(s) [${[...new Set(localRefs)].join(", ")}] — move to src/registry/extractors.ts`,
+        );
+      } else if (localRefs.length > allowed) {
+        violations.push(
+          `${fileRel}: expected at most ${allowed} local responseExtractor reference(s), found ${localRefs.length} ([${[...new Set(localRefs)].join(", ")}]) — move new extractors to src/registry/extractors.ts`,
+        );
       }
     }
 

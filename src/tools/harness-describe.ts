@@ -115,18 +115,9 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
         });
       }
 
-      // Filter by toolset if specified — use full detail
+      // Filter by toolset if specified
       if (args.toolset) {
-        const describe = registry.describe();
-        const toolsets = describe.toolsets as Record<string, unknown>;
-        const filtered = toolsets[args.toolset];
-        if (!filtered) {
-          return jsonResult({
-            error: `Unknown toolset "${args.toolset}". Available: ${Object.keys(toolsets).join(", ")}`,
-            available_toolsets: Object.keys(toolsets),
-          });
-        }
-        return jsonResult({ toolset: args.toolset, ...filtered as object });
+        return jsonResult(registry.describeToolset(args.toolset, registry.compactSchemas));
       }
 
       // No-args: return compact summary (~30 tokens per resource type)

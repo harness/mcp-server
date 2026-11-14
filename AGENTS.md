@@ -1,6 +1,6 @@
 # AGENTS.md — Harness.io MCP Server
 
-Registry-based MCP server: 11 consolidated tools (`harness_list`, `harness_get`, `harness_create`, `harness_update`, `harness_delete`, `harness_execute`, `harness_search`, `harness_describe`, `harness_diagnose`, `harness_status`, `harness_schema`) dispatching across 219+ resource types. TypeScript (Node.js 20+), ESM, pnpm, Zod v4.
+Registry-based MCP server: 11 consolidated tools (`harness_list`, `harness_get`, `harness_create`, `harness_update`, `harness_delete`, `harness_execute`, `harness_search`, `harness_describe`, `harness_diagnose`, `harness_status`, `harness_schema`) dispatching across 274+ default (318+ total) resource types in 50 toolsets. TypeScript (Node.js 20+), ESM, pnpm, Zod v4.
 
 ---
 
@@ -8,16 +8,16 @@ Registry-based MCP server: 11 consolidated tools (`harness_list`, `harness_get`,
 
 ```bash
 pnpm install           # install deps
-pnpm build             # tsc → build/
+pnpm build             # build MCP Apps UI + tsc → build/
 pnpm dev               # tsc --watch
-pnpm typecheck         # tsc --noEmit
-pnpm test              # vitest run (118 test files, 2510 tests, ~9s)
+pnpm typecheck         # tsc --noEmit (server + apps/harness-app)
+pnpm test              # vitest run
 pnpm standards:check   # run coding-standards and structural validation tests
 pnpm start             # stdio transport (requires HARNESS_API_KEY)
 pnpm start:http        # HTTP transport (node build/index.js http)
 pnpm inspect           # MCP Inspector against stdio build
 pnpm docs:generate     # generate docs from build/ — run pnpm build first
-pnpm docs:check        # CI check (reads build/); stale build = wrong count and CI fail
+pnpm docs:check        # CI check (reads build/); validates counts + README toolset table
 ```
 
 ---
@@ -33,14 +33,15 @@ src/
 │   ├── types.ts        # Registry types: ResourceDefinition, EndpointSpec, OperationPolicy
 │   ├── extractors.ts   # Response shape extractors for all resource types
 │   ├── scope-utils.ts  # Scope resolution utilities
-│   └── toolsets/       # 45 declarative toolset definition files (pure data — add new resources here)
+│   └── toolsets/       # 50 declarative toolset definition files (pure data — add new resources here)
 ├── tools/              # 11 consolidated tool handlers
-├── prompts/            # ~33 prompt templates (one per workflow)
+├── apps/               # MCP Apps UI views (pipeline execution card, KG dashboard)
+├── prompts/            # 35 prompt templates (one per workflow)
 ├── resources/          # MCP resources (pipeline YAML, execution summary)
 ├── client/
 │   └── harness-client.ts  # HTTP client — auth, retry, pagination
 ├── data/               # Example data and JSON schemas for entity validation
-├── search/             # Cross-resource keyword search
+├── search/             # Cross-resource keyword/semantic search
 ├── audit/              # Audit manager
 └── utils/              # Errors, logger, elicitation, deep-links, body normalizer
 ```
@@ -74,7 +75,13 @@ z.string().describe("Org ID").min(1).optional()  // ❌ description lost — eac
 
 ### Adding a new Harness resource
 
-Add a declarative toolset file in `src/registry/toolsets/` — no new tool registration, no schema changes, no prompt updates needed. The 11 tools stay fixed; dispatch is data-driven. Do NOT add per-endpoint tool handlers.
+Add or extend a declarative toolset file in `src/registry/toolsets/` — no new tool registration, no handler changes needed. The 11 tools stay fixed; dispatch is data-driven. Do NOT add per-endpoint tool handlers, and **do NOT create 1 `resource_type` per REST endpoint** (`docs/coding-standards.md` §13, enforced by `tests/coding-standards/registry-contract.test.ts`):
+
+- **Cohesive domain entities**: Keep `list` and `get` on the same `resourceType`. Never create `*_detail` resource types; if `get` is account-scoped while `list` is project-scoped, set `scope: "account"` on the `get` `EndpointSpec`.
+- **Actions & stats on parent**: Attach RPCs, evaluations, and `stats`/`count` endpoints to the parent resource's `executeActions` (use `operationPolicy: { risk: "read", retryPolicy: "safe" }` for read-only stats/queries). Never add single-action `execute`-only resource types or standalone `*_stats` / `*_count` resource types.
+- **No route-version suffixes**: Never suffix `resourceType` with `_v1` / `_v2` / `_v3` unless an older resource with the exact same `resourceType` name coexists (`pipeline_v1`, `template_v1`, `runtime_input_template_v1`).
+- **List compaction (`compactItem`)**: `harness_list` runs `compactItems()` by default (`src/utils/compact.ts`). Define `compactItem` on the `ResourceDefinition` whenever list items contain domain-specific fields outside the generic whitelist.
+- **Shared extractors only**: Import `responseExtractor` functions from `src/registry/extractors.ts` — never define inline or toolset-local extractor functions in `src/registry/toolsets/*.ts`.
 
 When adding **writes** (create/update/delete), also check the agent user flow and the owning service's OpenAPI — not just the write endpoint:
 
@@ -126,7 +133,7 @@ See `.env.example` for the full list. Non-obvious ones:
 
 | Var | Purpose |
 |-----|---------|
-| `HARNESS_MCP_MODE` | `single-user` (default), `multi-user`, or HTTP-only `oauth` |
+| `HARNESS_MCP_MODE` | `single-user` (default), `multi-user`, or HTTP-only `oauth` / `oauth-proxy` |
 | `HARNESS_TOOLSETS` | Comma-separated toolset names to restrict exposed tools |
 | `HARNESS_READ_ONLY` | Block all write operations (`true`/`false`) |
 | `HARNESS_AUTO_APPROVE_RISK` | Auto-approve operations at or below this risk level (`none` \| `read` \| `low_write` \| `medium_write` \| `high_write` \| `destructive` \| `all`; default `none`) |

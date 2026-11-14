@@ -176,19 +176,8 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           description: "Get a single work item by ID.",
         },
       },
-    },
-
-    // ── WorkItem lifecycle actions (resume / approve) ─────────────────────
-    {
-      resourceType: "work_item_resume",
-      displayName: "Work Item Resume",
-      description: "Resume a budget-blocked or gated work item.",
-      toolset: "autonomous_work",
-      scope: "project",
-      identifierFields: ["work_item_id"],
-      operations: {},
       executeActions: {
-        run: {
+        resume: {
           method: "POST",
           path: "/adlc/api/workitems/{workItemId}/resume",
           pathParams: { work_item_id: "workItemId" },
@@ -199,18 +188,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           actionDescription: "Resume a budget-blocked or gated work item.",
           bodySchema: emptyBodySchema,
         },
-      },
-    },
-    {
-      resourceType: "work_item_approve",
-      displayName: "Work Item Approve",
-      description: "Approve or reject a pending gate on a work item.",
-      toolset: "autonomous_work",
-      scope: "project",
-      identifierFields: ["work_item_id"],
-      operations: {},
-      executeActions: {
-        run: {
+        approve: {
           method: "POST",
           path: "/adlc/api/workitems/{workItemId}/approve",
           pathParams: { work_item_id: "workItemId" },
@@ -396,17 +374,8 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           description: "Get a single budget by ID.",
         },
       },
-    },
-    {
-      resourceType: "budget_grant",
-      displayName: "Budget Grant",
-      description: "Apply one approval increment to a budget.",
-      toolset: "autonomous_work",
-      scope: "project",
-      identifierFields: ["budget_id"],
-      operations: {},
       executeActions: {
-        run: {
+        grant: {
           method: "POST",
           path: "/adlc/api/budgets/{budgetId}/grant",
           pathParams: { budget_id: "budgetId" },

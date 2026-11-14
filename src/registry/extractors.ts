@@ -714,6 +714,8 @@ export const harV3ListExtract = (raw: unknown): unknown => {
   // backend `meta` envelope (which may gain new keys over time).
   const activeCount = typeof meta?.activeCount === "number" ? meta.activeCount : undefined;
   const deletedCount = typeof meta?.deletedCount === "number" ? meta.deletedCount : undefined;
+  const prodEnvCount = typeof meta?.prodEnvCount === "number" ? meta.prodEnvCount : undefined;
+  const nonProdEnvCount = typeof meta?.nonProdEnvCount === "number" ? meta.nonProdEnvCount : undefined;
   return {
     items,
     total,
@@ -722,6 +724,8 @@ export const harV3ListExtract = (raw: unknown): unknown => {
     hasMore: raw.hasMore,
     ...(activeCount !== undefined ? { activeCount } : {}),
     ...(deletedCount !== undefined ? { deletedCount } : {}),
+    ...(prodEnvCount !== undefined ? { prodEnvCount } : {}),
+    ...(nonProdEnvCount !== undefined ? { nonProdEnvCount } : {}),
   };
 };
 

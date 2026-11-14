@@ -65,7 +65,9 @@ Every `ResourceDefinition` declares a `scope`: `"project"`, `"org"`, or `"accoun
 - **Org scope**: requires `orgIdentifier` only
 - **Account scope**: no scope params needed (just `accountIdentifier`, which the client injects automatically)
 
-The `Registry.dispatch()` method handles scope injection automatically based on the definition. Do NOT manually inject `accountIdentifier`, `orgIdentifier`, or `projectIdentifier` in toolset specs.
+When an individual operation's backend endpoint has a different scope than the resource's default `scope` (for example, a project-scoped `list` endpoint paired with an account-scoped `get`-by-UUID endpoint on the same entity), set `scope: "account"` (or `"org"` / `"project"`) directly on that operation's `EndpointSpec` rather than splitting the entity into a separate `*_detail` resource type.
+
+The `Registry.dispatch()` method handles scope injection automatically based on the definition (and per-operation `EndpointSpec.scope` / `EndpointSpec.scopeParams` overrides). Do NOT manually inject `accountIdentifier`, `orgIdentifier`, or `projectIdentifier` in toolset specs.
 
 ### 5. Identifier Fields and Deep Links
 
@@ -181,6 +183,24 @@ All Zod schemas in tool handlers must:
 
 Do NOT add new `harness-*.ts` handler files to `src/tools/` — the 11 handlers are fixed.
 
+### 13. Resource Taxonomy and Consolidation (No Endpoint-per-`resource_type` Sprawl)
+
+Model `ResourceDefinition`s around **cohesive domain entities**, never 1:1 with backend REST endpoints:
+
+- **Keep `list` and `get` on the same `resourceType`**: Never create a separate `*_detail` resource type for single-item retrieval. If `get` is account-scoped while `list` is project-scoped, set `scope: "account"` on the `get` `EndpointSpec`.
+- **Attach RPCs and batch/stat queries to the parent entity's `executeActions`**: Never create a standalone `resource_type` that only has a single `execute` action (e.g. `foo_resume`, `foo_evaluate`), and avoid standalone `*_stats` / `*_count` resource types when they can be `executeActions.stats` (`operationPolicy: { risk: "read", retryPolicy: "safe" }`) on the parent resource. Read-risk execute actions are allowed in `HARNESS_READ_ONLY=true` mode and never prompt for confirmation.
+- **Consolidate hierarchical sub-routes with `pathBuilder`**: When a domain has nested drill-down paths determined by which parent IDs are provided, prefer a single resource with a `pathBuilder` over separate resource types per path depth.
+- **Never suffix `resource_type` with backend URL route versions (`_v1`, `_v2`, `_v3`)**: Name resources after domain capabilities (`chaos_experiment` for `/v3/experiments`, `security_exemption` for `/v2/exemptions`, `lifecycle_rule` for `/v3/lifecycle/rules`). A version suffix is only permitted when an older resource with the **exact same `resource_type` name** already coexists in the registry (`pipeline_v1`, `template_v1`, `runtime_input_template_v1`).
+
+### 14. What Belongs in a Toolset Definition (Content Boundaries)
+
+Toolset files (`src/registry/toolsets/*.ts`) are **declarative API dispatch tables**, not prompt-engineering playbooks or application controllers:
+
+1. **Keep `ResourceDefinition.description` concise (≤ 500 chars, 1–2 sentences)**: State what the entity is and any key scope/identifier rule. Multi-step workflows, onboarding wizards, and reasoning playbooks belong in **MCP Prompt templates (`src/prompts/*.ts`)**, never in resource or toolset `description` strings.
+2. **Never corrupt `items[]` arrays with prompt-engineering objects**: Response extractors for `list` operations must return `{ items: [...], total }` where every element of `items` is a real entity. Never push `{ _summary }`, `{ _reminder }`, or `{ _next_step }` objects onto the end of a list array (which corrupts `items[]` and inflates `total` by +1).
+3. **Do not expose internal UI dropdown / filter-panel BFF endpoints as resources**: Endpoints that only populate web UI `<select>` dropdowns (e.g. `/frontend/*/filters`, `/filter-panel`) or duplicate `list` with incompatible IDs (`/list-metadata`) should not be exposed as separate MCP resources or actions. Declare known filter values in `listFilterFields.enum` instead.
+4. **Never use `bodyBuilder` on `GET` operations**: `GET` requests have no HTTP body. Do not use `bodyBuilder` returning `undefined` on a `GET` spec as a side-effect hook to mutate `input` query parameters.
+
 ---
 
 ## Adding a New Harness Resource (Step-by-Step)
@@ -206,7 +226,9 @@ export const myDomainToolset: ToolsetDefinition = {
       toolset: "my-domain",
       scope: "project",          // or "org" or "account"
       identifierFields: ["my_resource_id"],
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter my resources by name or keyword" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/...",
       operations: {
         list: {

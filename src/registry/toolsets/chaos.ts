@@ -1776,11 +1776,10 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { experiment_id: "identity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "true" },
-          bodyBuilder: (input) => {
+          inputNormalizer: (input) => {
             if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
               (input as Record<string, unknown>).is_identity = false;
             }
-            return undefined;
           },
           responseExtractor: passthrough,
           description: descGetExperiment,
@@ -2877,15 +2876,10 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { experiment_id: "identity" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "true" },
-          // No request body for this GET — bodyBuilder is used purely to auto-detect
-          // UUID vs slug (same rationale as chaos_experiment.run above) before
-          // queryParams resolves is_identity from input. Runs regardless of HTTP
-          // method, so this is safe here.
-          bodyBuilder: (input) => {
+          inputNormalizer: (input) => {
             if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
               (input as Record<string, unknown>).is_identity = false;
             }
-            return undefined;
           },
           responseExtractor: chaosRunTimeInputsExtract,
           description: descListExperimentVariables,
@@ -3775,7 +3769,6 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: { load_test_identity: "loadTestIdentity" },
           // No request body; scope goes on the query string.
           skipScopeBodyInjection: true,
-          bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: descGetRunAIInsights,
           bodySchema: { description: descBodyNoBody, fields: [] },

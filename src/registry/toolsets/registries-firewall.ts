@@ -128,7 +128,7 @@ export const registriesFirewallToolset: ToolsetDefinition = {
   optIn: false,
   resources: [
     {
-      resourceType: "artifact_scan_v3",
+      resourceType: "artifact_scan",
       displayName: "Artifact Scan (v3)",
       description:
         "Firewall / policy scan results for artifacts. To list across every org and project, use " +
@@ -226,7 +226,7 @@ export const registriesFirewallToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "bulk_scan_evaluation_v3",
+      resourceType: "bulk_scan_evaluation",
       displayName: "Bulk Scan Evaluation (v3)",
       description: "Status of an async bulk scan evaluation kicked off previously.",
       toolset: "registries-firewall",
@@ -245,7 +245,7 @@ export const registriesFirewallToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "firewall_exception_v3",
+      resourceType: "firewall_exception",
       displayName: "Firewall Exception (v3)",
       description: "Approved / pending exceptions that let a policy-blocked artifact through firewall.",
       toolset: "registries-firewall",
@@ -364,7 +364,7 @@ export const registriesFirewallToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "firewall_exception_version_v3",
+      resourceType: "firewall_exception_version",
       displayName: "Firewall Exception Version (v3)",
       description: "Version listing used when authoring a firewall exception for a specific package.",
       // Account-scoped: v3 spec's ListFirewallExceptionVersionsV3 takes only

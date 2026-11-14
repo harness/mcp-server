@@ -226,6 +226,29 @@ const RESOURCE_TYPE_ALIASES: Record<string, string> = {
   env: "environment",
   svc: "service",
   inputset: "input_set",
+  package_v3: "package",
+  version_v3: "package_version",
+  file_v3: "package_file",
+  registry_metadata_v3: "registry_metadata",
+  package_metadata_v3: "package_metadata",
+  version_metadata_v3: "version_metadata",
+  file_metadata_v3: "file_metadata",
+  metadata_key_v3: "metadata_key",
+  metadata_value_v3: "metadata_value",
+  artifact_scan_v3: "artifact_scan",
+  bulk_scan_evaluation_v3: "bulk_scan_evaluation",
+  firewall_exception_v3: "firewall_exception",
+  firewall_exception_version_v3: "firewall_exception_version",
+};
+
+/**
+ * Non-breaking execute redirects for legacy single-action resource types that
+ * were consolidated into `executeActions` on their parent entity.
+ */
+export const LEGACY_EXECUTE_REDIRECTS: Readonly<Record<string, { resourceType: string; action: string }>> = {
+  work_item_resume: { resourceType: "work_item", action: "resume" },
+  work_item_approve: { resourceType: "work_item", action: "approve" },
+  budget_grant: { resourceType: "budget", action: "grant" },
 };
 
 export class Registry {
@@ -486,7 +509,7 @@ export class Registry {
     if (operation === "list") {
       assertListScopeResolved(
         resourceType,
-        def,
+        spec.scope ? { ...def, scope: spec.scope } : def,
         input,
         this.config.HARNESS_ORG,
         this.config.HARNESS_PROJECT,
@@ -523,6 +546,12 @@ export class Registry {
   ): Promise<unknown> {
     const auditCtx = signalOrAudit instanceof AbortSignal ? undefined : signalOrAudit;
     const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
+
+    const redirect = LEGACY_EXECUTE_REDIRECTS[resourceType];
+    if (redirect) {
+      resourceType = redirect.resourceType;
+      action = redirect.action;
+    }
 
     const def = this.getResource(resourceType);
     const actionSpec = def.executeActions?.[action];
@@ -659,7 +688,8 @@ export class Registry {
     httpStatus?: number,
   ): void {
     if (!this.auditManager) return;
-    const auditScope = isResourceScope(input.resource_scope) ? input.resource_scope : undefined;
+    const effectiveDefScope = spec.scope ?? def.scope;
+    const auditScope = spec.scope ? undefined : (isResourceScope(input.resource_scope) ? input.resource_scope : undefined);
 
     // Resolve path using pathBuilder if present, otherwise use static path
     const resolvedPath = spec.pathBuilder
@@ -678,16 +708,16 @@ export class Registry {
         ? shouldUseOrg(auditScope)
           ? (input.org_id as string | undefined) ?? this.config.HARNESS_ORG
           : undefined
-        : def.scope === "account"
+        : effectiveDefScope === "account"
           ? undefined
-          : (input.org_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_ORG),
+          : (input.org_id as string | undefined) ?? (def.scopeOptional && !spec.scope ? undefined : this.config.HARNESS_ORG),
       project_id: auditScope
         ? shouldUseProject(auditScope)
           ? (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT
           : undefined
-        : def.scope === "account" || def.scope === "org"
+        : effectiveDefScope === "account" || effectiveDefScope === "org"
           ? undefined
-          : (input.project_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_PROJECT),
+          : (input.project_id as string | undefined) ?? (def.scopeOptional && !spec.scope ? undefined : this.config.HARNESS_PROJECT),
       account_id: this.getAccountId(),
       risk: spec.operationPolicy?.risk ?? "read",
       confirmation: auditCtx?.confirmation,
@@ -711,9 +741,10 @@ export class Registry {
   ): Promise<unknown> {
     const resolvedAccountId = this.getAccountId();
     const resolvedConfig: Config = { ...this.config, HARNESS_ACCOUNT_ID: resolvedAccountId };
-    const requestedScope = getRequestedScope(def, input);
+    const effectiveDefScope = spec.scope ?? def.scope;
+    const requestedScope = spec.scope ? undefined : getRequestedScope(def, input);
     const explicitScopeValues = requestedScope ? getExplicitScopeValues(requestedScope, input, this.config) : undefined;
-    const pathDefaultScope = requestedScope ?? def.scope;
+    const pathDefaultScope = requestedScope ?? effectiveDefScope;
 
     const resolvedRoute = spec.routeResolver ? spec.routeResolver(input, resolvedConfig) : undefined;
 
@@ -722,6 +753,10 @@ export class Registry {
     // which is the process placeholder in multi-tenant chat MCP.
     if (spec.preflight) {
       await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
+    }
+
+    if (spec.inputNormalizer) {
+      spec.inputNormalizer(input, resolvedConfig);
     }
 
     // When explicit resource_scope resolved org/project from config defaults,
@@ -768,11 +803,11 @@ export class Registry {
     // Build query params (values may be string[] for repeated query keys — see HarnessClient.buildUrl)
     const params: Record<string, string | number | boolean | string[] | undefined> = {};
 
-    // Add scope params (allow per-resource, or per-route via routeResolver, override
-    // of query param names). When scopeOptional is true, only add org/project if
+    // Add scope params (allow per-resource, per-operation, or per-route via routeResolver,
+    // override of query param names). When scopeOptional is true, only add org/project if
     // explicitly provided in input. Otherwise, fall back to config defaults based on
-    // the resource's scope level.
-    const effectiveScopeParams = resolvedRoute?.scopeParams ?? def.scopeParams;
+    // the effective scope level (spec.scope ?? def.scope).
+    const effectiveScopeParams = resolvedRoute?.scopeParams ?? spec.scopeParams ?? def.scopeParams;
     const orgParam = effectiveScopeParams?.org ?? "orgIdentifier";
     const projectParam = effectiveScopeParams?.project ?? "projectIdentifier";
     if (requestedScope) {
@@ -783,7 +818,7 @@ export class Registry {
       if (shouldUseProject(requestedScope)) {
         params[projectParam] = explicitScopeValues?.projectId;
       }
-    } else if (def.scopeOptional) {
+    } else if (def.scopeOptional && !spec.scope) {
       // Dynamic scoping: only inject when caller explicitly provides them.
       // A legacy workspace_id (FME's Split.io identifier) takes precedence over
       // any org/project incidentally picked up from a UI URL — these are two
@@ -799,10 +834,10 @@ export class Registry {
       }
     } else {
       // Standard scoping: always inject based on scope level, falling back to config defaults
-      if (def.scope === "project" || def.scope === "org") {
+      if (effectiveDefScope === "project" || effectiveDefScope === "org") {
         params[orgParam] = (input.org_id as string) ?? this.config.HARNESS_ORG;
       }
-      if (def.scope === "project") {
+      if (effectiveDefScope === "project") {
         params[projectParam] = (input.project_id as string) ?? this.config.HARNESS_PROJECT;
       }
     }
@@ -815,7 +850,7 @@ export class Registry {
 
     // Account-scoped resources sometimes still need orgIdentifier in query params (NG /ng/api/projects).
     if (spec.injectOrgQueryFallback) {
-      const orgKey = def.scopeParams?.org ?? "orgIdentifier";
+      const orgKey = effectiveScopeParams?.org ?? "orgIdentifier";
       const cur = params[orgKey];
       if (cur === undefined || cur === "") {
         const fallback = (input.org_id as string) ?? this.config.HARNESS_ORG;
@@ -1282,6 +1317,51 @@ export class Registry {
       total_resource_types: this.resourceMap.size,
       total_toolsets: this.toolsets.length,
       toolsets,
+    };
+  }
+
+  /**
+   * Describe a single toolset for `harness_describe(toolset=...)`.
+   * In compact schema mode (`compact=true`), omits per-resource `listFilterFields`,
+   * `diagnosticHint`, and `relatedResources` and bounds `description` to its first
+   * sentence (≤ 200 chars) so large toolsets (e.g. `chaos` at 108.9 KB full) stay
+   * compact while directing callers to `harness_describe(resource_type='<type>')`.
+   */
+  describeToolset(toolsetName: string, compact = false): Record<string, unknown> {
+    const ts = this.toolsets.find((t) => t.name === toolsetName);
+    if (!ts) {
+      const available = this.toolsets.map((t) => t.name);
+      return {
+        error: `Unknown toolset "${toolsetName}". Available: ${available.join(", ")}`,
+        available_toolsets: available,
+      };
+    }
+    if (!compact) {
+      const full = (this.describe().toolsets as Record<string, object>)[toolsetName]!;
+      return { toolset: toolsetName, ...full };
+    }
+    const truncateDesc = (text: string): string => {
+      const firstLine = text.split("\n")[0]!.trim();
+      const sentenceEnd = firstLine.indexOf(". ");
+      const candidate = sentenceEnd !== -1 && sentenceEnd <= 200 ? firstLine.slice(0, sentenceEnd + 1) : firstLine;
+      return candidate.length > 200 ? `${candidate.slice(0, 197)}...` : candidate;
+    };
+    return {
+      toolset: ts.name,
+      displayName: ts.displayName,
+      description: truncateDesc(ts.description),
+      resources: ts.resources.map((r) => ({
+        resource_type: r.resourceType,
+        displayName: r.displayName,
+        description: truncateDesc(r.description),
+        scope: r.scope,
+        supportedScopes: getSupportedScopes(r).length > 1 ? getSupportedScopes(r) : undefined,
+        operations: Object.keys(r.operations),
+        executeActions: r.executeActions ? Object.keys(r.executeActions) : undefined,
+        identifierFields: r.identifierFields,
+        ...(r.searchAliases?.length ? { aliases: r.searchAliases } : {}),
+      })),
+      hint: "Call harness_describe(resource_type='<type>') for full details including listFilterFields, bodySchema, diagnosticHint, and relatedResources.",
     };
   }
 
