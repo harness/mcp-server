@@ -121,6 +121,19 @@ PAT/SAT tokens embed the account ID (`pat.<accountId>.<tokenId>.<secret>`), so `
 
 ---
 
+## Pre-Push Architecture-Review Pass
+
+Run this before pushing a new or changed resource, auth path, or public contract. Rules live in `docs/coding-standards.md`; this is the checklist of where to look. Design concerns are cheapest to fix before merge.
+
+1. **Verify yourself**: `pnpm typecheck`, `pnpm test`, `pnpm standards:check`, `pnpm build && pnpm docs:check`. Do not rely on the PR description.
+2. **Taxonomy** (§13).
+3. **Agent context cost and discovery** (§15): state the default `list` item size, drop bulky fields, say how an agent finds the right item.
+4. **Auth, tokens, redirects, secrets** (§16): closed-by-default allowlists, pinned endpoints, verified identity, no token contents in logs.
+5. **Every code path** (§17): scope, units, falsy values, risk gating, request and response tests, public surface in sync.
+6. **PR hygiene**: no internal ticket IDs, rebase before review, call out breaking removals.
+
+---
+
 ## Lessons
 
 - `tasks/lessons.md` — append a lesson after any correction or mistake; read it at the start of a session if working on a known problem area
