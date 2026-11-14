@@ -1,12 +1,7 @@
 import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract, fmeExperimentResultExtract } from "../extractors.js";
+import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract, fmeExperimentResultExtract, fmeActionExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
-
-const fmeActionExtract = (raw: unknown) => {
-  if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) return raw;
-  return { success: true, result: raw };
-};
 
 // The confirmed Harness-native FME v4 API (/fme/api/v4/...) does not use the
 // standard NG orgIdentifier/projectIdentifier query param convention — it expects

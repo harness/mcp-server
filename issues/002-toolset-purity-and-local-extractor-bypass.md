@@ -1,6 +1,6 @@
 # Issue 002: Toolset Purity, Monolithic Toolset Files, and Local Response Extractor Bypass (`Coding Standards Rule 2 & Rule 3`)
 
-**Status:** Guardrail Implemented (`fix/registry-taxonomy-and-dispatch-guardrails`); Modularization Roadmap Recorded
+**Status:** Fixed (`fix/registry-taxonomy-and-dispatch-guardrails`) — All 51 Local Extractors & 13 Inline Arrow Extractors Migrated (`0` Violations Remaining)
 **Date:** 2026-11-13
 **Related:** `docs/coding-standards.md` Rule 2 & Rule 3, `tests/coding-standards/architecture.test.ts`
 
@@ -70,9 +70,15 @@ Previously, `tests/coding-standards/architecture.test.ts` (`countInlineResponseE
 
 ---
 
-## 3. Solution Implemented & Follow-Up Plan
+## 3. Solution Implemented in This Branch
 
-1. **Automated Guardrail (`tests/coding-standards/architecture.test.ts`):**
-   - Added `findLocalResponseExtractorRefs()` to parse `import { ... } from "../extractors.js"` in every toolset file and fail `pnpm standards:check` if any new local `responseExtractor` identifier is introduced in `src/registry/toolsets/*.ts`.
-2. **Modular Extractor Layout (Follow-up):**
-   - Follow the `src/registry/appsec/extractors.ts` pattern (`src/registry/extractors.ts:2551`) by moving domain-specific extractors into `src/registry/extractors/<domain>.ts` (re-exported via `src/registry/extractors.ts`) and burning down `ALLOWED_LOCAL_EXTRACTOR_REF_COUNTS` and `ALLOWED_INLINE_EXTRACTOR_COUNTS` to `0`.
+1. **Migrated All 51 Toolset-Local Extractors & 13 Inline Arrow Extractors into `src/registry/extractors/`:**
+   - Created modular domain extractor files under `src/registry/extractors/`:
+     - `src/registry/extractors/iacm.ts` (12 IaCM + 1 Ansible extractors)
+     - `src/registry/extractors/scs.ts` (12 SCS + 3 Evidence Vault extractors)
+     - `src/registry/extractors/domain.ts` (24 extractors across Alerts, Deploys, Incidents, FME, Infrastructure, IDP, STO, CCM, Autonomous Work, Observability Evals, Knowledge Graph, Semantic Layer, Unified Search)
+     - `src/registry/extractors/inline-migrated.ts` (9 extractors migrated from inline arrow functions across CCM, Chaos, Governance, IDP, Knowledge Graph, STO)
+   - Re-exported all domain extractors from `src/registry/extractors.ts`.
+2. **Burned Down Both Legacy Allowlists in `tests/coding-standards/architecture.test.ts` to `0`:**
+   - `ALLOWED_INLINE_EXTRACTOR_COUNTS = {}` (**0 inline arrow extractors allowed in any toolset**)
+   - `ALLOWED_LOCAL_EXTRACTOR_REF_COUNTS = {}` (**0 toolset-local extractor functions allowed in any toolset**)

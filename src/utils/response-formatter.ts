@@ -16,12 +16,24 @@ export interface ToolResult {
 }
 
 /**
+ * True when an object at the end of a list array is a synthetic metadata/hint
+ * trailer (every key starts with `_`, e.g. `{ _summary }`, `{ _total_cves, _reminder }`,
+ * `{ _next_step }`) rather than a real resource entity.
+ */
+function isTrailingMetadataObject(item: unknown): item is Record<string, unknown> {
+  if (item === null || typeof item !== "object" || Array.isArray(item)) return false;
+  const keys = Object.keys(item as Record<string, unknown>);
+  return keys.length > 0 && keys.every((k) => k.startsWith("_"));
+}
+
+/**
  * Coerce registry list payloads into the `{ items, total?, page? }` shape expected by
  * `harness_list`'s output schema and MCP `structuredContent` (objects only — raw arrays
  * cannot be sent as structured content).
  *
- * Harness Code endpoints such as `pr_activity` return a top-level JSON array; without
- * this step, clients that require structured output fail with output validation errors.
+ * If an extractor appended a synthetic `_`-prefixed metadata trailer to the end
+ * of a bare array, hoist those `_` keys onto the top-level envelope so `items`
+ * contains only real entities and `total` is not inflated by +1.
  */
 export function normalizeHarnessListPayload(
   result: unknown,
@@ -29,6 +41,16 @@ export function normalizeHarnessListPayload(
 ): unknown {
   const page = options?.page;
   if (Array.isArray(result)) {
+    const last = result.length > 0 ? result[result.length - 1] : undefined;
+    if (isTrailingMetadataObject(last)) {
+      const items = result.slice(0, -1);
+      return {
+        ...last,
+        items,
+        total: items.length,
+        ...(page !== undefined ? { page } : {}),
+      };
+    }
     return {
       items: result,
       total: result.length,

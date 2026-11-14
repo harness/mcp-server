@@ -25,6 +25,25 @@ describe("normalizeHarnessListPayload", () => {
     const shaped = { items: [{ a: 1 }], total: 99, page: 0 };
     expect(normalizeHarnessListPayload(shaped)).toBe(shaped);
   });
+
+  it("hoists trailing _-prefixed metadata objects out of items[] so items and total are not corrupted", () => {
+    const rawWithTrailer = [
+      { id: "src-1", name: "docker-hub" },
+      { id: "src-2", name: "ecr" },
+      { _summary: { total: 2, by_type: { CONTAINER: 2 } }, _reminder: "Report only these items." },
+    ];
+    const normalized = normalizeHarnessListPayload(rawWithTrailer, { page: 0 });
+    expect(normalized).toEqual({
+      items: [
+        { id: "src-1", name: "docker-hub" },
+        { id: "src-2", name: "ecr" },
+      ],
+      total: 2,
+      page: 0,
+      _summary: { total: 2, by_type: { CONTAINER: 2 } },
+      _reminder: "Report only these items.",
+    });
+  });
 });
 
 describe("jsonResult", () => {

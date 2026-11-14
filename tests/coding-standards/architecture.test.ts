@@ -59,43 +59,14 @@ const TOOLSET_HELPER_FILES = new Set([
   "src/registry/toolsets/scopes.ts",
 ]);
 
-/** Legacy inline responseExtractor arrow functions — new ones must live in extractors.ts. */
-const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
-  "src/registry/toolsets/ansible.ts": 4,
-  "src/registry/toolsets/chaos.ts": 2,
-  "src/registry/toolsets/ccm.ts": 1,
-  "src/registry/toolsets/governance.ts": 1,
-  "src/registry/toolsets/iacm.ts": 1,
-  "src/registry/toolsets/idp.ts": 1,
-  "src/registry/toolsets/knowledge-graph.ts": 1,
-  "src/registry/toolsets/sto.ts": 3,
-};
+/** Zero inline responseExtractor arrow functions allowed — all must live in extractors.ts. */
+const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {};
 
 /**
- * Legacy toolset-local responseExtractor functions referenced by identifier.
- * Rule 3 requires all response extractors to live in src/registry/extractors.ts;
- * counts here are a ceiling that may only decrease as legacy extractors are migrated.
+ * Zero toolset-local responseExtractor functions allowed — all response extractors
+ * must be imported from `src/registry/extractors.ts` (Rule 3).
  */
-const ALLOWED_LOCAL_EXTRACTOR_REF_COUNTS: Record<string, number> = {
-  "src/registry/toolsets/alerts.ts": 5,
-  "src/registry/toolsets/ansible.ts": 5,
-  "src/registry/toolsets/autonomous_work.ts": 2,
-  "src/registry/toolsets/ccm.ts": 2,
-  "src/registry/toolsets/chaos.ts": 1,
-  "src/registry/toolsets/deploys.ts": 1,
-  "src/registry/toolsets/evidence-vault.ts": 3,
-  "src/registry/toolsets/feature-flags.ts": 8,
-  "src/registry/toolsets/iacm.ts": 19,
-  "src/registry/toolsets/idp.ts": 2,
-  "src/registry/toolsets/incidents.ts": 8,
-  "src/registry/toolsets/infrastructure.ts": 4,
-  "src/registry/toolsets/knowledge-graph.ts": 3,
-  "src/registry/toolsets/observability-evaluations.ts": 4,
-  "src/registry/toolsets/scs.ts": 12,
-  "src/registry/toolsets/semantic-layer.ts": 3,
-  "src/registry/toolsets/sto.ts": 1,
-  "src/registry/toolsets/unified-search.ts": 3,
-};
+const ALLOWED_LOCAL_EXTRACTOR_REF_COUNTS: Record<string, number> = {};
 
 const WRITE_TOOL_FILES = [
   "src/tools/harness-create.ts",

@@ -34,6 +34,9 @@ import {
   sdV2PageExtract,
   chaosRunTimeInputsExtract,
   chaosActionExtract,
+  chaosComponentVarExtract,
+  chaosProbesInRunExtract,
+  chaosEnvironmentsListExtract,
 } from "../extractors.js";
 import {
   validateLiveMetricsInput,
@@ -271,12 +274,6 @@ const experimentTemplateParams = {
     { name: "hub_identity", required: true, description: "hubIdentity from the same list row. Pass as params.hub_identity." },
   ],
 } satisfies ParamsSchema;
-
-/** Unwrap single-item response from get-chaos-component-variable endpoint. */
-const chaosComponentVarExtract = (raw: unknown): unknown => {
-  const r = raw as { items?: Array<{ name: string; variables: unknown[] }> };
-  return r.items?.[0] ?? raw;
-};
 
 /** Compact projection for chaos_loadtest list items — keeps cheap discriminator
  * scalars (toolType/targetType/scriptSource/infraType/cleanupPolicy) that the
@@ -2600,13 +2597,7 @@ export const chaosToolset: ToolsetDefinition = {
             }
             return body;
           },
-          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
-            const r = raw as { data?: unknown[] };
-            return {
-              items: r.data ?? (Array.isArray(raw) ? raw : []),
-              total: Array.isArray(r.data) ? r.data.length : (Array.isArray(raw) ? (raw as unknown[]).length : 0),
-            };
-          },
+          responseExtractor: chaosProbesInRunExtract,
           description: descListProbesInRun,
           bodySchema: {
             description: descBodyProbesInRun,
@@ -5480,13 +5471,7 @@ export const chaosToolset: ToolsetDefinition = {
             filterType: "Environment",
             ...(input.environment_type ? { environmentTypes: [input.environment_type] } : {}),
           }),
-          responseExtractor: (raw: unknown): { items: unknown[]; total: number } => {
-            const r = raw as { data?: { content?: unknown[]; totalItems?: number } };
-            return {
-              items: r.data?.content ?? [],
-              total: r.data?.totalItems ?? 0,
-            };
-          },
+          responseExtractor: chaosEnvironmentsListExtract,
           description: descListChaosEnvironments,
         },
       },

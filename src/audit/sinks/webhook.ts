@@ -20,7 +20,8 @@ export class WebhookSink implements AuditSink {
   readonly name = "webhook";
 
   private buffer: AuditEvent[] = [];
-  private inflightFlush: Promise<void> | null = null;
+  private flushChain: Promise<void> = Promise.resolve();
+  private closed = false;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly url: string;
   private readonly token?: string;
@@ -43,6 +44,7 @@ export class WebhookSink implements AuditSink {
   }
 
   emit(event: AuditEvent): void {
+    if (this.closed) return;
     this.buffer.push(event);
     if (this.buffer.length >= this.batchSize) {
       this.flush().catch((err) => {
@@ -52,14 +54,12 @@ export class WebhookSink implements AuditSink {
   }
 
   async flush(): Promise<void> {
-    if (this.buffer.length === 0) return;
-    const p = this.doFlush();
-    this.inflightFlush = p;
-    try {
-      await p;
-    } finally {
-      this.inflightFlush = null;
-    }
+    const next = this.flushChain.then(async () => {
+      if (this.buffer.length === 0) return;
+      await this.doFlush();
+    });
+    this.flushChain = next.catch(() => {});
+    return next;
   }
 
   private async doFlush(): Promise<void> {
@@ -92,21 +92,20 @@ export class WebhookSink implements AuditSink {
       });
     }
 
-    if (!delivered && this.buffer.length + batch.length <= this.batchSize * 5) {
+    if (!delivered && !this.closed && this.buffer.length + batch.length <= this.batchSize * 5) {
       this.buffer.unshift(...batch);
     } else if (!delivered) {
-      log.warn("Webhook buffer full, dropping failed batch", { eventCount: batch.length });
+      log.warn("Webhook buffer full or sink closed, dropping failed batch", { eventCount: batch.length });
     }
   }
 
   async close(): Promise<void> {
+    this.closed = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
-    if (this.inflightFlush) {
-      await this.inflightFlush.catch(() => {});
-    }
     await this.flush();
+    this.buffer.length = 0;
   }
 }
