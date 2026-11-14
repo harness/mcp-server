@@ -13,9 +13,33 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { existsSync, lstatSync, rmSync } from "node:fs";
 import { ensureSecureAdmZip, ADM_ZIP_ADVISORIES } from "./adm-zip-security-lib.mjs";
+import {
+  isSecureIpAddressVersion,
+  readIpAddressVersion,
+  resolveActiveIpAddressDir,
+  SECURE_IP_ADDRESS_VERSION,
+} from "./ip-address-security-lib.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// In a pnpm worktree, an earlier npm command (such as the adm-zip fallback
+// below) may have hoisted a non-symlinked `node_modules/ip-address` directory
+// that pnpm install does not remove. If `.pnpm` has a secure linked copy,
+// remove the stale top-level leftover so root resolution cannot hit it.
+const topLevelIpAddress = join(packageRoot, "node_modules", "ip-address");
+if (
+  existsSync(join(packageRoot, "node_modules", ".pnpm")) &&
+  existsSync(topLevelIpAddress) &&
+  !lstatSync(topLevelIpAddress).isSymbolicLink() &&
+  !isSecureIpAddressVersion(readIpAddressVersion(topLevelIpAddress), SECURE_IP_ADDRESS_VERSION)
+) {
+  const activeDir = resolveActiveIpAddressDir(packageRoot);
+  if (activeDir && activeDir !== topLevelIpAddress && isSecureIpAddressVersion(readIpAddressVersion(activeDir), SECURE_IP_ADDRESS_VERSION)) {
+    rmSync(topLevelIpAddress, { recursive: true, force: true });
+  }
+}
 
 if (process.env.HARNESS_MCP_SKIP_ADM_ZIP_PATCH === "1") {
   process.exit(0);

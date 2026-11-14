@@ -158,23 +158,6 @@ function isPnpmVirtualStoreEntry(packageRoot, dir, packageName) {
 }
 
 /**
- * In a pnpm worktree (where consumer symlinks into `.pnpm/` exist), an unlinked
- * top-level `node_modules/ip-address` directory is an orphaned leftover from a
- * prior `npm` command (such as the adm-zip postinstall fallback) and is shadowed
- * by `node_modules/.pnpm/express-rate-limit@.../node_modules/ip-address`.
- * @param {string} packageRoot
- * @param {string} dir
- * @param {string} packageName
- * @returns {boolean}
- */
-function isTopLevelNodeModulesEntry(packageRoot, dir, packageName) {
-  const parts = relative(packageRoot, dir).split(sep);
-  return parts.length === 2
-    && parts[0] === "node_modules"
-    && parts[1] === packageName;
-}
-
-/**
  * Dependency links are symlinks named after the package. Virtual-store directories
  * with no inbound symlink are leftovers `pnpm install` does not remove.
  * @param {string} packageRoot
@@ -248,9 +231,6 @@ export function findActiveIpAddressInstallDirs(packageRoot) {
     const realDir = safeRealpath(dir);
     if (realDir && linkedTargets.has(realDir)) {
       return true;
-    }
-    if (linkedTargets.size > 0 && isTopLevelNodeModulesEntry(packageRoot, dir, "ip-address")) {
-      return false;
     }
     return !isPnpmVirtualStoreEntry(packageRoot, dir, "ip-address");
   });

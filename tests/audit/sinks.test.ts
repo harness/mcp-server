@@ -210,6 +210,27 @@ describe("WebhookSink", () => {
     await closePromise;
     expect(closeFinished).toBe(true);
   });
+
+  it("discards failed batches on close() without leaving orphaned events in the buffer", async () => {
+    fetchSpy.mockResolvedValue({ ok: false, status: 503 });
+
+    const sink = new WebhookSink({
+      url: "https://example.com/audit",
+      batchSize: 10,
+      flushIntervalMs: 60000,
+    });
+
+    sink.emit(makeEvent({ event_id: "e-fail-1" }));
+    await sink.close();
+
+    // Subsequent flush() or emit() after close() must be a no-op with an empty buffer
+    const callsAtClose = fetchSpy.mock.calls.length;
+    expect(callsAtClose).toBeGreaterThanOrEqual(1);
+
+    sink.emit(makeEvent({ event_id: "e-after-close" }));
+    await sink.flush();
+    expect(fetchSpy).toHaveBeenCalledTimes(callsAtClose);
+  });
 });
 
 describe("OTelSink", () => {

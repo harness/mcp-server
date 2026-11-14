@@ -100,11 +100,12 @@ export class WebhookSink implements AuditSink {
   }
 
   async close(): Promise<void> {
-    this.closed = true;
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
+    await this.flush();
+    this.closed = true;
     await this.flush();
     this.buffer.length = 0;
   }

@@ -376,6 +376,41 @@ describe("registries-v3 compactItem projection", () => {
     expect(items[0].extra).toBeUndefined();
   });
 
+  it("package_file.compactItem (compactFileV3) keeps file_id, size, path, downloadUrl, downloadCmd, checksums, and timestamps", () => {
+    const resource = getResource("package_file");
+    expect(resource.compactItem).toBeDefined();
+    const items = compactItems(
+      [
+        {
+          id: "file-uuid-1",
+          name: "lodash-4.17.21.tgz",
+          path: "/lodash/-/lodash-4.17.21.tgz",
+          size: "1.32MB",
+          downloadUrl: "https://app.harness.io/har/api/v3/files/file-uuid-1/content",
+          downloadCmd: "curl -L 'https://app.harness.io/har/api/v3/files/file-uuid-1/content' -O",
+          checksums: [{ algorithm: "SHA-256", value: "abc123" }],
+          createdAt: 1700000000000,
+          modifiedAt: 1700000001000,
+          extraInternalField: "dropped",
+        },
+      ],
+      resource.compactItem,
+    ) as Record<string, unknown>[];
+    expect(items[0]).toEqual({
+      file_id: "file-uuid-1",
+      id: "file-uuid-1",
+      name: "lodash-4.17.21.tgz",
+      path: "/lodash/-/lodash-4.17.21.tgz",
+      size: "1.32MB",
+      downloadUrl: "https://app.harness.io/har/api/v3/files/file-uuid-1/content",
+      downloadCmd: "curl -L 'https://app.harness.io/har/api/v3/files/file-uuid-1/content' -O",
+      checksums: [{ algorithm: "SHA-256", value: "abc123" }],
+      createdAt: 1700000000000,
+      modifiedAt: 1700000001000,
+    });
+    expect(items[0].extraInternalField).toBeUndefined();
+  });
+
   it("firewall_exception_v3.compactItem keeps versionList/versionScanMap/status", () => {
     const resource = getResource("firewall_exception_v3");
     const items = compactItems(
