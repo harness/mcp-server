@@ -3,6 +3,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   DEPRECATED_RESOURCE_TYPE_ALIASES,
   PREFERRED_RESOURCE_TYPE_NAMES,
+  TOOLSET_ALIASES,
+  TOOLSET_GROUP_ALIASES,
   type Registry,
 } from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
@@ -13,7 +15,18 @@ import { describeScopeHint, resourceTypeSchema } from "./input-schemas.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
-  const allToolsets = registry.getAllToolsets().map(t => t.name) as [string, ...string[]];
+  const enabledToolsetNames = new Set(registry.getAllToolsets().map((t) => t.name));
+  const allToolsets = Array.from(
+    new Set([
+      ...enabledToolsetNames,
+      ...Object.entries(TOOLSET_ALIASES)
+        .filter(([, target]) => enabledToolsetNames.has(target))
+        .map(([alias]) => alias),
+      ...Object.entries(TOOLSET_GROUP_ALIASES)
+        .filter(([, targets]) => targets.some((t) => enabledToolsetNames.has(t)))
+        .map(([alias]) => alias),
+    ]),
+  ) as [string, ...string[]];
 
   server.registerTool(
     "harness_describe",

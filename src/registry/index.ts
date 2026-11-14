@@ -1615,7 +1615,13 @@ export class Registry {
     toolset?: string;
     searchTerm?: string;
   }): Record<string, unknown> {
-    if (filter.toolset && !this.toolsets.some((ts) => ts.name === filter.toolset)) {
+    const resolvedToolsetTargets = filter.toolset
+      ? (TOOLSET_GROUP_ALIASES[filter.toolset] ?? [TOOLSET_ALIASES[filter.toolset] ?? filter.toolset])
+      : undefined;
+    const matchedToolsetNames = resolvedToolsetTargets
+      ? new Set(this.toolsets.filter((ts) => resolvedToolsetTargets.includes(ts.name)).map((ts) => ts.name))
+      : undefined;
+    if (filter.toolset && (!matchedToolsetNames || matchedToolsetNames.size === 0)) {
       const available = this.toolsets.map((ts) => ts.name);
       return {
         error: `Unknown toolset "${filter.toolset}". Available: ${available.join(", ")}`,
@@ -1628,7 +1634,7 @@ export class Registry {
       : undefined;
     const matches: Array<{ entry: Record<string, unknown> & { type: string }; rank: number }> = [];
     for (const ts of this.toolsets) {
-      if (filter.toolset && ts.name !== filter.toolset) continue;
+      if (matchedToolsetNames && !matchedToolsetNames.has(ts.name)) continue;
       for (const resource of ts.resources) {
         if (ranked && !ranked.has(resource.resourceType)) continue;
         const actions = resource.executeActions ? Object.keys(resource.executeActions) : [];

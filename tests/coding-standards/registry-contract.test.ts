@@ -389,6 +389,51 @@ describe("Coding standards — registry resource contract", () => {
     }
   });
 
+  it("expands TOOLSET_GROUP_ALIASES in explicit, additive (+), and subtractive (-) HARNESS_TOOLSETS modes", () => {
+    // Explicit group selection: "artifacts" -> registries, registries-v3, registries-firewall
+    const explicitReg = new Registry({
+      ...MINIMAL_CONFIG,
+      HARNESS_TOOLSETS: "artifacts",
+    });
+    expect(explicitReg.getAllToolsets().map((t) => t.name).sort()).toEqual([
+      "registries",
+      "registries-firewall",
+      "registries-v3",
+    ]);
+
+    // Additive group selection: "+artifacts" adds opt-in registries-v3 to defaults
+    const additiveReg = new Registry({
+      ...MINIMAL_CONFIG,
+      HARNESS_TOOLSETS: "+artifacts",
+    });
+    const additiveNames = additiveReg.getAllToolsets().map((t) => t.name);
+    expect(additiveNames).toContain("registries");
+    expect(additiveNames).toContain("registries-v3");
+    expect(additiveNames).toContain("registries-firewall");
+    expect(additiveNames).toContain("pipelines");
+
+    // Subtractive group selection: "-sre" removes incidents, alerts, deploys, runbooks, timelines
+    const subtractiveReg = new Registry({
+      ...MINIMAL_CONFIG,
+      HARNESS_TOOLSETS: "-sre",
+    });
+    const subtractiveNames = subtractiveReg.getAllToolsets().map((t) => t.name);
+    for (const removed of ["incidents", "alerts", "deploys", "runbooks", "timelines"]) {
+      expect(subtractiveNames).not.toContain(removed);
+    }
+    expect(subtractiveNames).toContain("pipelines");
+  });
+
+  it("resolves toolset aliases in describeByOperation (e.g. toolset='flags')", () => {
+    const res = registry.describeByOperation({ operation: "list", toolset: "flags" }) as {
+      error?: string;
+      resource_types?: Array<{ type: string; toolset: string }>;
+    };
+    expect(res.error).toBeUndefined();
+    expect(res.resource_types?.length).toBeGreaterThan(0);
+    expect(res.resource_types?.every((r) => r.toolset === "feature-flags")).toBe(true);
+  });
+
   it("redirects consolidated legacy single-action execute resource types (work_item_resume, work_item_approve, budget_grant) to their parent resource actions", async () => {
     const client = {
       request: vi.fn().mockResolvedValue({ status: "OK" }),
