@@ -74,6 +74,8 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             diagnosticHint: def.diagnosticHint ?? undefined,
             relatedResources: def.relatedResources ?? undefined,
             executeHint: def.executeHint ?? undefined,
+            // Only resources that opt in declare this; consumed by the chat approval card.
+            ...(def.reviewCard ? { reviewCard: def.reviewCard } : {}),
             ...(() => {
               const examples = getExamplesForResource(def.resourceType);
               return examples.length > 0
