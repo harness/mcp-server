@@ -210,10 +210,12 @@ Every response is read by an LLM, and the agent loop owns the context. Tools mus
 3. **Truncate, offload, or isolate large output** (logs, execution output, payloads) behind a dedicated action. Do not inline it.
 4. **Pagination is not discovery.** If an agent must page through a whole catalog to find one item, discovery is missing. Support `search_term` where the API allows it, and prefer the shared search path (search-service / UDP) for resources an agent must find by meaning.
 5. **One search path.** Before adding a per-resource search mechanism, check whether the resource belongs in search-service / UDP. If a stopgap is needed, link the follow-up in the PR.
+6. **Caps must keep the rest reachable.** A list cap or truncation must not make items past the first N unreachable. `page`, `size`, and `search_term` are honoured, or the response says how to get the rest.
+7. **Measure it.** A change to `list`, `harness_describe`, or tool-schema payloads states before/after bytes or tokens, and schema changes run the evals (`docs/schema-budget.md`).
 
-### 16. Credentials, Auth, and Trust Boundaries
+### 16. Credentials, Auth, and Trust Boundaries (Server and Operator Surface)
 
-Applies to anything that touches tokens, sessions, redirects, upstream identity providers, or stored secrets: `src/config.ts`, `src/client/harness-client.ts`, and the auth code in `src/utils/` (`http-auth.ts`, `oauth-auth.ts`, `oauth-broker.ts`, `oauth-proxy.ts`, `oauth-proxy-vault.ts`, `oauth-proxy-redis-vault.ts`).
+These rules protect the server and its operators and are not visible to agents. They apply only to changes that touch auth. Applies to anything that touches tokens, sessions, redirects, upstream identity providers, or stored secrets: `src/config.ts`, `src/client/harness-client.ts`, and the auth code in `src/utils/` (`http-auth.ts`, `oauth-auth.ts`, `oauth-broker.ts`, `oauth-proxy.ts`, `oauth-proxy-vault.ts`, `oauth-proxy-redis-vault.ts`).
 
 1. **Allowlists default closed.** A wildcard (`*`) is an explicit, narrow opt-in (for example HTTP loopback only for local development), never the default. Custom URL schemes belong on an explicit list.
 2. **Only accept credentials this server issued or can verify.** Do not proxy refresh or exchange requests for tokens whose origin the server has not checked. Bind issued tokens and codes to the client and flow that created them.
@@ -222,7 +224,7 @@ Applies to anything that touches tokens, sessions, redirects, upstream identity 
 5. **Bind encrypted records to their identity.** Stored ciphertext must authenticate the logical record it belongs to (for example AES-GCM additional authenticated data), so swapping two stored values fails to decrypt.
 6. **Never log token contents.** Do not log JWT claims, tokens, or raw upstream response bodies. Log metadata only (`iss`, `sub`, `exp`, `kid`, HTTP status, grant type). Decide on structured fields (the OAuth `error` code and status), not on substring matches in a response body.
 7. **Apply the same limits on every path.** Scope and audience checks done at authorization also apply on refresh and any other re-entry path.
-8. **No dead or half-wired configuration.** Every public env var is read by code and documented. New secrets and URLs go through `Config` with multi-user / oauth / oauth-proxy rejection and HTTPS validation, and the README, `.env.example`, and manifests are updated together.
+8. **No dead or half-wired configuration.** Every public env var is read by code and documented. New secrets and URLs go through `Config` with multi-user / oauth / oauth-proxy rejection and HTTPS validation. Harness credentials are never sent to a non-Harness host; a third-party backend gets its own dedicated, opt-in credential that fails closed in hosted modes, and the README, `.env.example`, and manifests are updated together.
 
 ### 17. Correctness and Public Contract of New Code Paths
 
@@ -236,8 +238,10 @@ Check every path a change adds, not only the headline endpoint (history and exam
 6. **Gate by risk.** Read-only and confirmation gating follows `operationPolicy.risk`, not the tool family. Classify risk by behavior.
 7. **Do not leak backend envelopes.** No `passthrough` on a real endpoint unless the response is already a stable, agent-facing shape (§3).
 8. **Guard silent overwrites.** Registry keys, aliases, and canonical names must be checked for collisions, not overwritten silently. A new key that already exists should fail loudly. (Today `Registry` does not check duplicate canonical `resourceType`s across toolsets; the last one wins, so verify manually until a guard exists.)
-9. **Pin the contract with tests.** New or changed extractors and body builders have request-shape and response-shape tests (envelopes, empty results, falsy values, failure paths). "No focused coverage" is a finding.
+9. **Pin the contract with tests.** New or changed extractors and body builders have request-shape and response-shape tests (envelopes, empty results, falsy values, failure paths), and at least one test goes through the real entry path (for example session initialize), not only the unit. "No focused coverage" is a finding.
 10. **Keep the public surface in sync.** A new env var, tool surface, or removed resource updates the README, manifests, prompts, and the PR description. Removals are called out as breaking and pinned with a test.
+11. **Advertised surface matches behaviour.** Schema enums, descriptions, and `harness_describe` metadata list only what the code handles. A documented type or option that fails at runtime wastes agent calls.
+12. **Agent-supplied input is untrusted.** Validate values interpolated into expressions, paths, or queries (for example require a UUID). A raw query passthrough (free-form GraphQL or SQL) must not allow mutations in read-only mode.
 
 ---
 
