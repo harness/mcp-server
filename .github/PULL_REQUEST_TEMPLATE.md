@@ -14,6 +14,9 @@
 - [ ] `pnpm build` passes
 - [ ] `pnpm standards:check` passes (architecture guardrails — see [docs/coding-standards.md](docs/coding-standards.md))
 - [ ] `pnpm docs:check` passes (if registry/tool counts changed)
+- [ ] Agent context cost and discovery (`docs/coding-standards.md` §15): small default `list` items, bulky fields projected out, a way for agents to find the right item
+- [ ] Auth/credential changes follow §16 (closed-by-default allowlists, pinned endpoints, no token contents in logs)
+- [ ] New code paths checked against §17 (scope on every call, units, falsy values, risk gating, request/response-shape tests, public surface in sync)
 
 ## Coding Standards (registry-driven MCP model)
 If this PR adds or changes Harness API coverage:

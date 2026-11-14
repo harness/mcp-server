@@ -157,13 +157,13 @@
   - **Body builders must not silent-drop falsy values.** `hqlRunBody` used truthiness (`timeoutMs ? ...`), rewriting `timeout_ms: 0` out of the request. Fix: `!= null` checks so `0`/`false` reach the API or fail loudly.
   - **Read-only/confirmation gating is risk-based, not tool-family-based.** The batch-HQL path blocked all execute actions in read-only mode while `registry.dispatchExecute()` allows `risk: "read"`. Fix: gate on `actionSpec.operationPolicy.risk !== "read"`, mirroring the registry. Classify `risk` by behavior — HQL is a pure query language (find/filter/select/join, no mutations), so `run` is `risk: "read"`, not `low_write`.
   - **List-only metadata on get-only resources misleads discovery.** `kg_related_type` (get-only) set `listFilterFields`, so `harness_describe`/`harness_list` advertised `kind`/`include_transitive` as list filters. Fix: drop `listFilterFields`; document get params via the get op's `paramsSchema`. Add local required-field validation (throw a plain `Error` from the body builder → surfaces as a clean `errorResult` via `isUserError`) so a missing id fails locally instead of sending an id-less body.
-- **Rule**: For every new/changed resource, run the **Pre-Push Architecture-Review Pass** in `AGENTS.md` §Workflow 7 before pushing, and pair every new extractor/body builder with both a response-shape test (envelope dropped, empty/edge cases) and a request-shape test. "No focused coverage" is itself a recurring review finding.
+- **Rule**: The general rules from these patterns are in `docs/coding-standards.md` §17. For every new/changed resource, run the **Pre-Push Architecture-Review Pass** in `AGENTS.md` before pushing, and pair every new extractor/body builder with both a response-shape test (envelope dropped, empty/edge cases) and a request-shape test. "No focused coverage" is itself a recurring review finding.
 - **Build/docs gotcha**: `pnpm docs:generate` and `docs:check` read from `build/`. Always `pnpm build` first or counts go stale and CI `docs:check` fails.
 
 ## External PR Hygiene (Sunil review, PR #325)
 - **Issue**: Commit message `fix: [AIDEVOSP-1830]: …` exposed an internal Jira ID in the public `mcp-server` repo.
 - **Fix**: Use user-facing commit/PR text (e.g. `fix: skip resource discovery when org/project defaults are missing`) with no ticket prefix.
-- **Rule**: Never put Harness-internal ticket IDs in external PR titles, descriptions, or commit messages — see **Pre-Push Architecture-Review Pass** in `AGENTS.md` §Workflow 7.
+- **Rule**: Never put Harness-internal ticket IDs in external PR titles, descriptions, or commit messages — see **Pre-Push Architecture-Review Pass** in `AGENTS.md`.
 
 ## v1 Pipeline Examples: Converter Output Is Ground Truth, Not the Bundled Schema
 - **Context**: Aligning `src/data/examples/pipeline-v1.ts` to real v1 conversions from the harness pipeline converter (the comparison HTML reports).
@@ -218,3 +218,7 @@
 - **Fix**: Include preferred/deprecated resource aliases in `resourceTypeSchema()`'s full-mode enum, include toolset/group aliases in `registerDescribeTool()`'s full-mode `toolset` enum, resolve `TOOLSET_ALIASES` and `TOOLSET_GROUP_ALIASES` in `describeByOperation()`, and test explicit/`+`/`-` group expansion in `registry-contract.test.ts`.
 - **Rule**: Whenever adding a `resource_type` or `toolset` alias, trace every entry point where that parameter enters the server (Zod input schema in both `compact` and `full` modes, `getResource`, `describeToolset`, `describeByOperation`, and `parseToolsetFilter`) and assert all of them in `registry-contract.test.ts`. Never modify security scanners or `postinstall` scripts to work around a stale local `node_modules/` directory.
 
+## Agent Context Cost and Discovery Are Design Properties
+- **Issue**: A list/get/execute resource merged before design review. Afterwards the open questions were how large the objects are, whether the full response helps an agent, and how an agent finds one item when it must page through a catalog. The follow-up was a per-resource `search_term`, adding another search path beside search-service / UDP.
+- **Fix**: Make response size and discovery part of the design review before merge (`docs/coding-standards.md` §15).
+- **Rule**: State default list item size, project bulky fields out, and say how an agent discovers the right item. Prefer the shared search path over a new per-resource one, and link the follow-up if a stopgap is needed.

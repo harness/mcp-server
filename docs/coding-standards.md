@@ -201,6 +201,44 @@ Toolset files (`src/registry/toolsets/*.ts`) are **declarative API dispatch tabl
 3. **Do not expose internal UI dropdown / filter-panel BFF endpoints as resources**: Endpoints that only populate web UI `<select>` dropdowns (e.g. `/frontend/*/filters`, `/filter-panel`) or duplicate `list` with incompatible IDs (`/list-metadata`) should not be exposed as separate MCP resources or actions. Declare known filter values in `listFilterFields.enum` instead.
 4. **Never use `bodyBuilder` on `GET` operations**: `GET` requests have no HTTP body. Do not use `bodyBuilder` returning `undefined` on a `GET` spec as a side-effect hook to mutate `input` query parameters.
 
+### 15. Agent Context Cost and Discovery
+
+Every response is read by an LLM, and the agent loop owns the context. Tools must be designed so they do not bloat it.
+
+1. **Return what an agent will act on.** Do not return a full backend object because it is available. Ask whether each field helps the next call.
+2. **Keep default `list` items small.** Project bulky fields (steps, scripts, full specs, large nested arrays) out with `compactItem` or the response extractor. `get` returns what the agent needs for its next step.
+3. **Truncate, offload, or isolate large output** (logs, execution output, payloads) behind a dedicated action. Do not inline it.
+4. **Pagination is not discovery.** If an agent must page through a whole catalog to find one item, discovery is missing. Support `search_term` where the API allows it, and prefer the shared search path (search-service / UDP) for resources an agent must find by meaning.
+5. **One search path.** Before adding a per-resource search mechanism, check whether the resource belongs in search-service / UDP. If a stopgap is needed, link the follow-up in the PR.
+
+### 16. Credentials, Auth, and Trust Boundaries
+
+Applies to anything that touches tokens, sessions, redirects, upstream identity providers, or stored secrets: `src/config.ts`, `src/client/harness-client.ts`, and the auth code in `src/utils/` (`http-auth.ts`, `oauth-auth.ts`, `oauth-broker.ts`, `oauth-proxy.ts`, `oauth-proxy-vault.ts`, `oauth-proxy-redis-vault.ts`).
+
+1. **Allowlists default closed.** A wildcard (`*`) is an explicit, narrow opt-in (for example HTTP loopback only for local development), never the default. Custom URL schemes belong on an explicit list.
+2. **Only accept credentials this server issued or can verify.** Do not proxy refresh or exchange requests for tokens whose origin the server has not checked. Bind issued tokens and codes to the client and flow that created them.
+3. **Pin discovered endpoints before sending secrets.** Require `https` and the expected origin for any `authorization_endpoint`, `token_endpoint`, or JWKS URL taken from a discovery document before a redirect or a POST that carries a client secret or code.
+4. **Link identity on stable, verified claims.** Use `sub` (or an explicitly verified email on an allowlisted domain). Never treat an unverified `email`, `preferred_username`, `upn`, or `unique_name` as proof of identity. Re-check the link whenever a new token is stored, not only at first login.
+5. **Bind encrypted records to their identity.** Stored ciphertext must authenticate the logical record it belongs to (for example AES-GCM additional authenticated data), so swapping two stored values fails to decrypt.
+6. **Never log token contents.** Do not log JWT claims, tokens, or raw upstream response bodies. Log metadata only (`iss`, `sub`, `exp`, `kid`, HTTP status, grant type). Decide on structured fields (the OAuth `error` code and status), not on substring matches in a response body.
+7. **Apply the same limits on every path.** Scope and audience checks done at authorization also apply on refresh and any other re-entry path.
+8. **No dead or half-wired configuration.** Every public env var is read by code and documented. New secrets and URLs go through `Config` with multi-user / oauth / oauth-proxy rejection and HTTPS validation, and the README, `.env.example`, and manifests are updated together.
+
+### 17. Correctness and Public Contract of New Code Paths
+
+Check every path a change adds, not only the headline endpoint (history and examples: `tasks/lessons.md`).
+
+1. **Scope on every call.** Raw `client.request()` calls bypass registry scope injection. `HarnessClient` adds the account ID only, so pass org and project explicitly. For writes, list/get/create/update use the same scope params (§4).
+2. **Units and budgets.** Match the API's units (milliseconds versus unix seconds, pages versus offsets). Fit timeouts to the number of calls, and abort in-flight requests when falling back.
+3. **Act on the requested change.** Evaluate or score the state after the change, not only the current state.
+4. **Falsy values are values.** Body builders and input handling use `!= null` checks, not truthiness, so `0` and `false` reach the API or fail loudly.
+5. **Published names match their source.** A published field must be filled from the field it names, not a display label. List-only metadata (`listFilterFields`) is only declared where a `list` exists.
+6. **Gate by risk.** Read-only and confirmation gating follows `operationPolicy.risk`, not the tool family. Classify risk by behavior.
+7. **Do not leak backend envelopes.** No `passthrough` on a real endpoint unless the response is already a stable, agent-facing shape (§3).
+8. **Guard silent overwrites.** Registry keys, aliases, and canonical names must be checked for collisions, not overwritten silently. A new key that already exists should fail loudly. (Today `Registry` does not check duplicate canonical `resourceType`s across toolsets; the last one wins, so verify manually until a guard exists.)
+9. **Pin the contract with tests.** New or changed extractors and body builders have request-shape and response-shape tests (envelopes, empty results, falsy values, failure paths). "No focused coverage" is a finding.
+10. **Keep the public surface in sync.** A new env var, tool surface, or removed resource updates the README, manifests, prompts, and the PR description. Removals are called out as breaking and pinned with a test.
+
 ---
 
 ## Adding a New Harness Resource (Step-by-Step)
@@ -334,6 +372,9 @@ Before every commit, verify:
 - [ ] **`pnpm typecheck` passes** — strict mode
 - [ ] **`pnpm test` passes** — no regressions
 - [ ] **`pnpm standards:check` passes** — automated architecture guardrails
+- [ ] **Agent context cost and discovery considered** — small default list items, bulky fields projected out, a way to find the right item (§15)
+- [ ] **Auth/credential changes follow §16** — closed-by-default allowlists, pinned endpoints, no token contents in logs
+- [ ] **New code paths checked against §17** — scope, units, falsy values, risk gating, and request/response-shape tests
 
 ---
 
