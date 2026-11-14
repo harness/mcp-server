@@ -3,7 +3,15 @@
  * required by docs/coding-standards.md.
  */
 import { describe, it, expect, vi } from "vitest";
-import { Registry, ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
+import {
+  Registry,
+  ALL_TOOLSET_NAMES,
+  DEPRECATED_RESOURCE_TYPE_ALIASES,
+  NAV_DOMAIN_RESOURCE_ALIASES,
+  PREFERRED_RESOURCE_TYPE_NAMES,
+  TOOLSET_ALIASES,
+  TOOLSET_GROUP_ALIASES,
+} from "../../src/registry/index.js";
 import type { ResourceScope, ToolsetDefinition } from "../../src/registry/types.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { AuditEvent } from "../../src/audit/types.js";
@@ -344,6 +352,41 @@ describe("Coding standards — registry resource contract", () => {
     }
 
     expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("forbids adding new legacy module-acronym-prefixed resourceType names (fme_, iacm_, scs_, idp_, sei_, appsec_, chaos_, sto_, ccm_) without a clean harness-nav-config.yaml domain name", () => {
+    const LEGACY_PREFIX_RE = /^(?:fme|iacm|scs|idp|sei|appsec|chaos|sto|ccm)_/;
+    const unmapped: string[] = [];
+    for (const resourceType of registry.getAllResourceTypes()) {
+      if (LEGACY_PREFIX_RE.test(resourceType) && !PREFERRED_RESOURCE_TYPE_NAMES[resourceType]) {
+        unmapped.push(resourceType);
+      }
+    }
+    expect(
+      unmapped,
+      `New resources must use clean domain nouns aligned with harness-nav-config.yaml instead of legacy module acronym prefixes: ${unmapped.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("ensures every PREFERRED_RESOURCE_TYPE_NAMES entry has a unique, collision-free NAV_DOMAIN_RESOURCE_ALIASES reverse mapping and valid TOOLSET_ALIASES target", () => {
+    const preferredValues = Object.values(PREFERRED_RESOURCE_TYPE_NAMES);
+    expect(new Set(preferredValues).size).toBe(preferredValues.length);
+    for (const [legacy, preferred] of Object.entries(PREFERRED_RESOURCE_TYPE_NAMES)) {
+      expect(NAV_DOMAIN_RESOURCE_ALIASES[preferred]).toBe(legacy);
+      expect(registry.getResource(preferred).resourceType).toBe(legacy);
+    }
+    const allToolsetNames = new Set(ALL_TOOLSET_NAMES);
+    for (const [alias, target] of Object.entries(TOOLSET_ALIASES)) {
+      expect(allToolsetNames.has(target), `TOOLSET_ALIASES["${alias}"] -> "${target}" is not a registered toolset`).toBe(true);
+    }
+    for (const [alias, targets] of Object.entries(TOOLSET_GROUP_ALIASES)) {
+      for (const target of targets) {
+        expect(allToolsetNames.has(target), `TOOLSET_GROUP_ALIASES["${alias}"] -> "${target}" is not a registered toolset`).toBe(true);
+      }
+    }
+    for (const [alias, target] of Object.entries(DEPRECATED_RESOURCE_TYPE_ALIASES)) {
+      expect(registry.getResource(alias).resourceType).toBe(target);
+    }
   });
 
   it("redirects consolidated legacy single-action execute resource types (work_item_resume, work_item_approve, budget_grant) to their parent resource actions", async () => {

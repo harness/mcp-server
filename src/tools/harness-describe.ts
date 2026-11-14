@@ -1,6 +1,10 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Registry } from "../registry/index.js";
+import {
+  DEPRECATED_RESOURCE_TYPE_ALIASES,
+  PREFERRED_RESOURCE_TYPE_NAMES,
+  type Registry,
+} from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
@@ -36,8 +40,26 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
           const def = registry.getResource(args.resource_type);
           const resourceScopes = registry.getSupportedScopes(args.resource_type);
           const supportedScopes = resourceScopes.length > 1 ? resourceScopes : undefined;
+          const preferredName = PREFERRED_RESOURCE_TYPE_NAMES[def.resourceType];
+          const requestedNorm = args.resource_type.trim().toLowerCase().replace(/[\s-]+/g, "_");
+          const deprecatedV3Target = DEPRECATED_RESOURCE_TYPE_ALIASES[requestedNorm];
           return jsonResult({
             resource_type: def.resourceType,
+            ...(preferredName
+              ? {
+                  preferred_alias: preferredName,
+                  deprecation_note:
+                    requestedNorm === def.resourceType
+                      ? `Module-prefixed resource_type '${def.resourceType}' is deprecated and will become an alias in v4.0.0; prefer '${preferredName}' (supported now).`
+                      : undefined,
+                }
+              : {}),
+            ...(deprecatedV3Target
+              ? {
+                  deprecated_alias: requestedNorm,
+                  deprecation_note: `Resource type '${requestedNorm}' is deprecated and will be removed in v4.0.0; use '${deprecatedV3Target}' instead.`,
+                }
+              : {}),
             displayName: def.displayName,
             description: def.description,
             toolset: def.toolset,
