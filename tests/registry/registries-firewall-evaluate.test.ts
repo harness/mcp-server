@@ -6,7 +6,7 @@ import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { registriesFirewallToolset } from "../../src/registry/toolsets/registries-firewall.js";
 import {
-  BULK_SCAN_EVALUATION_MAX_SCANS,
+  BULK_SCAN_EVALUATION_PAGE_SIZE,
   bulkScanEvaluationExtract,
   firewallExceptionListExtract,
   harV3ScanEvaluationExtract,
@@ -300,7 +300,10 @@ describe("bulk_scan_evaluation get", () => {
     const registry = new Registry(makeConfig());
     const status = { evaluationId: "eval-1", status: "SUCCESS", scans: [], error: null };
     const client = mockClient({ data: status });
-    const expected = { evaluationId: "eval-1", status: "SUCCESS", error: null, totalScans: 0, scanStatusCounts: {}, scans: [] };
+    const expected = {
+      evaluationId: "eval-1", status: "SUCCESS", error: null,
+      totalScans: 0, scanStatusCounts: {}, selectedScans: 0, page: 0, hasMore: false, scans: [],
+    };
 
     const result = await registry.dispatch(client, "bulk_scan_evaluation", "get", {
       resource_scope: "account",
@@ -317,9 +320,11 @@ describe("bulk_scan_evaluation get", () => {
 });
 
 describe("bulkScanEvaluationExtract", () => {
-  const scan = (i: number, scanStatus: string) => ({ packageName: `p${i}`, version: "1.0.0", scanId: `s${i}`, scanStatus });
+  const scan = (i: number, scanStatus?: string) => ({ packageName: `p${i}`, version: "1.0.0", scanId: `s${i}`, scanStatus });
+  const many = (n: number, status: string, from = 0) => Array.from({ length: n }, (_, i) => scan(from + i, status));
+  const PAGE = BULK_SCAN_EVALUATION_PAGE_SIZE;
 
-  it("counts every scan and inlines only the non-ALLOWED ones", () => {
+  it("counts every scan and returns the non-ALLOWED ones by default", () => {
     const result = bulkScanEvaluationExtract({
       data: {
         evaluationId: "eval-1",
@@ -335,28 +340,73 @@ describe("bulkScanEvaluationExtract", () => {
       error: null,
       totalScans: 4,
       scanStatusCounts: { ALLOWED: 2, BLOCKED: 1, WARN: 1 },
+      selectedScans: 2,
+      page: 0,
+      hasMore: false,
       scans: [scan(1, "BLOCKED"), scan(2, "WARN")],
     });
   });
 
-  it("caps the inlined scans and says where the rest are", () => {
-    const blocked = Array.from({ length: BULK_SCAN_EVALUATION_MAX_SCANS + 5 }, (_, i) => scan(i, "BLOCKED"));
-    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: [scan(999, "ALLOWED"), ...blocked] } }) as
-      Record<string, unknown>;
+  it("pages past the first 100 and hints at the next page", () => {
+    const raw = { data: { status: "SUCCESS", scans: [scan(9999, "ALLOWED"), ...many(PAGE + 5, "BLOCKED")] } };
 
-    expect(result.scans).toHaveLength(BULK_SCAN_EVALUATION_MAX_SCANS);
-    expect(result.totalScans).toBe(BULK_SCAN_EVALUATION_MAX_SCANS + 6);
-    expect(result.scanStatusCounts).toEqual({ ALLOWED: 1, BLOCKED: BULK_SCAN_EVALUATION_MAX_SCANS + 5 });
-    expect(result.truncated).toBe(true);
-    expect(result.hint).toMatch(/harness_list resource_type=artifact_scan/);
+    const first = bulkScanEvaluationExtract(raw) as Record<string, unknown>;
+    expect(first.scans).toHaveLength(PAGE);
+    expect(first.totalScans).toBe(PAGE + 6);
+    expect(first.selectedScans).toBe(PAGE + 5);
+    expect(first.hasMore).toBe(true);
+    expect(first.hint).toMatch(/params\.page=1/);
+
+    const second = bulkScanEvaluationExtract(raw, { page: 1 }) as Record<string, unknown>;
+    expect(second.scans).toEqual(many(5, "BLOCKED", PAGE));
+    expect(second.hasMore).toBe(false);
+    expect(second).not.toHaveProperty("hint");
   });
 
-  it("does not mark exactly the cap as truncated", () => {
-    const blocked = Array.from({ length: BULK_SCAN_EVALUATION_MAX_SCANS }, (_, i) => scan(i, "BLOCKED"));
-    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: blocked } }) as Record<string, unknown>;
+  it("keeps UNKNOWN or missing-status overflow reachable through paging", () => {
+    const raw = { data: { status: "SUCCESS", scans: [...many(PAGE, "UNKNOWN"), scan(500)] } };
 
-    expect(result.scans).toHaveLength(BULK_SCAN_EVALUATION_MAX_SCANS);
-    expect(result).not.toHaveProperty("truncated");
+    const second = bulkScanEvaluationExtract(raw, { page: "1" }) as Record<string, unknown>;
+    expect(second.scanStatusCounts).toEqual({ UNKNOWN: PAGE + 1 });
+    expect(second.scans).toEqual([scan(500)]);
+  });
+
+  it("does not report more when the selection is exactly one page", () => {
+    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: many(PAGE, "BLOCKED") } }) as
+      Record<string, unknown>;
+
+    expect(result.scans).toHaveLength(PAGE);
+    expect(result.hasMore).toBe(false);
+    expect(result).not.toHaveProperty("hint");
+  });
+
+  it.each([
+    ["ALLOWED", 2],
+    ["blocked", 1],
+    ["UNKNOWN", 0],
+  ])("selects only scan_status=%s", (scanStatus, expected) => {
+    const raw = { data: { status: "SUCCESS", scans: [scan(0, "ALLOWED"), scan(1, "BLOCKED"), scan(2, "ALLOWED")] } };
+    const result = bulkScanEvaluationExtract(raw, { scan_status: scanStatus }) as Record<string, unknown>;
+    expect(result.selectedScans).toBe(expected);
+    expect(result.scanStatusCounts).toEqual({ ALLOWED: 2, BLOCKED: 1 });
+  });
+
+  it.each([
+    ["negative", -1],
+    ["fractional", 1.5],
+    ["non-numeric", "abc"],
+  ])("treats a %s page as page 0", (_label, page) => {
+    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: many(3, "BLOCKED") } }, { page }) as
+      Record<string, unknown>;
+    expect(result.page).toBe(0);
+    expect(result.scans).toHaveLength(3);
+  });
+
+  it("returns an empty page past the end", () => {
+    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: many(3, "BLOCKED") } }, { page: 4 }) as
+      Record<string, unknown>;
+    expect(result.scans).toEqual([]);
+    expect(result.hasMore).toBe(false);
   });
 
   it.each([
@@ -369,14 +419,23 @@ describe("bulkScanEvaluationExtract", () => {
     expect(result.scanStatusCounts).toEqual({});
   });
 
-  it("counts a scan without scanStatus as UNKNOWN and inlines it", () => {
-    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: [{ packageName: "x", version: "1" }] } }) as
-      Record<string, unknown>;
-    expect(result.scanStatusCounts).toEqual({ UNKNOWN: 1 });
-    expect(result.scans).toHaveLength(1);
-  });
-
   it("passes non-object responses through", () => {
     expect(bulkScanEvaluationExtract("oops")).toBe("oops");
+  });
+
+  it("reads page and scan_status from harness params on the real dispatch path without sending them upstream", async () => {
+    const registry = new Registry(makeConfig());
+    const client = mockClient({ data: { status: "SUCCESS", scans: [...many(PAGE, "BLOCKED"), scan(777, "WARN")] } });
+
+    const result = (await registry.dispatch(client, "bulk_scan_evaluation", "get", {
+      resource_scope: "account",
+      evaluation_id: "eval-1",
+      page: 1,
+    })) as Record<string, unknown>;
+
+    expect(result.scans).toEqual([scan(777, "WARN")]);
+    const call = firstCall(client);
+    expect(call.params.page).toBeUndefined();
+    expect(call.params.scan_status).toBeUndefined();
   });
 });

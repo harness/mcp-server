@@ -765,41 +765,45 @@ export const harV3ScanEvaluationExtract = (raw: unknown): unknown => {
   return { items, total: items.length };
 };
 
-/** Most non-ALLOWED scans a bulk evaluation poll returns inline. */
-export const BULK_SCAN_EVALUATION_MAX_SCANS = 100;
+/** Scans per page of a bulk evaluation poll. */
+export const BULK_SCAN_EVALUATION_PAGE_SIZE = 100;
 
 /**
  * GetBulkScanEvaluationStatusV3 returns `{ data: { evaluationId, status, error, scans: [{ packageName, version,
  * scanId, scanStatus }] } }`, and an evaluation can hold up to 10000 scans. Keep the agent's context small:
- * report `scanStatusCounts` for every scan, and inline only the non-ALLOWED scans (the ones an agent acts on),
- * capped at BULK_SCAN_EVALUATION_MAX_SCANS. When capped, `truncated` is true and `hint` says where the rest is.
+ * report `scanStatusCounts` for every scan, and page through the selected scans BULK_SCAN_EVALUATION_PAGE_SIZE at
+ * a time. By default the selection is every non-ALLOWED scan (the ones an agent acts on); `input.scan_status`
+ * selects one status instead (including ALLOWED). `input.page` (0-based) picks the page, so every scan of any
+ * status stays reachable from this one call.
  */
-export const bulkScanEvaluationExtract = (raw: unknown): unknown => {
+export const bulkScanEvaluationExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
   const unwrapped = harV3DataObjectUnwrap(raw);
   if (!isRecord(unwrapped)) return unwrapped;
   const { scans: rawScans, ...rest } = unwrapped;
   const scans = Array.isArray(rawScans) ? rawScans : [];
+  const statusFilter = typeof input?.scan_status === "string" && input.scan_status !== ""
+    ? input.scan_status.toUpperCase()
+    : undefined;
+  const requestedPage = Number(input?.page ?? 0);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 0;
   const scanStatusCounts: Record<string, number> = {};
-  const flagged: unknown[] = [];
+  const selected: unknown[] = [];
   for (const scan of scans) {
     const status = isRecord(scan) && typeof scan.scanStatus === "string" ? scan.scanStatus : "UNKNOWN";
     scanStatusCounts[status] = (scanStatusCounts[status] ?? 0) + 1;
-    if (status !== "ALLOWED") flagged.push(scan);
+    if (statusFilter ? status === statusFilter : status !== "ALLOWED") selected.push(scan);
   }
-  const truncated = flagged.length > BULK_SCAN_EVALUATION_MAX_SCANS;
+  const offset = page * BULK_SCAN_EVALUATION_PAGE_SIZE;
+  const hasMore = offset + BULK_SCAN_EVALUATION_PAGE_SIZE < selected.length;
   return {
     ...rest,
     totalScans: scans.length,
     scanStatusCounts,
-    scans: truncated ? flagged.slice(0, BULK_SCAN_EVALUATION_MAX_SCANS) : flagged,
-    ...(truncated
-      ? {
-        truncated: true,
-        hint: `Showing ${BULK_SCAN_EVALUATION_MAX_SCANS} of ${flagged.length} non-ALLOWED scans. List the rest ` +
-          "with harness_list resource_type=artifact_scan, filters registry_ids=<registryId> and " +
-          "scan_status=BLOCKED or WARN, or check exact versions with artifact_scan evaluate_packages.",
-      }
-      : {}),
+    selectedScans: selected.length,
+    page,
+    hasMore,
+    scans: selected.slice(offset, offset + BULK_SCAN_EVALUATION_PAGE_SIZE),
+    ...(hasMore ? { hint: `More scans: repeat this harness_get with params.page=${page + 1}.` } : {}),
   };
 };
 

@@ -314,7 +314,7 @@ export const registriesFirewallToolset: ToolsetDefinition = {
       resourceType: "bulk_scan_evaluation",
       displayName: "Bulk Scan Evaluation (v3)",
       description:
-        "Result of artifact_scan bulk_evaluate: per-status counts plus the non-ALLOWED scans (capped).",
+        "Result of artifact_scan bulk_evaluate: per-status counts plus a page of the non-ALLOWED scans.",
       toolset: "registries-firewall",
       scope: "project",
       // GetBulkScanEvaluationStatusV3 takes optional org/project, so poll at whatever scope bulk_evaluate used.
@@ -328,8 +328,14 @@ export const registriesFirewallToolset: ToolsetDefinition = {
           pathParams: { evaluation_id: "evaluation_id" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           // Response is `{ data: { evaluationId, status, scans, error } }` with up to 10000 scans; project to
-          // per-status counts plus the non-ALLOWED scans (capped).
+          // per-status counts plus one page of the selected scans.
           responseExtractor: bulkScanEvaluationExtract,
+          paramsSchema: {
+            fields: [
+              { name: "scan_status", required: false, description: "Only scans with this status (default: all non-ALLOWED)" },
+              { name: "page", required: false, description: "0-based page of 100 scans" },
+            ],
+          },
           description: "Get bulk scan evaluation status (v3)",
         },
       },
