@@ -194,8 +194,8 @@ function aicrPrLink(
 }
 
 /**
- * bodyBuilder for every AICR GET. Sends no body: hoists `repo_path` onto the
- * input for `queryParams` and records the PR deep link for the extractor.
+ * inputNormalizer for every AICR GET (and bodyBuilder for the bodyless POSTs). Sends no body:
+ * hoists `repo_path` onto the input for `queryParams` and records the PR deep link for the extractor.
  */
 function hoistAicrRepoPath(
   input: Record<string, unknown>,
@@ -1352,11 +1352,16 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
         "Latest AI Code Review of a pull request: criteria checks, overview (risk, status, summary), finding counts, and up to 100 open issues. " +
         "Pass repo_id + pr_number (with the repo's org_id/project_id) or a Harness PR URL. " +
         "Execute request_review to review the PR's current commit now, and review_status to follow it. " +
-        "Grade, score, and per-issue gate results are not exposed by the API yet.",
+        "Grade, score, and per-issue gate results are not exposed by the API yet. " +
+        "List: reviewed PRs of an account, org or project, newest first; merged and closed stay listed.",
       toolset: "aicr",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number"],
+      compactItem: aicrPullRequestCompact,
+      listFilterFields: [
+        { name: "query", description: "Search by pull request title" },
+      ],
       diagnosticHint: DIAGNOSTIC_HINT,
       searchAliases: ["ai code review", "aicr"],
       relatedResources: [
@@ -1373,6 +1378,20 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
         },
       ],
       operations: {
+        list: {
+          method: "GET",
+          path: `${AICR_BASE}/prs`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          preflight: aicrSpacePreflight,
+          pageOneIndexed: true,
+          headerPagination: true,
+          queryParams: SPACE_LIST_QUERY,
+          responseExtractor: aicrPullRequestListExtract,
+          description:
+            "List reviewed pull requests under a space with number, title, repo_path, risk, and author. " +
+            "Pass an item's repo_path and number to get, aicr_finding, or aicr_run. Only query filters; PR state and branches are on pull_request.",
+          paramsSchema: { fields: SPACE_PARAM_FIELDS },
+        },
         get: {
           method: "GET",
           path: `${AICR_BASE}/pullreqs/{prNumber}/review`,
@@ -1380,7 +1399,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             `${AICR_BASE}/pullreqs/${aicrPrNumber(input)}/review`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           preflight: aicrReviewPreflight,
-          bodyBuilder: hoistAicrRepoPath,
+          inputNormalizer: hoistAicrRepoPath,
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrReviewExtract,
           description:
@@ -1418,7 +1437,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             `${AICR_BASE}/pullreqs/${aicrPrNumber(input)}/review/status`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           preflight: aicrNamedRepoPreflight(aicrPrNumber),
-          bodyBuilder: hoistAicrRepoPath,
+          inputNormalizer: hoistAicrRepoPath,
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrReviewStatusExtract,
           actionDescription:
@@ -1476,7 +1495,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           pathBuilder: aicrFindingsPath,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           preflight: aicrNamedRepoPreflight(aicrFindingsPath),
-          bodyBuilder: hoistAicrRepoPath,
+          inputNormalizer: hoistAicrRepoPath,
           pageOneIndexed: true,
           queryParams: {
             repo_path: "repo_path",
@@ -1586,7 +1605,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             `${AICR_BASE}/pullreqs/${aicrPrNumber(input)}/runs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           preflight: aicrNamedRepoPreflight(aicrPrNumber),
-          bodyBuilder: hoistAicrRepoPath,
+          inputNormalizer: hoistAicrRepoPath,
           pageOneIndexed: true,
           headerPagination: true,
           queryParams: { repo_path: "repo_path", page: "page", size: "limit" },
@@ -1600,7 +1619,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           path: `${AICR_BASE}/runs/{runId}`,
           pathParams: { run_id: "runId" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          bodyBuilder: hoistAicrRepoPath,
+          inputNormalizer: hoistAicrRepoPath,
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrRunGetExtract,
           description:
@@ -1616,44 +1635,6 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
               },
             ],
           },
-        },
-      },
-    },
-    {
-      resourceType: "aicr_pull_request",
-      displayName: "AI Code Reviewed Pull Request",
-      description:
-        "Pull requests AI Code Review has reviewed under an account, org, or project, newest review first, with risk and author. " +
-        "Not filtered by PR state: merged and closed PRs stay listed. Only query filters; PR state and branches are on pull_request. Pass an item's repo_path and number to aicr_review, aicr_finding, or aicr_run.",
-      toolset: "aicr",
-      scope: "account",
-      scopeOptional: true,
-      identifierFields: [],
-      diagnosticHint: DIAGNOSTIC_HINT,
-      relatedResources: [
-        {
-          resourceType: "aicr_review",
-          relationship: "has",
-          description: "The review of a listed PR. Same repo_path and number.",
-        },
-      ],
-      compactItem: aicrPullRequestCompact,
-      listFilterFields: [
-        { name: "query", description: "Search by pull request title" },
-      ],
-      operations: {
-        list: {
-          method: "GET",
-          path: `${AICR_BASE}/prs`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          preflight: aicrSpacePreflight,
-          pageOneIndexed: true,
-          headerPagination: true,
-          queryParams: SPACE_LIST_QUERY,
-          responseExtractor: aicrPullRequestListExtract,
-          description:
-            "List reviewed pull requests with number, title, repo_path, risk, and author.",
-          paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
       },
     },
@@ -2120,8 +2101,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
         "AI Code Review settings of a space (org_id/project_id, or nothing for the account) or one repository (repo_id/repo_path): " +
         "excluded and test paths (reviews skip excluded files), the model connector reviews run with (llm_connector_ref, set on spaces), " +
         "review_triggers and dismissable. A value not set on a scope comes from the closest parent space, else the built-in default. " +
-        "review_triggers are read only when a GitHub App repository is enabled, so changing them leaves existing triggers as they are; " +
-        "drafts and dismissable are stored but not acted on yet. Change settings with execute set.",
+        "Not every setting is acted on yet; the set fields say which. Change settings with execute set.",
       toolset: "aicr",
       scope: "account",
       scopeOptional: true,

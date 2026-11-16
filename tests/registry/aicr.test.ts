@@ -162,7 +162,7 @@ describe("aicr toolset registration", () => {
   it("is opt-in; reads are safe and every write has the risk its effect calls for", () => {
     expect(aicrToolset.optIn).toBe(true);
     const types = aicrToolset.resources.map((r) => r.resourceType);
-    expect(types).toEqual(["aicr_review", "aicr_finding", "aicr_run", "aicr_pull_request", "aicr_repository", "aicr_gate", "aicr_rule", "aicr_convention", "aicr_setting"]);
+    expect(types).toEqual(["aicr_review", "aicr_finding", "aicr_run", "aicr_repository", "aicr_gate", "aicr_rule", "aicr_convention", "aicr_setting"]);
     const writes: Record<string, unknown> = {};
     for (const res of aicrToolset.resources) {
       expect(res.scope).toBe("account");
@@ -1075,14 +1075,14 @@ const REPO_SETTING = {
   has_linked_repo: false, created_by: 7, updated_by: 7, created: 1793705000000, updated: 1793706000000, source: "assigned",
 };
 
-describe("space-level lists (aicr_pull_request, aicr_repository)", () => {
+describe("space-level lists (aicr_review, aicr_repository)", () => {
   it.each([
     [{ org_id: "code", project_id: "DeepSourceAICR" }, `${ACCOUNT}/code/DeepSourceAICR`],
     [{ org_id: "code" }, `${ACCOUNT}/code`],
     [{}, ACCOUNT],
   ])("sends %o only as space_path, without orgIdentifier/projectIdentifier", async (scope, spacePath) => {
     // With projectIdentifier set, qa0 returns an empty list for a project space.
-    for (const resourceType of ["aicr_pull_request", "aicr_repository"]) {
+    for (const resourceType of ["aicr_review", "aicr_repository"]) {
       const { client, request } = makeClient(() => []);
       await registry().dispatch(client, resourceType, "list", { ...scope });
       expect(request.mock.calls[0][0].params).toEqual({ space_path: spacePath });
@@ -1113,7 +1113,7 @@ describe("space-level lists (aicr_pull_request, aicr_repository)", () => {
       opts.onResponseHeaders?.(PAGE_HEADERS);
       return [REVIEWED_PR, { ...REVIEWED_PR, number: 8 }];
     });
-    const result = await registry().dispatch(client, "aicr_pull_request", "list", {
+    const result = await registry().dispatch(client, "aicr_review", "list", {
       org_id: "code", project_id: "DeepSourceAICR", query: "rules", page: 0, size: 2,
     }) as Record<string, unknown>;
 
@@ -1131,7 +1131,7 @@ describe("space-level lists (aicr_pull_request, aicr_repository)", () => {
 
   it("does not forward state, branch, or author filters the backend cannot apply", async () => {
     const { client, request } = makeClient(() => []);
-    await registry().dispatch(client, "aicr_pull_request", "list", {
+    await registry().dispatch(client, "aicr_review", "list", {
       state: "merged", source_branch: "main", author_id: 12, page: 0, size: 20,
     });
     expect(request.mock.calls[0][0].params).toEqual({ space_path: ACCOUNT, page: 1, limit: 20 });
