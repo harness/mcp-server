@@ -850,7 +850,7 @@ async function aicrReviewPreflight(ctx: PreflightContext): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Approval prompt notes: short labelled lines saying what a write changes and where, from the
+// Approval prompt notes: one line saying what a write changes and where, from the
 // call's input. Names, not ids. Most are built before any request; rule and convention writes
 // by id also look the row's title up first (aicrNameLookup), and go without it if that fails.
 // ---------------------------------------------------------------------------
@@ -884,7 +884,7 @@ function aicrNoteTarget(input: Record<string, unknown>): AicrNoteTarget {
   const space = project ? `project ${org ? `${org}/` : ""}${project}` : org ? `org ${org}` : "";
   const repo = str(input.repo_id);
   if (repo) return { where: `repo ${repo} ${level === "account" ? "at account level" : `in ${space}`} (this repo only)`, repo: true, level };
-  return { where: space ? `${space} (every repo in it)` : "whole account (every repo)", repo: false, level };
+  return { where: space ? `${space} (every repo in it)` : "the whole account (every repo)", repo: false, level };
 }
 
 function aicrNoteBody(input: Record<string, unknown>): Record<string, unknown> {
@@ -904,9 +904,12 @@ function aicrNoteValue(value: unknown): string {
   return String(value);
 }
 
-/** `Label: text` lines; a line with no text is left out. Capped, so a long list cannot bury the rest. */
-function aicrNote(lines: Array<[label: string, text: string | undefined]>): string {
-  const text = lines.filter(([, t]) => t).map(([label, t]) => `${label}: ${t}`).join("\n");
+/**
+ * One line: `subject: effect`. Clients fold a long prompt after about three lines, so a note is a single
+ * line right under the title. Capped, so a long list cannot run on.
+ */
+function aicrNote(subject: string, effect: string): string {
+  const text = `${subject}: ${effect}`;
   return text.length <= AICR_NOTE_MAX_CHARS ? text : `${text.slice(0, AICR_NOTE_MAX_CHARS)}...`;
 }
 
@@ -916,37 +919,40 @@ function aicrNoteName(input: Record<string, unknown>): string | undefined {
   return title ? `"${title}"` : undefined;
 }
 
+/** `Rule "No TODOs" on project acme/web (every repo in it)`; without a name, `Rule on ...`. */
+function aicrNoteSubject(label: string, input: Record<string, unknown>, where: string): string {
+  const name = aicrNoteName(input);
+  return `${label}${name ? ` ${name}` : ""} on ${where}`;
+}
+
 function aicrGateSetNote(input: Record<string, unknown>): string {
   const categories = aicrNoteBody(input).categories;
   const parts = (Array.isArray(categories) ? categories : [])
     .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
     .map((c) => `${String(c.category)} ${c.reported === false ? "not reported" : `fails at ${String(c.fail_at)}`}`);
-  return aicrNote([
-    ["Merge gate", parts.join("; ") || undefined],
-    ["Where", aicrNoteTarget(input).where],
-    ["Effect", "categories not listed keep their setting."],
-  ]);
+  return aicrNote(
+    `Merge gate on ${aicrNoteTarget(input).where}`,
+    `${parts.length ? `${parts.join("; ")}. ` : ""}Categories not listed keep their setting.`,
+  );
 }
 
 function aicrSettingSetNote(input: Record<string, unknown>): string {
   const body = aicrNoteBody(input);
   const parts = AICR_SETTING_FIELDS.filter((f) => body[f] !== undefined).map((f) => `${f}: ${aicrNoteValue(body[f])}`);
-  return aicrNote([
-    ["Settings", parts.join("; ") || undefined],
-    ["Where", aicrNoteTarget(input).where],
-    ["Effect", "other settings stay as they are."],
-  ]);
+  return aicrNote(
+    `AI Code Review settings on ${aicrNoteTarget(input).where}`,
+    `${parts.length ? `${parts.join("; ")}. ` : ""}Other settings stay as they are.`,
+  );
 }
 
 const AICR_KIND_LABEL = { rule: "Rule", convention: "Convention" } as const;
 
 function aicrPolicyCreateNote(kind: "rule" | "convention") {
   return (input: Record<string, unknown>): string =>
-    aicrNote([
-      [AICR_KIND_LABEL[kind], aicrNoteName(input)],
-      ["Where", aicrNoteTarget(input).where],
-      ["Effect", kind === "rule" ? "reviews check PRs against it; a failed rule fails the Team rules check." : "reviews follow it when checking PRs."],
-    ]);
+    aicrNote(
+      aicrNoteSubject(`New ${kind}`, input, aicrNoteTarget(input).where),
+      kind === "rule" ? "reviews check PRs against it; a failed rule fails the Team rules check." : "reviews follow it when checking PRs.",
+    );
 }
 
 /** Who stops or starts using an archived or restored row: the repo, or every repo that inherits it. */
@@ -965,18 +971,17 @@ function aicrPolicyUpdateNote(kind: "rule" | "convention") {
         : body.status === "active"
           ? `restores it: reviews use it again in ${who}.`
           : `changes ${Object.keys(body).join(", ") || "it"} in ${who}.`;
-    return aicrNote([[AICR_KIND_LABEL[kind], aicrNoteName(input)], ["Where", t.where], ["Effect", effect]]);
+    return aicrNote(aicrNoteSubject(AICR_KIND_LABEL[kind], input, t.where), effect);
   };
 }
 
 function aicrPolicyDeleteNote(kind: "rule" | "convention") {
   return (input: Record<string, unknown>): string => {
     const t = aicrNoteTarget(input);
-    return aicrNote([
-      [AICR_KIND_LABEL[kind], aicrNoteName(input)],
-      ["Where", t.where],
-      ["Effect", `archives it, nothing is erased: reviews stop using it in ${aicrNoteInheritors(t)}. Update status to active to restore.`],
-    ]);
+    return aicrNote(
+      aicrNoteSubject(AICR_KIND_LABEL[kind], input, t.where),
+      `archives it, nothing is erased: reviews stop using it in ${aicrNoteInheritors(t)}. Update status to active to restore.`,
+    );
   };
 }
 
@@ -986,7 +991,7 @@ function aicrRuleOverrideNote(input: Record<string, unknown>): string | undefine
   const enabled = aicrNoteBody(input).enabled;
   const effect =
     typeof enabled === "boolean" ? `turns the rule ${enabled ? "on" : "off"} for this repo; other repos keep it.` : "overrides the rule for this repo; other repos keep it.";
-  return aicrNote([["Rule", aicrNoteName(input)], ["Where", t.where], ["Effect", effect]]);
+  return aicrNote(aicrNoteSubject("Rule", input, t.where), effect);
 }
 
 function aicrEnableNote(input: Record<string, unknown>): string | undefined {
@@ -996,16 +1001,16 @@ function aicrEnableNote(input: Record<string, unknown>): string | undefined {
     t.level === "project"
       ? "the project's AI Code Review pipeline (created if missing)"
       : `the AI Code Review pipeline of every project under the ${t.level} (created if missing)`;
-  return aicrNote([["Where", t.where], ["Effect", `adds a PR trigger to ${pipelines}; new PR commits get reviewed.`]]);
+  return aicrNote(`Enable AI Code Review on ${t.where}`, `adds a PR trigger to ${pipelines}; new PR commits get reviewed.`);
 }
 
 function aicrDisableNote(input: Record<string, unknown>): string | undefined {
   const t = aicrNoteTarget(input);
   if (!t.repo) return undefined;
-  return aicrNote([
-    ["Where", t.where],
-    ["Effect", "removes its PR triggers and every gate, rule, override and convention set on this repo. Enabling again does not bring them back."],
-  ]);
+  return aicrNote(
+    `Disable AI Code Review on ${t.where}`,
+    "removes its PR triggers and every gate, rule, override and convention set on this repo. Enabling again does not bring them back.",
+  );
 }
 
 function aicrDismissNote(input: Record<string, unknown>): string | undefined {
@@ -1013,11 +1018,10 @@ function aicrDismissNote(input: Record<string, unknown>): string | undefined {
   if (!t.repo) return undefined;
   const pr = str(input.pr_number);
   const reason = str(aicrNoteBody(input).reason);
-  return aicrNote([
-    ["Finding", `${pr ? `on PR #${pr}` : "on a PR"}${reason ? `, reason: ${reason}` : ""}`],
-    ["Where", t.where],
-    ["Effect", "it no longer fails the AI Code Review check. undo_dismiss reopens it."],
-  ]);
+  return aicrNote(
+    `Dismiss a finding${pr ? ` on PR #${pr}` : ""}${reason ? ` (reason: ${reason})` : ""} in ${t.where}`,
+    "it no longer fails the AI Code Review check. undo_dismiss reopens it.",
+  );
 }
 
 /**

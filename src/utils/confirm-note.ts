@@ -26,18 +26,18 @@ export function resolveConfirmNote(
   return typeof text === "string" && text.trim() ? text.trim() : undefined;
 }
 
-/** `message` with the note appended as its own paragraph; unchanged when there is no note. */
+/** `message` with the note on the next line; unchanged when there is no note. */
 export function withConfirmNote(message: string, note: string | undefined): string {
-  return note ? `${message}\n\n${note}` : message;
+  return note ? `${message}\n${note}` : message;
 }
 
 /**
- * A prompt with a title and a long body. The note goes under the title, before the body:
- * clients fold long prompts ("… +4 more lines"), and a note after the body would be hidden.
+ * A prompt with a title and a long body. The note is one line right under the title, before the body:
+ * clients fold a long prompt after about three lines ("… +4 more lines"), and anything later is hidden.
  * Unchanged (`title`, blank line, `body`) when there is no note.
  */
 export function withConfirmNoteFirst(title: string, body: string, note: string | undefined): string {
-  return note ? `${title}\n\n${note}\n\n${body}` : `${title}\n\n${body}`;
+  return note ? `${title}\n${note}\n\n${body}` : `${title}\n\n${body}`;
 }
 
 const PREFETCH_TIMEOUT_MS = 3_000;

@@ -94,10 +94,11 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           );
           return errorResult(reason);
         }
+        const deleteNote = await resolveConfirmNoteAsync(def.operations.delete, input, { client, registry, accountId: registry.getAccountId() });
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_delete",
-          message: `Delete ${args.resource_type} "${resolvedResourceId}"?\n\n${await resolveConfirmNoteAsync(def.operations.delete, input, { client, registry, accountId: registry.getAccountId() }) ?? "This is destructive and cannot be undone."}`,
+          message: `Delete ${args.resource_type} "${resolvedResourceId}"?${deleteNote ? `\n${deleteNote}` : "\n\nThis is destructive and cannot be undone."}`,
           risk: "destructive",
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,

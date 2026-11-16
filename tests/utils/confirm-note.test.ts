@@ -8,8 +8,8 @@ describe("resolveConfirmNote", () => {
     expect(withConfirmNote("Create x?\n\n{}", undefined)).toBe("Create x?\n\n{}");
   });
 
-  it("a string note is used as is, as its own paragraph", () => {
-    expect(withConfirmNote("Delete x?", resolveConfirmNote({ confirmNote: "Archives it." }, {}))).toBe("Delete x?\n\nArchives it.");
+  it("a string note is used as is, on the line under the question", () => {
+    expect(withConfirmNote("Delete x?", resolveConfirmNote({ confirmNote: "Archives it." }, {}))).toBe("Delete x?\nArchives it.");
   });
 
   it("a function note reads the input but gets a copy, so it cannot change what is sent", () => {
@@ -41,7 +41,7 @@ describe("resolveConfirmNote", () => {
 
 describe("withConfirmNoteFirst", () => {
   it("puts the note between the title and the body, so a folded prompt still shows it", () => {
-    expect(withConfirmNoteFirst("Create x?", "{\n}", "Note.")).toBe("Create x?\n\nNote.\n\n{\n}");
+    expect(withConfirmNoteFirst("Create x?", "{\n}", "Note.")).toBe("Create x?\nNote.\n\n{\n}");
   });
   it("no note: title, blank line, body, as before", () => {
     expect(withConfirmNoteFirst("Create x?", "{\n}", undefined)).toBe("Create x?\n\n{\n}");
