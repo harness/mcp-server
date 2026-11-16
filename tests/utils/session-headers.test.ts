@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import type { Config } from "../../src/config.js";
-import { resolveFmeApiKey } from "../../src/config.js";
+import { resolveAppSecApiKey, resolveFmeApiKey } from "../../src/config.js";
 import {
   mergeConfigWithSessionHeaders,
   MissingSessionCredentialsError,
@@ -208,6 +208,54 @@ describe("multi-user session credentials", () => {
     expect(merged.HARNESS_API_KEY).toBe("pat.user1.tok.sec");
     expect(merged.HARNESS_FME_API_KEY).toBe("shared-fme-key");
     expect(resolveFmeApiKey(merged)).toBe("pat.user1.tok.sec");
+  });
+
+  it("resolves AppSec auth from x-harness-appsec-api-key in multi-user mode and ignores shared server keys", () => {
+    const base = makeConfig({
+      HARNESS_MCP_MODE: "multi-user",
+      HARNESS_API_KEY: "",
+      HARNESS_ACCOUNT_ID: "",
+      HARNESS_APPSEC_API_KEY: "shared-server-appsec-key",
+    });
+
+    // Without x-harness-appsec-api-key, shared server key is ignored and session PAT is not used
+    const withoutAppSec = mergeConfigWithSessionHeaders(base, {
+      "x-harness-api-key": "pat.user1.tok.sec",
+    });
+    expect(resolveAppSecApiKey(withoutAppSec)).toBeUndefined();
+
+    // With x-harness-appsec-api-key, the session's Traceable token is bound and resolved,
+    // and survives object spreads like `{ ...headerConfig, HARNESS_ACCOUNT_ID }` in src/index.ts.
+    const withAppSec = mergeConfigWithSessionHeaders(base, {
+      "x-harness-api-key": "pat.user1.tok.sec",
+      "x-harness-appsec-api-key": "traceable-session-token-user1",
+    });
+    expect(resolveAppSecApiKey(withAppSec)).toBe("traceable-session-token-user1");
+    expect(resolveAppSecApiKey({ ...withAppSec })).toBe("traceable-session-token-user1");
+
+    // OAuth mode: survives `{ ...headerConfig, HARNESS_ACCOUNT_ID: oauthCredential.accountId }` spread
+    const oauthBase = makeConfig({
+      HARNESS_MCP_MODE: "oauth",
+      HARNESS_API_KEY: "",
+      HARNESS_ACCOUNT_ID: "",
+      HARNESS_APPSEC_API_KEY: "shared-server-appsec-key",
+    });
+    const oauthHeaderCfg = mergeConfigWithSessionHeaders(oauthBase, {
+      "x-harness-appsec-api-key": "traceable-oauth-session-token",
+    });
+    const oauthSessionCfg = { ...oauthHeaderCfg, HARNESS_ACCOUNT_ID: "oauth-acct" };
+    expect(resolveAppSecApiKey(oauthSessionCfg)).toBe("traceable-oauth-session-token");
+  });
+
+  it("ignores x-harness-appsec-api-key in single-user mode", () => {
+    const base = makeConfig({
+      HARNESS_MCP_MODE: "single-user",
+      HARNESS_APPSEC_API_KEY: "operator-appsec-key",
+    });
+    const merged = mergeConfigWithSessionHeaders(base, {
+      "x-harness-appsec-api-key": "attacker-appsec-key",
+    });
+    expect(resolveAppSecApiKey(merged)).toBe("operator-appsec-key");
   });
 
   it("does not require session credential headers in personal mode", () => {

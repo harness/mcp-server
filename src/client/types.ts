@@ -70,8 +70,8 @@ export interface RequestOptions {
   maxResponseBytes?: number;
   /** Required for responseType=sse. The caller owns the batch policy. */
   sseLimits?: JsonEventStreamLimits;
-  /** Product backend — when "fme", skips Harness-specific auth/headers/params. */
-  product?: "harness" | "fme";
+  /** Product backend — when "fme" or "appsec", skips Harness-specific auth/headers/params. */
+  product?: "harness" | "fme" | "appsec";
   /** When true, omit the automatic `accountIdentifier` query param.
    *  Some APIs (e.g. SEI) use only the `Harness-Account` header for account scoping. */
   headerBasedScoping?: boolean;

@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { chaosActionExtract, chaosDRTestListExtract, chaosExperimentListExtract, chaosInputSetListExtract } from "../../src/registry/extractors.js";
+import {
+  chaosActionExtract,
+  chaosDashboardListExtract,
+  chaosDRTestListExtract,
+  chaosExperimentListExtract,
+  chaosGuardConditionListExtract,
+  chaosGuardRuleListExtract,
+  chaosInputSetListExtract,
+  chaosOnboardingListExtract,
+  chaosPipelineOnboardingListExtract,
+} from "../../src/registry/extractors.js";
 
 describe("chaosInputSetListExtract", () => {
   it("injects experimentId from input into each item", () => {
@@ -99,6 +109,64 @@ describe("chaosDRTestListExtract", () => {
     expect(chaosDRTestListExtract(raw)).toEqual({
       items: [{ id: "dr-1" }, { id: "dr-2" }],
       total: 50,
+    });
+  });
+});
+
+describe("chaosGuard list extractors", () => {
+  it("reads conditions and ignores a data array", () => {
+    expect(chaosGuardConditionListExtract({
+      data: [{ conditionId: "from-data" }],
+      conditions: [{ conditionId: "c1" }],
+      pagination: { totalItems: 4 },
+    })).toEqual({ items: [{ conditionId: "c1" }], total: 4 });
+  });
+
+  it("reads rules", () => {
+    expect(chaosGuardRuleListExtract({
+      rules: [{ ruleId: "r1" }],
+      pagination: { totalItems: 1 },
+    })).toEqual({ items: [{ ruleId: "r1" }], total: 1 });
+  });
+
+  it("returns an empty list when the named array is missing", () => {
+    expect(chaosGuardConditionListExtract({ pagination: { totalItems: 3 } })).toEqual({ items: [], total: 3 });
+    expect(chaosGuardRuleListExtract({})).toEqual({ items: [], total: 0 });
+  });
+});
+
+describe("chaos onboarding list extractors", () => {
+  it("reads onboarding rows and total from data and page", () => {
+    expect(chaosOnboardingListExtract({
+      data: [{ onboardingID: "ob-1", environmentRef: "org.env" }],
+      page: { totalItems: 3 },
+    })).toEqual({
+      items: [{ onboardingID: "ob-1", environmentRef: "org.env" }],
+      total: 3,
+    });
+  });
+
+  it("reads pipelineOnboardings without a data envelope", () => {
+    expect(chaosPipelineOnboardingListExtract({
+      data: [{ pipelineIdentity: "wrong" }],
+      pipelineOnboardings: [{ pipelineIdentity: "pipe-1" }],
+    })).toEqual({
+      items: [{ pipelineIdentity: "pipe-1" }],
+      total: 1,
+    });
+  });
+});
+
+describe("chaos v3 list extractors", () => {
+  it("preserves dashboard counts outside the data array", () => {
+    expect(chaosDashboardListExtract({
+      data: [{ identity: "coverage" }],
+      pagination: { totalItems: 4 },
+      counts: { all: 4, favourites: 1 },
+    })).toEqual({
+      items: [{ identity: "coverage" }],
+      total: 4,
+      counts: { all: 4, favourites: 1 },
     });
   });
 });

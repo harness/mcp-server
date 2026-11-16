@@ -9,6 +9,7 @@ const log = createLogger("session-headers");
 export const PIPELINE_VERSION_HEADER = "x-harness-pipeline-version";
 export const AUTO_APPROVE_RISK_HEADER = "x-harness-auto-approve-risk";
 export const API_KEY_HEADER = "x-harness-api-key";
+export const APPSEC_API_KEY_HEADER = "x-harness-appsec-api-key";
 export const ACCOUNT_ID_HEADER = "x-harness-account-id";
 export const ORG_HEADER = "x-harness-org";
 export const PROJECT_HEADER = "x-harness-project";
@@ -87,10 +88,12 @@ export function mergeConfigWithSessionHeaders(
   const autoApproveRisk = parseAutoApproveRiskHeader(headers);
 
   const isMultiUser = baseConfig.HARNESS_MCP_MODE === "multi-user";
+  const isSingleUser = baseConfig.HARNESS_MCP_MODE === "single-user";
 
-  // Identity headers are only accepted in multi-user mode.
+  // Identity headers are only accepted in non-single-user hosted modes.
   // In single-user mode, the operator's config is authoritative.
   const sessionApiKey = isMultiUser ? getHeader(headers, API_KEY_HEADER) : undefined;
+  const sessionAppSecApiKey = !isSingleUser ? getHeader(headers, APPSEC_API_KEY_HEADER)?.trim() : undefined;
   const rawSessionAccountId = isMultiUser ? getHeader(headers, ACCOUNT_ID_HEADER) : undefined;
   const tokenAccountId = sessionApiKey ? extractAccountIdFromToken(sessionApiKey) : undefined;
   const sessionAccountId = rawSessionAccountId ?? tokenAccountId;
@@ -115,6 +118,7 @@ export function mergeConfigWithSessionHeaders(
   const hasOverrides = pipelineVersion !== undefined
     || autoApproveRisk !== undefined
     || sessionApiKey !== undefined
+    || sessionAppSecApiKey !== undefined
     || sessionAccountId !== undefined
     || sessionOrg !== undefined
     || sessionProject !== undefined;
@@ -129,6 +133,7 @@ export function mergeConfigWithSessionHeaders(
     ...(pipelineVersion !== undefined ? { HARNESS_PIPELINE_VERSION: pipelineVersion } : {}),
     ...(cappedAutoApproveRisk !== undefined ? { HARNESS_AUTO_APPROVE_RISK: cappedAutoApproveRisk } : {}),
     ...(sessionApiKey !== undefined ? { HARNESS_API_KEY: sessionApiKey } : {}),
+    ...(sessionAppSecApiKey !== undefined ? { HARNESS_APPSEC_SESSION_API_KEY: sessionAppSecApiKey } : {}),
     ...(sessionAccountId !== undefined ? { HARNESS_ACCOUNT_ID: sessionAccountId } : {}),
     ...(sessionOrg !== undefined ? { HARNESS_ORG: sessionOrg } : {}),
     ...(sessionProject !== undefined ? { HARNESS_PROJECT: sessionProject } : {}),

@@ -1,4 +1,4 @@
-import { type Config, isPlaceholderCredential, resolveFmeApiKey } from "../config.js";
+import { type Config, isPlaceholderCredential, resolveAppSecApiKey, resolveFmeApiKey } from "../config.js";
 import type { RequestOptions } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
@@ -307,6 +307,7 @@ export class HarnessClient {
   private readonly rateLimiter: RateLimiter;
   private readonly logUnsafeBodies: boolean;
   private readonly fmeApiKey: string | undefined;
+  private readonly appsecApiKey: string | undefined;
   private readonly mcpMode: Config["HARNESS_MCP_MODE"];
   private accountIdResolver?: AccountIdResolver;
   private bearerTokenResolver?: BearerTokenResolver;
@@ -322,6 +323,7 @@ export class HarnessClient {
     this.rateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
     this.logUnsafeBodies = config.HARNESS_LOG_UNSAFE_BODIES;
     this.fmeApiKey = resolveFmeApiKey(config);
+    this.appsecApiKey = resolveAppSecApiKey(config);
     this.mcpMode = config.HARNESS_MCP_MODE;
   }
 
@@ -353,9 +355,10 @@ export class HarnessClient {
 
   private buildHeaders(options: RequestOptions): Record<string, string> {
     const isFme = options.product === "fme";
+    const isAppSec = options.product === "appsec";
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      ...(isFme ? {} : { "Harness-Account": accountId }),
+      ...(isFme || isAppSec ? {} : { "Harness-Account": accountId }),
       "User-Agent": HARNESS_MCP_USER_AGENT,
       ...options.headers,
     };
@@ -368,11 +371,37 @@ export class HarnessClient {
     ) {
       headers["x-tenant-id"] = accountId;
     }
-    this.applyDefaultAuth(headers, isFme);
+    this.applyDefaultAuth(headers, isFme, isAppSec);
     return headers;
   }
 
-  private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
+  private applyDefaultAuth(headers: Record<string, string>, isFme: boolean, isAppSec = false): void {
+    if (isAppSec) {
+      // Never forward Harness x-api-key, session x-harness-api-key, or HarnessID OAuth tokens to api.traceable.ai.
+      deleteHeaderValues(headers, "x-api-key");
+      const headerAppSecKey = deleteHeaderValues(headers, "x-harness-appsec-api-key")
+        .map((value) => value.trim())
+        .find((value) => value && !isPlaceholderCredential(value));
+
+      if (getHeaderValue(headers, "authorization")) return;
+
+      const appsecApiKey = headerAppSecKey ?? this.appsecApiKey;
+      if (!appsecApiKey) {
+        const remediation =
+          this.mcpMode === "single-user"
+            ? "Set HARNESS_APPSEC_API_KEY to a valid Traceable Platform API token (HARNESS_API_KEY is never forwarded to Traceable)."
+            : `Supply a per-session Traceable token via the x-harness-appsec-api-key header (Harness credentials and HarnessID OAuth tokens are never forwarded to Traceable in ${this.mcpMode} mode).`;
+        throw new HarnessApiError(
+          `AppSec is not configured or authorized for this MCP session. ${remediation}`,
+          401,
+          "APPSEC_AUTH_MISSING",
+        );
+      }
+
+      headers["Authorization"] = appsecApiKey;
+      return;
+    }
+
     if (this.mcpMode === "oauth" || this.mcpMode === "oauth-proxy") {
       deleteHeaderValues(headers, "x-api-key");
       if (isFme) {
@@ -765,9 +794,10 @@ export class HarnessClient {
 
     // Inject accountIdentifier into query params (used by most Harness APIs).
     // Some APIs (e.g. SEI) use only the Harness-Account header — skip when told.
-    // FME/Split API uses neither Harness account query params nor Harness-Account header.
+    // FME/Split and Traceable AppSec APIs use neither Harness account query params nor Harness-Account header.
+    const isExternalProduct = options.product === "fme" || options.product === "appsec";
     const params = new URLSearchParams();
-    if (!options.headerBasedScoping && options.product !== "fme") {
+    if (!options.headerBasedScoping && !isExternalProduct) {
       const accountId = this.resolveAccountId();
       params.set("accountIdentifier", accountId);
       params.set("routingId", accountId);
@@ -781,7 +811,7 @@ export class HarnessClient {
     if (options.params) {
       for (const [key, value] of Object.entries(options.params)) {
         if (value === undefined || value === "") continue;
-        if (options.product !== "fme" && ACCOUNT_SCOPE_QUERY_KEYS.has(key)) {
+        if (!isExternalProduct && ACCOUNT_SCOPE_QUERY_KEYS.has(key)) {
           // The public global template catalog has its own account. Permit only
           // its single-template GET; routing and authentication stay session-bound.
           const isGlobalTemplateRead = key === "accountIdentifier"

@@ -297,7 +297,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, x-harness-api-key, x-harness-account-id, x-harness-org, x-harness-project, x-harness-pipeline-version, x-harness-auto-approve-risk");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, x-harness-api-key, x-harness-appsec-api-key, x-harness-account-id, x-harness-org, x-harness-project, x-harness-pipeline-version, x-harness-auto-approve-risk");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });

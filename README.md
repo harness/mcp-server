@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 265 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 269 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,7 +10,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 265 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 269 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 43 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -159,7 +159,7 @@ HARNESS_MCP_MODE=oauth
 
 This defaults to the issuer `https://id.harness.io/idp/realms/HarnessIDP`, resource `https://mcp.harness.io/mcp`, OAuth client `mcp-client`, and Harness API base `https://mcp.harness.io/cli`. Override them only for QA, local development, or another Harness environment.
 
-`HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token.
+`HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token. If the opt-in `appsec` toolset (`HARNESS_TOOLSETS=+appsec`) is enabled, sessions must also pass `x-harness-appsec-api-key` on the `initialize` request (HarnessID OAuth tokens are never forwarded to `api.traceable.ai`).
 
 The server publishes RFC 9728 protected-resource metadata and returns this challenge when a client has not authenticated:
 
@@ -205,6 +205,7 @@ Set `HARNESS_MCP_MODE=multi-user` for shared HTTP deployments where each client 
 - `HARNESS_API_KEY` must **not** be set in the server config — the server holds no Harness credentials.
 - Each session must provide `x-harness-api-key` on the `initialize` request. `x-harness-account-id` is required only when the API key does not embed an account segment.
 - Sessions may also provide `x-harness-org` and `x-harness-project` headers to set default scope for that session.
+- If the opt-in `appsec` toolset (`HARNESS_TOOLSETS=+appsec`) is enabled, sessions that call `appsec_*` resources must also provide `x-harness-appsec-api-key` on the `initialize` request (the session's `x-harness-api-key` is never forwarded to `api.traceable.ai`).
 - The Harness API key flows through to every Harness API call for that session, so the audit trail in Harness reflects the real user.
 - `HARNESS_MCP_AUTH_TOKEN` is independent and can still be used as an additional transport-layer gate.
 
@@ -627,6 +628,9 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_BROKER_TRANSACTION_TTL_MS` | No | `600000` | Maximum lifetime of the chained browser authorization transaction |
 | `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. Legacy FME is unavailable in OAuth mode so HarnessID tokens are never sent to `api.split.io`; use Harness-native `org_id`+`project_id` scope instead. Must not be set in `multi-user`, `oauth`, or `oauth-proxy` mode |
 | `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources in **legacy (`workspace_id`) mode only**. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development. Harness-native (`org_id`+`project_id`) mode ignores this and uses the standard `HARNESS_API_KEY`/`HARNESS_BASE_URL` instead |
+| `HARNESS_APPSEC_API_KEY`    | No       | --                          | Optional single-user Traceable Platform API token used by `appsec_` resources (`HARNESS_TOOLSETS=+appsec`). `HARNESS_API_KEY`, session `x-harness-api-key`, and HarnessID OAuth tokens are never forwarded to Traceable. Must not be set in `multi-user`, `oauth`, or `oauth-proxy` mode (hosted sessions supply `x-harness-appsec-api-key` per session) |
+| `HARNESS_APPSEC_BASE_URL`   | No       | `https://api.traceable.ai`  | Traceable GraphQL API base URL used by `appsec_` resources. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development |
+| `HARNESS_APPSEC_UI_URL`     | No       | `https://app.traceable.ai`  | Traceable web UI base URL used for deep links on `appsec_` resources (auto-derived from `HARNESS_APPSEC_BASE_URL` when unset) |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
 | `HARNESS_API_TIMEOUT_MS`    | No       | `30000`                     | HTTP request timeout in milliseconds                                                                                                                                                                                                                  |
@@ -1300,7 +1304,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-265 resource types organized across 43 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+269 resource types organized across 43 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1622,6 +1626,33 @@ Typical workflow:
 6. `harness_get` on `release_input`, `release_execution_phase_input`, `release_execution_phase_output`, `release_execution_activity_output`, or `release_execution_activity_input` using `release_id` plus `params.phase_identifier` / `params.activity_identifier` / `activity_execution_id` as documented on each resource.
 
 
+### Unified Search
+
+The opt-in `unified-search` toolset (`HARNESS_TOOLSETS=+unified-search`) adds semantic (meaning-based) search across every source search-service serves. Results are scoped to the caller's account and RBAC-filtered. The account needs the semantic search feature flag.
+
+| Resource Type | List | Get | Execute Actions |
+| ------------- | ---- | --- | --------------- |
+| `unified_search` | x | | `search` |
+| `unified_search_source` | | x | |
+
+```text
+# 1. Search with the user's words (all sources)
+harness_search(query="payments service that keeps crashing")
+
+# 2. Optional: if a hit names a Knowledge Graph type, look it up or query it
+harness_get(resource_type="kg_type", resource_id="<type id>", params={kind: "<kind>"})
+
+# 3. Narrow with filters on the hits' metadata keys, per source
+harness_execute(resource_type="unified_search", action="search", body={
+  query: "payments service that keeps crashing",
+  source_filters: {"<source>": {predicate: {field: "<metadata key>", op: "NE", values: [{string_value: "closed"}]}}}
+})
+```
+
+`harness_get(resource_type="unified_search_source")` lists the sources. See `harness_describe(resource_type="unified_search")` for the filter syntax.
+
+This is separate from the semantic routing providers in [Semantic Search](#semantic-search), which index MCP resource definitions and docs to narrow `harness_search`'s fan-out.
+
 ### Vibe
 
 The default-enabled `vibe` toolset covers the [Vibe Orchestrator BFF contract](tests/fixtures/vibe-bff-openapi.yaml) under `${HARNESS_BASE_URL}/vibe/v1`. It uses the existing Harness connection and account header, without adding account/org/project query parameters or scope fields to request bodies. The team validated the Vibe flow using Harness API-key authentication (PAT/SAT), so no opt-in setting is required for default sessions. The curated OpenAPI documents bearer/session authentication; the server's OAuth mode forwards the current session's bearer token. Automated regressions verify both header paths; gateway authentication remains subject to the target environment's configuration.
@@ -1754,42 +1785,46 @@ In single-user/self-hosted mode, legacy-mode auth uses a Bearer token from `HARN
 
 | Resource Type                    | List | Get | Create | Update | Delete | Execute Actions                                                              |
 |----------------------------------| ---- | --- | ------ | ------ | ------ |------------------------------------------------------------------------------|
-| `chaos_experiment`               | x    | x   | x      |        | x      | `run`, `stop`                                                                |
+| `chaos_experiment`               | x    | x   | x      | x      | x      | `run`, `stop`, `list_metadata`, `update_cron`                                 |
 | `chaos_experiment_run`           |      | x   |        |        |        |                                                                              |
 | `chaos_experiment_variable`      | x    |     |        |        |        |                                                                              |
 | `chaos_component_variable`       |      | x   |        |        |        |                                                                              |
 | `chaos_input_set`                | x    | x   | x      | x      | x      |                                                                              |
-| `chaos_experiment_template`      | x    | x   |        |        | x      | `create_from_template`, `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions` |
-| `chaos_probe`                    | x    | x   | x      |        | x      | `enable`, `verify`, `get_manifest`                                           |
+| `chaos_experiment_template`      | x    | x   | x      | x      | x      | `create_from_template`, `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions` |
+| `chaos_probe`                    | x    | x   | x      |        | x      | `list_metadata`, `enable`, `verify`, `get_manifest`                          |
 | `chaos_probe_in_run`             | x    |     |        |        |        |                                                                              |
-| `chaos_probe_template`           | x    | x   |        |        | x      | `get_variables`                                                              |
-| `chaos_infrastructure`           | x    |     |        |        |        |                                                                              |
-| `chaos_k8s_infrastructure`       | x    | x   | x      |        |        | `check_health`                                                               |
+| `chaos_probe_template`           | x    | x   | x      | x      | x      | `get_variables`                                                              |
+| `chaos_infrastructure`           | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_k8s_infrastructure`       | x    | x   | x      | x      | x      | `check_health`, `get_yaml`, `get_manifest`, `helm_command`                   |
 | `chaos_enabled_infrastructure`   | x    |     |        |        |        |                                                                              |
 | `chaos_environment`              | x    |     |        |        |        |                                                                              |
-| `chaos_hub`                      | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_hub`                      | x    | x   | x      | x      | x      | `list_metadata`                                                              |
 | `chaos_hub_fault`                | x    |     |        |        |        |                                                                              |
-| `chaos_fault`                    | x    | x   |        |        | x      | `get_variables`, `get_yaml`                                                  |
-| `chaos_fault_template`           | x    | x   |        |        | x      | `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions`           |
+| `chaos_fault`                    | x    | x   |        |        | x      | `list_metadata`, `get_variables`, `get_yaml`                                 |
+| `chaos_fault_template`           | x    | x   | x      | x      | x      | `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions`           |
 | `chaos_fault_experiment_run`     | x    |     |        |        |        |                                                                              |
-| `chaos_action`                   | x    | x   | x      |        | x      | `get_manifest`                                                               |
-| `chaos_action_template`          | x    | x   |        |        | x      | `list_revisions`, `get_variables`, `compare_revisions`                       |
+| `chaos_action`                   | x    | x   | x      | x      | x      | `list_metadata`, `get_manifest`                                              |
+| `chaos_action_template`          | x    | x   | x      | x      | x      | `list_revisions`, `get_variables`, `compare_revisions`                       |
 | `chaos_loadtest`                 | x    | x   | x      | x      | x      | `run`, `stop`                                                                |
 | `chaos_service`                  | x    | x   | x      | x      | x      | `list_experiment_runs`, `list_load_tests`                                    |
 | `custom_service`                 | x    | x   | x      | x      |        |                                                                              |
-| `chaos_application_map`          | x    | x   |        |        |        |                                                                              |
+| `chaos_application_map`          | x    | x   |        |        | x      |                                                                              |
 | `discovered_agent`               | x    |     |        |        |        |                                                                              |
 | `discovered_namespace`           | x    |     |        |        |        |                                                                              |
 | `discovered_service`             | x    |     |        |        |        |                                                                              |
 | `discovered_network_map`         | x    |     |        |        |        |                                                                              |
-| `chaos_guard_condition`          | x    | x   |        |        | x      |                                                                              |
-| `chaos_guard_rule`               | x    | x   |        |        | x      | `enable`                                                                     |
+| `chaos_guard_condition`          | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_guard_rule`               | x    | x   | x      | x      | x      | `enable`                                                                     |
 | `chaos_recommendation`           | x    | x   |        |        |        |                                                                              |
+| `chaos_onboarding`               | x    | x   | x      |        | x      | `stats`, `confirm_discovery`, `onboard_services`, `confirm_service_onboarding`, `trigger_risk_scan`, `risk_scan`, `confirm_risk_scan`, `list_services`, `confirm_network_map`, `confirm_experiment_creation`, `confirm_experiment_run`, `skip`, `stop` |
+| `chaos_pipeline_onboarding`      | x    | x   | x      |        | x      | `can_onboard`                                                                |
 | `chaos_risk`                     | x    | x   |        |        |        |                                                                              |
 | `chaos_dr_test`                  | x    |     | x      |        |        |                                                                              |
 | `scanned_risk`                   | x    | x   |        |        |        | `occurrences`, `summary_by_service`                                          |
 | `chaos_risk_rule`                | x    | x   | x      | x      | x      |                                                                              |
 | `chaos_risk_scan`                | x    | x   | x      | x      | x      | `retry`, `abort`, `report`, `report_download`, `heatmap`, `submit_findings` |
+| `chaos_dashboard`                | x    | x   |        | x      |        |                                                                              |
+| `chaos_image_registry`           |      | x   | x      | x      |        | `resolve`                                                                    |
 
 ### Cloud Cost Management (CCM)
 
@@ -2008,11 +2043,13 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 43 of 47 toolsets are enabled. Four toolsets are opt-in and excluded from the defaults:
+By default, 43 of 49 toolsets are enabled. Five toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
+- **`appsec`** — Traceable Application & API Security (API inventory, OpenAPI specs, sample spans, sensitive data types, runtime threat activities, security events, AST scans, inventory trends, fraud policies, and derivation configs). Opt-in because it requires a dedicated `HARNESS_APPSEC_API_KEY` and targets `api.traceable.ai`.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
 - **`observability-evaluations`** — Scheduled production-telemetry evaluation rules. Opt-in because it depends on the deployed scoring control plane.
+- **`unified-search`** — Semantic search across every source search-service serves. Opt-in because the backend is not deployed on every cluster and is feature-flagged per account (see [Unified Search](#unified-search)).
 - **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions). Opt-in until v3 writes land, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
 
 ### Adding toolsets with `+` prefix
@@ -2074,7 +2111,7 @@ Available toolset names:
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
 | `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition, fme_metric, fme_event_type, fme_experiment, fme_experiment_settings, fme_experiment_alerting, fme_experiment_result                       |
 | `gitops`                | gitops_agent, gitops_agent_metrics, gitops_argo_project, gitops_app_project_mapping, gitops_autocreate_log, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree, gitops_cluster_link |
-| `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, custom_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan |
+| `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, custom_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_onboarding, chaos_pipeline_onboarding, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan, chaos_dashboard, chaos_image_registry |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
@@ -2089,6 +2126,7 @@ Available toolset names:
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
+| `unified-search` *(opt-in)*        | unified_search, unified_search_source                                                                                                                                                                                                                                                                        |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_git_registration, eval_prompt, online_eval |
 | `observability-evaluations` *(opt-in)* | observability_eval                                                                                                                                                                                                                                                               |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
@@ -2097,6 +2135,7 @@ Available toolset names:
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 | `vibe`                | vibe_project, vibe_app_lifecycle |
 | `timelines`           | activity_timeline |
+| `appsec` *(opt-in)*   | appsec_api, appsec_api_spec, appsec_api_span, appsec_entity, appsec_vulnerability, appsec_threat_activity, appsec_security_event, appsec_ast_scan, appsec_inventory_trend, appsec_datatype, appsec_fraud_policy, appsec_derivation_config |
 
 
 ## Architecture
@@ -2114,8 +2153,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 47 Toolsets (43 default) |
-                |  265 Resource Types|
+                | 49 Toolsets (43 default) |
+                |  269 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
