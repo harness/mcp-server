@@ -4666,14 +4666,14 @@ describe("approval prompt notes (confirmNote)", () => {
         "Categories not listed keep their setting. Applies to pull requests of every repository under it.",
     );
     expect(await promptFor(registry, "harness_create", { resource_type: "aicr_rule", org_id: "acme", body: { title: "No TODOs" } })).toBe(
-      'Create aicr_rule?\n\n{\n  "title": "No TODOs"\n}\n\nCreates this rule on org acme: reviews check pull requests of every repository under it against it, ' +
-        "and a failed rule fails the Team rules check.",
+      "Create aicr_rule?\n\nCreates this rule on org acme: reviews check pull requests of every repository under it against it, " +
+        'and a failed rule fails the Team rules check.\n\n{\n  "title": "No TODOs"\n}',
     );
     expect(await promptFor(registry, "harness_update", {
       resource_type: "aicr_convention", resource_id: "7", org_id: "acme", project_id: "web", repo_id: "demo", body: { status: "archived" },
     })).toBe(
-      'Update aicr_convention "7"?\n\n{\n  "status": "archived"\n}\n\nArchives the convention on repository demo in project acme/web: ' +
-        "reviews stop using it in every repository that inherits it. Update with status active restores it.",
+      'Update aicr_convention "7"?\n\nArchives the convention on repository demo in project acme/web: ' +
+        'reviews stop using it in every repository that inherits it. Update with status active restores it.\n\n{\n  "status": "archived"\n}',
     );
     expect(await promptFor(registry, "harness_delete", { resource_type: "aicr_rule", resource_id: "5" })).toBe(
       'Delete aicr_rule "5"?\n\nArchives the rule on the account: reviews stop using it in every repository that inherits it. Update with status active restores it.',

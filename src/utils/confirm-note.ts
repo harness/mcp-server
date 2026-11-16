@@ -30,3 +30,12 @@ export function resolveConfirmNote(
 export function withConfirmNote(message: string, note: string | undefined): string {
   return note ? `${message}\n\n${note}` : message;
 }
+
+/**
+ * A prompt with a title and a long body. The note goes under the title, before the body:
+ * clients fold long prompts ("… +4 more lines"), and a note after the body would be hidden.
+ * Unchanged (`title`, blank line, `body`) when there is no note.
+ */
+export function withConfirmNoteFirst(title: string, body: string, note: string | undefined): string {
+  return note ? `${title}\n\n${note}\n\n${body}` : `${title}\n\n${body}`;
+}

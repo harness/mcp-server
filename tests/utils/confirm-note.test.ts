@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveConfirmNote, withConfirmNote } from "../../src/utils/confirm-note.js";
+import { resolveConfirmNote, withConfirmNote, withConfirmNoteFirst } from "../../src/utils/confirm-note.js";
 
 describe("resolveConfirmNote", () => {
   it("no confirmNote, or no spec: no note, and the message is unchanged", () => {
@@ -36,5 +36,14 @@ describe("resolveConfirmNote", () => {
     expect(resolveConfirmNote({ confirmNote: () => "  " }, {})).toBeUndefined();
     expect(resolveConfirmNote({ confirmNote: () => undefined }, {})).toBeUndefined();
     expect(resolveConfirmNote({ confirmNote: "" }, {})).toBeUndefined();
+  });
+});
+
+describe("withConfirmNoteFirst", () => {
+  it("puts the note between the title and the body, so a folded prompt still shows it", () => {
+    expect(withConfirmNoteFirst("Create x?", "{\n}", "Note.")).toBe("Create x?\n\nNote.\n\n{\n}");
+  });
+  it("no note: title, blank line, body, as before", () => {
+    expect(withConfirmNoteFirst("Create x?", "{\n}", undefined)).toBe("Create x?\n\n{\n}");
   });
 });
