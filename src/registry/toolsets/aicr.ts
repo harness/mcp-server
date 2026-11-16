@@ -312,7 +312,8 @@ async function aicrRepoConfigId(
 
 /**
  * A repository with no config row may not exist at all (the config routes do not check), so a typo
- * would read as "inherits everything". Ask Code; only its 404 counts, any other error is ignored.
+ * would read as "inherits everything". Ask Code: its 404 means no such repository, and any other error
+ * (denied, server error, timeout) is raised as it is rather than taken to mean the repository exists.
  */
 async function aicrCheckRepoExists(ctx: PreflightContext, repoPath: string): Promise<void> {
   const { spacePath, repoIdentifier } = splitAicrRepoPath(repoPath);
@@ -329,6 +330,7 @@ async function aicrCheckRepoExists(ctx: PreflightContext, repoPath: string): Pro
           "Check repo_id and the repository's org_id/project_id.",
       );
     }
+    throw err;
   }
 }
 
@@ -1393,9 +1395,9 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           pathBuilder: (input) =>
             `${AICR_BASE}/pullreqs/${aicrPrNumber(input)}/review/start`,
           // Starts the repo's AI Code Review pipeline as the caller. A retry after a lost response
-          // could start a second pipeline, so it is never retried. It runs a pipeline as the caller,
-          // so it asks first.
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          // could start a second pipeline, so it is never retried. It runs a pipeline as the caller, so it
+          // asks first, and auto-approving medium writes does not cover it (the same level as enable).
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           preflight: aicrNamedRepoPreflight(aicrPrNumber),
           confirmNote: aicrReviewRequestNote,
           bodyBuilder: hoistAicrRepoPath,
@@ -1622,7 +1624,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       displayName: "AI Code Reviewed Pull Request",
       description:
         "Pull requests AI Code Review has reviewed under an account, org, or project, newest review first, with risk and author. " +
-        "Not filtered by PR state: a reviewed PR stays listed after it merges or closes. Only query filters the list; the list has no PR state or branches (use pull_request for those). Pass an item's repo_path and number to aicr_review, aicr_finding, or aicr_run.",
+        "Not filtered by PR state: merged and closed PRs stay listed. Only query filters; PR state and branches are on pull_request. Pass an item's repo_path and number to aicr_review, aicr_finding, or aicr_run.",
       toolset: "aicr",
       scope: "account",
       scopeOptional: true,

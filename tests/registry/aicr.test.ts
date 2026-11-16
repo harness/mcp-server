@@ -178,7 +178,7 @@ describe("aicr toolset registration", () => {
     }
     expect(writes).toEqual({
       // Starts the review pipeline; a retry could start a second one.
-      "aicr_review.request_review": { risk: "medium_write", retryPolicy: "do_not_retry" },
+      "aicr_review.request_review": { risk: "high_write", retryPolicy: "do_not_retry" },
       // Dismissing can let a PR pass the gate, so it needs confirmation; undo only reopens.
       "aicr_finding.dismiss": { risk: "medium_write", retryPolicy: "do_not_retry" },
       "aicr_finding.undo_dismiss": { risk: "low_write", retryPolicy: "do_not_retry" },
@@ -562,6 +562,17 @@ describe("aicr_gate.get", () => {
     ["a cluster without the route", new HarnessApiError("404 page not found", 404)],
   ])("fails on %s instead of reporting the repo as ungated", async (_case, error) => {
     const { client } = makeClient(() => { throw error; });
+    await expect(registry().dispatch(client, "aicr_gate", "get", { ...SCOPE })).rejects.toThrow(error.message);
+  });
+
+  it.each([
+    ["a denied repository lookup", new HarnessApiError("Forbidden", 403)],
+    ["a server error on the repository lookup", new HarnessApiError("Internal Server Error", 500)],
+  ])("raises %s instead of treating the repository as existing", async (_case, error) => {
+    const { client } = makeClient((opts) => {
+      if (opts.path.startsWith("/code/")) throw error;
+      throw new HarnessApiError("Not Found", 404);
+    });
     await expect(registry().dispatch(client, "aicr_gate", "get", { ...SCOPE })).rejects.toThrow(error.message);
   });
 
@@ -956,6 +967,7 @@ describe("aicr_review request_review / review_status", () => {
 describe("aicr_review.get", () => {
   function reviewClient(overrides: { overview?: () => unknown; findings?: () => unknown } = {}) {
     return makeClient((opts) => {
+      if (opts.path.startsWith("/code/")) return {};
       if (opts.path.endsWith("/review")) return REVIEW;
       if (opts.path.endsWith("/overview")) return (overrides.overview ?? (() => OVERVIEW))();
       if (opts.path.endsWith("/findings")) return (overrides.findings ?? (() => FINDINGS))();
