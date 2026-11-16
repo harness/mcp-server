@@ -2865,6 +2865,7 @@ export function aicrGateExtract(raw: unknown, input?: Record<string, unknown>): 
 }
 
 export const AICR_GATE_CATEGORIES: readonly string[] = ["security", "reliability", "complexity", "hygiene"];
+export const AICR_TRIGGERS: readonly string[] = ["on_pr_open", "on_push", "drafts"];
 
 /**
  * A repository with no AI Code Review config row is gated with nothing reported
@@ -2930,10 +2931,14 @@ export function aicrRuleCreateExtract(raw: unknown, input?: Record<string, unkno
 }
 
 /** `GET /rules` and `GET /conventions` are bare arrays; `headerPagination` supplies the total from `x-total`. */
-export function aicrRuleListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
-  const rows = Array.isArray(raw) ? raw : [];
-  return { items: rows.map((r) => aicrRuleExtract(r, input)), total: rows.length };
+function aicrPolicyListExtract(row: (raw: unknown, input?: Record<string, unknown>) => unknown) {
+  return (raw: unknown, input?: Record<string, unknown>): unknown => {
+    const rows = Array.isArray(raw) ? raw : [];
+    return { items: rows.map((r) => row(r, input)), total: rows.length };
+  };
 }
+
+export const aicrRuleListExtract = aicrPolicyListExtract(aicrRuleExtract);
 
 export function aicrRuleCompact(item: Record<string, unknown>): Record<string, unknown> {
   return pickPresent(item, ["id", "title", "enabled", "overridable", "status", "space_path", "repo_path", "inherited", "repo_override"]);
@@ -2957,10 +2962,7 @@ export function aicrConventionCreateExtract(raw: unknown, input?: Record<string,
   return withCreatedSpacePath(aicrConventionExtract(raw, input), raw, input);
 }
 
-export function aicrConventionListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
-  const rows = Array.isArray(raw) ? raw : [];
-  return { items: rows.map((r) => aicrConventionExtract(r, input)), total: rows.length };
-}
+export const aicrConventionListExtract = aicrPolicyListExtract(aicrConventionExtract);
 
 export function aicrConventionCompact(item: Record<string, unknown>): Record<string, unknown> {
   return pickPresent(item, ["id", "title", "enabled", "status", "languages", "space_path", "repo_path", "inherited"]);
@@ -2998,7 +3000,7 @@ function aicrSettingView(raw: unknown, input: Record<string, unknown> | undefine
     out.llm_connector_ref_scope = aicrConfigScope(c.llm_connector_ref_scope);
     out.review_triggers = c.review_triggers;
     out.review_triggers_scope = Object.fromEntries(
-      ["on_pr_open", "on_push", "drafts"].map((k) => [k, aicrConfigScope(triggersScope[k])]),
+      AICR_TRIGGERS.map((k) => [k, aicrConfigScope(triggersScope[k])]),
     );
     out.dismissable = c.dismissable;
     out.dismissable_scope = aicrConfigScope(c.dismissable_scope);

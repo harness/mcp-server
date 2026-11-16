@@ -43,6 +43,7 @@ import {
   aicrRunListExtract,
   aicrUndoDismissExtract,
   AICR_GATE_CATEGORIES,
+  AICR_TRIGGERS,
 } from "../extractors.js";
 
 /**
@@ -72,6 +73,11 @@ function str(value: unknown): string | undefined {
     : undefined;
 }
 
+/** The caller's `body` when it is an object, else an empty one. */
+function aicrBody(input: Record<string, unknown>): Record<string, unknown> {
+  return (typeof input.body === "object" && input.body !== null && !Array.isArray(input.body) ? input.body : {}) as Record<string, unknown>;
+}
+
 /** One path segment (org, project, or repo identifier): no "/" and not "." or "..". */
 function segment(
   input: Record<string, unknown>,
@@ -88,7 +94,7 @@ function segment(
 }
 
 /** `space_path` (`<account>[/<org>[/<project>]]`) from the account plus explicit org_id/project_id. */
-export function aicrSpacePath(
+function aicrSpacePath(
   input: Record<string, unknown>,
   accountId: string | undefined,
 ): string {
@@ -105,6 +111,8 @@ export function aicrSpacePath(
   return [accountId, org, project].filter(Boolean).join("/");
 }
 
+const trimSlashes = (path: string): string => path.replace(/^\/+|\/+$/g, "");
+
 /** `repo_path` from an explicit `repo_path`, or from `repo_id` plus optional explicit org/project. */
 export function resolveAicrRepoPath(
   input: Record<string, unknown>,
@@ -112,7 +120,7 @@ export function resolveAicrRepoPath(
 ): string {
   const explicit = str(input.repo_path);
   if (explicit) {
-    const repoPath = explicit.replace(/^\/+|\/+$/g, "");
+    const repoPath = trimSlashes(explicit);
     // The token is bound to one account; another account's path fails as a bare "Unauthorized".
     const account = repoPath.split("/")[0];
     if (accountId && account !== accountId) {
@@ -229,13 +237,27 @@ function aicrDismissBody(
   config: PathBuilderConfig,
 ): Record<string, unknown> {
   hoistAicrRepoPath(input, config);
-  const body = (
-    typeof input.body === "object" && input.body !== null ? input.body : {}
-  ) as Record<string, unknown>;
+  const body = aicrBody(input);
   return {
     reason: body.reason,
     ...(body.note !== undefined ? { note: body.note } : {}),
   };
+}
+
+/** A safe-to-retry GET made on behalf of a preflight. */
+function aicrGet(ctx: PreflightContext, path: string, params: Record<string, string | number>): Promise<unknown> {
+  return ctx.client.request<unknown>({ method: "GET", path, params, retryPolicy: "safe", signal: ctx.signal });
+}
+
+/** A rule or convention row by id, or undefined when the answer is not a row. */
+async function aicrPolicyRow(
+  ctx: PreflightContext,
+  kind: "rule" | "convention",
+  id: string,
+  params: Record<string, string>,
+): Promise<Record<string, unknown> | undefined> {
+  const row = await aicrGet(ctx, `${AICR_BASE}/${kind}s/${encodePathSegment(id)}`, params);
+  return typeof row === "object" && row !== null ? (row as Record<string, unknown>) : undefined;
 }
 
 /** Whether the caller named a repository (repo_id or repo_path) rather than a space. */
@@ -254,13 +276,7 @@ async function aicrOwnConfig(
 ): Promise<Record<string, unknown> | undefined> {
   let row: unknown;
   try {
-    row = await ctx.client.request<unknown>({
-      method: "GET",
-      path: `${AICR_BASE}/config/${level}`,
-      params,
-      retryPolicy: "safe",
-      signal: ctx.signal,
-    });
+    row = await aicrGet(ctx, `${AICR_BASE}/config/${level}`, params);
   } catch (err) {
     // "Not Found" is a missing row; a cluster without the route answers "404 page not found".
     if (
@@ -302,12 +318,9 @@ async function aicrCheckRepoExists(ctx: PreflightContext, repoPath: string): Pro
   const { spacePath, repoIdentifier } = splitAicrRepoPath(repoPath);
   const [, org, project] = spacePath.split("/");
   try {
-    await ctx.client.request<unknown>({
-      method: "GET",
-      path: `/code/api/v1/repos/${encodePathSegment(repoIdentifier)}`,
-      params: { ...(org ? { orgIdentifier: org } : {}), ...(project ? { projectIdentifier: project } : {}) },
-      retryPolicy: "safe",
-      signal: ctx.signal,
+    await aicrGet(ctx, `/code/api/v1/repos/${encodePathSegment(repoIdentifier)}`, {
+      ...(org ? { orgIdentifier: org } : {}),
+      ...(project ? { projectIdentifier: project } : {}),
     });
   } catch (err) {
     if (err instanceof HarnessApiError && err.statusCode === 404) {
@@ -384,18 +397,14 @@ async function aicrCheckEditScope(
   id: string,
 ): Promise<void> {
   const { input } = ctx;
-  const Kind = kind === "rule" ? "Rule" : "Convention";
-  const row = (await ctx.client.request<unknown>({
-    method: "GET",
-    path: `${AICR_BASE}/${kind}s/${encodePathSegment(id)}`,
-    params: input.repo_path
-      ? { repo_path: String(input.repo_path) }
-      : { space_path: String(input.space_path) },
-    retryPolicy: "safe",
-    signal: ctx.signal,
-  })) as Record<string, unknown> | undefined;
-  if (typeof row !== "object" || row === null)
-    throw new Error(`No ${kind} with id ${id}.`);
+  const Kind = AICR_KIND_LABEL[kind];
+  const row = await aicrPolicyRow(
+    ctx,
+    kind,
+    id,
+    input.repo_path ? { repo_path: String(input.repo_path) } : { space_path: String(input.space_path) },
+  );
+  if (!row) throw new Error(`No ${kind} with id ${id}.`);
 
   if (row.overrides_id != null) {
     throw new Error(
@@ -480,7 +489,7 @@ function aicrPolicyCreatePreflight(fields: readonly string[], op: string) {
 
 async function aicrRuleOverridePreflight(ctx: PreflightContext): Promise<void> {
   validateAicrBody(ctx.input, ["enabled"], "override");
-  if (typeof aicrNoteBody(ctx.input).enabled !== "boolean")
+  if (typeof aicrBody(ctx.input).enabled !== "boolean")
     throw new Error("override needs body.enabled: true or false.");
   if (!namesAicrRepo(ctx.input)) {
     throw new Error(
@@ -515,9 +524,7 @@ function pickAicrBody(
   input: Record<string, unknown>,
   fields: readonly string[],
 ): Record<string, unknown> {
-  const body = (
-    typeof input.body === "object" && input.body !== null ? input.body : {}
-  ) as Record<string, unknown>;
+  const body = aicrBody(input);
   return Object.fromEntries(
     fields.filter((f) => body[f] !== undefined).map((f) => [f, body[f]]),
   );
@@ -529,7 +536,7 @@ function validateAicrBody(
   fields: readonly string[],
   op: string,
 ): void {
-  const unknown = Object.keys(aicrNoteBody(input)).filter((k) => !fields.includes(k));
+  const unknown = Object.keys(aicrBody(input)).filter((k) => !fields.includes(k));
   if (unknown.length > 0)
     throw new Error(`${op} does not take ${unknown.join(", ")}. It takes: ${fields.join(", ")}.`);
   const out = pickAicrBody(input, fields);
@@ -570,23 +577,14 @@ const AICR_GATE_FAIL_AT = ["never", "critical", "major_and_above", "any"];
  */
 const AICR_GATE_BODY_KEY = "_aicr_gate_body";
 
-/** The normalized gate body the set preflight builds; the bodyBuilder sends it. */
-function aicrGateBody(input: Record<string, unknown>): unknown {
-  return input[AICR_GATE_BODY_KEY];
-}
-
-function aicrGateSetPreflight(scope: ReturnType<typeof aicrPolicyScopePreflight>) {
-  return async (ctx: PreflightContext): Promise<void | { result: unknown }> => {
-    ctx.input[AICR_GATE_BODY_KEY] = normalizeAicrGate(ctx.input);
-    return scope(ctx);
-  };
+/** The normalized body is built before any request and stored for the bodyBuilder to send. */
+async function aicrGateSetPreflight(ctx: PreflightContext): Promise<void | { result: unknown }> {
+  ctx.input[AICR_GATE_BODY_KEY] = normalizeAicrGate(ctx.input);
+  return aicrPolicyScopePreflight(aicrNoRepoConfigError)(ctx);
 }
 
 function normalizeAicrGate(input: Record<string, unknown>): Record<string, unknown> {
-  const body = (
-    typeof input.body === "object" && input.body !== null ? input.body : {}
-  ) as Record<string, unknown>;
-  const categories = body.categories;
+  const categories = aicrBody(input).categories;
   if (!Array.isArray(categories) || categories.length === 0) {
     throw new Error(
       "set needs body.categories: [{category, reported, fail_at}, ...] for the categories to change.",
@@ -648,7 +646,6 @@ const AICR_SETTING_FIELDS = [
   "add_paths",
   "remove_paths",
 ];
-const AICR_TRIGGERS = ["on_pr_open", "on_push", "drafts"];
 
 interface AicrConfigPath {
   pattern: string;
@@ -679,9 +676,7 @@ function aicrPathList(value: unknown, field: string): AicrConfigPath[] {
 function aicrSettingChange(
   input: Record<string, unknown>,
 ): Record<string, unknown> {
-  const body = (
-    typeof input.body === "object" && input.body !== null ? input.body : {}
-  ) as Record<string, unknown>;
+  const body = aicrBody(input);
   const keys = Object.keys(body);
   if (keys.length === 0)
     throw new Error(
@@ -854,14 +849,7 @@ async function aicrReviewPreflight(ctx: PreflightContext): Promise<void> {
   const repoPath = resolveAicrRepoPath(input, ctx.accountId);
   input.repo_path = repoPath;
 
-  const get = (path: string, params: Record<string, string | number>) =>
-    ctx.client.request<unknown>({
-      method: "GET",
-      path,
-      params,
-      retryPolicy: "safe",
-      signal: ctx.signal,
-    });
+  const get = (path: string, params: Record<string, string | number>) => aicrGet(ctx, path, params);
   const settle = (r: PromiseSettledResult<unknown>) =>
     r.status === "fulfilled"
       ? { ok: true, value: r.value }
@@ -905,15 +893,17 @@ interface AicrNoteTarget {
   level: "account" | "org" | "project";
 }
 
-/** Caller text shown inside a note: one line, no quotes, bounded so it cannot crowd out the effect. */
-function aicrNoteId(value: string): string {
+/** Caller text shown inside a note: one line, no quotes, cut at `max` so it cannot crowd out the effect. */
+function aicrNoteText(value: string, max: number): string {
   const flat = value.replace(/\s+/g, " ").replace(/"/g, "'").trim();
-  return flat.length > AICR_NOTE_ID_MAX ? `${flat.slice(0, AICR_NOTE_ID_MAX - 1)}…` : flat;
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
+const aicrNoteId = (value: string): string => aicrNoteText(value, AICR_NOTE_ID_MAX);
 
 function aicrNoteTarget(input: Record<string, unknown>): AicrNoteTarget {
   // Same precedence as resolveAicrRepoPath: repo_path wins over repo_id. Its first segment is the account id.
-  const repoPath = str(input.repo_path)?.replace(/^\/+|\/+$/g, "");
+  const explicit = str(input.repo_path);
+  const repoPath = explicit && trimSlashes(explicit);
   if (repoPath) {
     const parts = repoPath.split("/");
     const name = aicrNoteId(parts[parts.length - 1]!);
@@ -929,10 +919,6 @@ function aicrNoteTarget(input: Record<string, unknown>): AicrNoteTarget {
   const repo = str(input.repo_id) && aicrNoteId(str(input.repo_id)!);
   if (repo) return { where: `repo ${repo} ${level === "account" ? "(account level)" : `in ${space}`}`, repo: true, level };
   return { where: space || "the account", repo: false, level };
-}
-
-function aicrNoteBody(input: Record<string, unknown>): Record<string, unknown> {
-  return (typeof input.body === "object" && input.body !== null && !Array.isArray(input.body) ? input.body : {}) as Record<string, unknown>;
 }
 
 function aicrNoteValue(value: unknown): string {
@@ -960,11 +946,10 @@ function aicrNote(subject: string, effect: string): string {
 
 /** `"title"` from the body, or the one aicrNameLookup found. */
 function aicrNoteName(input: Record<string, unknown>): string | undefined {
-  const raw = str(aicrNoteBody(input).title) ?? str(input[AICR_NOTE_TITLE_KEY]);
+  const raw = str(aicrBody(input).title) ?? str(input[AICR_NOTE_TITLE_KEY]);
   // A title is user text: one line, bounded, so it cannot forge extra prompt lines.
-  const title = raw?.replace(/\s+/g, " ").replace(/"/g, "'").trim();
-  if (!title) return undefined;
-  return `"${title.length > AICR_NOTE_TITLE_MAX ? `${title.slice(0, AICR_NOTE_TITLE_MAX - 1)}…` : title}"`;
+  const title = raw && aicrNoteText(raw, AICR_NOTE_TITLE_MAX);
+  return title ? `"${title}"` : undefined;
 }
 
 /** `Rule "No TODOs" on project acme/web`; without a name, `Rule on ...`. */
@@ -974,7 +959,7 @@ function aicrNoteSubject(label: string, input: Record<string, unknown>, where: s
 }
 
 function aicrGateSetNote(input: Record<string, unknown>): string {
-  const categories = aicrNoteBody(input).categories;
+  const categories = aicrBody(input).categories;
   const parts = (Array.isArray(categories) ? categories : [])
     .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
     .map((c) => `${String(c.category)} ${c.reported === false ? "not reported" : `fails at ${String(c.fail_at)}`}`);
@@ -985,7 +970,7 @@ function aicrGateSetNote(input: Record<string, unknown>): string {
 }
 
 function aicrSettingSetNote(input: Record<string, unknown>): string {
-  const body = aicrNoteBody(input);
+  const body = aicrBody(input);
   const parts = AICR_SETTING_FIELDS.filter((f) => body[f] !== undefined).map((f) => `${f}: ${aicrNoteValue(body[f])}`);
   return aicrNote(
     `AI Code Review settings on ${aicrNoteTarget(input).where}`,
@@ -1013,7 +998,7 @@ function aicrPolicyUpdateNote(kind: "rule" | "convention") {
     const t = aicrNoteTarget(input);
     // Only the fields the update sends: a field it would drop is not a change.
     const body = Object.fromEntries(
-      Object.entries(aicrNoteBody(input)).filter(([k]) => (AICR_UPDATE_FIELDS[kind] as readonly string[]).includes(k)),
+      Object.entries(aicrBody(input)).filter(([k]) => (AICR_UPDATE_FIELDS[kind] as readonly string[]).includes(k)),
     );
     const effect =
       body.status === "archived"
@@ -1038,7 +1023,7 @@ function aicrPolicyDeleteNote(kind: "rule" | "convention") {
 function aicrRuleOverrideNote(input: Record<string, unknown>): string | undefined {
   const t = aicrNoteTarget(input);
   if (!t.repo) return undefined;
-  const enabled = aicrNoteBody(input).enabled;
+  const enabled = aicrBody(input).enabled;
   const effect =
     typeof enabled === "boolean" ? `turns it ${enabled ? "on" : "off"} for this repo; other repos keep the rule.` : "overrides it for this repo; other repos keep the rule.";
   return aicrNote(aicrNoteSubject("Rule", input, t.where), effect);
@@ -1056,7 +1041,7 @@ function aicrEnableNote(input: Record<string, unknown>): string | undefined {
 
 function aicrReviewRequestNote(input: Record<string, unknown>): string | undefined {
   const t = aicrNoteTarget(input);
-  const pr = str(input.pr_number) ?? (typeof input.pr_number === "number" ? String(input.pr_number) : undefined);
+  const pr = str(input.pr_number);
   if (!t.repo || !pr) return undefined;
   return aicrNote(`Review PR #${pr} in ${t.where}`, "starts the repo's AI Code Review pipeline as you, on the PR's current commit.");
 }
@@ -1074,7 +1059,7 @@ function aicrDismissNote(input: Record<string, unknown>): string | undefined {
   const t = aicrNoteTarget(input);
   if (!t.repo) return undefined;
   const pr = str(input.pr_number);
-  const reason = str(aicrNoteBody(input).reason);
+  const reason = str(aicrBody(input).reason);
   return aicrNote(
     `Dismiss a finding${pr ? ` on PR #${pr}` : ""}${reason ? ` (reason: ${reason})` : ""} in ${t.where}`,
     "it no longer fails the review check. undo_dismiss reopens it.",
@@ -1090,18 +1075,12 @@ function aicrNameLookup(kind: "rule" | "convention", idField: "rule_id" | "conve
   return async (ctx: PreflightContext): Promise<void> => {
     const { input } = ctx;
     const id = str(input[idField]);
-    if (!id || str(aicrNoteBody(input).title)) return;
-    const params = namesAicrRepo(input)
+    if (!id || str(aicrBody(input).title)) return;
+    const params: Record<string, string> = namesAicrRepo(input)
       ? { repo_path: resolveAicrRepoPath(input, ctx.accountId) }
       : { space_path: aicrSpacePath(input, ctx.accountId) };
-    const row = (await ctx.client.request<unknown>({
-      method: "GET",
-      path: `${AICR_BASE}/${kind}s/${encodePathSegment(id)}`,
-      params,
-      retryPolicy: "safe",
-      signal: ctx.signal,
-    })) as Record<string, unknown> | undefined;
-    const title = typeof row === "object" && row !== null ? str(row.title) : undefined;
+    const row = await aicrPolicyRow(ctx, kind, id, params);
+    const title = row && str(row.title);
     if (title) input[AICR_NOTE_TITLE_KEY] = title;
   };
 }
@@ -1263,6 +1242,13 @@ const RULE_BODY_FIELDS: BodyFieldSpec[] = [
     description: "Path globs, up to 50",
   },
 ];
+
+/** Gates, rules and conventions: a space by path, a repository by its config id (and its path, for auth). */
+const POLICY_SCOPE_QUERY = {
+  space_path: "space_path",
+  repo_config_id: "repo_config_id",
+  repo_path: "repo_path",
+};
 
 const SPACE_LIST_QUERY = {
   space_path: "space_path",
@@ -1777,11 +1763,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           preflight: aicrPolicyScopePreflight(aicrGateNoRepoConfig),
           // The handler ignores repo_path, but auth resolves the account from space_path or repo_path;
           // with repo_config_id alone the request is a 401.
-          queryParams: {
-            space_path: "space_path",
-            repo_config_id: "repo_config_id",
-            repo_path: "repo_path",
-          },
+          queryParams: POLICY_SCOPE_QUERY,
           responseExtractor: aicrGateExtract,
           description:
             "Get each category's reported flag and fail_at, the org floor (org_reported, org_fail_at), and set_by (organization or repository). " +
@@ -1798,14 +1780,10 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             risk: "high_write",
             retryPolicy: "do_not_retry",
           },
-          preflight: aicrGateSetPreflight(aicrPolicyScopePreflight(aicrNoRepoConfigError)),
-          bodyBuilder: aicrGateBody,
+          preflight: aicrGateSetPreflight,
+          bodyBuilder: (input) => input[AICR_GATE_BODY_KEY],
           skipScopeBodyInjection: true,
-          queryParams: {
-            space_path: "space_path",
-            repo_config_id: "repo_config_id",
-            repo_path: "repo_path",
-          },
+          queryParams: POLICY_SCOPE_QUERY,
           responseExtractor: aicrGateExtract,
           confirmNote: aicrGateSetNote,
           actionDescription:
@@ -1867,9 +1845,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           pageOneIndexed: true,
           headerPagination: true,
           queryParams: {
-            space_path: "space_path",
-            repo_config_id: "repo_config_id",
-            repo_path: "repo_path",
+            ...POLICY_SCOPE_QUERY,
             status: "status",
             query: "query",
             page: "page",
@@ -1903,11 +1879,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           preflight: aicrPolicyCreatePreflight(AICR_RULE_CREATE_FIELDS, "Creating a rule"),
           bodyBuilder: (input) => pickAicrBody(input, AICR_RULE_CREATE_FIELDS),
           skipScopeBodyInjection: true,
-          queryParams: {
-            space_path: "space_path",
-            repo_config_id: "repo_config_id",
-            repo_path: "repo_path",
-          },
+          queryParams: POLICY_SCOPE_QUERY,
           responseExtractor: aicrRuleCreateExtract,
           confirmNote: aicrPolicyCreateNote("rule"),
           description:
@@ -2038,9 +2010,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           pageOneIndexed: true,
           headerPagination: true,
           queryParams: {
-            space_path: "space_path",
-            repo_config_id: "repo_config_id",
-            repo_path: "repo_path",
+            ...POLICY_SCOPE_QUERY,
             status: "status",
             query: "query",
             page: "page",
@@ -2076,11 +2046,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           preflight: aicrPolicyCreatePreflight(AICR_CONVENTION_CREATE_FIELDS, "Creating a convention"),
           bodyBuilder: (input) => pickAicrBody(input, AICR_CONVENTION_CREATE_FIELDS),
           skipScopeBodyInjection: true,
-          queryParams: {
-            space_path: "space_path",
-            repo_config_id: "repo_config_id",
-            repo_path: "repo_path",
-          },
+          queryParams: POLICY_SCOPE_QUERY,
           responseExtractor: aicrConventionCreateExtract,
           confirmNote: aicrPolicyCreateNote("convention"),
           description:

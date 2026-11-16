@@ -50,7 +50,7 @@ const PREFETCH_TIMEOUT_MS = 3_000;
 export async function resolveConfirmNoteAsync(
   spec: Pick<EndpointSpec, "confirmNote" | "confirmPrefetch"> | undefined,
   input: Record<string, unknown>,
-  deps: { client: HarnessClientInterface; registry: RegistryDispatchInterface; accountId?: string; signal?: AbortSignal },
+  deps: { client: HarnessClientInterface; registry: RegistryDispatchInterface; accountId?: string },
 ): Promise<string | undefined> {
   if (!spec?.confirmPrefetch || spec.confirmNote === undefined) return resolveConfirmNote(spec, input);
   let copy: Record<string, unknown>;
@@ -61,10 +61,9 @@ export async function resolveConfirmNoteAsync(
   }
   const timeout = new AbortController();
   const timer = setTimeout(() => timeout.abort(), PREFETCH_TIMEOUT_MS);
-  const signal = deps.signal ? AbortSignal.any([deps.signal, timeout.signal]) : timeout.signal;
   try {
     await Promise.race([
-      spec.confirmPrefetch({ ...deps, signal, input: copy }),
+      spec.confirmPrefetch({ ...deps, signal: timeout.signal, input: copy }),
       new Promise<void>((resolve) => timeout.signal.addEventListener("abort", () => resolve(), { once: true })),
     ]);
   } catch (err) {
