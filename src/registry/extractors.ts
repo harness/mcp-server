@@ -755,6 +755,49 @@ export const harV3DataObjectUnwrap = (raw: unknown): unknown => {
 };
 
 /**
+ * BulkEvaluateArtifactsV3 (`POST /scans/bulk-evaluate-sync`) returns `{ data: [ArtifactScanDetailsV3] }`,
+ * one entry per requested artifact. Project to `{ items, total }`; a missing or null `data` means nothing
+ * was evaluated, so return an empty list rather than the raw envelope.
+ */
+export const harV3ScanEvaluationExtract = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  const items = Array.isArray(raw.data) ? raw.data : [];
+  return { items, total: items.length };
+};
+
+const FIREWALL_EXCEPTION_STATUS_COUNT_KEYS: Record<string, string> = {
+  PENDING: "pendingCount",
+  APPROVED: "approvedCount",
+  REJECTED: "rejectedCount",
+  EXPIRED: "expiredCount",
+};
+
+/**
+ * ListFirewallExceptionsV3 returns `{ items, page, hasMore, meta: { totalCount, pendingCount, approvedCount,
+ * rejectedCount, expiredCount } }`. The backend computes these counts without the status filter (they feed the
+ * UI tabs), so `meta.totalCount` is the count across every status. Surface the per-status `counts` and, when a
+ * status filter is set, report `total` as that status's count so it matches the filtered items.
+ */
+export const firewallExceptionListExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
+  const base = harV3ListExtract(raw);
+  if (!isRecord(raw) || !isRecord(base) || !isRecord(raw.meta)) return base;
+  const meta = raw.meta;
+  const counts: Record<string, number> = {};
+  for (const [status, key] of Object.entries(FIREWALL_EXCEPTION_STATUS_COUNT_KEYS)) {
+    const value = meta[key];
+    if (typeof value === "number") counts[status.toLowerCase()] = value;
+  }
+  const status = typeof input?.status === "string" ? input.status.toUpperCase() : undefined;
+  const statusKey = status ? FIREWALL_EXCEPTION_STATUS_COUNT_KEYS[status] : undefined;
+  const statusTotal = statusKey ? meta[statusKey] : undefined;
+  return {
+    ...base,
+    ...(typeof statusTotal === "number" ? { total: statusTotal } : {}),
+    ...(Object.keys(counts).length > 0 ? { counts } : {}),
+  };
+};
+
+/**
  * Factory for v1 list responses (bare arrays).
  * If `wrapperKey` is provided, each item is unwrapped: `{ project: {...} }` → `{...}`.
  * Total is derived from array length since response headers aren't accessible.
