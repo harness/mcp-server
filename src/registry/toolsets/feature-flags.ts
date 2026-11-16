@@ -199,6 +199,8 @@ const fmeFeatureFlagUpdateSchema: BodySchema = {
     { name: "tags", type: "array", required: false, description: "Updated tags — provide as [{name: 'tag1'}] or ['tag1', 'tag2'] (strings are auto-wrapped)", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Harness-native mode only. Updated owners — each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
     { name: "rolloutStatus", type: "object", required: false, description: "Rollout status — provide as {id: '<uuid>'} (use fme_rollout_status to discover valid IDs)" },
+    { name: "comment", type: "string", required: false, description: "Harness-native mode only. Optional comment recorded with the change" },
+    { name: "title", type: "string", required: false, description: "Harness-native mode only. Optional short title for the change" },
   ],
 };
 
@@ -223,6 +225,38 @@ const fmeFeatureFlagKillRestoreReallocateSchema: BodySchema = {
 
 const fmeFeatureFlagArchiveSchema: BodySchema = {
   description: "Optional comment and/or title recorded with the action.",
+  fields: [
+    { name: "comment", type: "string", required: false, description: "Optional comment explaining the change" },
+    { name: "title", type: "string", required: false, description: "Optional short title for the change" },
+  ],
+};
+
+const fmeFeatureFlagDeleteSchema: BodySchema = {
+  description: "Harness-native only. Optional comment and/or title recorded with the delete, passed as params.body.",
+  fields: [
+    { name: "comment", type: "string", required: false, description: "Optional comment explaining the change" },
+    { name: "title", type: "string", required: false, description: "Optional short title for the change" },
+  ],
+};
+
+const fmeFeatureFlagDefinitionDeleteSchema: BodySchema = {
+  description: "Comment and/or title recorded with the delete, passed as params.body. title and comment are required when the project enforces them.",
+  fields: [
+    { name: "comment", type: "string", required: false, description: "Comment explaining the change; required when the project enforces comments" },
+    { name: "title", type: "string", required: false, description: "Short title for the change; required when the project enforces titles" },
+  ],
+};
+
+const fmeSegmentDeleteSchema: BodySchema = {
+  description: "Optional comment and/or title recorded with the delete, passed as params.body.",
+  fields: [
+    { name: "comment", type: "string", required: false, description: "Optional comment explaining the change" },
+    { name: "title", type: "string", required: false, description: "Optional short title for the change" },
+  ],
+};
+
+const fmeSegmentDefinitionDeleteSchema: BodySchema = {
+  description: "Optional comment and/or title recorded with the delete, passed as params.body.",
   fields: [
     { name: "comment", type: "string", required: false, description: "Optional comment explaining the change" },
     { name: "title", type: "string", required: false, description: "Optional short title for the change" },
@@ -380,24 +414,13 @@ function fmeSegmentDefinitionKeysBody(input: Record<string, unknown>, opts: { re
   };
 }
 
-/** harness_delete has no body argument, so title/comment arrive as params.title/params.comment or params.body.title/comment. */
-function fmeDeleteGovernanceBody(input: Record<string, unknown>): Record<string, unknown> | undefined {
-  const body = (input.body as Record<string, unknown> | undefined) ?? {};
-  const title = body.title ?? input.title;
-  const comment = body.comment ?? input.comment;
-  if (title === undefined && comment === undefined) return undefined;
-  return {
-    ...(comment !== undefined ? { comment } : {}),
-    ...(title !== undefined ? { title } : {}),
-  };
-}
-
-const FME_DELETE_GOVERNANCE_NOTE =
-  " Optional params.title and params.comment are recorded with the change.";
-
 const fmeSegmentDefinitionCreateSchema: BodySchema = {
   description: "Create a segment definition in an environment. Omit the body (or send {}) to create an empty/default shell.",
-  fields: [{ name: "description", type: "string", required: false, description: "Optional description for the definition" }],
+  fields: [
+    { name: "description", type: "string", required: false, description: "Optional description for the definition" },
+    { name: "comment", type: "string", required: false, description: "Optional comment recorded with the change" },
+    { name: "title", type: "string", required: false, description: "Optional short title for the change" },
+  ],
 };
 
 const fmeSegmentDefinitionUpdateSchema: BodySchema = {
@@ -721,11 +744,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "delete"),
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          bodyBuilder: fmeDeleteGovernanceBody,
           responseExtractor: passthrough,
           description:
-            "Delete (archive) an environment by environment_id (Harness-native only). Returns 400 hasDependents while SDK API keys, flags, or segments still target it. Create via EnvironmentStarterKit always provisions client/server API keys, so a brand-new environment cannot be deleted until those keys are removed." +
-            FME_DELETE_GOVERNANCE_NOTE,
+            "Delete (archive) an environment by environment_id (Harness-native only). Returns 400 hasDependents while SDK API keys, flags, or segments still target it. Create via EnvironmentStarterKit always provisions client/server API keys, so a brand-new environment cannot be deleted until those keys are removed.",
         },
       },
     },
@@ -844,12 +865,18 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: `/fme/api/v4/feature-flags/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) =>
-            isFmeHarnessNativeSelected(input, "fme_feature_flag") ? fmeDeleteGovernanceBody(input) : undefined,
+          bodyBuilder: (input) => {
+            if (!isFmeHarnessNativeSelected(input, "fme_feature_flag")) return undefined;
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            if (body.comment === undefined && body.title === undefined) return undefined;
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
           responseExtractor: passthrough,
-          description:
-            "Delete a feature flag from a workspace (legacy) or org_id+project_id-scoped project (Harness-native)." +
-            " Harness-native only: optional params.title and params.comment are recorded with the change.",
+          bodySchema: fmeFeatureFlagDeleteSchema,
+          description: "Delete a feature flag from a workspace (legacy) or org_id+project_id-scoped project (Harness-native)",
         },
         update: {
           method: "PATCH",
@@ -881,6 +908,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 ...(body.tags !== undefined ? { tags: body.tags === null ? null : normalizeFmeTags(body.tags) } : {}),
                 ...(body.owners !== undefined ? { owners: body.owners } : {}),
                 ...(body.rolloutStatus !== undefined ? { rolloutStatus: body.rolloutStatus } : {}),
+                ...(body.comment !== undefined ? { comment: body.comment } : {}),
+                ...(body.title !== undefined ? { title: body.title } : {}),
               };
             }
             if (!body) return [];
@@ -1187,12 +1216,18 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "delete"),
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { environment_id: "environment_id" },
-          bodyBuilder: fmeDeleteGovernanceBody,
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            if (body.comment === undefined && body.title === undefined) return undefined;
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
           responseExtractor: passthrough,
+          bodySchema: fmeFeatureFlagDefinitionDeleteSchema,
           description:
-            "Delete a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id." +
-            FME_DELETE_GOVERNANCE_NOTE +
-            " They are required when the project enforces titles and comments (400 Missing required title/comment otherwise).",
+            "Delete a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id.",
         },
       },
       executeActions: {
@@ -1732,11 +1767,18 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { ...FME_SEGMENT_TYPE_QUERY_PARAMS },
           paramsSchema: fmeSegmentTypeParamsSchema,
-          bodyBuilder: fmeDeleteGovernanceBody,
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            if (body.comment === undefined && body.title === undefined) return undefined;
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
           responseExtractor: passthrough,
+          bodySchema: fmeSegmentDeleteSchema,
           description:
-            "Delete a segment by name. Requires params.segment_type (STANDARD | LARGE | RULE_BASED). Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first." +
-            FME_DELETE_GOVERNANCE_NOTE,
+            "Delete a segment by name. Requires params.segment_type (STANDARD | LARGE | RULE_BASED). Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
         },
         create: {
           method: "POST",
@@ -1851,7 +1893,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: { environment_id: "environment_id" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            return body?.description !== undefined ? { description: body.description } : {};
+            return {
+              ...(body?.description !== undefined ? { description: body.description } : {}),
+              ...(body?.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body?.title !== undefined ? { title: body.title } : {}),
+            };
           },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentDefinitionCreateSchema,
@@ -1887,11 +1933,18 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { environment_id: "environment_id" },
-          bodyBuilder: fmeDeleteGovernanceBody,
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            if (body.comment === undefined && body.title === undefined) return undefined;
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
           responseExtractor: passthrough,
+          bodySchema: fmeSegmentDefinitionDeleteSchema,
           description:
-            "Delete a segment definition from an environment. Returns 400 hasDependents while membership keys remain — remove_keys (or add_keys with replace=true and empty keys) first." +
-            FME_DELETE_GOVERNANCE_NOTE,
+            "Delete a segment definition from an environment. Returns 400 hasDependents while membership keys remain — remove_keys (or add_keys with replace=true and empty keys) first.",
         },
       },
       executeActions: {

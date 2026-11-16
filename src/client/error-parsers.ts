@@ -78,6 +78,24 @@ export const fmeUnprocessableEntityParser: ErrorParser = {
   },
 };
 
+/**
+ * FME v4 writes return 400 "Missing required title" / "Missing required comment" when the
+ * project enforces titles/comments on changes. harness_delete has no top-level body argument
+ * (title/comment go in params.body); harness_create/update/execute take a top-level body.
+ */
+export const fmeMissingTitleCommentParser: ErrorParser = {
+  name: "fme-400-missing-title-comment",
+  match: ({ path, status }) => path.startsWith("/fme/") && status === 400,
+  parse(body) {
+    const message = nonEmptyString(body.detail);
+    if (!message || !/^Missing required (title|comment)\b/i.test(message)) return undefined;
+    return {
+      detail:
+        "this project requires a title/comment on changes. Include title and comment in the request body: params.body.title / params.body.comment for harness_delete, or body.title / body.comment for harness_create, harness_update and harness_execute.",
+    };
+  },
+};
+
 const UNIFIED_SEARCH_HINTS: Record<number, { message: string; detail: string }> = {
   401: {
     message: "Unified search returned 401 Unauthorized",
@@ -126,7 +144,7 @@ export const unifiedSearchErrorParser: ErrorParser = {
 };
 
 /** Registered parsers, checked in order. Add new API-specific parsers here. */
-export const ERROR_PARSERS: readonly ErrorParser[] = [fmeUnprocessableEntityParser, unifiedSearchErrorParser];
+export const ERROR_PARSERS: readonly ErrorParser[] = [fmeUnprocessableEntityParser, fmeMissingTitleCommentParser, unifiedSearchErrorParser];
 
 /** Run the first matching parser that produces a result; undefined means "use generic parsing". */
 export function runErrorParsers(

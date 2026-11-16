@@ -2080,7 +2080,7 @@ describe("fme_segment_definition", () => {
   });
 });
 
-describe("FME delete title/comment forwarding", () => {
+describe("FME title/comment on v4 writes", () => {
   let registry: Registry;
 
   beforeEach(() => {
@@ -2094,7 +2094,6 @@ describe("FME delete title/comment forwarding", () => {
       path: "/fme/api/v4/feature-flag-definitions/my_flag",
       ids: { feature_flag_name: "my_flag", environment_id: "e1" },
     },
-    { resourceType: "fme_environment", path: "/fme/api/v4/environments/e1", ids: { environment_id: "e1" } },
     {
       resourceType: "fme_segment_definition",
       path: "/fme/api/v4/segment-definitions/seg1",
@@ -2103,7 +2102,47 @@ describe("FME delete title/comment forwarding", () => {
     { resourceType: "fme_segment", path: "/fme/api/v4/segments/seg1", ids: { segment_name: "seg1", segment_type: "STANDARD" } },
   ];
 
-  it.each(deletes)("$resourceType: forwards flat title/comment params as the DELETE body", async ({ resourceType, path, ids }) => {
+  it.each(deletes)("$resourceType delete: declares title/comment in its bodySchema", ({ resourceType }) => {
+    const fields = findResource(resourceType).operations.delete?.bodySchema?.fields.map((f) => f.name);
+    expect(fields).toEqual(["comment", "title"]);
+  });
+
+  it.each(deletes)("$resourceType delete: sends params.body title/comment as the DELETE body", async ({ resourceType, path, ids }) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      ...ids,
+      body: { title: "Cleanup", comment: "Flag fully rolled out" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("DELETE");
+    expect(req.path).toBe(path);
+    expect(req.body).toEqual({ title: "Cleanup", comment: "Flag fully rolled out" });
+  });
+
+  it.each(deletes)("$resourceType delete: sends only the fields provided", async ({ resourceType, ids }) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "delete", { org_id: "o1", project_id: "p1", ...ids, body: { title: "Cleanup" } });
+
+    expect(firstRequest(mockRequest).body).toEqual({ title: "Cleanup" });
+  });
+
+  it.each(deletes)("$resourceType delete: sends no body when none is given", async ({ resourceType, ids }) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "delete", { org_id: "o1", project_id: "p1", ...ids });
+
+    expect(firstRequest(mockRequest).body).toBeUndefined();
+  });
+
+  it.each(deletes)("$resourceType delete: ignores flat title/comment params", async ({ resourceType, ids }) => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -2114,32 +2153,6 @@ describe("FME delete title/comment forwarding", () => {
       title: "Cleanup",
       comment: "Flag fully rolled out",
     });
-
-    const req = firstRequest(mockRequest);
-    expect(req.method).toBe("DELETE");
-    expect(req.path).toBe(path);
-    expect(req.body).toEqual({ title: "Cleanup", comment: "Flag fully rolled out" });
-  });
-
-  it.each(deletes)("$resourceType: forwards title/comment nested under body", async ({ resourceType, ids }) => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, resourceType, "delete", {
-      org_id: "o1",
-      project_id: "p1",
-      ...ids,
-      body: { title: "Cleanup" },
-    });
-
-    expect(firstRequest(mockRequest).body).toEqual({ title: "Cleanup" });
-  });
-
-  it.each(deletes)("$resourceType: sends no body when title/comment are absent", async ({ resourceType, ids }) => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, resourceType, "delete", { org_id: "o1", project_id: "p1", ...ids });
 
     expect(firstRequest(mockRequest).body).toBeUndefined();
   });
@@ -2151,13 +2164,115 @@ describe("FME delete title/comment forwarding", () => {
     await registry.dispatch(client, "fme_feature_flag", "delete", {
       workspace_id: "ws1",
       feature_flag_name: "my_flag",
-      title: "Cleanup",
-      comment: "Flag fully rolled out",
+      body: { title: "Cleanup", comment: "Flag fully rolled out" },
     });
 
     const req = firstRequest(mockRequest);
     expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag");
     expect(req.body).toBeUndefined();
+  });
+
+  it("fme_environment delete is unchanged: no body schema, no body sent", async () => {
+    expect(findResource("fme_environment").operations.delete?.bodySchema).toBeUndefined();
+
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_environment", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+      body: { title: "Cleanup" },
+      title: "Cleanup",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/environments/e1");
+    expect(req.body).toBeUndefined();
+  });
+
+  it.each([
+    ["fme_feature_flag", "update"],
+    ["fme_segment_definition", "create"],
+  ])("%s %s: declares title/comment in its bodySchema", (resourceType, operation) => {
+    const op = findResource(resourceType).operations[operation as "update" | "create"];
+    const fields = op?.bodySchema?.fields.map((f) => f.name);
+    expect(fields).toContain("title");
+    expect(fields).toContain("comment");
+  });
+
+  it("fme_feature_flag native update sends title/comment in the merge patch", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      body: { description: "new", title: "Retitle", comment: "why" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PATCH");
+    expect(req.body).toEqual({ description: "new", comment: "why", title: "Retitle" });
+  });
+
+  it("fme_feature_flag native update omits title/comment when not provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      body: { description: "new" },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ description: "new" });
+  });
+
+  it("fme_feature_flag legacy update does not send title/comment", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "update", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+      body: { description: "new", title: "Retitle", comment: "why" },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual([{ op: "replace", path: "/description", value: "new" }]);
+  });
+
+  it("fme_segment_definition create sends title/comment with the description", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_definition", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+      segment_name: "seg1",
+      body: { description: "d", title: "Create", comment: "why" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.body).toEqual({ description: "d", comment: "why", title: "Create" });
+  });
+
+  it("fme_segment_definition create still sends an empty body when none is given", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_definition", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+      segment_name: "seg1",
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({});
   });
 });
 
