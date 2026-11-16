@@ -712,6 +712,13 @@ async function perspectiveUpdatePreflight(ctx: PreflightContext): Promise<void> 
   if (!input.body) input.body = {};
   const body = input.body;
 
+  // An explicit blank viewVersion is API-invalid (@NotBlank); fail loudly rather
+  // than silently rewriting it (which would downgrade a non-v1 perspective).
+  if (typeof body.viewVersion === "string" && body.viewVersion.trim() === "") {
+    throw new Error("cost_perspective update: viewVersion must not be blank. Omit it to keep the existing version.");
+  }
+  if (body.viewVersion === null) delete body.viewVersion;
+
   const uuid = typeof body.uuid === "string" ? body.uuid : undefined;
   if (uuid) {
     let existing: unknown;
@@ -740,7 +747,7 @@ async function perspectiveUpdatePreflight(ctx: PreflightContext): Promise<void> 
     }
   }
 
-  if (!body.viewVersion) body.viewVersion = "v1";
+  if (body.viewVersion === undefined) body.viewVersion = "v1";
 }
 
 function splitCsv(value: unknown): string[] {

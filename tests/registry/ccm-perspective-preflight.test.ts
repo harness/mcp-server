@@ -129,6 +129,22 @@ describe("cost_perspective update preflight", () => {
     expect(body.unitMetricInfo).toEqual([]);
   });
 
+  it("rejects an explicit blank viewVersion instead of rewriting it to v1", async () => {
+    for (const blank of ["", "  "]) {
+      const body: Record<string, unknown> = { uuid: "p1", name: "X", viewVersion: blank };
+      const { ctx, dispatch } = makeUpdateCtx(body, { ...existing, viewVersion: "v2" });
+      await expect(getUpdatePreflight()(ctx)).rejects.toThrow(/viewVersion must not be blank/);
+      expect(dispatch).not.toHaveBeenCalled();
+    }
+  });
+
+  it("treats null viewVersion as omitted and keeps the stored version", async () => {
+    const body: Record<string, unknown> = { uuid: "p1", name: "X", viewVersion: null };
+    const { ctx } = makeUpdateCtx(body, { ...existing, viewVersion: "v2" });
+    await getUpdatePreflight()(ctx);
+    expect(body.viewVersion).toBe("v2");
+  });
+
   it("aborts instead of sending a partial update when the lookup fails", async () => {
     const body: Record<string, unknown> = { uuid: "p1", name: "X" };
     const { ctx } = makeUpdateCtx(body, new Error("boom"));
