@@ -55,8 +55,6 @@ import {
  * explicitly passed org_id / project_id / repo_id. As with `pull_request`, org
  * and project are optional (account- and org-level repos), and ambient
  * HARNESS_ORG / HARNESS_PROJECT are never used to fill them in.
- *
- * Opt-in while AI Code Review is in beta: HARNESS_TOOLSETS=aicr.
  */
 
 const AICR_BASE = "/gateway/aicr/api/v1";
@@ -1288,15 +1286,14 @@ const AICR_URL_WRITE_ERROR =
  * instead of guessing (e.g. a PR read's numeric source_repo_id is not repo_id).
  */
 function aicrIdsFromUrl(url: string): string {
-  let parsed: Record<string, unknown>;
+  let parsed: ReturnType<typeof parseHarnessUrl>;
   try {
-    parsed = parseHarnessUrl(url) as unknown as Record<string, unknown>;
+    parsed = parseHarnessUrl(url);
   } catch {
     return "";
   }
-  const ids = ["org_id", "project_id", "repo_id", "pr_number"]
-    .filter((field) => str(parsed[field]))
-    .map((field) => `${field}=${String(parsed[field])}`);
+  const fields = ["org_id", "project_id", "repo_id", "pr_number"] as const;
+  const ids = fields.filter((field) => str(parsed[field])).map((field) => `${field}=${parsed[field]}`);
   return ids.length
     ? ` From your URL: ${ids.join(", ")}. Retry without url: org_id and project_id as arguments, the rest in params (plus finding_key / rule_id / convention_id if the action needs one).`
     : "";
@@ -1343,7 +1340,6 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
   displayName: "AI Code Review",
   description:
     "AI Code Review for Harness Code pull requests: review (get, request, status), findings (dismiss and undo), review runs, repositories, merge gates, team rules, coding conventions and settings",
-  optIn: true,
   resources: [
     {
       resourceType: "aicr_review",
@@ -1445,6 +1441,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             "Read-only, takes a Harness PR URL. run.head_sha is the commit reviewed; if the PR has newer commits, request_review again. " +
             "A running review whose pipeline has ended is marked failed here, when you can edit reviews.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
+          bodySchema: { description: "No body", fields: [] },
         },
       },
     },
@@ -1581,6 +1578,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           actionDescription:
             "Undo the dismissal of a finding, so it is open and counts against the check again. Fails if it is not dismissed.",
           paramsSchema: { fields: [...PR_PARAM_FIELDS, FINDING_KEY_FIELD] },
+          bodySchema: { description: "No body", fields: [] },
         },
       },
     },

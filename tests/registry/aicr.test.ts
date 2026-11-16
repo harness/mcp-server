@@ -159,8 +159,7 @@ function registry(overrides: Partial<Config> = {}) {
 }
 
 describe("aicr toolset registration", () => {
-  it("is opt-in; reads are safe and every write has the risk its effect calls for", () => {
-    expect(aicrToolset.optIn).toBe(true);
+  it("reads are safe and every write has the risk its effect calls for", () => {
     const types = aicrToolset.resources.map((r) => r.resourceType);
     expect(types).toEqual(["aicr_review", "aicr_finding", "aicr_run", "aicr_repository", "aicr_gate", "aicr_rule", "aicr_convention", "aicr_setting"]);
     const writes: Record<string, unknown> = {};
@@ -224,9 +223,9 @@ describe("aicr toolset registration", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  it("is not enabled by default and is enabled with HARNESS_TOOLSETS=aicr", () => {
-    expect(() => registry({ HARNESS_TOOLSETS: undefined }).getResource("aicr_finding")).toThrow();
-    expect(registry().getResource("aicr_finding").resourceType).toBe("aicr_finding");
+  it("is enabled by default and can be removed with HARNESS_TOOLSETS=-aicr", () => {
+    expect(registry({ HARNESS_TOOLSETS: undefined }).getResource("aicr_finding").resourceType).toBe("aicr_finding");
+    expect(() => registry({ HARNESS_TOOLSETS: "-aicr" }).getResource("aicr_finding")).toThrow();
   });
 });
 
