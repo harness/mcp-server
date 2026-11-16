@@ -1,6 +1,7 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import {
   passthrough, harV3ListExtract, harV3DataObjectUnwrap, harV3ScanEvaluationExtract, firewallExceptionListExtract,
+  bulkScanEvaluationExtract,
 } from "../extractors.js";
 import { V3_SCOPE_PARAMS, V3_PACKAGE_TYPES, V3_SORT_DESC, V3_PACKAGE_TYPES_DESC } from "./registries-v3.js";
 
@@ -38,22 +39,31 @@ const artifactScanEvaluateSchema: BodySchema = {
 };
 
 const packagesEvaluateSchema = (max: number, withSkipCache: boolean): BodySchema => ({
-  description: `Packages to evaluate against one registry's firewall policies (1-${max} per call).`,
+  description: `Packages to check against one registry's firewall policies (1-${max}).`,
   fields: [
-    { name: "registryId", type: "string", required: true, description: "UUID of the registry whose policies apply (registry `uuid`, or `registryId` on a scan)" },
-    { name: "artifacts", type: "array", required: true, description: `Packages to evaluate, each { packageName, version } (max ${max})`, itemType: "object" },
+    { name: "registryId", type: "string", required: true, description: "Registry UUID (registry `uuid`, or `registryId` on a scan)" },
+    { name: "artifacts", type: "array", required: true, description: "[{ packageName, version }]", itemType: "object" },
     ...(withSkipCache
-      ? [{ name: "skipCache", type: "boolean" as const, required: false, description: "Ignore any cached scan result and run a fresh policy evaluation" }]
+      ? [{ name: "skipCache", type: "boolean" as const, required: false, description: "Ignore cached results" }]
       : []),
   ],
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const packagesEvaluateBody = (action: string, max: number, withSkipCache: boolean) =>
   (input: Record<string, unknown>): Record<string, unknown> => {
     const body = (input.body ?? {}) as Record<string, unknown>;
+    // registry_id (param) and body.registryId are aliases; refuse to pick one silently when they disagree.
+    if (input.registry_id != null && body.registryId != null && input.registry_id !== body.registryId) {
+      throw new Error(`${action}: registry_id and body.registryId differ; pass only one`);
+    }
     const registryId = input.registry_id ?? body.registryId;
-    if (typeof registryId !== "string" || registryId === "") {
-      throw new Error(`${action} needs registryId (registry UUID)`);
+    if (typeof registryId !== "string" || !UUID_RE.test(registryId)) {
+      throw new Error(`${action} needs registryId as a registry UUID (registry \`uuid\`, or registryId on a scan)`);
+    }
+    if (withSkipCache && body.skipCache != null && typeof body.skipCache !== "boolean") {
+      throw new Error(`${action}: skipCache must be a boolean`);
     }
     const artifacts = body.artifacts;
     if (!Array.isArray(artifacts) || artifacts.length === 0 || artifacts.length > max) {
@@ -70,7 +80,7 @@ const packagesEvaluateBody = (action: string, max: number, withSkipCache: boolea
     return {
       registryId,
       artifacts: normalized,
-      ...(withSkipCache && body.skipCache != null ? { skipCache: body.skipCache === true } : {}),
+      ...(withSkipCache && body.skipCache != null ? { skipCache: body.skipCache } : {}),
     };
   };
 
@@ -178,8 +188,7 @@ export const registriesFirewallToolset: ToolsetDefinition = {
       description:
         "Firewall / policy scan results for artifacts. To list across every org and project, use " +
         "resource_scope=account with filter scope=descendants; without it only that level's registries are included. " +
-        "The list holds only BLOCKED/WARN scans of versions already pulled, so a version missing from it is not " +
-        "proven safe: to check specific package versions (pulled or not) use the evaluate_packages action.",
+        "Lists only BLOCKED/WARN scans of pulled versions; absence is not proof of safety, use evaluate_packages.",
       toolset: "registries-firewall",
       scope: "project",
       // org/project are optional on GetArtifactScansV3, and GetArtifactScanDetailsV3 takes neither. The backend
@@ -280,11 +289,9 @@ export const registriesFirewallToolset: ToolsetDefinition = {
           // Response is `{ data: [ArtifactScanDetailsV3, ...] }`; project to `{ items, total }`.
           responseExtractor: harV3ScanEvaluationExtract,
           actionDescription:
-            "Check whether specific package versions would pass a registry's firewall policies, including " +
-            "versions nobody has pulled yet. Pass body.registryId (registry UUID) and body.artifacts " +
-            `[{ packageName, version }] (max ${EVALUATE_PACKAGES_MAX_ARTIFACTS}); optional body.skipCache. ` +
-            "Synchronous and read-only: returns one scan detail per artifact (scanStatus, " +
-            "policySetFailureDetails, fixVersionDetails). For larger batches use bulk_evaluate.",
+            "Pre-pull check: would these exact versions pass the firewall, even if never pulled? Synchronous, " +
+            "read-only; one scan detail per artifact (scanStatus, policySetFailureDetails, fixVersionDetails). " +
+            "Over 50 artifacts: bulk_evaluate.",
           bodySchema: packagesEvaluateSchema(EVALUATE_PACKAGES_MAX_ARTIFACTS, true),
         },
         bulk_evaluate: {
@@ -297,10 +304,8 @@ export const registriesFirewallToolset: ToolsetDefinition = {
           // Response is `{ data: { evaluationId } }`; unwrap.
           responseExtractor: harV3DataObjectUnwrap,
           actionDescription:
-            "Queue an asynchronous firewall evaluation for many package versions in one registry, e.g. a lock " +
-            "file. Pass body.registryId (registry UUID) and body.artifacts [{ packageName, version }] " +
-            `(max ${BULK_EVALUATE_MAX_ARTIFACTS}). Returns an evaluationId; poll harness_get ` +
-            "resource_type=bulk_scan_evaluation with evaluation_id until status is SUCCESS or FAILURE.",
+            "Queue an async check of many versions (e.g. a lock file); stores scan results. Returns evaluationId; " +
+            "poll harness_get bulk_scan_evaluation until status is SUCCESS or FAILURE.",
           bodySchema: packagesEvaluateSchema(BULK_EVALUATE_MAX_ARTIFACTS, false),
         },
       },
@@ -308,7 +313,8 @@ export const registriesFirewallToolset: ToolsetDefinition = {
     {
       resourceType: "bulk_scan_evaluation",
       displayName: "Bulk Scan Evaluation (v3)",
-      description: "Status and results of an async bulk scan evaluation started with artifact_scan bulk_evaluate.",
+      description:
+        "Result of artifact_scan bulk_evaluate: per-status counts plus the non-ALLOWED scans (capped).",
       toolset: "registries-firewall",
       scope: "project",
       // GetBulkScanEvaluationStatusV3 takes optional org/project, so poll at whatever scope bulk_evaluate used.
@@ -321,8 +327,9 @@ export const registriesFirewallToolset: ToolsetDefinition = {
           path: "/har/api/v3/scans/bulk-evaluate/{evaluation_id}",
           pathParams: { evaluation_id: "evaluation_id" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          // Response is `{ data: { evaluationId, status, scans, error } }`; unwrap.
-          responseExtractor: harV3DataObjectUnwrap,
+          // Response is `{ data: { evaluationId, status, scans, error } }` with up to 10000 scans; project to
+          // per-status counts plus the non-ALLOWED scans (capped).
+          responseExtractor: bulkScanEvaluationExtract,
           description: "Get bulk scan evaluation status (v3)",
         },
       },

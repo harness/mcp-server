@@ -5,7 +5,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { registriesFirewallToolset } from "../../src/registry/toolsets/registries-firewall.js";
-import { firewallExceptionListExtract, harV3ScanEvaluationExtract } from "../../src/registry/extractors.js";
+import {
+  BULK_SCAN_EVALUATION_MAX_SCANS,
+  bulkScanEvaluationExtract,
+  firewallExceptionListExtract,
+  harV3ScanEvaluationExtract,
+} from "../../src/registry/extractors.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -112,8 +117,12 @@ describe("artifact_scan evaluate_packages", () => {
   });
 
   it.each([
-    ["no registryId", { artifacts: artifacts(1) }, /needs registryId/],
-    ["an empty registryId", { registryId: "", artifacts: artifacts(1) }, /needs registryId/],
+    ["no registryId", { artifacts: artifacts(1) }, /needs registryId as a registry UUID/],
+    ["an empty registryId", { registryId: "", artifacts: artifacts(1) }, /needs registryId as a registry UUID/],
+    ["a registry name instead of a UUID", { registryId: "npm_fw_ah5472", artifacts: artifacts(1) },
+      /needs registryId as a registry UUID/],
+    ["a non-boolean skipCache", { registryId: REGISTRY_ID, artifacts: artifacts(1), skipCache: "true" },
+      /skipCache must be a boolean/],
     ["no artifacts", { registryId: REGISTRY_ID }, /needs 1-50 artifacts/],
     ["zero artifacts", { registryId: REGISTRY_ID, artifacts: [] }, /needs 1-50 artifacts/],
     ["51 artifacts", { registryId: REGISTRY_ID, artifacts: artifacts(51) }, /needs 1-50 artifacts/],
@@ -131,6 +140,29 @@ describe("artifact_scan evaluate_packages", () => {
       registry.dispatchExecute(client, "artifact_scan", "evaluate_packages", { body }),
     ).rejects.toThrow(message);
     expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("rejects registry_id and body.registryId that disagree without calling the API", async () => {
+    const client = mockClient({ data: [] });
+
+    await expect(
+      registry.dispatchExecute(client, "artifact_scan", "evaluate_packages", {
+        registry_id: REGISTRY_ID,
+        body: { registryId: "226b4f20-a8ea-48c0-955b-059425660226", artifacts: artifacts(1) },
+      }),
+    ).rejects.toThrow(/registry_id and body.registryId differ/);
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("accepts registry_id and body.registryId when they match", async () => {
+    const client = mockClient({ data: [] });
+
+    await registry.dispatchExecute(client, "artifact_scan", "evaluate_packages", {
+      registry_id: REGISTRY_ID,
+      body: { registryId: REGISTRY_ID, artifacts: artifacts(1) },
+    });
+
+    expect(firstCall(client).body.registryId).toBe(REGISTRY_ID);
   });
 
   it("is declared read-only and retry-safe", () => {
@@ -268,6 +300,7 @@ describe("bulk_scan_evaluation get", () => {
     const registry = new Registry(makeConfig());
     const status = { evaluationId: "eval-1", status: "SUCCESS", scans: [], error: null };
     const client = mockClient({ data: status });
+    const expected = { evaluationId: "eval-1", status: "SUCCESS", error: null, totalScans: 0, scanStatusCounts: {}, scans: [] };
 
     const result = await registry.dispatch(client, "bulk_scan_evaluation", "get", {
       resource_scope: "account",
@@ -279,6 +312,71 @@ describe("bulk_scan_evaluation get", () => {
     expect(call.params.account_identifier).toBe("acct123");
     expect(call.params.org_identifier).toBeUndefined();
     expect(call.params.project_identifier).toBeUndefined();
-    expect(result).toEqual(status);
+    expect(result).toEqual(expected);
+  });
+});
+
+describe("bulkScanEvaluationExtract", () => {
+  const scan = (i: number, scanStatus: string) => ({ packageName: `p${i}`, version: "1.0.0", scanId: `s${i}`, scanStatus });
+
+  it("counts every scan and inlines only the non-ALLOWED ones", () => {
+    const result = bulkScanEvaluationExtract({
+      data: {
+        evaluationId: "eval-1",
+        status: "SUCCESS",
+        error: null,
+        scans: [scan(0, "ALLOWED"), scan(1, "BLOCKED"), scan(2, "WARN"), scan(3, "ALLOWED")],
+      },
+    });
+
+    expect(result).toEqual({
+      evaluationId: "eval-1",
+      status: "SUCCESS",
+      error: null,
+      totalScans: 4,
+      scanStatusCounts: { ALLOWED: 2, BLOCKED: 1, WARN: 1 },
+      scans: [scan(1, "BLOCKED"), scan(2, "WARN")],
+    });
+  });
+
+  it("caps the inlined scans and says where the rest are", () => {
+    const blocked = Array.from({ length: BULK_SCAN_EVALUATION_MAX_SCANS + 5 }, (_, i) => scan(i, "BLOCKED"));
+    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: [scan(999, "ALLOWED"), ...blocked] } }) as
+      Record<string, unknown>;
+
+    expect(result.scans).toHaveLength(BULK_SCAN_EVALUATION_MAX_SCANS);
+    expect(result.totalScans).toBe(BULK_SCAN_EVALUATION_MAX_SCANS + 6);
+    expect(result.scanStatusCounts).toEqual({ ALLOWED: 1, BLOCKED: BULK_SCAN_EVALUATION_MAX_SCANS + 5 });
+    expect(result.truncated).toBe(true);
+    expect(result.hint).toMatch(/harness_list resource_type=artifact_scan/);
+  });
+
+  it("does not mark exactly the cap as truncated", () => {
+    const blocked = Array.from({ length: BULK_SCAN_EVALUATION_MAX_SCANS }, (_, i) => scan(i, "BLOCKED"));
+    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: blocked } }) as Record<string, unknown>;
+
+    expect(result.scans).toHaveLength(BULK_SCAN_EVALUATION_MAX_SCANS);
+    expect(result).not.toHaveProperty("truncated");
+  });
+
+  it.each([
+    ["missing scans", { data: { status: "PENDING", error: null } }],
+    ["null scans", { data: { status: "PROCESSING", scans: null } }],
+  ])("handles %s while the evaluation is running", (_label, raw) => {
+    const result = bulkScanEvaluationExtract(raw) as Record<string, unknown>;
+    expect(result.totalScans).toBe(0);
+    expect(result.scans).toEqual([]);
+    expect(result.scanStatusCounts).toEqual({});
+  });
+
+  it("counts a scan without scanStatus as UNKNOWN and inlines it", () => {
+    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: [{ packageName: "x", version: "1" }] } }) as
+      Record<string, unknown>;
+    expect(result.scanStatusCounts).toEqual({ UNKNOWN: 1 });
+    expect(result.scans).toHaveLength(1);
+  });
+
+  it("passes non-object responses through", () => {
+    expect(bulkScanEvaluationExtract("oops")).toBe("oops");
   });
 });
