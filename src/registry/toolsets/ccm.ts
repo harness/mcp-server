@@ -778,59 +778,6 @@ async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> 
   }
 }
 
-const PERSPECTIVE_UPDATE_CARRY_KEYS = [
-  "name",
-  "viewVersion",
-  "viewType",
-  "viewState",
-  "folderId",
-  "viewRules",
-  "viewVisualization",
-  "viewTimeRange",
-  "viewPreferences",
-  "dataSources",
-  "unitMetricInfo",
-] as const;
-
-/**
- * Preflight hook for cost_perspective.update. The API takes @Valid CEView
- * (viewVersion is @NotBlank) and the DAO rewrites the whole record, so a
- * partial body fails validation or wipes fields. Fill every field the caller
- * did not send from the existing perspective (caller values always win, so an
- * explicit empty unitMetricInfo still clears it). If the lookup fails, still
- * default viewVersion so validation does not reject the update.
- */
-async function perspectiveUpdatePreflight(ctx: PreflightContext): Promise<void> {
-  const input = ctx.input as { body?: Record<string, unknown> };
-  if (!input.body) input.body = {};
-  const body = input.body;
-
-  const uuid = typeof body.uuid === "string" ? body.uuid : undefined;
-  if (uuid) {
-    try {
-      const existing = await ctx.registry.dispatch(
-        ctx.client,
-        "cost_perspective",
-        "get",
-        { perspective_id: uuid },
-        ctx.signal,
-      );
-      if (existing && typeof existing === "object" && !Array.isArray(existing)) {
-        const current = existing as Record<string, unknown>;
-        for (const key of PERSPECTIVE_UPDATE_CARRY_KEYS) {
-          if (body[key] === undefined && current[key] !== undefined && current[key] !== null) {
-            body[key] = current[key];
-          }
-        }
-      }
-    } catch {
-      // Graceful degradation — fall through to the viewVersion default
-    }
-  }
-
-  if (!body.viewVersion) body.viewVersion = "v1";
-}
-
 function splitCsv(value: unknown): string[] {
   if (typeof value !== "string") {
     return [];
@@ -1063,11 +1010,10 @@ export const ccmToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ccm/api/perspective",
-          preflight: perspectiveUpdatePreflight,
           operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. Any field you omit (including viewVersion) is filled from the existing perspective before the update is sent; fields you provide override.",
+            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
             fields: [
               { name: "uuid", type: "string", required: true, description: "Perspective UUID (from get)" },
               { name: "name", type: "string", required: true, description: "Perspective name (1-80 chars)" },
