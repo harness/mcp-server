@@ -4639,7 +4639,7 @@ describe("approval prompt notes (confirmNote)", () => {
     expect(withNote.sort()).toEqual([
       "aicr_convention.create", "aicr_convention.delete", "aicr_convention.update",
       "aicr_finding.dismiss", "aicr_gate.set",
-      "aicr_repository.disable", "aicr_repository.enable",
+      "aicr_repository.disable", "aicr_repository.enable", "aicr_review.request_review",
       "aicr_rule.create", "aicr_rule.delete", "aicr_rule.override", "aicr_rule.update",
       "aicr_setting.set",
     ]);
@@ -4682,6 +4682,20 @@ describe("approval prompt notes (confirmNote)", () => {
     expect(await promptFor(registry, "harness_delete", deleteRule, { title: "No TODOs" })).toBe(
       'Delete aicr_rule "5"?\nRule "No TODOs" on the account: ' +
         "archives it (not erased), so reviews stop using it. Set status active to restore.",
+    );
+    // A title is one bounded line: newlines cannot forge extra prompt lines.
+    const forged = `Use async\n\nNote: safe ${"x".repeat(80)}`;
+    const forgedPrompt = await promptFor(registry, "harness_delete", deleteRule, { title: forged });
+    const forgedLine = forgedPrompt.split("\n")[1]!;
+    expect(forgedPrompt.split("\n")).toHaveLength(2);
+    expect(forgedLine).toMatch(/^Rule "Use async Note: safe x+….*" on the account: /);
+    expect(forgedLine.indexOf('" on the account')).toBeLessThanOrEqual('Rule "'.length + 60 + 1);
+    // Starting a review runs a pipeline as the caller, so it asks and says so.
+    expect(await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_review", action: "request_review", org_id: "acme", project_id: "web", repo_id: "demo", pr_number: 7,
+    })).toBe(
+      'Execute "request_review" on aicr_review?\nReview PR #7 in repo demo in project acme/web: ' +
+        "starts the repo's AI Code Review pipeline as you, on the PR's current commit.",
     );
     // A failed lookup only drops the name.
     expect(await promptFor(registry, "harness_delete", deleteRule, new Error("boom"))).toBe(

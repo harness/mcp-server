@@ -453,7 +453,7 @@ function aicrPolicyByIdPreflight(
   return async (ctx: PreflightContext): Promise<void> => {
     const { input } = ctx;
     // A bad body fails before any request, not after the scope lookups.
-    if (body) pickAicrBody(input, body.fields, body.op);
+    if (body) validateAicrBody(input, body.fields, body.op);
     if (namesAicrRepo(input)) {
       const repoPath = resolveAicrRepoPath(input, ctx.accountId);
       input.repo_path = repoPath;
@@ -469,7 +469,19 @@ function aicrPolicyByIdPreflight(
   };
 }
 
+/** Create ops: the body is checked before any scope lookup, then the scope is resolved. */
+function aicrPolicyCreatePreflight(fields: readonly string[], op: string) {
+  const scope = aicrPolicyScopePreflight(aicrNoRepoConfigError);
+  return async (ctx: PreflightContext): Promise<void | { result: unknown }> => {
+    validateAicrBody(ctx.input, fields, op);
+    return scope(ctx);
+  };
+}
+
 async function aicrRuleOverridePreflight(ctx: PreflightContext): Promise<void> {
+  validateAicrBody(ctx.input, ["enabled"], "override");
+  if (typeof aicrNoteBody(ctx.input).enabled !== "boolean")
+    throw new Error("override needs body.enabled: true or false.");
   if (!namesAicrRepo(ctx.input)) {
     throw new Error(
       "override applies to one repository: pass repo_id (with its org_id/project_id) or repo_path.",
@@ -498,25 +510,32 @@ function aicrFieldOk(kind: AicrFieldKind, v: unknown): boolean {
   }
 }
 
-/** Only the named fields of the caller's body, each checked for its type; scope travels in the query. */
+/** The named fields the caller's body has; scope travels in the query. A pure mapping. */
 function pickAicrBody(
   input: Record<string, unknown>,
   fields: readonly string[],
-  op: string,
 ): Record<string, unknown> {
   const body = (
     typeof input.body === "object" && input.body !== null ? input.body : {}
   ) as Record<string, unknown>;
-  const out = Object.fromEntries(
+  return Object.fromEntries(
     fields.filter((f) => body[f] !== undefined).map((f) => [f, body[f]]),
   );
+}
+
+/** Preflight check for {@link pickAicrBody}: at least one named field, each of its type. */
+function validateAicrBody(
+  input: Record<string, unknown>,
+  fields: readonly string[],
+  op: string,
+): void {
+  const out = pickAicrBody(input, fields);
   if (Object.keys(out).length === 0)
     throw new Error(`${op} needs at least one of: ${fields.join(", ")}.`);
   for (const [k, v] of Object.entries(out)) {
     const kind = AICR_FIELD_KINDS[k];
     if (kind && !aicrFieldOk(kind, v)) throw new Error(`${k} must be ${AICR_KIND_COPY[kind]}.`);
   }
-  return out;
 }
 
 const AICR_RULE_CREATE_FIELDS = [
@@ -546,7 +565,21 @@ const AICR_GATE_FAIL_AT = ["never", "critical", "major_and_above", "any"];
  * `PUT /gates` saves each entry whole, and a missing `reported` is false (off, and at a space,
  * off for everything under it), so each entry must name all three fields.
  */
-function aicrGateBody(input: Record<string, unknown>): Record<string, unknown> {
+const AICR_GATE_BODY_KEY = "_aicr_gate_body";
+
+/** The normalized gate body the set preflight builds; the bodyBuilder sends it. */
+function aicrGateBody(input: Record<string, unknown>): unknown {
+  return input[AICR_GATE_BODY_KEY];
+}
+
+function aicrGateSetPreflight(scope: ReturnType<typeof aicrPolicyScopePreflight>) {
+  return async (ctx: PreflightContext): Promise<void | { result: unknown }> => {
+    ctx.input[AICR_GATE_BODY_KEY] = normalizeAicrGate(ctx.input);
+    return scope(ctx);
+  };
+}
+
+function normalizeAicrGate(input: Record<string, unknown>): Record<string, unknown> {
   const body = (
     typeof input.body === "object" && input.body !== null ? input.body : {}
   ) as Record<string, unknown>;
@@ -856,6 +889,7 @@ async function aicrReviewPreflight(ctx: PreflightContext): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const AICR_NOTE_MAX_CHARS = 600;
+const AICR_NOTE_TITLE_MAX = 60;
 /** Where aicrNameLookup leaves the row's title for the note (on the copy of the input it gets). */
 const AICR_NOTE_TITLE_KEY = "__aicr_note_title";
 
@@ -915,8 +949,11 @@ function aicrNote(subject: string, effect: string): string {
 
 /** `"title"` from the body, or the one aicrNameLookup found. */
 function aicrNoteName(input: Record<string, unknown>): string | undefined {
-  const title = str(aicrNoteBody(input).title) ?? str(input[AICR_NOTE_TITLE_KEY]);
-  return title ? `"${title}"` : undefined;
+  const raw = str(aicrNoteBody(input).title) ?? str(input[AICR_NOTE_TITLE_KEY]);
+  // A title is user text: one line, bounded, so it cannot forge extra prompt lines.
+  const title = raw?.replace(/\s+/g, " ").trim();
+  if (!title) return undefined;
+  return `"${title.length > AICR_NOTE_TITLE_MAX ? `${title.slice(0, AICR_NOTE_TITLE_MAX - 1)}…` : title}"`;
 }
 
 /** `Rule "No TODOs" on project acme/web`; without a name, `Rule on ...`. */
@@ -996,6 +1033,13 @@ function aicrEnableNote(input: Record<string, unknown>): string | undefined {
       ? "the project's review pipeline (created if missing)"
       : `the review pipeline of every project under the ${t.level} (created if missing)`;
   return aicrNote(`Enable AI Code Review on ${t.where}`, `adds a PR trigger to ${pipelines}, so new PR commits get reviewed.`);
+}
+
+function aicrReviewRequestNote(input: Record<string, unknown>): string | undefined {
+  const t = aicrNoteTarget(input);
+  const pr = str(input.pr_number) ?? (typeof input.pr_number === "number" ? String(input.pr_number) : undefined);
+  if (!t.repo || !pr) return undefined;
+  return aicrNote(`Review PR #${pr} in ${t.where}`, "starts the repo's AI Code Review pipeline as you, on the PR's current commit.");
 }
 
 function aicrDisableNote(input: Record<string, unknown>): string | undefined {
@@ -1344,9 +1388,11 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           pathBuilder: (input) =>
             `${AICR_BASE}/pullreqs/${aicrPrNumber(input)}/review/start`,
           // Starts the repo's AI Code Review pipeline as the caller. A retry after a lost response
-          // could start a second pipeline, so it is never retried.
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          // could start a second pipeline, so it is never retried. It runs a pipeline as the caller,
+          // so it asks first.
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           preflight: aicrNamedRepoPreflight(aicrPrNumber),
+          confirmNote: aicrReviewRequestNote,
           bodyBuilder: hoistAicrRepoPath,
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrReviewStatusExtract,
@@ -1356,6 +1402,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             "If a review of that commit is already running, that one is returned and no new one starts. " +
             "Returns status running with the run; follow it with review_status.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
+          bodySchema: { description: "No body", fields: [] },
         },
         review_status: {
           method: "GET",
@@ -1732,7 +1779,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             risk: "medium_write",
             retryPolicy: "do_not_retry",
           },
-          preflight: aicrPolicyScopePreflight(aicrNoRepoConfigError),
+          preflight: aicrGateSetPreflight(aicrPolicyScopePreflight(aicrNoRepoConfigError)),
           bodyBuilder: aicrGateBody,
           skipScopeBodyInjection: true,
           queryParams: {
@@ -1834,9 +1881,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             risk: "medium_write",
             retryPolicy: "do_not_retry",
           },
-          preflight: aicrPolicyScopePreflight(aicrNoRepoConfigError),
-          bodyBuilder: (input) =>
-            pickAicrBody(input, AICR_RULE_CREATE_FIELDS, "Creating a rule"),
+          preflight: aicrPolicyCreatePreflight(AICR_RULE_CREATE_FIELDS, "Creating a rule"),
+          bodyBuilder: (input) => pickAicrBody(input, AICR_RULE_CREATE_FIELDS),
           skipScopeBodyInjection: true,
           queryParams: {
             space_path: "space_path",
@@ -1860,8 +1906,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             retryPolicy: "do_not_retry",
           },
           preflight: aicrPolicyByIdPreflight("rule", true, { fields: AICR_RULE_UPDATE_FIELDS, op: "Updating a rule" }),
-          bodyBuilder: (input) =>
-            pickAicrBody(input, AICR_RULE_UPDATE_FIELDS, "Updating a rule"),
+          bodyBuilder: (input) => pickAicrBody(input, AICR_RULE_UPDATE_FIELDS),
           skipScopeBodyInjection: true,
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrRuleExtract,
@@ -1909,12 +1954,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             retryPolicy: "do_not_retry",
           },
           preflight: aicrRuleOverridePreflight,
-          bodyBuilder: (input) => {
-            const body = pickAicrBody(input, ["enabled"], "override");
-            if (typeof body.enabled !== "boolean")
-              throw new Error("override needs body.enabled: true or false.");
-            return body;
-          },
+          bodyBuilder: (input) => pickAicrBody(input, ["enabled"]),
           skipScopeBodyInjection: true,
           queryParams: {
             repo_config_id: "repo_config_id",
@@ -2014,13 +2054,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             risk: "medium_write",
             retryPolicy: "do_not_retry",
           },
-          preflight: aicrPolicyScopePreflight(aicrNoRepoConfigError),
-          bodyBuilder: (input) =>
-            pickAicrBody(
-              input,
-              AICR_CONVENTION_CREATE_FIELDS,
-              "Creating a convention",
-            ),
+          preflight: aicrPolicyCreatePreflight(AICR_CONVENTION_CREATE_FIELDS, "Creating a convention"),
+          bodyBuilder: (input) => pickAicrBody(input, AICR_CONVENTION_CREATE_FIELDS),
           skipScopeBodyInjection: true,
           queryParams: {
             space_path: "space_path",
@@ -2049,12 +2084,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             fields: AICR_CONVENTION_UPDATE_FIELDS,
             op: "Updating a convention",
           }),
-          bodyBuilder: (input) =>
-            pickAicrBody(
-              input,
-              AICR_CONVENTION_UPDATE_FIELDS,
-              "Updating a convention",
-            ),
+          bodyBuilder: (input) => pickAicrBody(input, AICR_CONVENTION_UPDATE_FIELDS),
           skipScopeBodyInjection: true,
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrConventionExtract,

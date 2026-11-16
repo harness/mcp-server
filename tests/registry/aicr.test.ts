@@ -7,6 +7,7 @@ import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { applyHeaderPagination } from "../../src/registry/pagination.js";
 import { compactItems } from "../../src/utils/compact.js";
+import { aicrRunGetExtract, aicrRunListExtract } from "../../src/registry/extractors.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { aicrToolset, resolveAicrRepoPath, aicrPrNumber } from "../../src/registry/toolsets/aicr.js";
 import {
@@ -177,7 +178,7 @@ describe("aicr toolset registration", () => {
     }
     expect(writes).toEqual({
       // Starts the review pipeline; a retry could start a second one.
-      "aicr_review.request_review": { risk: "low_write", retryPolicy: "do_not_retry" },
+      "aicr_review.request_review": { risk: "medium_write", retryPolicy: "do_not_retry" },
       // Dismissing can let a PR pass the gate, so it needs confirmation; undo only reopens.
       "aicr_finding.dismiss": { risk: "medium_write", retryPolicy: "do_not_retry" },
       "aicr_finding.undo_dismiss": { risk: "low_write", retryPolicy: "do_not_retry" },
@@ -917,6 +918,12 @@ describe("aicr_review request_review / review_status", () => {
     expect(result).toMatchObject({ pr_number: 7, status: "running", run: { id: RUN_ID, status: "running", head_sha: "abc123" } });
     expect((result.run as Record<string, unknown>).config).toBeUndefined();
     expect(result.note).toMatch(/review_status/);
+  });
+
+  it("never returns a run's config, which can hold MCP server auth headers", () => {
+    const run = { ...RUNNING, config: { mcp_servers: [{ headers: { Authorization: "Bearer s3cret" } }] } };
+    expect(JSON.stringify([aicrRunGetExtract(run), aicrRunListExtract([run])])).not.toMatch(/s3cret|mcp_servers/);
+    expect(aicrRunGetExtract(run)).toMatchObject({ id: RUN_ID, status: "running", head_sha: "abc123" });
   });
 
   it("checks a typed repo exists before starting", async () => {

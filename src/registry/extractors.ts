@@ -2615,17 +2615,22 @@ function aicrLink(input?: Record<string, unknown>): { openInHarness?: string } {
   return typeof link === "string" ? { openInHarness: link } : {};
 }
 
-/** Drop per-agent token and cost usage from each language's run stats. */
+/**
+ * Drop the run's `config` (it can hold MCP server auth headers) and per-agent token and cost
+ * usage from each language's run stats.
+ */
 function aicrRunView(run: unknown): unknown {
-  if (!isRecord(run) || !isRecord(run.stats)) return run;
+  if (!isRecord(run)) return run;
+  const { config: _config, ...visible } = run;
+  if (!isRecord(visible.stats)) return visible;
   const stats = Object.fromEntries(
-    Object.entries(run.stats).map(([language, s]) => {
+    Object.entries(visible.stats).map(([language, s]) => {
       if (!isRecord(s)) return [language, s];
       const { usage: _usage, ...rest } = s;
       return [language, rest];
     }),
   );
-  return { ...run, stats };
+  return { ...visible, stats };
 }
 
 /** `GET /pullreqs/{n}/runs` returns a bare array; `headerPagination` supplies the real total. */
