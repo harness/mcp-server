@@ -57,3 +57,49 @@ export function resolveHttpHostValidationOptions(
 
   return { host };
 }
+
+const WILDCARD_BIND_HOSTS = new Set(["0.0.0.0", "::", "[::]"]);
+
+/**
+ * Resolve the `Access-Control-Allow-Origin` header value for HTTP transport.
+ *
+ * - Never emits wildcard bind addresses (`http://0.0.0.0:<port>` or `http://::<port>`),
+ *   which are invalid browser Origins when the server binds to all interfaces in Docker/K8s.
+ * - When a request carries an `Origin` header whose hostname is permitted by
+ *   `allowedHosts` (or matches the normalized bind host), reflects that exact origin.
+ * - Otherwise returns the canonical default origin (`http://<safeHost>:<port>`).
+ */
+export function resolveCorsAllowOrigin(
+  requestOrigin: string | undefined,
+  host: string,
+  port: number,
+  allowedHosts?: readonly string[],
+): string {
+  const safeHost = WILDCARD_BIND_HOSTS.has(host)
+    ? "127.0.0.1"
+    : host === "::1"
+      ? "[::1]"
+      : host;
+  const fallbackOrigin = `http://${safeHost}:${port}`;
+
+  if (!requestOrigin) return fallbackOrigin;
+
+  try {
+    const parsed = new URL(requestOrigin);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return fallbackOrigin;
+    }
+    const originHost = parsed.hostname;
+    const permittedHosts = new Set<string>([
+      safeHost,
+      ...(allowedHosts ?? []),
+    ]);
+    if (permittedHosts.has(originHost)) {
+      return parsed.origin;
+    }
+  } catch {
+    // Malformed Origin header — fall back to canonical bind origin
+  }
+
+  return fallbackOrigin;
+}

@@ -312,6 +312,7 @@ export class HarnessClient {
   private accountIdResolver?: AccountIdResolver;
   private bearerTokenResolver?: BearerTokenResolver;
   private currentUserId?: string;
+  private currentUserCacheKey?: string;
   private currentUserPromise?: Promise<string>;
 
   constructor(config: Config) {
@@ -479,9 +480,15 @@ export class HarnessClient {
    * the human for a UUID.
    */
   async getCurrentUserId(): Promise<string> {
+    const cacheKey = `${this.resolveAccountId()}:${this.bearerTokenResolver?.() ?? this.token}`;
+    if (this.currentUserCacheKey !== cacheKey) {
+      this.currentUserId = undefined;
+      this.currentUserPromise = undefined;
+      this.currentUserCacheKey = cacheKey;
+    }
     if (this.currentUserId) return this.currentUserId;
     if (this.currentUserPromise) return this.currentUserPromise;
-    this.currentUserPromise = (async () => {
+    const inflightPromise = (async () => {
       const resp = await this.request<{ data?: { uuid?: string } }>({
         method: "GET",
         path: "/ng/api/user/currentUser",
@@ -494,13 +501,18 @@ export class HarnessClient {
           500,
         );
       }
-      this.currentUserId = uuid;
+      if (this.currentUserCacheKey === cacheKey) {
+        this.currentUserId = uuid;
+      }
       return uuid;
     })();
+    this.currentUserPromise = inflightPromise;
     try {
-      return await this.currentUserPromise;
+      return await inflightPromise;
     } catch (err) {
-      this.currentUserPromise = undefined;
+      if (this.currentUserPromise === inflightPromise) {
+        this.currentUserPromise = undefined;
+      }
       throw err;
     }
   }

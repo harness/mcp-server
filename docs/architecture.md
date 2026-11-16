@@ -1,6 +1,6 @@
 # Architecture: OperationPolicy & Registry Contract
 
-This document describes the design and architecture of the OperationPolicy system introduced in [Spec 001](../specs/001-registry-contract.md). It covers the type hierarchy, data flow, behavioral contracts, and integration points.
+This document describes the design and architecture of the `OperationPolicy` and `Registry` dispatch system. It covers the type hierarchy, data flow, behavioral contracts, and integration points.
 
 ---
 
@@ -8,8 +8,8 @@ This document describes the design and architecture of the OperationPolicy syste
 
 1. **Every operation declares its risk.** No implicit defaults. The registry contract is absolute — `operationPolicy` is required on every `EndpointSpec`.
 2. **Risk drives confirmation behavior.** Tool handlers pass `risk: RiskLevel` from `operationPolicy` into `confirmViaElicitation`, which applies `requiresConfirmation()` (failure path on clients without elicitation) and `shouldAutoApprove()` (`HARNESS_AUTO_APPROVE_RISK` / autonomous mode).
-3. **Retry policy is per-operation.** Non-idempotent POSTs are marked `do_not_retry`; idempotent GETs and PUTs are `safe`. The HTTP client will read this in a future spec (P5).
-4. **Zero code in toolset files.** Risk classification is pure data on each `EndpointSpec` — no functions, no imports, no conditional logic.
+3. **Retry policy is per-operation.** Non-idempotent POSTs are marked `do_not_retry`; idempotent GETs and PUTs are `safe`. `HarnessClient` (`isSafeRetry()`) enforces `retryPolicy` on transient 429/5xx and network failures.
+4. **Pure-data toolset files.** Risk classification, scoping (`scope`, `supportedScopes`, per-operation `EndpointSpec.scope`), and routing are declarative data on each `ResourceDefinition` / `EndpointSpec`.
 
 ---
 
@@ -91,8 +91,8 @@ Client supports MCP form elicitation?
 |---|---|---|
 | `harness_create` | `def.operations.create!.operationPolicy.risk` | Passed to `confirmViaElicitation`; `requiresConfirmation(risk)` when client lacks elicitation |
 | `harness_update` | `def.operations.update!.operationPolicy.risk` | Same |
-| `harness_execute` | `actionSpec.operationPolicy.risk` (per action) | Same |
-| `harness_delete` | Hardcoded `risk: "destructive"` | Same (always confirms unless auto-approved) |
+| `harness_execute` | `actionSpec.operationPolicy.risk` (per action) | Same (`read` and `low_write` actions proceed without confirmation; `read` actions are also allowed in `HARNESS_READ_ONLY=true` mode) |
+| `harness_delete` | `def.operations.delete!.operationPolicy.risk` | Same (all delete operations declare `risk: "destructive"`) |
 
 ---
 
@@ -166,7 +166,7 @@ The structural validation test suite (`tests/registry/structural-validation.test
 6. **All `list` and `get` operations have `risk: "read"`** — reads never have side effects.
 7. **No EndpointSpec has `blockWithoutConfirmation`** — removed field, fully replaced.
 
-These tests run on every `pnpm test` invocation and validate all ~500+ endpoint specs across 31 toolset files.
+These tests run on every `pnpm test` and `pnpm standards:check` invocation and validate all endpoint specs across all 50 toolset files.
 
 ---
 
@@ -185,18 +185,11 @@ Confirmation is driven by `risk: RiskLevel` plus optional auto-approve level fro
 
 ### Preflight Hooks
 
-`PreflightContext` types `client` as `HarnessClientInterface` and `registry` as `RegistryDispatchInterface` — structural interfaces that the concrete `HarnessClient` and `Registry` classes satisfy without explicit `implements` declarations. This eliminates the previous `unknown` typing while avoiding circular imports.
-
-Hooks that need concrete-only methods (e.g. `getCurrentUserId()`) narrow via double-cast:
-```typescript
-const hc = client as unknown as HarnessClient;
-```
-
-`HarnessClientInterface` exposes only `readonly account: string` — the minimum surface needed for structural compatibility. The `request()` method is intentionally omitted because its `RequestOptions` parameter type lives in `client/types.ts` and would create a cross-module dependency. Preflight hooks that call `request` cast to the concrete type anyway.
+`PreflightContext` types `client` as `HarnessClientInterface` and `registry` as `RegistryDispatchInterface` — structural interfaces that the concrete `HarnessClient` and `Registry` classes satisfy without explicit `implements` declarations. `HarnessClientInterface` exposes `readonly account: string`, `getCurrentUserId(): Promise<string>`, and `request<T>(options: RequestOptions): Promise<T>`, allowing preflight hooks to resolve actor identities or default entities without circular imports.
 
 ### Resource Scope Selection
 
-Resource definitions declare a default `scope` (`account`, `org`, or `project`). Multi-scope APIs also set `supportedScopes`, and callers can pass `resource_scope` through the generic tools to choose the request level explicitly. The registry validates the requested scope, injects only the identifiers required for that scope, and fails before the API call if `resource_scope: "org"` is missing `org_id`/`HARNESS_ORG` or `resource_scope: "project"` is missing `project_id`/`HARNESS_PROJECT`.
+Resource definitions declare a default `scope` (`account`, `org`, or `project`). Multi-scope APIs also set `supportedScopes`, and callers can pass `resource_scope` through the generic tools to choose the request level explicitly. When an individual operation's backend endpoint has a fixed scope that differs from the resource's default `scope` (for example, a project-scoped `list` paired with an account-scoped `get`-by-UUID on the same resource), `EndpointSpec.scope` overrides the scope for that operation so both operations remain on a single `resourceType`. The registry validates the requested scope, injects only the identifiers required for that scope, and fails before the API call if `resource_scope: "org"` is missing `org_id`/`HARNESS_ORG` or `resource_scope: "project"` is missing `project_id`/`HARNESS_PROJECT`.
 
 `harness_describe` exposes `supportedScopes` and `scopeHint` from local registry metadata so agents can discover when account/org/project variants are available without making a Harness API call.
 
@@ -236,33 +229,8 @@ Wait failure is intentionally non-fatal to the trigger: if polling errors or the
 
 The registry emits audit events for every registry-dispatched Harness API operation (`list`, `get`, `create`, `update`, `delete`, and `execute`). Mutating operations record the elicitation or auto-approval path when a confirmation context is present; read operations currently omit confirmation metadata. Tools that bypass registry dispatch for local metadata or schema discovery are outside this audit stream. Sinks are telemetry outputs; they should not change the outcome of the Harness API operation.
 
-### HTTP Client Retry (Future: P5)
+### HTTP Client Retry (`HarnessClient`)
 
-The `retryPolicy` field is declared on every spec but NOT yet consumed by the HTTP client. In P5, the dispatch layer will read `operationPolicy.retryPolicy` to decide:
-- `safe` → retry on 429/5xx with exponential backoff
-- `do_not_retry` → surface failure immediately
-- `idempotency_key_required` → retry only with a stable key (for APIs that support it)
-
----
-
-## Backfill Coverage
-
-| Group | Files | Specs | Classification |
-|---|---|---|---|
-| A: Read-only | 8 | ~30 | All `read` / `safe` |
-| B: Simple write | 10 | ~60 | Default CRUD rules |
-| C: Complex + execute | 13 | ~400+ | Per-action judgment |
-| **Total** | **31** | **~500+** | **Every spec covered** |
-
----
-
-## What This Does NOT Cover
-
-This architecture focuses on the registry contract and the confirmation gating derived from it. The following are separate systems built on top of `operationPolicy`:
-
-| Spec | What it does | How it uses operationPolicy |
-|---|---|---|
-| **P3** (fail-closed elicitation) | Chat-based confirmation fallback | Reads `risk` to decide fallback behavior |
-| **P4** (autonomous modes) | `HARNESS_AUTONOMOUS_MODE` env var | Compares `risk` against mode threshold |
-| **P5** (retry policy) | HTTP client retry decisions | Reads `retryPolicy` to control retry |
-| **P10** (write quality contract) | Structural linter for writes | Extends registry-as-contract pattern |
+`Registry.executeSpec` forwards `spec.operationPolicy.retryPolicy` to `HarnessClient.request()`. `HarnessClient` (`isSafeRetry()`) uses `retryPolicy` to decide:
+- `safe` → retry on transient HTTP status codes (`429`, `500`, `502`, `503`, `504`) and transient network codes (`EAI_AGAIN`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT`, `UND_ERR_SOCKET`) with exponential backoff
+- `do_not_retry` / `idempotency_key_required` → surface failure immediately without automatic retry

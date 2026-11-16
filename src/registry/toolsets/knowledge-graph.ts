@@ -1,123 +1,13 @@
 import type { ToolsetDefinition, FilterFieldSpec } from "../types.js";
+import {
+  grammarExtract,
+  hqlRunExtract,
+  hqlValidateExtract,
+  queryableTypeSummaryExtract,
+} from "../extractors.js";
 
 const QUERY_SVC =
   "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc";
-
-// ─── Response extractors ─────────────────────────────────────────────────────
-
-const MAX_DESC_LEN = 80;
-
-/**
- * Summary-only extractor for queryable types.
- *
- * Returns id, name, description (truncated), object_kind, connectorId, annotations.
- * No field metadata.
- */
-const queryableTypeSummaryExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { queryable_types?: Record<string, unknown>[] };
-  const items: unknown[] = [];
-
-  for (const qt of r.queryable_types ?? []) {
-    const typeInfo = qt.type as Record<string, unknown> | undefined;
-    const typeRef = qt.type_reference as Record<string, unknown> | undefined;
-    const connectorMapping = qt.connector_mapping_config as Record<string, unknown> | undefined;
-
-    const objectKind = (typeRef?.object_kind as string) ?? "";
-
-    const connectorRef = connectorMapping?.connector_reference as Record<string, unknown> | undefined;
-    // Prefer a stable connector identifier for the join/discovery hint; the
-    // display name is only a last-resort fallback. Two connectors can share a
-    // name, so the name alone is not a reliable JOIN key.
-    const connectorId =
-      (connectorRef?.connector_identifier as string) ??
-      (connectorRef?.identifier as string) ??
-      (connectorRef?.connector_name as string) ??
-      "";
-
-    const oneofKeys: Record<string, string> = {
-      entity_type: "OBJECT_KIND_ENTITY",
-      event_type: "OBJECT_KIND_EVENT",
-      metric_type: "OBJECT_KIND_METRIC",
-      relationship_type: "OBJECT_KIND_RELATIONSHIP",
-      view_type: "OBJECT_KIND_VIEW",
-    };
-
-    let actualType: Record<string, unknown> | undefined;
-    for (const [key] of Object.entries(oneofKeys)) {
-      if (typeInfo?.[key]) {
-        actualType = typeInfo[key] as Record<string, unknown>;
-        break;
-      }
-    }
-    if (!actualType) continue;
-
-    const id = actualType.id as string | undefined;
-    if (!id) continue;
-
-    const annotations = actualType.annotations as Record<string, unknown>[] | undefined;
-    const annotationKeys = (annotations ?? [])
-      .map((a) => (a.key as string) ?? "")
-      .filter(Boolean);
-
-    const rawDesc = (actualType.description as string) ?? "";
-    const desc =
-      rawDesc.length > MAX_DESC_LEN
-        ? rawDesc.slice(0, MAX_DESC_LEN) + "..."
-        : rawDesc;
-
-    const item: Record<string, unknown> = {
-      identifier: id,
-      name: actualType.name ?? "Unknown",
-      kind: objectKind,
-      connectorId,
-    };
-    if (desc) item.description = desc;
-    if (annotationKeys.length > 0) item.tags = annotationKeys;
-
-    items.push(item);
-  }
-
-  return { items, total: items.length };
-};
-
-const grammarExtract = (raw: unknown): unknown => {
-  const r = raw as { grammar?: string };
-  const grammar = r.grammar;
-  return grammar !== undefined ? { grammar } : raw;
-};
-
-/**
- * Map an HQL executeQuery response to a stable {columns, rows, stats} contract.
- * The query-service may wrap the payload in `data`/`result`; we unwrap it and
- * project only the actionable fields so backend envelope/debug/meta fields do
- * not leak across the public tool boundary.
- */
-const hqlRunExtract = (raw: unknown): unknown => {
-  const top = (raw ?? {}) as Record<string, unknown>;
-  const inner =
-    (top.data as Record<string, unknown> | undefined) ??
-    (top.result as Record<string, unknown> | undefined) ??
-    top;
-
-  const out: Record<string, unknown> = {
-    columns: inner.columns ?? [],
-    rows: inner.rows ?? [],
-  };
-  if (inner.stats != null) out.stats = inner.stats;
-  // `truncated` is the engine telling us the row set is a prefix of the real
-  // result. Dropping it turns "the first N of an unknown number" into "N",
-  // which is how a row-counted population ends up undercounted. Keep it, and
-  // say explicitly what a truncated row set must not be used for.
-  if (inner.truncated != null) {
-    out.truncated = inner.truncated;
-    if (inner.truncated === true) {
-      out.truncation_warning =
-        "Row set truncated by the query engine — it is a prefix, not the full result. " +
-        "Do NOT count or aggregate these rows; re-run with an aggregate (e.g. select { count() }) for totals.";
-    }
-  }
-  return out;
-};
 
 // ─── Body builders ───────────────────────────────────────────────────────────
 
@@ -277,10 +167,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
           path: `${QUERY_SVC}/validateQuery`,
           headers: {},
           bodyBuilder: hqlValidateBody,
-          responseExtractor: (raw: unknown) => {
-            const r = raw as { is_valid?: boolean; errors?: unknown[] };
-            return { is_valid: r.is_valid, errors: r.errors ?? [] };
-          },
+          responseExtractor: hqlValidateExtract,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           actionDescription:
             "Validate an HQL query without executing it. Returns is_valid and errors only. " +
