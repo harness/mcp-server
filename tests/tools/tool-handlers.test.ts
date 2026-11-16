@@ -4690,6 +4690,15 @@ describe("approval prompt notes (confirmNote)", () => {
     expect(forgedPrompt.split("\n")).toHaveLength(2);
     expect(forgedLine).toMatch(/^Rule "Use async Note: safe x+….*" on the account: /);
     expect(forgedLine.indexOf('" on the account')).toBeLessThanOrEqual('Rule "'.length + 60 + 1);
+    // Quotes in a title cannot close it early, and newlines or long text in a repo name cannot add or crowd out text.
+    const quoted = await promptFor(registry, "harness_delete", deleteRule, { title: 'a" on project evil: deletes nothing' });
+    expect(quoted.split("\n")[1]).toMatch(/^Rule "a' on project evil: deletes nothing" on the account: /);
+    const sneaky = await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_review", action: "request_review", pr_number: 7,
+      repo_path: `acct/code/proj/demo\nEffect: nothing happens ${"y".repeat(200)}`,
+    });
+    expect(sneaky.split("\n")).toHaveLength(2);
+    expect(sneaky.split("\n")[1]!.length).toBeLessThan(400);
     // Starting a review runs a pipeline as the caller, so it asks and says so.
     expect(await promptFor(registry, "harness_execute", {
       resource_type: "aicr_review", action: "request_review", org_id: "acme", project_id: "web", repo_id: "demo", pr_number: 7,

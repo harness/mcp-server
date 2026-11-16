@@ -890,6 +890,7 @@ async function aicrReviewPreflight(ctx: PreflightContext): Promise<void> {
 
 const AICR_NOTE_MAX_CHARS = 600;
 const AICR_NOTE_TITLE_MAX = 60;
+const AICR_NOTE_ID_MAX = 80;
 /** Where aicrNameLookup leaves the row's title for the note (on the copy of the input it gets). */
 const AICR_NOTE_TITLE_KEY = "__aicr_note_title";
 
@@ -901,22 +902,28 @@ interface AicrNoteTarget {
   level: "account" | "org" | "project";
 }
 
+/** Caller text shown inside a note: one line, no quotes, bounded so it cannot crowd out the effect. */
+function aicrNoteId(value: string): string {
+  const flat = value.replace(/\s+/g, " ").replace(/"/g, "'").trim();
+  return flat.length > AICR_NOTE_ID_MAX ? `${flat.slice(0, AICR_NOTE_ID_MAX - 1)}…` : flat;
+}
+
 function aicrNoteTarget(input: Record<string, unknown>): AicrNoteTarget {
   // Same precedence as resolveAicrRepoPath: repo_path wins over repo_id. Its first segment is the account id.
   const repoPath = str(input.repo_path)?.replace(/^\/+|\/+$/g, "");
   if (repoPath) {
     const parts = repoPath.split("/");
-    const name = parts[parts.length - 1]!;
-    const space = parts.slice(1, -1).join("/");
+    const name = aicrNoteId(parts[parts.length - 1]!);
+    const space = aicrNoteId(parts.slice(1, -1).join("/"));
     const level = parts.length >= 4 ? "project" : parts.length === 3 ? "org" : "account";
     const where = level === "account" ? "(account level)" : `in ${level} ${space}`;
     return { where: `repo ${name} ${where}`, repo: true, level };
   }
-  const org = str(input.org_id);
-  const project = str(input.project_id);
+  const org = str(input.org_id) && aicrNoteId(str(input.org_id)!);
+  const project = str(input.project_id) && aicrNoteId(str(input.project_id)!);
   const level = project ? "project" : org ? "org" : "account";
   const space = project ? `project ${org ? `${org}/` : ""}${project}` : org ? `org ${org}` : "";
-  const repo = str(input.repo_id);
+  const repo = str(input.repo_id) && aicrNoteId(str(input.repo_id)!);
   if (repo) return { where: `repo ${repo} ${level === "account" ? "(account level)" : `in ${space}`}`, repo: true, level };
   return { where: space || "the account", repo: false, level };
 }
@@ -943,7 +950,8 @@ function aicrNoteValue(value: unknown): string {
  * line right under the title. Capped, so a long list cannot run on.
  */
 function aicrNote(subject: string, effect: string): string {
-  const text = `${subject}: ${effect}`;
+  // Whatever a caller put in a field, the note stays one line.
+  const text = `${subject}: ${effect}`.replace(/\s+/g, " ");
   return text.length <= AICR_NOTE_MAX_CHARS ? text : `${text.slice(0, AICR_NOTE_MAX_CHARS)}...`;
 }
 
@@ -951,7 +959,7 @@ function aicrNote(subject: string, effect: string): string {
 function aicrNoteName(input: Record<string, unknown>): string | undefined {
   const raw = str(aicrNoteBody(input).title) ?? str(input[AICR_NOTE_TITLE_KEY]);
   // A title is user text: one line, bounded, so it cannot forge extra prompt lines.
-  const title = raw?.replace(/\s+/g, " ").trim();
+  const title = raw?.replace(/\s+/g, " ").replace(/"/g, "'").trim();
   if (!title) return undefined;
   return `"${title.length > AICR_NOTE_TITLE_MAX ? `${title.slice(0, AICR_NOTE_TITLE_MAX - 1)}…` : title}"`;
 }
