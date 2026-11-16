@@ -386,6 +386,12 @@ export interface EndpointSpec {
    */
   confirmNote?: string | ((input: Record<string, unknown>) => string | undefined);
   /**
+   * Runs before the approval prompt, on a copy of the input, so `confirmNote` can name what the call
+   * touches (e.g. look up a title by id). Writes what it finds into that copy. A throw or a wait over
+   * a few seconds is ignored: the prompt just goes without it. Never changes the call itself.
+   */
+  confirmPrefetch?: (ctx: PreflightContext) => Promise<void>;
+  /**
    * Declarative input expansion rules. When present, matching shorthand keys
    * in user input are expanded into full nested structures before resolution.
    */

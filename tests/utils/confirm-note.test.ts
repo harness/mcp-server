@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { resolveConfirmNote, withConfirmNote, withConfirmNoteFirst } from "../../src/utils/confirm-note.js";
+import { describe, it, expect, vi } from "vitest";
+import { resolveConfirmNote, withConfirmNote, withConfirmNoteFirst, resolveConfirmNoteAsync } from "../../src/utils/confirm-note.js";
 
 describe("resolveConfirmNote", () => {
   it("no confirmNote, or no spec: no note, and the message is unchanged", () => {
@@ -45,5 +45,43 @@ describe("withConfirmNoteFirst", () => {
   });
   it("no note: title, blank line, body, as before", () => {
     expect(withConfirmNoteFirst("Create x?", "{\n}", undefined)).toBe("Create x?\n\n{\n}");
+  });
+});
+
+describe("resolveConfirmNoteAsync", () => {
+  const deps = { client: {} as never, registry: {} as never };
+  const note = (i: Record<string, unknown>) => (i.name ? `For ${String(i.name)}` : "For it");
+
+  it("no prefetch: same as resolveConfirmNote", async () => {
+    expect(await resolveConfirmNoteAsync({ confirmNote: note }, { name: "a" }, deps)).toBe("For a");
+    expect(await resolveConfirmNoteAsync(undefined, {}, deps)).toBeUndefined();
+  });
+
+  it("the prefetch fills a copy of the input; the caller's input is left alone", async () => {
+    const input: Record<string, unknown> = {};
+    const confirmPrefetch = async (ctx: { input: Record<string, unknown> }) => {
+      ctx.input.name = "found";
+    };
+    expect(await resolveConfirmNoteAsync({ confirmNote: note, confirmPrefetch }, input, deps)).toBe("For found");
+    expect(input).toEqual({});
+  });
+
+  it("a failing prefetch only drops what it would have added", async () => {
+    const confirmPrefetch = async () => {
+      throw new Error("boom");
+    };
+    expect(await resolveConfirmNoteAsync({ confirmNote: note, confirmPrefetch }, {}, deps)).toBe("For it");
+  });
+
+  it("a prefetch that hangs is dropped after 3s", async () => {
+    vi.useFakeTimers();
+    try {
+      const confirmPrefetch = () => new Promise<void>(() => {});
+      const pending = resolveConfirmNoteAsync({ confirmNote: note, confirmPrefetch }, {}, deps);
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(await pending).toBe("For it");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

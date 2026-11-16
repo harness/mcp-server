@@ -6,7 +6,7 @@ import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
-import { resolveConfirmNote, withConfirmNoteFirst } from "../utils/confirm-note.js";
+import { resolveConfirmNoteAsync, withConfirmNoteFirst } from "../utils/confirm-note.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
@@ -106,7 +106,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           message: withConfirmNoteFirst(
             `Update ${args.resource_type} "${resolvedResourceId}"?`,
             bodyPreview,
-            resolveConfirmNote(def.operations.update, input),
+            await resolveConfirmNoteAsync(def.operations.update, input, { client, registry, accountId: registry.getAccountId() }),
           ),
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,

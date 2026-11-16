@@ -1,4 +1,4 @@
-import type { EndpointSpec } from "../registry/types.js";
+import type { EndpointSpec, HarnessClientInterface, RegistryDispatchInterface } from "../registry/types.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("confirm-note");
@@ -38,4 +38,39 @@ export function withConfirmNote(message: string, note: string | undefined): stri
  */
 export function withConfirmNoteFirst(title: string, body: string, note: string | undefined): string {
   return note ? `${title}\n\n${note}\n\n${body}` : `${title}\n\n${body}`;
+}
+
+const PREFETCH_TIMEOUT_MS = 3_000;
+
+/**
+ * resolveConfirmNote, after the operation's `confirmPrefetch` (if any) has run on a copy of the
+ * input. Operations without a prefetch behave exactly like resolveConfirmNote. A prefetch that
+ * throws or takes over 3s is dropped, and the note is built without what it would have added.
+ */
+export async function resolveConfirmNoteAsync(
+  spec: Pick<EndpointSpec, "confirmNote" | "confirmPrefetch"> | undefined,
+  input: Record<string, unknown>,
+  deps: { client: HarnessClientInterface; registry: RegistryDispatchInterface; accountId?: string; signal?: AbortSignal },
+): Promise<string | undefined> {
+  if (!spec?.confirmPrefetch || spec.confirmNote === undefined) return resolveConfirmNote(spec, input);
+  let copy: Record<string, unknown>;
+  try {
+    copy = structuredClone(input);
+  } catch {
+    return resolveConfirmNote(spec, input);
+  }
+  const timeout = new AbortController();
+  const timer = setTimeout(() => timeout.abort(), PREFETCH_TIMEOUT_MS);
+  const signal = deps.signal ? AbortSignal.any([deps.signal, timeout.signal]) : timeout.signal;
+  try {
+    await Promise.race([
+      spec.confirmPrefetch({ ...deps, signal, input: copy }),
+      new Promise<void>((resolve) => timeout.signal.addEventListener("abort", () => resolve(), { once: true })),
+    ]);
+  } catch (err) {
+    log.debug("confirmPrefetch failed, prompting without it", { error: err instanceof Error ? err.message : String(err) });
+  } finally {
+    clearTimeout(timer);
+  }
+  return resolveConfirmNote(spec, copy);
 }

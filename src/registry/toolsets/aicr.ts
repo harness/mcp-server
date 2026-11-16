@@ -850,14 +850,17 @@ async function aicrReviewPreflight(ctx: PreflightContext): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Approval prompt notes: what a write changes and where, from the call's input
-// (before preflight, no requests). A call the preflight will refuse may get a vague note.
+// Approval prompt notes: short labelled lines saying what a write changes and where, from the
+// call's input. Names, not ids. Most are built before any request; rule and convention writes
+// by id also look the row's title up first (aicrNameLookup), and go without it if that fails.
 // ---------------------------------------------------------------------------
 
 const AICR_NOTE_MAX_CHARS = 600;
+/** Where aicrNameLookup leaves the row's title for the note (on the copy of the input it gets). */
+const AICR_NOTE_TITLE_KEY = "__aicr_note_title";
 
 interface AicrNoteTarget {
-  /** e.g. `project acme/web`, `repository demo in org acme`, `the account`. */
+  /** e.g. `project acme/web (every repo in it)`, `repo demo in project acme/web (this repo only)`. */
   where: string;
   repo: boolean;
   /** The space level the repository or space sits at. */
@@ -865,19 +868,23 @@ interface AicrNoteTarget {
 }
 
 function aicrNoteTarget(input: Record<string, unknown>): AicrNoteTarget {
-  // Same precedence as resolveAicrRepoPath: repo_path wins over repo_id.
+  // Same precedence as resolveAicrRepoPath: repo_path wins over repo_id. Its first segment is the account id.
   const repoPath = str(input.repo_path)?.replace(/^\/+|\/+$/g, "");
   if (repoPath) {
-    const depth = repoPath.split("/").length;
-    return { where: `repository ${repoPath}`, repo: true, level: depth >= 4 ? "project" : depth === 3 ? "org" : "account" };
+    const parts = repoPath.split("/");
+    const name = parts[parts.length - 1]!;
+    const space = parts.slice(1, -1).join("/");
+    const level = parts.length >= 4 ? "project" : parts.length === 3 ? "org" : "account";
+    const where = level === "account" ? "at account level" : `in ${level} ${space}`;
+    return { where: `repo ${name} ${where} (this repo only)`, repo: true, level };
   }
   const org = str(input.org_id);
   const project = str(input.project_id);
   const level = project ? "project" : org ? "org" : "account";
-  const space = project ? `project ${org ? `${org}/` : ""}${project}` : org ? `org ${org}` : "the account";
+  const space = project ? `project ${org ? `${org}/` : ""}${project}` : org ? `org ${org}` : "";
   const repo = str(input.repo_id);
-  if (repo) return { where: `repository ${repo} ${level === "account" ? "at account level" : `in ${space}`}`, repo: true, level };
-  return { where: space, repo: false, level };
+  if (repo) return { where: `repo ${repo} ${level === "account" ? "at account level" : `in ${space}`} (this repo only)`, repo: true, level };
+  return { where: space ? `${space} (every repo in it)` : "whole account (every repo)", repo: false, level };
 }
 
 function aicrNoteBody(input: Record<string, unknown>): Record<string, unknown> {
@@ -897,73 +904,89 @@ function aicrNoteValue(value: unknown): string {
   return String(value);
 }
 
-function aicrNote(text: string): string {
+/** `Label: text` lines; a line with no text is left out. Capped, so a long list cannot bury the rest. */
+function aicrNote(lines: Array<[label: string, text: string | undefined]>): string {
+  const text = lines.filter(([, t]) => t).map(([label, t]) => `${label}: ${t}`).join("\n");
   return text.length <= AICR_NOTE_MAX_CHARS ? text : `${text.slice(0, AICR_NOTE_MAX_CHARS)}...`;
 }
 
-/** Whose pull requests a space or repository setting reaches. */
-function aicrNoteReach(t: AicrNoteTarget): string {
-  return t.repo ? "its pull requests" : "pull requests of every repository under it";
+/** `"title"` from the body, or the one aicrNameLookup found. */
+function aicrNoteName(input: Record<string, unknown>): string | undefined {
+  const title = str(aicrNoteBody(input).title) ?? str(input[AICR_NOTE_TITLE_KEY]);
+  return title ? `"${title}"` : undefined;
 }
 
 function aicrGateSetNote(input: Record<string, unknown>): string {
-  const t = aicrNoteTarget(input);
   const categories = aicrNoteBody(input).categories;
   const parts = (Array.isArray(categories) ? categories : [])
     .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
     .map((c) => `${String(c.category)} ${c.reported === false ? "not reported" : `fails at ${String(c.fail_at)}`}`);
-  return aicrNote(
-    `Sets the merge gate of ${t.where}${parts.length ? `: ${parts.join("; ")}` : ""}. ` +
-      `Categories not listed keep their setting. Applies to ${aicrNoteReach(t)}.`,
-  );
+  return aicrNote([
+    ["Merge gate", parts.join("; ") || undefined],
+    ["Where", aicrNoteTarget(input).where],
+    ["Effect", "categories not listed keep their setting."],
+  ]);
 }
 
 function aicrSettingSetNote(input: Record<string, unknown>): string {
-  const t = aicrNoteTarget(input);
   const body = aicrNoteBody(input);
   const parts = AICR_SETTING_FIELDS.filter((f) => body[f] !== undefined).map((f) => `${f}: ${aicrNoteValue(body[f])}`);
-  return aicrNote(
-    `Changes the AI Code Review settings of ${t.where}${parts.length ? `: ${parts.join("; ")}` : ""}. ` +
-      `Other settings stay as they are. Applies to reviews of ${aicrNoteReach(t)}.`,
-  );
+  return aicrNote([
+    ["Settings", parts.join("; ") || undefined],
+    ["Where", aicrNoteTarget(input).where],
+    ["Effect", "other settings stay as they are."],
+  ]);
 }
+
+const AICR_KIND_LABEL = { rule: "Rule", convention: "Convention" } as const;
 
 function aicrPolicyCreateNote(kind: "rule" | "convention") {
-  return (input: Record<string, unknown>): string => {
-    const t = aicrNoteTarget(input);
-    return kind === "rule"
-      ? `Creates this rule on ${t.where}: reviews check ${aicrNoteReach(t)} against it, and a failed rule fails the Team rules check.`
-      : `Creates this convention on ${t.where}: reviews follow it on ${aicrNoteReach(t)}.`;
-  };
+  return (input: Record<string, unknown>): string =>
+    aicrNote([
+      [AICR_KIND_LABEL[kind], aicrNoteName(input)],
+      ["Where", aicrNoteTarget(input).where],
+      ["Effect", kind === "rule" ? "reviews check PRs against it; a failed rule fails the Team rules check." : "reviews follow it when checking PRs."],
+    ]);
 }
 
-function aicrPolicyArchiveText(kind: "rule" | "convention", where: string): string {
-  return `Archives the ${kind} on ${where}: reviews stop using it in every repository that inherits it. Update with status active restores it.`;
+/** Who stops or starts using an archived or restored row: the repo, or every repo that inherits it. */
+function aicrNoteInheritors(t: AicrNoteTarget): string {
+  return t.repo ? "this repo" : "every repo that inherits it";
 }
 
 function aicrPolicyUpdateNote(kind: "rule" | "convention") {
   return (input: Record<string, unknown>): string => {
-    const { where } = aicrNoteTarget(input);
-    const status = aicrNoteBody(input).status;
-    if (status === "archived") return aicrPolicyArchiveText(kind, where);
-    if (status === "active") return `Restores the ${kind} on ${where}: reviews use it again in every repository that inherits it.`;
-    return `Changes the ${kind} on ${where}; every repository that inherits it gets the change.`;
+    const t = aicrNoteTarget(input);
+    const body = aicrNoteBody(input);
+    const who = aicrNoteInheritors(t);
+    const effect =
+      body.status === "archived"
+        ? `archives it: reviews stop using it in ${who}. Set status active to restore.`
+        : body.status === "active"
+          ? `restores it: reviews use it again in ${who}.`
+          : `changes ${Object.keys(body).join(", ") || "it"} in ${who}.`;
+    return aicrNote([[AICR_KIND_LABEL[kind], aicrNoteName(input)], ["Where", t.where], ["Effect", effect]]);
   };
 }
 
 function aicrPolicyDeleteNote(kind: "rule" | "convention") {
-  return (input: Record<string, unknown>): string => aicrPolicyArchiveText(kind, aicrNoteTarget(input).where);
+  return (input: Record<string, unknown>): string => {
+    const t = aicrNoteTarget(input);
+    return aicrNote([
+      [AICR_KIND_LABEL[kind], aicrNoteName(input)],
+      ["Where", t.where],
+      ["Effect", `archives it, nothing is erased: reviews stop using it in ${aicrNoteInheritors(t)}. Update status to active to restore.`],
+    ]);
+  };
 }
 
 function aicrRuleOverrideNote(input: Record<string, unknown>): string | undefined {
   const t = aicrNoteTarget(input);
   if (!t.repo) return undefined;
   const enabled = aicrNoteBody(input).enabled;
-  const rule = str(input.rule_id);
-  const what = `rule${rule ? ` ${rule}` : ""}`;
-  return typeof enabled === "boolean"
-    ? `Turns ${what} ${enabled ? "on" : "off"} for ${t.where} only; other repositories keep the rule as it is.`
-    : `Overrides ${what} for ${t.where} only.`;
+  const effect =
+    typeof enabled === "boolean" ? `turns the rule ${enabled ? "on" : "off"} for this repo; other repos keep it.` : "overrides the rule for this repo; other repos keep it.";
+  return aicrNote([["Rule", aicrNoteName(input)], ["Where", t.where], ["Effect", effect]]);
 }
 
 function aicrEnableNote(input: Record<string, unknown>): string | undefined {
@@ -971,30 +994,55 @@ function aicrEnableNote(input: Record<string, unknown>): string | undefined {
   if (!t.repo) return undefined;
   const pipelines =
     t.level === "project"
-      ? "its project's AI Code Review pipeline (creating the pipeline if missing)"
-      : `the AI Code Review pipeline of every project under the ${t.level} (creating pipelines if missing)`;
-  return `Enables AI Code Review on ${t.where}: adds a pull request trigger to ${pipelines}, so new pull request commits are reviewed.`;
+      ? "the project's AI Code Review pipeline (created if missing)"
+      : `the AI Code Review pipeline of every project under the ${t.level} (created if missing)`;
+  return aicrNote([["Where", t.where], ["Effect", `adds a PR trigger to ${pipelines}; new PR commits get reviewed.`]]);
 }
 
 function aicrDisableNote(input: Record<string, unknown>): string | undefined {
   const t = aicrNoteTarget(input);
   if (!t.repo) return undefined;
-  return (
-    `Disables AI Code Review on ${t.where}: deletes its pull request triggers and the gates, rules, rule overrides and conventions set on it. ` +
-    "Enabling it again does not restore them."
-  );
+  return aicrNote([
+    ["Where", t.where],
+    ["Effect", "removes its PR triggers and every gate, rule, override and convention set on this repo. Enabling again does not bring them back."],
+  ]);
 }
 
 function aicrDismissNote(input: Record<string, unknown>): string | undefined {
   const t = aicrNoteTarget(input);
   if (!t.repo) return undefined;
-  const key = str(input.finding_key);
   const pr = str(input.pr_number);
   const reason = str(aicrNoteBody(input).reason);
-  return aicrNote(
-    `Dismisses finding${key ? ` ${key}` : ""}${pr ? ` on pull request #${pr}` : ""} of ${t.where}${reason ? ` (reason: ${reason})` : ""}: ` +
-      "it no longer fails the AI Code Review check. undo_dismiss reopens it.",
-  );
+  return aicrNote([
+    ["Finding", `${pr ? `on PR #${pr}` : "on a PR"}${reason ? `, reason: ${reason}` : ""}`],
+    ["Where", t.where],
+    ["Effect", "it no longer fails the AI Code Review check. undo_dismiss reopens it."],
+  ]);
+}
+
+/**
+ * Looks up the title of the rule or convention a write names by id, for its approval prompt.
+ * One read, the same one the write's own checks make. It runs on a copy of the input and any
+ * failure means the prompt has no name, so it cannot block or change the write.
+ */
+function aicrNameLookup(kind: "rule" | "convention", idField: "rule_id" | "convention_id") {
+  return async (ctx: PreflightContext): Promise<void> => {
+    const { input } = ctx;
+    const id = str(input[idField]);
+    if (!id || str(aicrNoteBody(input).title)) return;
+    const params = namesAicrRepo(input)
+      ? { repo_path: resolveAicrRepoPath(input, ctx.accountId) }
+      : { space_path: aicrSpacePath(input, ctx.accountId) };
+    const row = (await ctx.client.request<unknown>({
+      method: "GET",
+      path: `${AICR_BASE}/${kind}s/${encodePathSegment(id)}`,
+      params,
+      retryPolicy: "safe",
+      signal: ctx.signal,
+    })) as Record<string, unknown> | undefined;
+    const title = typeof row === "object" && row !== null ? str(row.title) : undefined;
+    if (title) input[AICR_NOTE_TITLE_KEY] = title;
+  };
 }
 
 const REPO_PARAM_FIELDS = [
@@ -1820,6 +1868,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrRuleExtract,
           confirmNote: aicrPolicyUpdateNote("rule"),
+          confirmPrefetch: aicrNameLookup("rule", "rule_id"),
           description:
             "Change the given fields of a rule; status archived archives it and active restores it. Use execute override to turn an inherited rule off for one repository.",
           paramsSchema: { fields: [...POLICY_SCOPE_FIELDS, RULE_ID_FIELD] },
@@ -1843,6 +1892,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           preflight: aicrPolicyByIdPreflight("rule", true),
           confirmNote: aicrPolicyDeleteNote("rule"),
+          confirmPrefetch: aicrNameLookup("rule", "rule_id"),
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrArchiveExtract("rule_id"),
           description:
@@ -1874,6 +1924,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           },
           responseExtractor: aicrRuleExtract,
           confirmNote: aicrRuleOverrideNote,
+          confirmPrefetch: aicrNameLookup("rule", "rule_id"),
           actionDescription:
             "Turn an overridable rule of a parent space off (enabled false) or back on for one repository, without changing it elsewhere. " +
             "Fails for a required (not overridable) or archived rule, and for a rule set on the repository itself. Calling it again updates the same override. " +
@@ -2010,6 +2061,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrConventionExtract,
           confirmNote: aicrPolicyUpdateNote("convention"),
+          confirmPrefetch: aicrNameLookup("convention", "convention_id"),
           description:
             "Change the given fields of a convention; a list given replaces the old one. status archived archives it and active restores it.",
           paramsSchema: {
@@ -2035,6 +2087,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           preflight: aicrPolicyByIdPreflight("convention", true),
           confirmNote: aicrPolicyDeleteNote("convention"),
+          confirmPrefetch: aicrNameLookup("convention", "convention_id"),
           queryParams: { space_path: "space_path", repo_path: "repo_path" },
           responseExtractor: aicrArchiveExtract("convention_id"),
           description:
