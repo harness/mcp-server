@@ -704,8 +704,8 @@ const PERSPECTIVE_UPDATE_CARRY_KEYS = [
  * (viewVersion is @NotBlank) and the DAO rewrites the whole record, so a
  * partial body fails validation or wipes fields. Fill every field the caller
  * did not send from the existing perspective (caller values always win, so an
- * explicit empty unitMetricInfo still clears it). If the lookup fails, still
- * default viewVersion so validation does not reject the update.
+ * explicit empty unitMetricInfo still clears it). If the lookup fails, the update
+ * is aborted rather than sending a partial body that would erase configuration.
  */
 async function perspectiveUpdatePreflight(ctx: PreflightContext): Promise<void> {
   const input = ctx.input as { body?: Record<string, unknown> };
@@ -714,24 +714,29 @@ async function perspectiveUpdatePreflight(ctx: PreflightContext): Promise<void> 
 
   const uuid = typeof body.uuid === "string" ? body.uuid : undefined;
   if (uuid) {
+    let existing: unknown;
     try {
-      const existing = await ctx.registry.dispatch(
+      existing = await ctx.registry.dispatch(
         ctx.client,
         "cost_perspective",
         "get",
         { perspective_id: uuid },
         ctx.signal,
       );
-      if (existing && typeof existing === "object" && !Array.isArray(existing)) {
-        const current = existing as Record<string, unknown>;
-        for (const key of PERSPECTIVE_UPDATE_CARRY_KEYS) {
-          if (body[key] === undefined && current[key] !== undefined && current[key] !== null) {
-            body[key] = current[key];
-          }
+    } catch (err) {
+      // Never send a partial PUT: the API rewrites the whole record.
+      throw new Error(
+        `Cannot update cost_perspective ${uuid}: failed to fetch the existing perspective to preserve omitted fields (${err instanceof Error ? err.message : String(err)}). Retry, or send the full perspective object.`,
+        { cause: err },
+      );
+    }
+    if (existing && typeof existing === "object" && !Array.isArray(existing)) {
+      const current = existing as Record<string, unknown>;
+      for (const key of PERSPECTIVE_UPDATE_CARRY_KEYS) {
+        if (body[key] === undefined && current[key] !== undefined && current[key] !== null) {
+          body[key] = current[key];
         }
       }
-    } catch {
-      // Graceful degradation — fall through to the viewVersion default
     }
   }
 
@@ -869,39 +874,6 @@ export const ccmToolset: ToolsetDefinition = {
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
-      reviewCard: {
-        version: 1,
-        label: "View",
-        fields: [
-          {
-            label: "Folder",
-            path: "folderId",
-            default: "Default",
-            lookup: { resourceType: "cost_perspective_folder", match: "uuid", display: "name" },
-          },
-          {
-            label: "Time Frame",
-            path: "viewTimeRange.viewTimeRangeType",
-            default: "Last 30 days",
-            labels: {
-              LAST_7: "Last 7 days",
-              LAST_30: "Last 30 days",
-              LAST_MONTH: "Last month",
-              CURRENT_MONTH: "Current month",
-              LAST_QUARTER: "Last quarter",
-              CURRENT_QUARTER: "Current quarter",
-              LAST_3_MONTH: "Last 3 months",
-              CUSTOM: "Custom range",
-            },
-          },
-          {
-            label: "Group By",
-            path: "viewVisualization.groupBy",
-            template: "{identifierName}: {fieldName}",
-            default: "None",
-          },
-        ],
-      },
       listFilterFields: [
         { name: "search_term", description: "Filter perspectives by name" },
         { name: "sort_type", description: "Sort field (default: TIME)", enum: ["TIME", "COST", "CLUSTER_COST", "NAME"] },
@@ -1677,22 +1649,6 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["category_id"],
-      reviewCard: {
-        version: 1,
-        label: "Cost Category",
-        fields: [
-          {
-            label: "Unallocated costs",
-            path: "unallocatedCost.strategy",
-            default: "Not specified",
-            labels: {
-              HIDE: "Hidden",
-              DISPLAY_NAME: "Shown as a separate bucket",
-              SHARE: "Shared across buckets",
-            },
-          },
-        ],
-      },
       listFilterFields: [
         { name: "search", description: "Filter cost categories by name" },
         { name: "sort_type", description: "Sort field", enum: ["NAME", "LAST_EDIT"] },

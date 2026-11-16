@@ -129,10 +129,10 @@ describe("cost_perspective update preflight", () => {
     expect(body.unitMetricInfo).toEqual([]);
   });
 
-  it("still defaults viewVersion to v1 when the lookup fails", async () => {
+  it("aborts instead of sending a partial update when the lookup fails", async () => {
     const body: Record<string, unknown> = { uuid: "p1", name: "X" };
     const { ctx } = makeUpdateCtx(body, new Error("boom"));
-    await getUpdatePreflight()(ctx);
-    expect(body.viewVersion).toBe("v1");
+    await expect(getUpdatePreflight()(ctx)).rejects.toThrow(/failed to fetch the existing perspective.*boom/);
+    expect(body.viewVersion).toBeUndefined();
   });
 });
