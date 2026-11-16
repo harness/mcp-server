@@ -1189,8 +1189,8 @@ describe("aicr approval prompt notes", () => {
       org_id: "acme",
       body: { llm_connector_ref: null, add_paths: [{ pattern: "vendor/**", type: "excluded" }], review_triggers: { on_push: false } },
     })).toBe(
-      "AI Code Review settings on org acme (every repo in it): review_triggers: on_push false; llm_connector_ref: inherit; add_paths: vendor/** (excluded). " +
-        "Other settings stay as they are.",
+      "AI Code Review settings on org acme: review_triggers: on_push false; llm_connector_ref: inherit; add_paths: vendor/** (excluded). " +
+        "Other settings are unchanged.",
     );
   });
 
@@ -1206,10 +1206,10 @@ describe("aicr approval prompt notes", () => {
   it("rule override says on or off, for that repository only", () => {
     const override = def("aicr_rule").executeActions!.override;
     expect(note(override, { ...REPO, rule_id: "5", body: { enabled: false } })).toBe(
-      "Rule on repo demo in project acme/web (this repo only): turns the rule off for this repo; other repos keep it.",
+      "Rule on repo demo in project acme/web: turns it off for this repo; other repos keep the rule.",
     );
     expect(note(override, { ...REPO, rule_id: "5", __aicr_note_title: "No TODOs", body: { enabled: true } })).toBe(
-      'Rule "No TODOs" on repo demo in project acme/web (this repo only): turns the rule on for this repo; other repos keep it.',
+      'Rule "No TODOs" on repo demo in project acme/web: turns it on for this repo; other repos keep the rule.',
     );
     expect(note(override, { rule_id: "5", body: { enabled: false } })).toBeUndefined();
   });
@@ -1217,39 +1217,39 @@ describe("aicr approval prompt notes", () => {
   it("repository enable says which pipelines get the trigger; disable says what is deleted", () => {
     const { enable, disable } = def("aicr_repository").executeActions!;
     expect(note(enable, REPO)).toBe(
-      "Enable AI Code Review on repo demo in project acme/web (this repo only): " +
-        "adds a PR trigger to the project's AI Code Review pipeline (created if missing); new PR commits get reviewed.",
+      "Enable AI Code Review on repo demo in project acme/web: " +
+        "adds a PR trigger to the project's review pipeline (created if missing), so new PR commits get reviewed.",
     );
     const orgRepo = note(enable, { repo_path: `${ACCOUNT}/acme/demo` })!;
-    expect(orgRepo).toContain("on repo demo in org acme (this repo only)");
+    expect(orgRepo).toContain("on repo demo in org acme: ");
     expect(orgRepo).toContain("every project under the org");
     expect(orgRepo).not.toContain(ACCOUNT);
     const accountRepo = note(enable, { repo_id: "demo" })!;
-    expect(accountRepo).toContain("on repo demo at account level (this repo only)");
+    expect(accountRepo).toContain("on repo demo (account level): ");
     expect(accountRepo).toContain("every project under the account");
     expect(note(disable, REPO)).toBe(
-      "Disable AI Code Review on repo demo in project acme/web (this repo only): " +
-        "removes its PR triggers and every gate, rule, override and convention set on this repo. Enabling again does not bring them back.",
+      "Disable AI Code Review on repo demo in project acme/web: " +
+        "removes its PR triggers, gates, rules, overrides and conventions. Enabling again does not bring them back.",
     );
     expect(note(disable, {})).toBeUndefined();
   });
 
   it("finding dismiss names the pull request, repository and reason, not the finding key", () => {
     expect(note(def("aicr_finding").executeActions!.dismiss, { ...REPO, pr_number: 3, finding_key: "ab12", body: { reason: "accepted_risk" } })).toBe(
-      "Dismiss a finding on PR #3 (reason: accepted_risk) in repo demo in project acme/web (this repo only): " +
-        "it no longer fails the AI Code Review check. undo_dismiss reopens it.",
+      "Dismiss a finding on PR #3 (reason: accepted_risk) in repo demo in project acme/web: " +
+        "it no longer fails the review check. undo_dismiss reopens it.",
     );
   });
 
   it("rule and convention update: restore and plain change", () => {
     expect(note(def("aicr_rule").operations.update, { project_id: "web", org_id: "acme", body: { status: "active" } })).toBe(
-      "Rule on project acme/web (every repo in it): restores it: reviews use it again in every repo that inherits it.",
+      "Rule on project acme/web: restores it, so reviews use it again.",
     );
     expect(note(def("aicr_convention").operations.update, { ...REPO, body: { title: "x" } })).toBe(
-      'Convention "x" on repo demo in project acme/web (this repo only): changes title in this repo.',
+      'Convention "x" on repo demo in project acme/web: changes title.',
     );
     expect(note(def("aicr_convention").operations.create, REPO)).toBe(
-      "New convention on repo demo in project acme/web (this repo only): reviews follow it when checking PRs.",
+      "New convention on repo demo in project acme/web: reviews follow it when checking PRs.",
     );
   });
 

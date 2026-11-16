@@ -4663,30 +4663,30 @@ describe("approval prompt notes (confirmNote)", () => {
       resource_type: "aicr_gate", action: "set", org_id: "acme", project_id: "web",
       body: { categories: [{ category: "security", reported: true, fail_at: "major_and_above" }, { category: "hygiene", reported: false, fail_at: "never" }] },
     })).toBe(
-      'Execute "set" on aicr_gate?\nMerge gate on project acme/web (every repo in it): security fails at major_and_above; hygiene not reported. ' +
-        "Categories not listed keep their setting.",
+      'Execute "set" on aicr_gate?\nMerge gate on project acme/web: security fails at major_and_above; hygiene not reported. ' +
+        "Other categories are unchanged.",
     );
     // The note comes before the body, so a client that folds a long prompt still shows it.
     expect(await promptFor(registry, "harness_create", { resource_type: "aicr_rule", org_id: "acme", body: { title: "No TODOs" } })).toBe(
-      'Create aicr_rule?\nNew rule "No TODOs" on org acme (every repo in it): reviews check PRs against it; a failed rule fails the Team rules check.' +
+      'Create aicr_rule?\nNew rule "No TODOs" on org acme: reviews check PRs against it; a failed rule fails the Team rules check.' +
         '\n\n{\n  "title": "No TODOs"\n}',
     );
     // Update and delete name the row by looking its title up (one read) before the prompt.
     expect(await promptFor(registry, "harness_update", {
       resource_type: "aicr_convention", resource_id: "7", org_id: "acme", project_id: "web", repo_id: "demo", body: { status: "archived" },
     }, { title: "Use async" })).toBe(
-      'Update aicr_convention "7"?\nConvention "Use async" on repo demo in project acme/web (this repo only): ' +
-        'archives it: reviews stop using it in this repo. Set status active to restore.\n\n{\n  "status": "archived"\n}',
+      'Update aicr_convention "7"?\nConvention "Use async" on repo demo in project acme/web: ' +
+        'archives it, so reviews stop using it. Set status active to restore.\n\n{\n  "status": "archived"\n}',
     );
     const deleteRule = { resource_type: "aicr_rule", resource_id: "5" };
     expect(await promptFor(registry, "harness_delete", deleteRule, { title: "No TODOs" })).toBe(
-      'Delete aicr_rule "5"?\nRule "No TODOs" on the whole account (every repo): ' +
-        "archives it, nothing is erased: reviews stop using it in every repo that inherits it. Update status to active to restore.",
+      'Delete aicr_rule "5"?\nRule "No TODOs" on the account: ' +
+        "archives it (not erased), so reviews stop using it. Set status active to restore.",
     );
     // A failed lookup only drops the name.
     expect(await promptFor(registry, "harness_delete", deleteRule, new Error("boom"))).toBe(
-      'Delete aicr_rule "5"?\nRule on the whole account (every repo): ' +
-        "archives it, nothing is erased: reviews stop using it in every repo that inherits it. Update status to active to restore.",
+      'Delete aicr_rule "5"?\nRule on the account: ' +
+        "archives it (not erased), so reviews stop using it. Set status active to restore.",
     );
   });
 });

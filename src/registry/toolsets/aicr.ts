@@ -860,7 +860,7 @@ const AICR_NOTE_MAX_CHARS = 600;
 const AICR_NOTE_TITLE_KEY = "__aicr_note_title";
 
 interface AicrNoteTarget {
-  /** e.g. `project acme/web (every repo in it)`, `repo demo in project acme/web (this repo only)`. */
+  /** e.g. `project acme/web`, `repo demo in project acme/web`, `the account`. */
   where: string;
   repo: boolean;
   /** The space level the repository or space sits at. */
@@ -875,16 +875,16 @@ function aicrNoteTarget(input: Record<string, unknown>): AicrNoteTarget {
     const name = parts[parts.length - 1]!;
     const space = parts.slice(1, -1).join("/");
     const level = parts.length >= 4 ? "project" : parts.length === 3 ? "org" : "account";
-    const where = level === "account" ? "at account level" : `in ${level} ${space}`;
-    return { where: `repo ${name} ${where} (this repo only)`, repo: true, level };
+    const where = level === "account" ? "(account level)" : `in ${level} ${space}`;
+    return { where: `repo ${name} ${where}`, repo: true, level };
   }
   const org = str(input.org_id);
   const project = str(input.project_id);
   const level = project ? "project" : org ? "org" : "account";
   const space = project ? `project ${org ? `${org}/` : ""}${project}` : org ? `org ${org}` : "";
   const repo = str(input.repo_id);
-  if (repo) return { where: `repo ${repo} ${level === "account" ? "at account level" : `in ${space}`} (this repo only)`, repo: true, level };
-  return { where: space ? `${space} (every repo in it)` : "the whole account (every repo)", repo: false, level };
+  if (repo) return { where: `repo ${repo} ${level === "account" ? "(account level)" : `in ${space}`}`, repo: true, level };
+  return { where: space || "the account", repo: false, level };
 }
 
 function aicrNoteBody(input: Record<string, unknown>): Record<string, unknown> {
@@ -919,7 +919,7 @@ function aicrNoteName(input: Record<string, unknown>): string | undefined {
   return title ? `"${title}"` : undefined;
 }
 
-/** `Rule "No TODOs" on project acme/web (every repo in it)`; without a name, `Rule on ...`. */
+/** `Rule "No TODOs" on project acme/web`; without a name, `Rule on ...`. */
 function aicrNoteSubject(label: string, input: Record<string, unknown>, where: string): string {
   const name = aicrNoteName(input);
   return `${label}${name ? ` ${name}` : ""} on ${where}`;
@@ -932,7 +932,7 @@ function aicrGateSetNote(input: Record<string, unknown>): string {
     .map((c) => `${String(c.category)} ${c.reported === false ? "not reported" : `fails at ${String(c.fail_at)}`}`);
   return aicrNote(
     `Merge gate on ${aicrNoteTarget(input).where}`,
-    `${parts.length ? `${parts.join("; ")}. ` : ""}Categories not listed keep their setting.`,
+    `${parts.length ? `${parts.join("; ")}. ` : ""}Other categories are unchanged.`,
   );
 }
 
@@ -941,7 +941,7 @@ function aicrSettingSetNote(input: Record<string, unknown>): string {
   const parts = AICR_SETTING_FIELDS.filter((f) => body[f] !== undefined).map((f) => `${f}: ${aicrNoteValue(body[f])}`);
   return aicrNote(
     `AI Code Review settings on ${aicrNoteTarget(input).where}`,
-    `${parts.length ? `${parts.join("; ")}. ` : ""}Other settings stay as they are.`,
+    `${parts.length ? `${parts.join("; ")}. ` : ""}Other settings are unchanged.`,
   );
 }
 
@@ -955,22 +955,16 @@ function aicrPolicyCreateNote(kind: "rule" | "convention") {
     );
 }
 
-/** Who stops or starts using an archived or restored row: the repo, or every repo that inherits it. */
-function aicrNoteInheritors(t: AicrNoteTarget): string {
-  return t.repo ? "this repo" : "every repo that inherits it";
-}
-
 function aicrPolicyUpdateNote(kind: "rule" | "convention") {
   return (input: Record<string, unknown>): string => {
     const t = aicrNoteTarget(input);
     const body = aicrNoteBody(input);
-    const who = aicrNoteInheritors(t);
     const effect =
       body.status === "archived"
-        ? `archives it: reviews stop using it in ${who}. Set status active to restore.`
+        ? "archives it, so reviews stop using it. Set status active to restore."
         : body.status === "active"
-          ? `restores it: reviews use it again in ${who}.`
-          : `changes ${Object.keys(body).join(", ") || "it"} in ${who}.`;
+          ? "restores it, so reviews use it again."
+          : `changes ${Object.keys(body).join(", ") || "it"}.`;
     return aicrNote(aicrNoteSubject(AICR_KIND_LABEL[kind], input, t.where), effect);
   };
 }
@@ -980,7 +974,7 @@ function aicrPolicyDeleteNote(kind: "rule" | "convention") {
     const t = aicrNoteTarget(input);
     return aicrNote(
       aicrNoteSubject(AICR_KIND_LABEL[kind], input, t.where),
-      `archives it, nothing is erased: reviews stop using it in ${aicrNoteInheritors(t)}. Update status to active to restore.`,
+      "archives it (not erased), so reviews stop using it. Set status active to restore.",
     );
   };
 }
@@ -990,7 +984,7 @@ function aicrRuleOverrideNote(input: Record<string, unknown>): string | undefine
   if (!t.repo) return undefined;
   const enabled = aicrNoteBody(input).enabled;
   const effect =
-    typeof enabled === "boolean" ? `turns the rule ${enabled ? "on" : "off"} for this repo; other repos keep it.` : "overrides the rule for this repo; other repos keep it.";
+    typeof enabled === "boolean" ? `turns it ${enabled ? "on" : "off"} for this repo; other repos keep the rule.` : "overrides it for this repo; other repos keep the rule.";
   return aicrNote(aicrNoteSubject("Rule", input, t.where), effect);
 }
 
@@ -999,9 +993,9 @@ function aicrEnableNote(input: Record<string, unknown>): string | undefined {
   if (!t.repo) return undefined;
   const pipelines =
     t.level === "project"
-      ? "the project's AI Code Review pipeline (created if missing)"
-      : `the AI Code Review pipeline of every project under the ${t.level} (created if missing)`;
-  return aicrNote(`Enable AI Code Review on ${t.where}`, `adds a PR trigger to ${pipelines}; new PR commits get reviewed.`);
+      ? "the project's review pipeline (created if missing)"
+      : `the review pipeline of every project under the ${t.level} (created if missing)`;
+  return aicrNote(`Enable AI Code Review on ${t.where}`, `adds a PR trigger to ${pipelines}, so new PR commits get reviewed.`);
 }
 
 function aicrDisableNote(input: Record<string, unknown>): string | undefined {
@@ -1009,7 +1003,7 @@ function aicrDisableNote(input: Record<string, unknown>): string | undefined {
   if (!t.repo) return undefined;
   return aicrNote(
     `Disable AI Code Review on ${t.where}`,
-    "removes its PR triggers and every gate, rule, override and convention set on this repo. Enabling again does not bring them back.",
+    "removes its PR triggers, gates, rules, overrides and conventions. Enabling again does not bring them back.",
   );
 }
 
@@ -1020,7 +1014,7 @@ function aicrDismissNote(input: Record<string, unknown>): string | undefined {
   const reason = str(aicrNoteBody(input).reason);
   return aicrNote(
     `Dismiss a finding${pr ? ` on PR #${pr}` : ""}${reason ? ` (reason: ${reason})` : ""} in ${t.where}`,
-    "it no longer fails the AI Code Review check. undo_dismiss reopens it.",
+    "it no longer fails the review check. undo_dismiss reopens it.",
   );
 }
 
