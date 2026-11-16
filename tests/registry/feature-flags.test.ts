@@ -2133,6 +2133,15 @@ describe("FME title/comment on v4 writes", () => {
     expect(firstRequest(mockRequest).body).toEqual({ title: "Cleanup" });
   });
 
+  it.each(deletes)("$resourceType delete: sends empty-string title/comment instead of dropping them", async ({ resourceType, ids }) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "delete", { org_id: "o1", project_id: "p1", ...ids, body: { title: "", comment: "" } });
+
+    expect(firstRequest(mockRequest).body).toEqual({ title: "", comment: "" });
+  });
+
   it.each(deletes)("$resourceType delete: sends no body when none is given", async ({ resourceType, ids }) => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -2231,6 +2240,20 @@ describe("FME title/comment on v4 writes", () => {
     expect(firstRequest(mockRequest).body).toEqual({ description: "new" });
   });
 
+  it("fme_feature_flag native update sends empty-string title/comment instead of dropping them", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      body: { description: "new", title: "", comment: "" },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ description: "new", comment: "", title: "" });
+  });
+
   it("fme_feature_flag legacy update does not send title/comment", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -2259,6 +2282,21 @@ describe("FME title/comment on v4 writes", () => {
     const req = firstRequest(mockRequest);
     expect(req.method).toBe("POST");
     expect(req.body).toEqual({ description: "d", comment: "why", title: "Create" });
+  });
+
+  it("fme_segment_definition create sends empty-string title/comment instead of dropping them", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_definition", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+      segment_name: "seg1",
+      body: { title: "", comment: "" },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ comment: "", title: "" });
   });
 
   it("fme_segment_definition create still sends an empty body when none is given", async () => {
