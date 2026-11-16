@@ -186,7 +186,7 @@ describe("aicr toolset registration", () => {
       "aicr_repository.enable": { risk: "high_write", retryPolicy: "do_not_retry" },
       "aicr_repository.disable": { risk: "destructive", retryPolicy: "do_not_retry" },
       // Loosening a gate lets PRs pass with findings that failed them.
-      "aicr_gate.set": { risk: "medium_write", retryPolicy: "do_not_retry" },
+      "aicr_gate.set": { risk: "high_write", retryPolicy: "do_not_retry" },
       // A rule can fail the Team rules check on every PR under its scope; turning one off lets them pass.
       "aicr_rule.create": { risk: "medium_write", retryPolicy: "do_not_retry" },
       "aicr_rule.update": { risk: "medium_write", retryPolicy: "do_not_retry" },
@@ -639,7 +639,7 @@ describe("aicr_rule", () => {
   it("creates with only rule fields in the body and the scope in the query", async () => {
     const { client, request } = makeClient(() => RULE);
     await registry().dispatch(client, "aicr_rule", "create", {
-      org_id: "code", project_id: "DeepSourceAICR", body: { title: "Log the request id", overridable: true, org_id: "x" },
+      org_id: "code", project_id: "DeepSourceAICR", body: { title: "Log the request id", overridable: true },
     });
     expect(request.mock.calls[0][0]).toMatchObject({ method: "POST", path: "/gateway/aicr/api/v1/rules", params: { space_path: PROJECT } });
     expect(request.mock.calls[0][0].body).toEqual({ title: "Log the request id", overridable: true });
@@ -733,7 +733,7 @@ describe("aicr_convention", () => {
   it("creates with only convention fields and reports the space it landed on", async () => {
     const { client, request } = makeClient(() => CONVENTION);
     const result = await registry().dispatch(client, "aicr_convention", "create", {
-      org_id: "code", project_id: "DeepSourceAICR", body: { title: "Wrap errors", body: "Use fmt.Errorf with %w.", languages: ["go"], overridable: true },
+      org_id: "code", project_id: "DeepSourceAICR", body: { title: "Wrap errors", body: "Use fmt.Errorf with %w.", languages: ["go"] },
     });
     expect(request.mock.calls[0][0]).toMatchObject({ method: "POST", params: { space_path: PROJECT } });
     expect(request.mock.calls[0][0].body).toEqual({ title: "Wrap errors", body: "Use fmt.Errorf with %w.", languages: ["go"] });
@@ -1258,6 +1258,19 @@ describe("aicr approval prompt notes", () => {
     expect(note(def("aicr_convention").operations.create, REPO)).toBe(
       "New convention on repo demo in project acme/web: reviews follow it when checking PRs.",
     );
+  });
+
+  it("rule and convention update: a field the update would drop is neither refused silently nor named in the note", async () => {
+    expect(note(def("aicr_rule").operations.update, { project_id: "web", org_id: "acme", body: { title: "x", enable: false } })).toBe(
+      'Rule "x" on project acme/web: changes title.',
+    );
+    for (const [type, op, extra] of [["aicr_rule", "update", { rule_id: "r1" }], ["aicr_rule", "create", {}], ["aicr_convention", "update", { convention_id: "c1" }]] as const) {
+      const { client, request } = makeClient(() => ({}));
+      await expect(
+        registry().dispatch(client, type, op, { org_id: "code", ...extra, body: { title: "x", enable: false, org_id: "y" } }),
+      ).rejects.toThrow(/does not take enable, org_id\. It takes: /);
+      expect(request).not.toHaveBeenCalled();
+    }
   });
 
   it("update and delete by id look the title up with one read; a body title skips it", async () => {

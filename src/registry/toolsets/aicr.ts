@@ -523,12 +523,15 @@ function pickAicrBody(
   );
 }
 
-/** Preflight check for {@link pickAicrBody}: at least one named field, each of its type. */
+/** Preflight check for {@link pickAicrBody}: no field it would drop, at least one named field, each of its type. */
 function validateAicrBody(
   input: Record<string, unknown>,
   fields: readonly string[],
   op: string,
 ): void {
+  const unknown = Object.keys(aicrNoteBody(input)).filter((k) => !fields.includes(k));
+  if (unknown.length > 0)
+    throw new Error(`${op} does not take ${unknown.join(", ")}. It takes: ${fields.join(", ")}.`);
   const out = pickAicrBody(input, fields);
   if (Object.keys(out).length === 0)
     throw new Error(`${op} needs at least one of: ${fields.join(", ")}.`);
@@ -1000,10 +1003,18 @@ function aicrPolicyCreateNote(kind: "rule" | "convention") {
     );
 }
 
+const AICR_UPDATE_FIELDS = {
+  rule: AICR_RULE_UPDATE_FIELDS,
+  convention: AICR_CONVENTION_UPDATE_FIELDS,
+} as const;
+
 function aicrPolicyUpdateNote(kind: "rule" | "convention") {
   return (input: Record<string, unknown>): string => {
     const t = aicrNoteTarget(input);
-    const body = aicrNoteBody(input);
+    // Only the fields the update sends: a field it would drop is not a change.
+    const body = Object.fromEntries(
+      Object.entries(aicrNoteBody(input)).filter(([k]) => (AICR_UPDATE_FIELDS[kind] as readonly string[]).includes(k)),
+    );
     const effect =
       body.status === "archived"
         ? "archives it, so reviews stop using it. Set status active to restore."
@@ -1625,7 +1636,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       displayName: "AI Code Reviewed Pull Request",
       description:
         "Pull requests AI Code Review has reviewed under an account, org, or project, newest review first, with risk and author. " +
-        "Includes merged and closed PRs; only query filters the list. Has no PR state or branches (use pull_request for those). Pass an item's repo_path and number to aicr_review, aicr_finding, or aicr_run.",
+        "Not filtered by PR state: a reviewed PR stays listed after it merges or closes. Only query filters the list; the list has no PR state or branches (use pull_request for those). Pass an item's repo_path and number to aicr_review, aicr_finding, or aicr_run.",
       toolset: "aicr",
       scope: "account",
       scopeOptional: true,
@@ -1784,7 +1795,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           path: `${AICR_BASE}/gates`,
           // Loosening a gate lets PRs under the scope pass with findings that failed them before.
           operationPolicy: {
-            risk: "medium_write",
+            risk: "high_write",
             retryPolicy: "do_not_retry",
           },
           preflight: aicrGateSetPreflight(aicrPolicyScopePreflight(aicrNoRepoConfigError)),
