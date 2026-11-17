@@ -1597,6 +1597,22 @@ Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-
 Use `harness_execute(resource_type="pr_comment", action="resolve", ...)` to resolve a comment thread and `action="unresolve"` to reopen it; neither takes a body. `comment_id` must be a row's `id` from `pr_activity` where that row's `parent_id` is `null`; the API rejects reply ids.
 
 
+### AI Code Review (AICR)
+
+AICR resources are default-enabled and read results from the AI Code Review service for Harness Code pull requests. They need the service to be reachable on your Harness environment; set `HARNESS_TOOLSETS=-aicr` to remove them. Pass `org_id` and `project_id` to work in a project, or neither for the account. Name a repository with `repo_id` (plus `org_id`/`project_id`) or with `repo_path` (`<account>/<org>/<project>/<repo>`).
+
+Start with `harness_list resource_type=aicr_review` to see the pull requests that have been reviewed, newest first. Pass an item's `repo_id` and `pr_number` to `harness_get resource_type=aicr_review` for the review, then use `aicr_finding` for its findings and `aicr_run` for past runs. `aicr_repository` lists the repositories where review is enabled; `aicr_gate`, `aicr_rule`, `aicr_convention` and `aicr_setting` hold the merge gates, team rules, coding conventions and settings.
+
+Actions go through `harness_execute`:
+
+- `aicr_review`: `request_review` starts a review of a pull request, and `review_status` checks how it is going.
+- `aicr_finding`: `dismiss` and `undo_dismiss`.
+- `aicr_repository`: `enable` and `disable`.
+- `aicr_gate` and `aicr_setting`: `set`.
+- `aicr_rule`: `override` turns an inherited rule that is marked overridable off or on for one repository. Rules and conventions are created and updated with `harness_create` and `harness_update`; `harness_delete` archives them instead of erasing them.
+
+Every write asks for approval first, and the prompt says what will change and where. Enabling review, setting gates or settings, and starting a review are high risk; disabling review is destructive. The service ignores some settings for now, and the review's grade, score and per-issue gate results are not exposed yet; the `set` fields and resource descriptions say which.
+
 ### Release Management
 
 Release Management (RMG) resources are default-enabled. Definition resources (`release_process`, `release_activity`) support list/get/create/update/delete with `body.yaml`; call `harness_schema(resource_type="release_process"|"release_activity")` before create/update. Execution resources monitor running releases — most list operations require `release_id` (UUID from `harness_list resource_type=release`, or the UI URL slug such as `identifier-1.0.0-abc`). Paste an RMG release URL into `harness_list` to auto-fill `release_id`.
