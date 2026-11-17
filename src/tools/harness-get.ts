@@ -14,6 +14,8 @@ import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
+import { buildResultView, createAppViewContext } from "../apps/mcp-apps.js";
+import { buildPipelineExecutionView } from "../apps/pipeline-execution.js";
 
 function isTrue(value: unknown): boolean {
   return value === true || value === "true";
@@ -21,6 +23,7 @@ function isTrue(value: unknown): boolean {
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
   const gettableTypes = registry.getTypesForOperation("get");
+  const appView = createAppViewContext(server, registry.mcpAppsEnabled);
 
   server.registerTool(
     "harness_get",
@@ -37,6 +40,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         return_download_url: z.union([z.boolean(), z.enum(["true", "false"])]).optional().describe("For execution_log only: return a directly fetchable log download URL instead of buffering log content."),
       },
       outputSchema: compactOutputSchema(getOutputSchema, registry.compactSchemas),
+      ...appView.toolMeta,
       annotations: {
         title: "Get Harness Resource",
         readOnlyHint: true,
@@ -153,7 +157,20 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           }
         }
 
-        return jsonResult(result);
+        return appView.attach(jsonResult(result), () =>
+          (resourceType === "execution"
+            ? buildPipelineExecutionView(result, {
+                orgId: asString(input.org_id) ?? registry.orgId,
+                projectId: asString(input.project_id) ?? registry.projectId,
+                deepLink: (template, linkParams) => registry.deepLink(template, linkParams),
+              })
+            : undefined) ??
+          buildResultView(result, {
+            displayName: def.displayName,
+            resourceId,
+            refresh: { tool: "harness_get", arguments: rawArgs as Record<string, unknown> },
+          }),
+        );
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) {

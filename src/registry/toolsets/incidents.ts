@@ -1,156 +1,8 @@
 import type { ToolsetDefinition, BodySchema, EndpointSpec, ParamsSchema } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
-import { offsetListExtract } from "../extractors.js";
+import { addRootCauseTheoryExtract, incidentGetExtract, offsetListExtract, projectIncident } from "../extractors.js";
 import { MC_SCOPE } from "./scopes.js";
-import { projectRelatedActivity } from "./related-activities.js";
 import { isRecord } from "../../utils/type-guards.js";
-
-/**
- * Project a single item cited by a root-cause theory (a deploy, PR, ticket,
- * link, etc.). This is a different, simpler shape than the generic
- * `relatedActivities` edges projected by `projectRelatedActivity` below — the
- * backend DTOs are unrelated even though the field name collides.
- */
-function projectTheoryRelatedActivity(a: unknown): unknown {
-  if (!isRecord(a)) return a;
-  const out: Record<string, unknown> = {};
-  if (typeof a.type === "string") out.type = a.type;
-  if (typeof a.displayId === "string") out.displayId = a.displayId;
-  if (typeof a.url === "string") out.url = a.url;
-  return out;
-}
-
-/**
- * Project a cited item the backend couldn't link or check, echoing the
- * `{type, id}` reference the caller sent alongside the reason.
- */
-function projectRelatedActivityIssue(i: unknown): unknown {
-  if (!isRecord(i)) return i;
-  const out: Record<string, unknown> = {};
-  if (isRecord(i.reference)) {
-    const ref: Record<string, unknown> = {};
-    if (typeof i.reference.type === "string") ref.type = i.reference.type;
-    if (typeof i.reference.id === "string") ref.id = i.reference.id;
-    out.reference = ref;
-  }
-  if (typeof i.reason === "string") out.reason = i.reason;
-  return out;
-}
-
-/**
- * Project a single root-cause theory to its stable, agent-relevant fields,
- * dropping any backend-internal keys the API may add.
- */
-function projectRootCauseTheory(t: unknown): unknown {
-  if (!isRecord(t)) return t;
-  const out: Record<string, unknown> = {};
-  if (typeof t.id === "string") out.id = t.id;
-  if (typeof t.message === "string") out.message = t.message;
-  if (typeof t.status === "string") out.status = t.status;
-  if (typeof t.confidence === "number") out.confidence = t.confidence;
-  if (typeof t.aiGenerated === "boolean") out.aiGenerated = t.aiGenerated;
-  if (Array.isArray(t.relatedActivities) && t.relatedActivities.length > 0) {
-    out.relatedActivities = t.relatedActivities.map(projectTheoryRelatedActivity);
-  }
-  return out;
-}
-
-/**
- * Project a single key-event entry to its stable fields.
- */
-function projectKeyEvent(e: unknown): unknown {
-  if (!isRecord(e)) return e;
-  const out: Record<string, unknown> = {};
-  if (typeof e.timestamp === "number") out.timestamp = e.timestamp;
-  if (typeof e.status === "string") out.status = e.status;
-  if (typeof e.details === "string") out.details = e.details;
-  return out;
-}
-
-/**
- * Max summary length kept in list view. Incident summaries are multi-paragraph
- * narratives (often ~1KB), which dominate a list payload once multiplied by the
- * page size. The full text stays available via harness_get.
- */
-const LIST_SUMMARY_MAX = 400;
-
-/**
- * Project the common incident fields shared by the detail view and the list
- * compactor. Emits a stable, documented shape and drops backend
- * envelope/debug/meta. `verbose` controls whether the heavy event/theory
- * arrays are projected in full (detail view) or replaced with counts (list),
- * and whether summary is kept in full or truncated. Related activities are
- * already small enough to emit in full in both views.
- */
-function projectIncident(raw: Record<string, unknown>, verbose: boolean): Record<string, unknown> {
-  const slim: Record<string, unknown> = {};
-  // Identity + core status
-  if (typeof raw.prettyId === "string") slim.prettyId = raw.prettyId;
-  if (typeof raw.projectId === "string") slim.projectId = raw.projectId;
-  if (typeof raw.title === "string") slim.title = raw.title;
-  if (typeof raw.status === "string") slim.status = raw.status;
-  // severity is an object { id, label } in the response (not a bare string)
-  if (raw.severity !== undefined) slim.severity = raw.severity;
-  if (typeof raw.summary === "string") {
-    slim.summary = verbose || raw.summary.length <= LIST_SUMMARY_MAX
-      ? raw.summary
-      : `${raw.summary.slice(0, LIST_SUMMARY_MAX)}… [truncated — use harness_get for the full summary]`;
-  }
-  if (Array.isArray(raw.impactedServices)) slim.impactedServices = raw.impactedServices;
-  if (Array.isArray(raw.environments)) slim.environments = raw.environments;
-  // reporter/commander are user objects (or null)
-  if (raw.reporter !== undefined) slim.reporter = raw.reporter;
-  if (raw.commander !== undefined) slim.commander = raw.commander;
-  if (typeof raw.videoConferenceLink === "string") slim.videoConferenceLink = raw.videoConferenceLink;
-  if (Array.isArray(raw.commsLinks)) slim.commsLinks = raw.commsLinks;
-  // Lifecycle timestamps (epoch-millis). Keep all that are present and non-null.
-  for (const key of [
-    "reportedAtTimestamp", "startedAtTimestamp", "acknowledgedAtTimestamp",
-    "mitigatedAtTimestamp", "resolvedAtTimestamp", "closedAtTimestamp",
-    "responderAssignedAtTimestamp",
-  ]) {
-    if (typeof raw[key] === "number") slim[key] = raw[key];
-  }
-  // Heavy arrays: full projection in the detail view, counts only in lists.
-  if (Array.isArray(raw.keyEvents)) {
-    slim.keyEvents = verbose ? raw.keyEvents.map(projectKeyEvent) : raw.keyEvents.length;
-  }
-  if (Array.isArray(raw.rootCauseTheories)) {
-    slim.rootCauseTheories = verbose
-      ? raw.rootCauseTheories.map(projectRootCauseTheory)
-      : raw.rootCauseTheories.length;
-  }
-  if (verbose && typeof raw.rootCauseTheoriesSha === "string") {
-    slim.rootCauseTheoriesSha = raw.rootCauseTheoriesSha;
-  }
-  if (Array.isArray(raw.relatedActivities) && raw.relatedActivities.length > 0) {
-    slim.relatedActivities = raw.relatedActivities.map(projectRelatedActivity);
-  }
-  return slim;
-}
-
-/**
- * Extract an incident detail response (get/create/update/close all return the
- * same incident DTO). Projects a stable shape and strips backend
- * envelope/debug/meta fields. Keeps the full keyEvents/rootCauseTheories
- * timeline since this is the detail view.
- */
-function incidentGetExtract(raw: unknown): unknown {
-  if (!isRecord(raw)) return raw;
-  return projectIncident(raw, true);
-}
-
-function addRootCauseTheoryExtract(raw: unknown): unknown {
-  if (!isRecord(raw)) return raw;
-  const out: Record<string, unknown> = {};
-  if (raw.theory !== undefined) out.theory = projectRootCauseTheory(raw.theory);
-  if (typeof raw.created === "boolean") out.created = raw.created;
-  for (const key of ["notLinked", "unverified"] as const) {
-    const issues = raw[key];
-    if (Array.isArray(issues) && issues.length > 0) out[key] = issues.map(projectRelatedActivityIssue);
-  }
-  return out;
-}
 
 /**
  * Compact an incident list item. The list response carries the same multi-KB
@@ -211,6 +63,25 @@ const incidentUpdateSchema: BodySchema = {
   ],
 };
 
+const theoryCitationFields: BodySchema["fields"] = [
+  {
+    name: "type",
+    type: "string",
+    required: true,
+    description: "DEPLOY, PR, INCIDENT, ALERT, CHANGE, BUILD, FF, FLAG_CHANGE, TICKET or LINK. For an item "
+      + "cited by web URL the type is a hint: the URL decides how it's stored",
+  },
+  {
+    name: "id",
+    type: "string",
+    required: true,
+    description: "The item's public ID (e.g. DEPL-12). For a PR, its web URL or "
+      + "<repository identifier>#<PR number> for a repository in the incident's project's Harness Code "
+      + "(e.g. checkout-service#42). Anything else, such as a pipeline execution, build, feature flag, "
+      + "ticket or status page, by its web URL",
+  },
+];
+
 const addRootCauseTheorySchema: BodySchema = {
   description: "Root-cause theory to add (AddRootCauseTheoryRequest)",
   fields: [
@@ -237,25 +108,53 @@ const addRootCauseTheorySchema: BodySchema = {
         + "any that can't be found are returned in notLinked and the theory is still added. The items on a "
         + "CONFIRMED theory are recorded as the incident's cause.",
       itemType: "object",
-      fields: [
-        {
-          name: "type",
-          type: "string",
-          required: true,
-          description: "DEPLOY, PR, INCIDENT, ALERT, CHANGE, BUILD, FF, FLAG_CHANGE, TICKET or LINK. For an item "
-            + "cited by web URL the type is a hint: the URL decides how it's stored",
-        },
-        {
-          name: "id",
-          type: "string",
-          required: true,
-          description: "The item's public ID (e.g. DEPL-12). For a PR, its web URL or "
-            + "<repository identifier>#<PR number> for a repository in the incident's project's Harness Code "
-            + "(e.g. checkout-service#42). Anything else, such as a pipeline execution, build, feature flag, "
-            + "ticket or status page, by its web URL",
-        },
-      ],
+      fields: theoryCitationFields,
     },
+  ],
+};
+
+const updateRootCauseTheorySchema: BodySchema = {
+  description:
+    "Parts of the theory to change (UpdateRootCauseTheoryRequest). Omitted fields are unchanged; give at least "
+    + "one of message, confidence, addRelatedActivities, removeRelatedActivities or clearRelatedActivities",
+  fields: [
+    { name: "message", type: "string", required: false, description: "The new theory text" },
+    { name: "confidence", type: "number", required: false, description: "Integer from 0 to 100" },
+    {
+      name: "addRelatedActivities",
+      type: "array",
+      required: false,
+      description:
+        "Items to cite in addition to the current ones. Items that can't be found are returned in notLinked",
+      itemType: "object",
+      fields: theoryCitationFields,
+    },
+    {
+      name: "removeRelatedActivities",
+      type: "array",
+      required: false,
+      description:
+        "Current citations to drop, each as the type and id of the theory's relatedActivities entry. Any the "
+        + "theory doesn't cite are returned in notRemoved. An item can't be both added and removed",
+      itemType: "object",
+      fields: theoryCitationFields,
+    },
+    {
+      name: "clearRelatedActivities",
+      type: "boolean",
+      required: false,
+      description:
+        "true to drop every current citation; with addRelatedActivities, replaces them. Can't be combined with "
+        + "removeRelatedActivities",
+    },
+    { name: "reason", type: "string", required: false, description: "Why the theory is being changed" },
+  ],
+};
+
+const removeRootCauseTheorySchema: BodySchema = {
+  description: "Why the theory is being removed (RemoveRootCauseTheoryRequest)",
+  fields: [
+    { name: "reason", type: "string", required: true, description: "Why the theory no longer holds" },
   ],
 };
 
@@ -264,6 +163,11 @@ const rootCauseTheoryParamsSchema: ParamsSchema = {
     { name: "theory_id", required: true, description: "Root-cause theory id (rootCauseTheories[].id from harness_get on the incident)" },
   ],
 };
+
+const THEORY_EDIT_RULES =
+  "Only an INVESTIGATING theory can be changed; CONFIRMED and RULED_OUT theories can't. When the caller's "
+  + "credential is the project's bound Agent Account, only AI-generated theories can be changed. Theories "
+  + "not named are left as they are.";
 
 const rootCauseTheoryStatusSchema: BodySchema = {
   description: "Concurrency check for a root-cause theory status change (RootCauseTheoryStatusRequest)",
@@ -418,13 +322,49 @@ export const incidentsToolset: ToolsetDefinition = {
             + "human-authored. status applies to a theory being created. Sending RULED_OUT here does not rule "
             + "out a theory that already exists; use rule_out_root_cause_theory for that. If a theory with the "
             + "same message already exists, no duplicate is created: the cited items are added to the existing "
-            + "theory, which is returned with created=false and its status and confidence left unchanged. Cited "
+            + "theory, which is returned with created=false and its status and confidence left unchanged. Adding "
+            + "items to that theory follows the same rules as update_root_cause_theory: it must be INVESTIGATING "
+            + "and, for an Agent Account caller, AI-generated; re-sending items it already cites succeeds. Cited "
             + "items that weren't found are returned in notLinked and aren't linked; those that couldn't be "
             + "checked, have no activity in the incident's project, or whose URL isn't the cited type are "
             + "returned in unverified and are linked as cited. The response's theory.id identifies the theory "
             + "for later status changes. The response does not include rootCauseTheoriesSha, and an add that "
             + "changes the theories (a new theory, or new citations on an existing one) changes it, so call "
             + "harness_get before confirming, ruling out, or undoing a theory.",
+        },
+        update_root_cause_theory: {
+          method: "PATCH",
+          path: "/gateway/ir/tp/api/v1/mc/incidents/{incidentId}/root-cause-theories/{theoryId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { incident_id: "incidentId", theory_id: "theoryId" },
+          paramsSchema: rootCauseTheoryParamsSchema,
+          bodyBuilder: buildBodyNormalized(),
+          bodySchema: updateRootCauseTheorySchema,
+          responseExtractor: addRootCauseTheoryExtract,
+          actionDescription:
+            "Change a root-cause theory's message, confidence or cited items. Pass theory_id via params and only "
+            + "the parts that change in the body. Citations not named in removeRelatedActivities are kept; name "
+            + "one to remove by the type and id of its relatedActivities entry from harness_get. To confirm a "
+            + "theory, use confirm_root_cause_theory. "
+            + THEORY_EDIT_RULES
+            + " Returns the theory as changed, with notLinked and unverified as for add_root_cause_theory, and "
+            + "notRemoved for removeRelatedActivities items the theory doesn't cite.",
+        },
+        remove_root_cause_theory: {
+          method: "POST",
+          path: "/gateway/ir/tp/api/v1/mc/incidents/{incidentId}/root-cause-theories/{theoryId}/remove",
+          // Deletes the theory with no undo, so it prompts (or needs confirm: true) like any delete.
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { incident_id: "incidentId", theory_id: "theoryId" },
+          paramsSchema: rootCauseTheoryParamsSchema,
+          bodyBuilder: buildBodyNormalized(),
+          bodySchema: removeRootCauseTheorySchema,
+          responseExtractor: incidentGetExtract,
+          actionDescription:
+            "Delete a root-cause theory that is wrong or superseded. Pass theory_id via params and body.reason. "
+            + "To keep a theory on record as excluded, use rule_out_root_cause_theory instead. "
+            + THEORY_EDIT_RULES
+            + " Returns the updated incident.",
         },
         confirm_root_cause_theory: rootCauseTheoryStatusAction(
           "confirm",

@@ -94,4 +94,26 @@ describe("harness_describe operation filter", () => {
     expect(data.operations).toEqual(expect.arrayContaining([expect.objectContaining({ operation: "list" })]));
     expect(data.resource_types).toBeUndefined();
   });
+
+  it("bounds toolset-filtered describe payload in compact mode while keeping full mode detailed", async () => {
+    const compactChaos = await server.call("harness_describe", { toolset: "chaos" });
+    const compactBytes = compactChaos.content[0]!.text.length;
+    const compactParsed = parse(compactChaos) as {
+      toolset: string;
+      displayName: string;
+      resources: Array<Record<string, unknown>>;
+      hint?: string;
+    };
+
+    const fullRegistry = new Registry({ ...makeConfig(), HARNESS_SCHEMA_MODE: "full" });
+    const fullChaosBytes = JSON.stringify(fullRegistry.describeToolset("chaos", false)).length;
+
+    expect(compactParsed.toolset).toBe("chaos");
+    expect(compactParsed.displayName).toBe("Chaos Engineering");
+    expect(compactParsed.resources.length).toBeGreaterThan(30);
+    expect(compactParsed.resources[0]?.listFilterFields).toBeUndefined();
+    expect(compactParsed.resources[0]?.diagnosticHint).toBeUndefined();
+    expect(compactParsed.hint).toMatch(/harness_describe\(resource_type=/);
+    expect(compactBytes).toBeLessThan(fullChaosBytes * 0.2);
+  });
 });

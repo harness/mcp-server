@@ -1,31 +1,7 @@
 import type { ParamsSchema, ToolsetDefinition } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
-import { ngExtract, pageExtract } from "../extractors.js";
+import { infrastructureExtract, infrastructurePageExtract, ngExtract } from "../extractors.js";
 import { isRecord } from "../../utils/type-guards.js";
-
-/** Copy environmentRef onto environmentIdentifier so the deep-link template can resolve {environmentIdentifier}. */
-function aliasEnvironmentIdentifier(record: Record<string, unknown>): void {
-  if (typeof record.environmentIdentifier === "string" && record.environmentIdentifier) return;
-  const nested = isRecord(record.infrastructure) ? record.infrastructure : undefined;
-  const ref = record.environmentRef ?? nested?.environmentRef;
-  if (typeof ref === "string" && ref) {
-    record.environmentIdentifier = ref;
-  }
-}
-
-const infrastructureExtract = (raw: unknown): unknown => {
-  const data = ngExtract(raw);
-  if (isRecord(data)) aliasEnvironmentIdentifier(data);
-  return data;
-};
-
-const infrastructurePageExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const page = pageExtract(raw);
-  for (const item of page.items) {
-    if (isRecord(item)) aliasEnvironmentIdentifier(item);
-  }
-  return page;
-};
 
 /**
  * Infra create/update body shaping (same unwrap/strip pattern as service/env), plus

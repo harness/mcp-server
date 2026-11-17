@@ -1,25 +1,14 @@
 import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough, stoExemptionsExtract, stoRemediationDiffExtract } from "../extractors.js";
-
-/**
- * Injects a redirect hint into every security_issue list response.
- * When the LLM lands here while trying to approve/reject an exemption, it sees
- * the hint in the response and pivots to security_exemption on the next call.
- */
-const securityIssueListExtract = (raw: unknown): unknown => {
-  const base = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  return {
-    ...base,
-    _action_hint:
-      "If the user asked to APPROVE, REJECT, or PROMOTE an exemption — even by mentioning a CVE or package name — " +
-      "STOP using this resource. " +
-      "The correct workflow is: " +
-      "(1) harness_list(resource_type='security_exemption', filters={status:'Pending', search:'<keyword from user prompt>'}). " +
-      "(2) Get the exemption_id from _action_id_by_row. " +
-      "(3) harness_execute(resource_type='security_exemption', action='approve', resource_id=<exemption_id>, body={scope:'CURRENT'|'ORG'|'ACCOUNT'|'PROJECT'}).",
-  };
-};
+import {
+  passthrough,
+  securityIssueListExtract,
+  stoExemptionsExtract,
+  stoRemediationDiffExtract,
+  stoPipelineSecurityIssuesExtract,
+  stoPipelineSecurityStepsExtract,
+  stoBulkExemptionExtract,
+} from "../extractors.js";
 
 /**
  * STO scope override — STO API uses accountId / orgId / projectId
@@ -225,75 +214,7 @@ export const stoToolset: ToolsetDefinition = {
             page_new: "pageNew",
             page_size_new: "pageSizeNew",
           },
-          responseExtractor: (raw: unknown): unknown => {
-            // Pipeline Security endpoint (sto-core PipelineSecurityIssuesResult) returns:
-            //   { existing: { issues: [...], pagination: { totalItems, ... } },
-            //     new:      { issues: [...], pagination: { totalItems, ... } },
-            //     counts: {...}, matchingSteps: [...] }
-            // NOTE: the partition payload key is `issues` (not `items`) and totals live
-            // under `pagination.totalItems` (not a top-level `totalItems`). We flatten
-            // existing+new into a single items[] for prompt consumption and preserve
-            // the partitioned counts + matchingSteps as side-channels.
-            if (raw === null || raw === undefined || typeof raw !== "object") return raw;
-            type Partition = {
-              issues?: unknown[];
-              items?: unknown[]; // defensive: handle older or alternate shapes
-              pagination?: { totalItems?: number };
-              totalItems?: number; // defensive
-            };
-            const r = raw as {
-              existing?: Partition;
-              new?: Partition;
-              counts?: unknown;
-              matchingSteps?: unknown;
-            };
-            const partitionItems = (p: Partition | undefined): unknown[] => {
-              if (!p) return [];
-              if (Array.isArray(p.issues)) return p.issues;
-              if (Array.isArray(p.items)) return p.items;
-              return [];
-            };
-            const partitionTotal = (p: Partition | undefined, fallback: number): number => {
-              if (!p) return fallback;
-              if (typeof p.pagination?.totalItems === "number") return p.pagination.totalItems;
-              if (typeof p.totalItems === "number") return p.totalItems;
-              return fallback;
-            };
-            const existingItems = partitionItems(r.existing);
-            const newItems = partitionItems(r.new);
-            // Tag each row so the prompt can tell which partition it came from.
-            const tagged = [
-              ...existingItems.map(it => (typeof it === "object" && it !== null ? { ...it, _partition: "existing" } : it)),
-              ...newItems.map(it => (typeof it === "object" && it !== null ? { ...it, _partition: "new" } : it)),
-            ];
-            const existingTotal = partitionTotal(r.existing, existingItems.length);
-            const newTotal = partitionTotal(r.new, newItems.length);
-            // Surface one-line breadcrumbs for the two IDs that are NOT on the
-            // issue row but ARE required for narrower-scope exemptions. Without
-            // these hints, agents spend multiple turns chasing the raw IDs
-            // through unrelated endpoints (security_issue_filter, harness_get
-            // on the issue, etc).
-            const targetIdHint =
-              "Each row carries `targetVariantName` (display string like 'repo:branch') but NOT a raw `target_id`. " +
-              "For target-scoped exemptions, also call harness_list(resource_type='pipeline_security_step', " +
-              "filters={execution_id:<same id>}) and join on `targetName:targetVariant === issue.targetVariantName` " +
-              "to resolve the `target_id` you pass to harness_create body.target_id.";
-            const pipelineIdHint =
-              "Issue rows do NOT carry `pipeline_id` either. For pipeline-scoped exemptions: " +
-              "(1) if a Harness pipeline execution URL was pasted, `pipeline_id` is already auto-extracted from the URL path; " +
-              "(2) otherwise call harness_get(resource_type='execution', resource_id=<execution_id>) once and read `pipelineIdentifier`. " +
-              "Do NOT iterate through harness_list(resource_type='pipeline') — the execution-to-pipeline link is 1:1.";
-            return {
-              items: tagged,
-              total: existingTotal + newTotal,
-              existing_total: existingTotal,
-              new_total: newTotal,
-              counts: r.counts,
-              matching_steps: r.matchingSteps,
-              _target_id_lookup_hint: targetIdHint,
-              _pipeline_id_lookup_hint: pipelineIdHint,
-            };
-          },
+          responseExtractor: stoPipelineSecurityIssuesExtract,
           skipCompact: true,
           description: "List the security issues shown on a specific pipeline execution's Security tab. Requires execution_id. Flattens existing + new partitions into items[]; each item is tagged with _partition.",
         },
@@ -331,18 +252,7 @@ export const stoToolset: ToolsetDefinition = {
           queryParams: {
             execution_id: "executionId",
           },
-          responseExtractor: (raw: unknown): unknown => {
-            // Response: { steps: [...], reachabilityFlag: bool, exploitabilityFlag: bool }
-            if (raw === null || raw === undefined || typeof raw !== "object") return raw;
-            const r = raw as { steps?: unknown[]; reachabilityFlag?: boolean; exploitabilityFlag?: boolean };
-            const steps = Array.isArray(r.steps) ? r.steps : [];
-            return {
-              items: steps,
-              total: steps.length,
-              reachability_flag: r.reachabilityFlag ?? false,
-              exploitability_flag: r.exploitabilityFlag ?? false,
-            };
-          },
+          responseExtractor: stoPipelineSecurityStepsExtract,
           skipCompact: true,
           description: "List STO scan steps that ran in a given pipeline execution. Use to map issues back to their source scanner.",
         },
@@ -726,45 +636,7 @@ export const stoToolset: ToolsetDefinition = {
               items,
             };
           },
-          responseExtractor: (raw: unknown): unknown => {
-            // Surface the all-or-none outcome at the top level so the LLM
-            // doesn't have to inspect every item to know what happened.
-            // Server returns: { results: [{issueId, id?, error?, statusCode}], succeeded, failed }
-            if (raw === null || typeof raw !== "object") return raw;
-            const r = raw as { results?: unknown[]; succeeded?: number; failed?: number };
-            const succeeded = typeof r.succeeded === "number" ? r.succeeded : 0;
-            const failed = typeof r.failed === "number" ? r.failed : 0;
-            const total = succeeded + failed;
-            const allOrNone =
-              total === 0
-                ? "EMPTY"
-                : failed === 0
-                  ? "ALL_SUCCEEDED"
-                  : succeeded === 0
-                    ? "ALL_FAILED"
-                    : "MIXED_UNEXPECTED";
-            return {
-              status: allOrNone,
-              succeeded,
-              failed,
-              total,
-              results: r.results ?? [],
-              ...(allOrNone === "ALL_FAILED"
-                ? {
-                    _action_hint:
-                      "The entire bulk request was rolled back. Inspect results[0].error for the cause, " +
-                      "fix the offending item(s), and re-send the FULL corrected list — never retry only the failed items.",
-                  }
-                : {}),
-              ...(allOrNone === "MIXED_UNEXPECTED"
-                ? {
-                    _action_hint:
-                      "Bulk endpoint returned a mixed succeeded/failed result, which violates the all-or-none contract. " +
-                      "Treat this as a server-side bug and surface the raw results[] to the user.",
-                  }
-                : {}),
-            };
-          },
+          responseExtractor: stoBulkExemptionExtract,
           description:
             "Bulk-create security exemptions (1..100 items) in a single all-or-none transaction. " +
             "Auto-derives requesterId from the authenticated PAT and always sets exemptFutureOccurrences=true.",
