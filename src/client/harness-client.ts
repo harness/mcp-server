@@ -273,10 +273,11 @@ function enrichErrorMessage(
   parsed: Record<string, unknown>,
   path: string,
   status: number,
+  errorPath?: string,
 ): string {
   // API-specific parsers (see error-parsers.ts) refine the message and detail for the
   // statuses they register for. Generic enrichments below still run on top.
-  const custom = runErrorParsers(parsed, { path, status });
+  const custom = runErrorParsers(parsed, { path: errorPath ?? path, status });
   const base = custom?.message && isGarbageMessage(typeof parsed.message === "string" ? parsed.message : undefined) ? custom.message : rawMessage;
   const generic = collectErrorDetail(parsed, base);
   const detail = [custom?.detail, generic].filter(Boolean).join("; ");
@@ -589,7 +590,7 @@ export class HarnessClient {
           const rawMessage = isGarbageMessage(parsed.message)
               ? humanizeHttpError(response.status, body)
               : parsed.message!;
-          const message = enrichErrorMessage(rawMessage, parsed, options.path, response.status);
+          const message = enrichErrorMessage(rawMessage, parsed, options.path, response.status, options.errorPath);
           log.debug(`HTTP ${response.status} error`, {
             body: this.logUnsafeBodies ? body.slice(0, 1000) : redactJsonString(body),
           });
@@ -753,7 +754,7 @@ export class HarnessClient {
           const rawMessage = isGarbageMessage(parsed.message)
               ? humanizeHttpError(response.status, body)
               : parsed.message!;
-          const message = enrichErrorMessage(rawMessage, parsed, options.path, response.status);
+          const message = enrichErrorMessage(rawMessage, parsed, options.path, response.status, options.errorPath);
           const error = new HarnessApiError(message, response.status, parsed.code, parsed.correlationId);
 
           if (

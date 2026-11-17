@@ -215,6 +215,15 @@ describe("fme_feature_flag dual-mode routing", () => {
     expect(req.params?.orgIdentifier).toBeUndefined();
   });
 
+  it("sets errorPath to the original /fme/ path for native FME requests", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", { org_id: "o1", project_id: "p1" });
+
+    expect(firstRequest(mockRequest).errorPath).toBe("/fme/api/v4/feature-flags");
+  });
+
   it("new mode: org_id+project_id routes to the Harness-native feature-flags path", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);

@@ -48,6 +48,11 @@ export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** Absolute route path only; encode identifiers and pass query values through params. */
   path: string;
+  /**
+   * Path as the caller addressed it, when a wrapper rewrites `path` before calling the client
+   * (e.g. a routing proxy stripping `/fme`). Used only to select API-specific error parsers.
+   */
+  errorPath?: string;
   /** Scalar or string[] (repeated query keys, e.g. `inputSetIdentifiers=a&inputSetIdentifiers=b`). */
   params?: Record<string, string | number | boolean | string[] | undefined>;
   body?: unknown;

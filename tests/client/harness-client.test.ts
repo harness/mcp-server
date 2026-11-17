@@ -937,7 +937,7 @@ describe("HarnessClient", () => {
     });
 
     describe("FME 422 problem+json errors (error-parsers.ts)", () => {
-      const reject = async (body: unknown, status = 422, init: { path?: string; stream?: boolean } = {}) => {
+      const reject = async (body: unknown, status = 422, init: { path?: string; errorPath?: string; stream?: boolean } = {}) => {
         fetchSpy.mockResolvedValue(new Response(JSON.stringify(body), {
           status,
           headers: { "content-type": "application/problem+json" },
@@ -945,8 +945,8 @@ describe("HarnessClient", () => {
         const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
         const path = init.path ?? "/fme/api/v4/feature-flags";
         try {
-          if (init.stream) await client.requestStream({ path, method: "POST", body: {} });
-          else await client.request({ path, method: "POST", body: {} });
+          if (init.stream) await client.requestStream({ path, errorPath: init.errorPath, method: "POST", body: {} });
+          else await client.request({ path, errorPath: init.errorPath, method: "POST", body: {} });
           expect.fail("should have thrown");
         } catch (err) {
           return err as HarnessApiError;
@@ -1090,6 +1090,33 @@ describe("HarnessClient", () => {
 
       it("does not apply to other statuses on FME paths", async () => {
         const err = await reject(governance([{ title: "P", detail: "D" }]), 400);
+        expect(err.message).not.toContain("P: D");
+      });
+
+      const denied = [{ title: "P", detail: "D" }];
+
+      it("parses when a wrapper rewrote the path but passed the original as errorPath", async () => {
+        const err = await reject(governance(denied), 422, { path: "/api/v4/feature-flags", errorPath: "/fme/api/v4/feature-flags" });
+        expect(err.message).toContain("P: D");
+      });
+
+      it("parses on requestStream when errorPath is set", async () => {
+        const err = await reject(governance(denied), 422, { path: "/api/v4/feature-flags", errorPath: "/fme/api/v4/feature-flags", stream: true });
+        expect(err.message).toContain("P: D");
+      });
+
+      it("does not parse a rewritten path without errorPath", async () => {
+        const err = await reject(governance(denied), 422, { path: "/api/v4/feature-flags" });
+        expect(err.message).not.toContain("P: D");
+      });
+
+      it("does not parse a non-FME 422 when errorPath is absent", async () => {
+        const err = await reject(governance(denied), 422, { path: "/ng/api/connectors" });
+        expect(err.message).not.toContain("P: D");
+      });
+
+      it("does not parse other statuses even when errorPath is set", async () => {
+        const err = await reject(governance(denied), 400, { path: "/api/v4/feature-flags", errorPath: "/fme/api/v4/feature-flags" });
         expect(err.message).not.toContain("P: D");
       });
 
