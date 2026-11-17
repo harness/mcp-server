@@ -165,17 +165,14 @@ describe("iacm_workspace write contract", () => {
     expect(update.preflight).toBe(list.preflight);
   });
 
-  it("create/update skip scope injection and default an omitted provider connector to empty", () => {
-    for (const op of ["create", "update"] as const) {
-      const spec = getOp("iacm_workspace", op);
-      expect(spec.skipScopeBodyInjection).toBe(true);
-      expect(spec.bodyBuilder).toBeDefined();
-      expect(spec.bodyBuilder!({ body: { name: "x", provisioner: "terraform" } })).toEqual({
-        name: "x",
-        provisioner: "terraform",
-        provider_connector: "",
-      });
-    }
+  it("create defaults an omitted provider connector; update leaves the body unchanged", () => {
+    const body = { name: "x", provisioner: "terraform" };
+    const create = getOp("iacm_workspace", "create");
+    const update = getOp("iacm_workspace", "update");
+    expect(create.skipScopeBodyInjection).toBe(true);
+    expect(update.skipScopeBodyInjection).toBe(true);
+    expect(create.bodyBuilder!({ body })).toEqual({ ...body, provider_connector: "" });
+    expect(update.bodyBuilder!({ body })).toEqual(body);
   });
 
   it("documents the API-required create body and optional template association", () => {
@@ -229,6 +226,7 @@ describe("iacm_workspace write contract", () => {
     expect(update.bodySchema!.description).toMatch(/full workspace body|not a partial patch/i);
     expect(required).toEqual([
       "name",
+      "provider_connector",
       "provisioner",
       "terraform_variables",
       "environment_variables",
