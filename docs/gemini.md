@@ -1,6 +1,6 @@
 # Harness MCP Server — Gemini CLI Context
 
-This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 282 resource types across 45 default toolsets.
+This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 274 resource types across 44 default toolsets.
 
 ## How This Server Works
 
