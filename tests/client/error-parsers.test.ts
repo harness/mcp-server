@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   ERROR_PARSERS,
-  fmeMissingTitleCommentParser,
   fmeUnprocessableEntityParser,
   MAX_FME_MESSAGE_CHARS,
   runErrorParsers,
@@ -93,37 +92,6 @@ describe("fmeUnprocessableEntityParser.parse", () => {
     const detail = parse({ detail: "d", errors: [{ title: "P", detail: "y".repeat(5000) }] })?.detail ?? "";
     expect(detail.length).toBe(2001);
     expect(detail.endsWith("…")).toBe(true);
-  });
-});
-
-describe("fmeMissingTitleCommentParser", () => {
-  const fme400 = { path: "/fme/api/v4/feature-flag-definitions/f", status: 400 };
-  const validation = (detail: string) => ({ title: "Validation Error", errorType: "validationError", detail });
-
-  it("matches 400 on /fme/ paths only", () => {
-    expect(fmeMissingTitleCommentParser.match(fme400)).toBe(true);
-    expect(fmeMissingTitleCommentParser.match({ ...fme400, status: 422 })).toBe(false);
-    expect(fmeMissingTitleCommentParser.match({ path: "/ng/api/x", status: 400 })).toBe(false);
-  });
-
-  it.each(["Missing required title", "Missing required comment", "Missing required title/comment"])(
-    "points at params.body for %s",
-    (detail) => {
-      const result = fmeMissingTitleCommentParser.parse(validation(detail), fme400);
-      expect(result?.detail).toContain("params.body.title");
-      expect(result?.detail).toContain("params.body.comment");
-      expect(result?.detail).toContain("harness_update");
-    },
-  );
-
-  it("ignores other 400 validation errors", () => {
-    expect(fmeMissingTitleCommentParser.parse(validation("hasDependents"), fme400)).toBeUndefined();
-    expect(fmeMissingTitleCommentParser.parse({}, fme400)).toBeUndefined();
-  });
-
-  it("is registered in the default registry", () => {
-    expect(ERROR_PARSERS).toContain(fmeMissingTitleCommentParser);
-    expect(runErrorParsers(validation("Missing required title"), fme400)?.detail).toContain("params.body.title");
   });
 });
 

@@ -240,10 +240,10 @@ const fmeFeatureFlagDeleteSchema: BodySchema = {
 };
 
 const fmeFeatureFlagDefinitionDeleteSchema: BodySchema = {
-  description: "Comment and/or title recorded with the delete, passed as params.body. title and comment are required when the project enforces them.",
+  description: "Comment and/or title recorded with the delete, passed as params.body. Both are optional in the schema, but the API rejects the delete if the project enforces them and they are missing.",
   fields: [
-    { name: "comment", type: "string", required: false, description: "Comment explaining the change; required when the project enforces comments" },
-    { name: "title", type: "string", required: false, description: "Short title for the change; required when the project enforces titles" },
+    { name: "comment", type: "string", required: false, description: "Comment explaining the change; send it if the project enforces comments" },
+    { name: "title", type: "string", required: false, description: "Short title for the change; send it if the project enforces titles" },
   ],
 };
 
@@ -392,6 +392,15 @@ const fmeSegmentDefinitionKeysRemoveSchema: BodySchema = {
     { name: "title", type: "string", required: false, description: "Optional short title for the change" },
   ],
 };
+
+/** The optional title/comment of an FME v4 write body. Only fields the caller set are copied, so "" is kept. */
+function pickTitleComment(body: unknown): Record<string, unknown> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  return {
+    ...(b.comment !== undefined ? { comment: b.comment } : {}),
+    ...(b.title !== undefined ? { title: b.title } : {}),
+  };
+}
 
 function fmeSegmentDefinitionKeysBody(input: Record<string, unknown>, opts: { requireNonEmpty: boolean }): Record<string, unknown> {
   const body = input.body as Record<string, unknown> | undefined;
@@ -867,12 +876,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             if (!isFmeHarnessNativeSelected(input, "fme_feature_flag")) return undefined;
-            const body = (input.body as Record<string, unknown> | undefined) ?? {};
-            if (body.comment === undefined && body.title === undefined) return undefined;
-            return {
-              ...(body.comment !== undefined ? { comment: body.comment } : {}),
-              ...(body.title !== undefined ? { title: body.title } : {}),
-            };
+            const picked = pickTitleComment(input.body);
+            return Object.keys(picked).length > 0 ? picked : undefined;
           },
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDeleteSchema,
@@ -908,8 +913,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 ...(body.tags !== undefined ? { tags: body.tags === null ? null : normalizeFmeTags(body.tags) } : {}),
                 ...(body.owners !== undefined ? { owners: body.owners } : {}),
                 ...(body.rolloutStatus !== undefined ? { rolloutStatus: body.rolloutStatus } : {}),
-                ...(body.comment !== undefined ? { comment: body.comment } : {}),
-                ...(body.title !== undefined ? { title: body.title } : {}),
+                ...pickTitleComment(body),
               };
             }
             if (!body) return [];
@@ -1217,12 +1221,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { environment_id: "environment_id" },
           bodyBuilder: (input) => {
-            const body = (input.body as Record<string, unknown> | undefined) ?? {};
-            if (body.comment === undefined && body.title === undefined) return undefined;
-            return {
-              ...(body.comment !== undefined ? { comment: body.comment } : {}),
-              ...(body.title !== undefined ? { title: body.title } : {}),
-            };
+            const picked = pickTitleComment(input.body);
+            return Object.keys(picked).length > 0 ? picked : undefined;
           },
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDefinitionDeleteSchema,
@@ -1768,12 +1768,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: { ...FME_SEGMENT_TYPE_QUERY_PARAMS },
           paramsSchema: fmeSegmentTypeParamsSchema,
           bodyBuilder: (input) => {
-            const body = (input.body as Record<string, unknown> | undefined) ?? {};
-            if (body.comment === undefined && body.title === undefined) return undefined;
-            return {
-              ...(body.comment !== undefined ? { comment: body.comment } : {}),
-              ...(body.title !== undefined ? { title: body.title } : {}),
-            };
+            const picked = pickTitleComment(input.body);
+            return Object.keys(picked).length > 0 ? picked : undefined;
           },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentDeleteSchema,
@@ -1895,8 +1891,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             const body = input.body as Record<string, unknown> | undefined;
             return {
               ...(body?.description !== undefined ? { description: body.description } : {}),
-              ...(body?.comment !== undefined ? { comment: body.comment } : {}),
-              ...(body?.title !== undefined ? { title: body.title } : {}),
+              ...pickTitleComment(body),
             };
           },
           responseExtractor: passthrough,
@@ -1934,12 +1929,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { environment_id: "environment_id" },
           bodyBuilder: (input) => {
-            const body = (input.body as Record<string, unknown> | undefined) ?? {};
-            if (body.comment === undefined && body.title === undefined) return undefined;
-            return {
-              ...(body.comment !== undefined ? { comment: body.comment } : {}),
-              ...(body.title !== undefined ? { title: body.title } : {}),
-            };
+            const picked = pickTitleComment(input.body);
+            return Object.keys(picked).length > 0 ? picked : undefined;
           },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentDefinitionDeleteSchema,
