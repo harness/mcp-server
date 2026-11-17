@@ -816,6 +816,39 @@ export const ccmToolset: ToolsetDefinition = {
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
+      reviewCard: {
+        version: 1,
+        label: "View",
+        fields: [
+          {
+            label: "Folder",
+            path: "folderId",
+            default: "Default",
+            lookup: { resourceType: "cost_perspective_folder", match: "uuid", display: "name" },
+          },
+          {
+            label: "Time Frame",
+            path: "viewTimeRange.viewTimeRangeType",
+            default: "Last 30 days",
+            labels: {
+              LAST_7: "Last 7 days",
+              LAST_30: "Last 30 days",
+              LAST_MONTH: "Last month",
+              CURRENT_MONTH: "Current month",
+              LAST_QUARTER: "Last quarter",
+              CURRENT_QUARTER: "Current quarter",
+              LAST_3_MONTH: "Last 3 months",
+              CUSTOM: "Custom range",
+            },
+          },
+          {
+            label: "Group By",
+            path: "viewVisualization.groupBy",
+            template: "{identifierName}: {fieldName}",
+            default: "None",
+          },
+        ],
+      },
       listFilterFields: [
         { name: "search_term", description: "Filter perspectives by name" },
         { name: "sort_type", description: "Sort field (default: TIME)", enum: ["TIME", "COST", "CLUSTER_COST", "NAME"] },
@@ -1590,6 +1623,22 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["category_id"],
+      reviewCard: {
+        version: 1,
+        label: "Cost Category",
+        fields: [
+          {
+            label: "Unallocated costs",
+            path: "unallocatedCost.strategy",
+            default: "Not specified",
+            labels: {
+              HIDE: "Hidden",
+              DISPLAY_NAME: "Shown as a separate bucket",
+              SHARE: "Shared across buckets",
+            },
+          },
+        ],
+      },
       listFilterFields: [
         { name: "search", description: "Filter cost categories by name" },
         { name: "sort_type", description: "Sort field", enum: ["NAME", "LAST_EDIT"] },

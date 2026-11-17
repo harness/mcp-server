@@ -351,8 +351,18 @@ The MCP server exposes an `instructions` string in `src/index.ts` sent to every 
 | Required fields / body format | `bodySchema` on the `EndpointSpec` |
 | Debugging / troubleshooting | `diagnosticHint` on the resource |
 | Filter fields for list operations | `listFilterFields` on the resource |
+| Approval-card layout for create/update review | `reviewCard` on the resource (surfaced by `harness_describe` as `reviewCard`) |
 
-The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `bodySchema`, `diagnosticHint`, and `listFilterFields` — prefer data over prose in the instructions block.
+The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `bodySchema`, `diagnosticHint`, `listFilterFields`, and `reviewCard` — prefer data over prose in the instructions block.
+
+### `reviewCard` contract
+
+Optional, opt-in, pure JSON (no functions). Resources without it get the chat's generic confirm card. Shape (`ReviewCardSpec` in `src/registry/types.ts`):
+
+- `version: 1`, optional `label` (card title noun; defaults to the resource `displayName`)
+- `fields[]`: `label` (unique per card), `path` (dotted path into the create/update body), and optional `labels` (enum → display text), `template` (for object values, e.g. `{identifierName}: {fieldName}`), `default` (shown when the path is missing/empty), `lookup` (`{ resourceType, match, display }` read-only id → name resolution via `harness_list`)
+
+Consumers read it with `harness_describe(resource_type="<type>")`. Currently declared for `cost_perspective` and `cost_category` in `src/registry/toolsets/ccm.ts`. Changing the shape requires bumping `version`.
 
 ---
 

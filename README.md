@@ -752,6 +752,8 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 
 Current multi-scope resources include `connector`, `service`, `environment`, `infrastructure`, `secret`, `file_store`, `template`, `policy`, and `policy_set`. If `resource_scope` is omitted, the registry uses the resource's default scope and configured defaults, except resources marked as optional scope may omit org/project unless explicitly passed. Harness URLs can also set the scope automatically when the path contains account-level or project-level context.
 
+**Approval-card metadata (`reviewCard`):** Resource types that opt in expose an optional `reviewCard` object in `harness_describe(resource_type="<type>")`. It tells chat clients how to render a create/update review card: `version` (currently `1`), optional `label` (card title noun), and `fields[]` rows, each with `label`, `path` (dotted path into the request body), and optional `labels` (enum → display text), `template`, `default`, and `lookup` (`{ resourceType, match, display }` id → name resolution via `harness_list`). Resources without it use the generic confirm card. Currently declared for `cost_perspective` and `cost_category`. See `docs/coding-standards.md` (`reviewCard` contract).
+
 **Structured output:** Every tool declares an MCP `outputSchema`. `harness_list` normalizes list-like Harness responses into object-shaped structured content so strict clients can validate it: top-level arrays become `{ "items": [...], "total": <count>, "page": <page> }`, and common wrapper keys such as `content`, `data`, `body`, `objects`, or `features` are hoisted to `items` when needed. The text response still contains the compact JSON payload returned to all clients.
 
 
