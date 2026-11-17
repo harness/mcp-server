@@ -58,6 +58,7 @@ import { unifiedSearchToolset } from "./toolsets/unified-search.js";
 import { aicrToolset } from "./toolsets/aicr.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
+import { integrationsToolset } from "./toolsets/integrations.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
 import { alertsToolset } from "./toolsets/alerts.js";
 import { deploysToolset } from "./toolsets/deploys.js";
@@ -236,6 +237,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   releaseManagementToolset,
   vibeToolset,
   appsecToolset,
+  integrationsToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
