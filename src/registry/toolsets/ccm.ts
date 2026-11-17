@@ -685,6 +685,71 @@ async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> 
   }
 }
 
+const PERSPECTIVE_UPDATE_CARRY_KEYS = [
+  "name",
+  "viewVersion",
+  "viewType",
+  "viewState",
+  "folderId",
+  "viewRules",
+  "viewVisualization",
+  "viewTimeRange",
+  "viewPreferences",
+  "dataSources",
+  "unitMetricInfo",
+] as const;
+
+/**
+ * Preflight hook for cost_perspective.update. The API takes @Valid CEView
+ * (viewVersion is @NotBlank) and the DAO rewrites the whole record, so a
+ * partial body fails validation or wipes fields. Fill every field the caller
+ * did not send from the existing perspective (caller values always win, so an
+ * explicit empty unitMetricInfo still clears it). If the lookup fails, the update
+ * is aborted rather than sending a partial body that would erase configuration.
+ */
+async function perspectiveUpdatePreflight(ctx: PreflightContext): Promise<void> {
+  const input = ctx.input as { body?: Record<string, unknown> };
+  if (!input.body) input.body = {};
+  const body = input.body;
+
+  // An explicit blank viewVersion is API-invalid (@NotBlank); fail loudly rather
+  // than silently rewriting it (which would downgrade a non-v1 perspective).
+  if (typeof body.viewVersion === "string" && body.viewVersion.trim() === "") {
+    throw new Error("cost_perspective update: viewVersion must not be blank. Omit it to keep the existing version.");
+  }
+  if (body.viewVersion === null) delete body.viewVersion;
+
+  const uuid = typeof body.uuid === "string" ? body.uuid : undefined;
+  if (uuid) {
+    let existing: unknown;
+    try {
+      existing = await ctx.registry.dispatch(
+        ctx.client,
+        "cost_perspective",
+        "get",
+        { perspective_id: uuid },
+        ctx.signal,
+      );
+    } catch (err) {
+      // Never send a partial PUT: the API rewrites the whole record.
+      throw new Error(
+        `Cannot update cost_perspective ${uuid}: failed to fetch the existing perspective to preserve omitted fields (${err instanceof Error ? err.message : String(err)}). Retry, or send the full perspective object.`,
+        { cause: err },
+      );
+    }
+    if (existing && typeof existing === "object" && !Array.isArray(existing)) {
+      const current = existing as Record<string, unknown>;
+      for (const key of PERSPECTIVE_UPDATE_CARRY_KEYS) {
+        if (body[key] === undefined && current[key] !== undefined && current[key] !== null) {
+          body[key] = current[key];
+        }
+      }
+    }
+  }
+
+  if (body.viewVersion === undefined) body.viewVersion = "v1";
+}
+
 function splitCsv(value: unknown): string[] {
   if (typeof value !== "string") {
     return [];
@@ -917,10 +982,11 @@ export const ccmToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ccm/api/perspective",
+          preflight: perspectiveUpdatePreflight,
           operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
+            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. Any field you omit (including viewVersion) is filled from the existing perspective before the update is sent; fields you provide override.",
             fields: [
               { name: "uuid", type: "string", required: true, description: "Perspective UUID (from get)" },
               { name: "name", type: "string", required: true, description: "Perspective name (1-80 chars)" },
