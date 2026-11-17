@@ -1338,6 +1338,8 @@ function refuseUrlOnAicrWrites(toolset: ToolsetDefinition): ToolsetDefinition {
 export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
   name: "aicr",
   displayName: "AI Code Review",
+  // Opt-in until the gateway route is confirmed on every production environment.
+  optIn: true,
   description:
     "AI Code Review for Harness Code pull requests: review (get, request, status), findings (dismiss and undo), review runs, repositories, merge gates, team rules, coding conventions and settings",
   resources: [

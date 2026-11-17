@@ -84,4 +84,22 @@ describe("resolveConfirmNoteAsync", () => {
       vi.useRealTimers();
     }
   });
+
+  it("the 3s timeout aborts the prefetch's signal, so its requests are cancelled", async () => {
+    vi.useFakeTimers();
+    try {
+      let signal: AbortSignal | undefined;
+      const confirmPrefetch = (ctx: { signal?: AbortSignal }) => {
+        signal = ctx.signal;
+        return new Promise<void>(() => {});
+      };
+      const pending = resolveConfirmNoteAsync({ confirmNote: note, confirmPrefetch }, {}, deps);
+      expect(signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(3_000);
+      await pending;
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

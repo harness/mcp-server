@@ -223,9 +223,9 @@ describe("aicr toolset registration", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  it("is enabled by default and can be removed with HARNESS_TOOLSETS=-aicr", () => {
-    expect(registry({ HARNESS_TOOLSETS: undefined }).getResource("aicr_finding").resourceType).toBe("aicr_finding");
-    expect(() => registry({ HARNESS_TOOLSETS: "-aicr" }).getResource("aicr_finding")).toThrow();
+  it("is opt-in: absent by default, present with +aicr", () => {
+    expect(() => registry({ HARNESS_TOOLSETS: undefined }).getResource("aicr_finding")).toThrow();
+    expect(registry({ HARNESS_TOOLSETS: "+aicr" }).getResource("aicr_finding").resourceType).toBe("aicr_finding");
   });
 });
 
