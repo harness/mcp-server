@@ -258,6 +258,22 @@ const workspaceOptionalFields: BodyFieldSpec[] = [
   },
 ];
 
+/**
+ * Create-only. Goa requires the provider_connector key to be present; the UI
+ * sends "" when no cloud connector is chosen, and iac-server skips lookup for
+ * an empty value. Update is a full-replacement PUT, so it must not default an
+ * omitted connector to "" — that would clear the stored connector.
+ */
+const workspaceCreateBody = (input: Record<string, unknown>): unknown => {
+  const body = input.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const record = { ...(body as Record<string, unknown>) };
+  if (record.provider_connector == null) {
+    record.provider_connector = "";
+  }
+  return record;
+};
+
 const workspaceCreateSchema: BodySchema = {
   description:
     "IaCM workspace definition. Create from a template by also supplying associated_template.",
@@ -267,8 +283,11 @@ const workspaceCreateSchema: BodySchema = {
     {
       name: "provider_connector",
       type: "string",
-      required: true,
-      description: "Harness connector reference for the infrastructure provider",
+      required: false,
+      description:
+        "Optional Harness connector for the cloud provider. Omit it when the workspace has no " +
+        "provider connector, the same as the IaCM UI. An omitted value is sent as an empty string " +
+        "because the API requires the key to be present; a non-empty value must reference an existing connector.",
     },
     { name: "provisioner", type: "string", required: true, description: "Provisioner such as terraform, opentofu, terragrunt, or awscdk" },
     {
@@ -314,7 +333,9 @@ const workspaceUpdateSchema: BodySchema = {
       name: "provider_connector",
       type: "string",
       required: true,
-      description: "Harness connector reference for the infrastructure provider",
+      description:
+        "Harness connector for the cloud provider. Update replaces the stored value, so copy the " +
+        "current connector from harness_get. Pass \"\" only to clear it.",
     },
     { name: "provisioner", type: "string", required: true, description: "Provisioner such as terraform, opentofu, terragrunt, or awscdk" },
     {
@@ -692,7 +713,7 @@ export const iacmToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project" },
           preflight: requireProjectScope,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: workspaceCreateBody,
           bodySchema: workspaceCreateSchema,
           skipScopeBodyInjection: true,
           responseExtractor: workspaceWriteExtract,
@@ -719,6 +740,7 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Update an IaCM workspace by identifier. This endpoint uses full-replacement semantics for core fields: " +
             "include name, provider_connector, provisioner, terraform_variables, and environment_variables. " +
+            "Copy provider_connector from the current workspace; an empty string clears it. " +
             "IaCM enforces permissions, validation, and policy evaluation. " +
             "Response is { policy_evaluation } only — not the workspace. Follow up with harness_get " +
             "(resource_type=iacm_workspace, workspace_id=<identifier>) to fetch the updated workspace.",

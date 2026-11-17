@@ -165,16 +165,14 @@ describe("iacm_workspace write contract", () => {
     expect(update.preflight).toBe(list.preflight);
   });
 
-  it("create/update use skipScopeBodyInjection and identity bodyBuilder", () => {
-    for (const op of ["create", "update"] as const) {
-      const spec = getOp("iacm_workspace", op);
-      expect(spec.skipScopeBodyInjection).toBe(true);
-      expect(spec.bodyBuilder).toBeDefined();
-      expect(spec.bodyBuilder!({ body: { name: "x", provisioner: "terraform" } })).toEqual({
-        name: "x",
-        provisioner: "terraform",
-      });
-    }
+  it("create defaults an omitted provider connector; update leaves the body unchanged", () => {
+    const body = { name: "x", provisioner: "terraform" };
+    const create = getOp("iacm_workspace", "create");
+    const update = getOp("iacm_workspace", "update");
+    expect(create.skipScopeBodyInjection).toBe(true);
+    expect(update.skipScopeBodyInjection).toBe(true);
+    expect(create.bodyBuilder!({ body })).toEqual({ ...body, provider_connector: "" });
+    expect(update.bodyBuilder!({ body })).toEqual(body);
   });
 
   it("documents the API-required create body and optional template association", () => {
@@ -186,7 +184,6 @@ describe("iacm_workspace write contract", () => {
     expect(required).toEqual([
       "identifier",
       "name",
-      "provider_connector",
       "provisioner",
       "terraform_variables",
       "environment_variables",
@@ -860,7 +857,7 @@ describe("iacm registry dispatch", () => {
     const mockRequest = vi.fn();
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
     const invalidBody = { ...workspaceBody };
-    delete (invalidBody as Partial<typeof workspaceBody>).provider_connector;
+    delete (invalidBody as Partial<typeof workspaceBody>).provisioner;
 
     await expect(
       registry.dispatch(makeClient(mockRequest), "iacm_workspace", "create", {
@@ -868,7 +865,7 @@ describe("iacm registry dispatch", () => {
         project_id: "Testim",
         body: invalidBody,
       }),
-    ).rejects.toThrow("provider_connector");
+    ).rejects.toThrow("provisioner");
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
