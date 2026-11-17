@@ -526,7 +526,7 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       const client = new HarnessClient(config);
       const registry = new Registry(config);
       const invalidBody = { ...workspaceBody };
-      delete (invalidBody as { provider_connector?: string }).provider_connector;
+      delete (invalidBody as { provisioner?: string }).provisioner;
 
       await expect(
         registry.dispatch(client, "iacm_workspace", "create", {
@@ -534,7 +534,7 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
           project_id: "test-project",
           body: invalidBody,
         }),
-      ).rejects.toThrow("provider_connector");
+      ).rejects.toThrow("provisioner");
 
       expect(fetchSpy).not.toHaveBeenCalled();
     });
