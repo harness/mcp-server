@@ -105,6 +105,25 @@ export function compactJob(raw: Item): Item {
   });
 }
 
+export function definitionPath(input: Record<string, unknown>): string {
+  const id = requireField(input, "definition_id", "integration_definition");
+  return `${CCP}/v1/definitions/${encodePathSegment(id)}`;
+}
+
+/** List item: what the definition is and, for connectors, which auth/action ids it offers. */
+export function compactDefinition(raw: Item): Item {
+  return dropUndefined({
+    id: raw.id,
+    name: raw.name,
+    category: raw.category,
+    vendor: raw.vendor,
+    version: raw.version,
+    description: raw.description,
+    auth: raw.auth,
+    actions: raw.actions,
+  });
+}
+
 const SCOPE_NOTE =
   "Default scope is project — pass org_id and project_id (or rely on HARNESS_ORG/HARNESS_PROJECT). " +
   "Use resource_scope='org' or 'account' only when the user asked for org- or account-level integrations.";
@@ -204,6 +223,54 @@ export const integrationsToolset: ToolsetDefinition = {
           description:
             "Get one job by integration_id + job_id (resource_id fills job_id), including action config, " +
             "checkpoints, last run, next run and health.",
+        },
+      },
+    },
+    {
+      resourceType: "integration_definition",
+      displayName: "Integration Definition",
+      description:
+        "Global connector library catalog (not account/org/project scoped). Categories: connector, auth, action, " +
+        "trigger, stream. A connector's list item names the auth and action ids it supports; get returns the " +
+        "full template (input form) and, for ingest actions, the JSON Schema of each stream. Use these ids for " +
+        "integration connector.uses / auth.uses and job action.uses / trigger.uses.",
+      toolset: "integrations",
+      scope: "account",
+      headerBasedScoping: true,
+      identifierFields: ["definition_id"],
+      compactItem: compactDefinition,
+      relatedResources: [
+        { resourceType: "integration", relationship: "schema", description: "connector.uses and auth.uses are definition ids." },
+        { resourceType: "integration_job", relationship: "schema", description: "action.uses and trigger.uses are definition ids." },
+      ],
+      listFilterFields: [
+        {
+          name: "category",
+          description: "Only definitions of this category.",
+          enum: ["connector", "auth", "action", "trigger", "stream"],
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/connector-control-plane/v1/definitions",
+          pathBuilder: () => `${CCP}/v1/definitions`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { category: "category" },
+          responseExtractor: v1ListExtract(),
+          description:
+            "List library definitions, optionally by category. Not paged — returns every match. Summaries only; " +
+            "get a definition by id for its template and stream schemas.",
+        },
+        get: {
+          method: "GET",
+          path: "/connector-control-plane/v1/definitions/{id}",
+          pathBuilder: definitionPath,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get one definition by definition_id: category, version, vendor, template (the authored input form, " +
+            "including option sources for dynamic fields) and, for ingest actions, streams[].schema.",
         },
       },
     },

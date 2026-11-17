@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import {
+  compactDefinition,
   compactIntegration,
   compactJob,
   integrationScopeBase,
@@ -233,6 +234,61 @@ describe("list compaction", () => {
       identifier: "nightly", name: "N", enabled: false, default: true, action: "githubIngest",
       trigger: { uses: "schedule", with: { frequency: "24h" } }, streams: ["pull_requests"],
       health: "healthy", lastRun: "succeeded", nextRunAt: "2026-11-18T00:00:00Z",
+    });
+  });
+});
+
+describe("integration_definition", () => {
+  it("lists the global catalog with no scope in the path", async () => {
+    const { registry, client, call } = setup([{ id: "github", category: "connector" }]);
+    const result = (await registry.dispatch(client, "integration_definition", "list", {})) as Record<string, unknown>;
+    expect(call().method).toBe("GET");
+    expect(call().path).toBe("/connector-control-plane/v1/definitions");
+    expect(call().headerBasedScoping).toBe(true);
+    expect(result.items).toEqual([{ id: "github", category: "connector" }]);
+  });
+
+  it("ignores org/project and resource_scope", async () => {
+    const { registry, client, call } = setup([]);
+    await registry.dispatch(client, "integration_definition", "list", { org_id: "o", project_id: "p" });
+    expect(call().path).toBe("/connector-control-plane/v1/definitions");
+  });
+
+  it("filters by category", async () => {
+    const { registry, client, call } = setup([]);
+    await registry.dispatch(client, "integration_definition", "list", { category: "auth" });
+    expect(call().params).toMatchObject({ category: "auth" });
+  });
+
+  it("does not send detail (full templates come from get)", async () => {
+    const { registry, client, call } = setup([]);
+    await registry.dispatch(client, "integration_definition", "list", { detail: true });
+    expect(call().params).not.toHaveProperty("detail");
+  });
+
+  it("gets one definition by id", async () => {
+    const body = { id: "githubIngest", category: "action", template: { inputs: [] }, streams: [{ name: "pull_requests", schema: {} }] };
+    const { registry, client, call } = setup(body);
+    const result = await registry.dispatch(client, "integration_definition", "get", { definition_id: "githubIngest" });
+    expect(call().path).toBe("/connector-control-plane/v1/definitions/githubIngest");
+    expect(result).toEqual(body);
+  });
+
+  it("get without definition_id throws", async () => {
+    const { registry, client, request } = setup({});
+    await expect(registry.dispatch(client, "integration_definition", "get", {})).rejects.toThrow(/definition_id/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("compactDefinition drops icon and author", () => {
+    expect(
+      compactDefinition({
+        id: "github", name: "GitHub", description: "d", author: "harness", category: "connector", version: "1.0.0",
+        iconName: "github", vendor: "github", method: null, auth: ["pat", "app"], actions: ["githubIngest"],
+      }),
+    ).toEqual({
+      id: "github", name: "GitHub", description: "d", category: "connector", version: "1.0.0",
+      vendor: "github", auth: ["pat", "app"], actions: ["githubIngest"],
     });
   });
 });
