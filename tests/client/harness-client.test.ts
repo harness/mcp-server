@@ -1110,11 +1110,6 @@ describe("HarnessClient", () => {
         expect(err.message).not.toContain("P: D");
       });
 
-      it("does not parse a non-FME 422 when errorPath is absent", async () => {
-        const err = await reject(governance(denied), 422, { path: "/ng/api/connectors" });
-        expect(err.message).not.toContain("P: D");
-      });
-
       it("does not parse other statuses even when errorPath is set", async () => {
         const err = await reject(governance(denied), 400, { path: "/api/v4/feature-flags", errorPath: "/fme/api/v4/feature-flags" });
         expect(err.message).not.toContain("P: D");

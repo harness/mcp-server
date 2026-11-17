@@ -49,8 +49,9 @@ export interface RequestOptions {
   /** Absolute route path only; encode identifiers and pass query values through params. */
   path: string;
   /**
-   * Path as the caller addressed it, when a wrapper rewrites `path` before calling the client
-   * (e.g. a routing proxy stripping `/fme`). Used only to select API-specific error parsers.
+   * Set by the registry for `/fme/` requests: the path as the caller addressed it. Replaces `path`
+   * as the context for API-specific error parsers only, so a wrapper that rewrites `path` (e.g. a
+   * routing proxy stripping `/fme`) must forward it unchanged.
    */
   errorPath?: string;
   /** Scalar or string[] (repeated query keys, e.g. `inputSetIdentifiers=a&inputSetIdentifiers=b`). */
