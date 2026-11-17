@@ -395,11 +395,51 @@ describe("bulkScanEvaluationExtract", () => {
     ["negative", -1],
     ["fractional", 1.5],
     ["non-numeric", "abc"],
-  ])("treats a %s page as page 0", (_label, page) => {
-    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: many(3, "BLOCKED") } }, { page }) as
+    ["empty-string", ""],
+    ["negative-string", "-1"],
+    ["fractional-string", "1.5"],
+    ["boolean", false],
+    ["NaN", Number.NaN],
+    ["object", { n: 1 }],
+  ])("rejects a %s page instead of repeating page 0", (_label, page) => {
+    const raw = { data: { status: "SUCCESS", scans: many(3, "BLOCKED") } };
+    expect(() => bulkScanEvaluationExtract(raw, { page })).toThrow(/params\.page must be a non-negative integer/);
+  });
+
+  it.each([
+    ["omitted", {}],
+    ["null", { page: null }],
+  ])("treats an %s page as page 0", (_label, input) => {
+    const result = bulkScanEvaluationExtract({ data: { status: "SUCCESS", scans: many(3, "BLOCKED") } }, input) as
       Record<string, unknown>;
     expect(result.page).toBe(0);
     expect(result.scans).toHaveLength(3);
+  });
+
+  it.each([
+    ["a number", 5],
+    ["a boolean", true],
+  ])("rejects scan_status given as %s", (_label, scanStatus) => {
+    const raw = { data: { status: "SUCCESS", scans: many(3, "BLOCKED") } };
+    expect(() => bulkScanEvaluationExtract(raw, { scan_status: scanStatus }))
+      .toThrow(/params\.scan_status must be a string/);
+  });
+
+  it("treats an empty scan_status as the non-ALLOWED default", () => {
+    const raw = { data: { status: "SUCCESS", scans: [scan(0, "ALLOWED"), scan(1, "BLOCKED")] } };
+    const result = bulkScanEvaluationExtract(raw, { scan_status: "" }) as Record<string, unknown>;
+    expect(result.scans).toEqual([scan(1, "BLOCKED")]);
+  });
+
+  it("surfaces an invalid page as an error on the real dispatch path", async () => {
+    const registry = new Registry(makeConfig());
+    const client = mockClient({ data: { status: "SUCCESS", scans: many(3, "BLOCKED") } });
+
+    await expect(registry.dispatch(client, "bulk_scan_evaluation", "get", {
+      resource_scope: "account",
+      evaluation_id: "eval-1",
+      page: -1,
+    })).rejects.toThrow(/params\.page must be a non-negative integer/);
   });
 
   it("returns an empty page past the end", () => {

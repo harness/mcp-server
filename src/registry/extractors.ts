@@ -768,6 +768,31 @@ export const harV3ScanEvaluationExtract = (raw: unknown): unknown => {
 /** Scans per page of a bulk evaluation poll. */
 export const BULK_SCAN_EVALUATION_PAGE_SIZE = 100;
 
+/** Reads `params.scan_status`; omitted or empty means the default (every non-ALLOWED scan). */
+const bulkScanEvaluationStatusFilter = (value: unknown): string | undefined => {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`bulk_scan_evaluation: params.scan_status must be a string, got ${JSON.stringify(value)}.`);
+  }
+  return value.toUpperCase();
+};
+
+/**
+ * Reads `params.page` (0-based). Omitted means page 0. Anything else that is not a non-negative integer (or its
+ * decimal string) throws, so a malformed continuation request fails instead of repeating page 0.
+ */
+const bulkScanEvaluationPage = (value: unknown): number => {
+  if (value === undefined || value === null) return 0;
+  const isDigits = typeof value === "string" && /^\d+$/.test(value);
+  const page = typeof value === "number" ? value : isDigits ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(page) || page < 0) {
+    throw new Error(
+      `bulk_scan_evaluation: params.page must be a non-negative integer, got ${JSON.stringify(value)}.`,
+    );
+  }
+  return page;
+};
+
 /**
  * GetBulkScanEvaluationStatusV3 returns `{ data: { evaluationId, status, error, scans: [{ packageName, version,
  * scanId, scanStatus }] } }`, and an evaluation can hold up to 10000 scans. Keep the agent's context small:
@@ -781,11 +806,8 @@ export const bulkScanEvaluationExtract = (raw: unknown, input?: Record<string, u
   if (!isRecord(unwrapped)) return unwrapped;
   const { scans: rawScans, ...rest } = unwrapped;
   const scans = Array.isArray(rawScans) ? rawScans : [];
-  const statusFilter = typeof input?.scan_status === "string" && input.scan_status !== ""
-    ? input.scan_status.toUpperCase()
-    : undefined;
-  const requestedPage = Number(input?.page ?? 0);
-  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 0;
+  const statusFilter = bulkScanEvaluationStatusFilter(input?.scan_status);
+  const page = bulkScanEvaluationPage(input?.page);
   const scanStatusCounts: Record<string, number> = {};
   const selected: unknown[] = [];
   for (const scan of scans) {
