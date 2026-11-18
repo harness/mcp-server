@@ -215,13 +215,14 @@ describe("fme_feature_flag dual-mode routing", () => {
     expect(req.params?.orgIdentifier).toBeUndefined();
   });
 
-  it("does not set errorPath for legacy Split.io requests", async () => {
+  it("sets errorPath to the dispatched path for legacy Split.io requests", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1" });
 
-    expect(firstRequest(mockRequest).errorPath).toBeUndefined();
+    const req = firstRequest(mockRequest);
+    expect(req.errorPath).toBe(req.path);
   });
 
   it("sets errorPath to the original /fme/ path for native FME requests", async () => {

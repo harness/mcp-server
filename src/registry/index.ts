@@ -1170,7 +1170,7 @@ export class Registry {
     const requestOpts = {
       method: resolvedMethod,
       path,
-      ...(path.startsWith("/fme/") ? { errorPath: path } : {}),
+      errorPath: path,
       params,
       body,
       ...(baseUrl ? { baseUrl } : {}),
