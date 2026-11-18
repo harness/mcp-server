@@ -343,7 +343,18 @@ export const registriesFirewallToolset: ToolsetDefinition = {
     {
       resourceType: "firewall_exception",
       displayName: "Firewall Exception (v3)",
-      description: "Approved / pending exceptions that let a policy-blocked artifact through firewall.",
+      description:
+        "Approved / pending exceptions that let a policy-blocked artifact through firewall. " +
+        "An exception is scoped to a single registryId — the specific registry that evaluated and " +
+        "blocked the artifact — not to a project/org/account hierarchy. There is no ancestor-walk or " +
+        "inheritance across registries: a project-level virtual registry fronting an org- or account-level " +
+        "upstream proxy does NOT inherit exceptions from, or share exceptions with, that upstream — and an " +
+        "exception raised on the upstream does not apply to a different virtual/project registry either. " +
+        "To unblock an artifact, always raise the exception against the registryId that actually produced " +
+        "the BLOCKED scan (check the scan or packument error for that registryId), whatever scope (project, " +
+        "org, or account) that registry happens to live at. When listing, pass org_id/project_id matching " +
+        "that registry's own scope — omitting them (or passing only account_id) silently returns a partial, " +
+        "unrelated subset rather than every exception for the account.",
       toolset: "registries-firewall",
       // account-scoped: CreateFirewallExceptionV3 only accepts account_identifier (no org/project).
       // List accepts optional org/project for filtering — pass them explicitly via filter fields.
