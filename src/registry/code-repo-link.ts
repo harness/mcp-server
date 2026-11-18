@@ -69,11 +69,16 @@ export async function resolveCodeRepoLinkParams(
     if (fromResult) return fromResult;
   }
 
-  // Deliberately no org/project params: Code resolves a numeric repo ID globally (`FindByRef` parses it
-  // before any space-path lookup), and the caller's scope may be exactly what is wrong or missing.
+  // Raw requests bypass registry scope injection (§17.1), so forward the scope the primary call carried.
+  // Code resolves a numeric repo ID globally, so a missing or mismatched scope still returns the repo.
+  const scopeParams: Record<string, string> = {};
+  if (ctx.linkParams.orgIdentifier) scopeParams.orgIdentifier = ctx.linkParams.orgIdentifier;
+  if (ctx.linkParams.projectIdentifier) scopeParams.projectIdentifier = ctx.linkParams.projectIdentifier;
+
   const repo = await ctx.client.request<unknown>({
     method: "GET",
     path: `/code/api/v1/repos/${encodePathSegment(repoRef)}`,
+    params: scopeParams,
     retryPolicy: "safe",
     signal: ctx.signal,
   });

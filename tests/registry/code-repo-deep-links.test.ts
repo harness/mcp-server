@@ -33,7 +33,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
   };
 }
 
-type RequestOptions = { method: string; path: string };
+type RequestOptions = { method: string; path: string; params?: Record<string, unknown> };
 
 /** Mock client that answers by `METHOD path`; an Error value rejects, an unrouted call fails the test. */
 function routedClient(routes: Record<string, unknown>) {
@@ -46,7 +46,11 @@ function routedClient(routes: Record<string, unknown>) {
   });
   const client = { request, account: "test-account" } as unknown as HarnessClient;
   const calls = () => request.mock.calls.map(([opts]) => `${opts.method} ${opts.path}`);
-  return { client, calls };
+  /** Query params sent on the repo lookup (`GET /code/api/v1/repos/<id>`). */
+  const lookupParams = () => request.mock.calls
+    .map(([opts]) => opts)
+    .find((opts) => opts.method === "GET" && opts.path === "/code/api/v1/repos/837")?.params;
+  return { client, calls, lookupParams };
 }
 
 function repoRecord(path: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -97,6 +101,32 @@ describe("Harness Code deep links with a numeric repo_id", () => {
     );
     expect(result.openInHarness).not.toContain("/repos/837/");
     expect(calls()).toEqual(["POST /code/api/v1/repos/837/pullreq", LOOKUP]);
+  });
+
+  it("forwards the scope the primary call carried to the repo lookup, and none when there was none", async () => {
+    const scoped = routedClient({
+      "GET /code/api/v1/repos/837/pullreq/5": pullReq(5),
+      [LOOKUP]: repoRecord(`${ACCOUNT}/PROD/Data_Ops/dataops-platform`),
+    });
+    await new Registry(makeConfig()).dispatch(scoped.client, "pull_request", "get", {
+      repo_id: "837",
+      pr_number: "5",
+      org_id: "PROD",
+      project_id: "Data_Ops",
+    });
+    expect(scoped.lookupParams()).toEqual({ orgIdentifier: "PROD", projectIdentifier: "Data_Ops" });
+
+    const unscoped = routedClient({
+      "GET /code/api/v1/repos/837/pullreq/5": pullReq(5),
+      [LOOKUP]: repoRecord(`${ACCOUNT}/PROD/Data_Ops/dataops-platform`),
+    });
+    await new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined })).dispatch(
+      unscoped.client,
+      "pull_request",
+      "get",
+      { repo_id: "837", pr_number: "5" },
+    );
+    expect(unscoped.lookupParams()).toEqual({});
   });
 
   it("does not issue an extra lookup when repo_id is already an identifier", async () => {
