@@ -1438,7 +1438,7 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 
 | Resource Type      | List | Get | Create | Update | Delete | Execute Actions |
 | ------------------ | ---- | --- | ------ | ------ | ------ | --------------- |
-| `registry`         | x    | x   |        |        |        |                 |
+| `registry`         | x    | x   |        |        |        | stats           |
 | `artifact`         | x    |     |        |        |        |                 |
 | `artifact_version` | x    |     |        |        |        |                 |
 | `artifact_file`    | x    |     |        |        |        |                 |
