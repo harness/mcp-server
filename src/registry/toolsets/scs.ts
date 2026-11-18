@@ -1,8 +1,26 @@
 import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
-import { scsCleanExtract, scsListExtract } from "../extractors.js";
+import {
+  COMPONENT_DRIFT_LIST_FIELDS,
+  COMPONENT_ENRICHMENT_FIELDS,
+  artifactComponentListExtract,
+  artifactSecurityListExtract,
+  artifactSourceListExtract,
+  bomViolationListExtract,
+  chainOfCustodyExtract,
+  codeRepoListExtract,
+  componentDependenciesExtract,
+  componentRemediationExtract,
+  componentVulnerabilityExtract,
+  projectSecurityOverviewExtract,
+  remediationPrListExtract,
+  sbomDownloadExtract,
+  scsCleanExtract,
+  scsListExtract,
+} from "../extractors.js";
 import { HarnessApiError } from "../../utils/errors.js";
-import { isRecord, asString, asNumber } from "../../utils/type-guards.js";
+
+export { chainOfCustodyExtract, sbomDownloadExtract };
 
 function filterFieldsToParamsSchema(fields: FilterFieldSpec[]): ParamsSchema {
   return {
@@ -64,263 +82,6 @@ const ACTIVE_REMEDIATION_PR_STATUSES = new Set([
 const PREFLIGHT_PAGE_SIZE = 100;
 const PREFLIGHT_MAX_PAGES = 5;
 
-// ── P2-2: Per-resource field lists for list extractors ─────────────────────
-// Only actionable fields are retained in list responses to reduce token usage.
-// Get operations keep scsCleanExtract (full detail for single-item views).
-const ARTIFACT_SOURCE_LIST_FIELDS = [
-  "id", "source_id", "identifier", "name", "artifact_type", "source_type",
-  "registry_type", "registry_url", "artifact_count", "created", "updated",
-];
-
-const ARTIFACT_SECURITY_LIST_FIELDS = [
-  "id", "artifact_id", "identifier", "name", "tag", "url", "digest",
-  "components_count", "vulnerability_count", "sto_issue_count",
-  "scorecard", "orchestration", "policy_enforcement",
-  "slsa_verification", "signing_status", "updated", "created",
-];
-
-/**
- * Custom extractor for artifact_security list responses.
- * Wraps scsListExtract and injects a `_next_step` hint on each artifact that
- * has policy violations, guiding the LLM to call scs_bom_violation with the
- * correct enforcement_id. Follows the same pattern as runtimeInputExtract._hint.
- */
-const artifactSecurityListExtract = (raw: unknown): unknown => {
-  const cleaned = scsListExtract(ARTIFACT_SECURITY_LIST_FIELDS)(raw);
-  if (!Array.isArray(cleaned)) return cleaned;
-  return cleaned.map(item => {
-    if (item && typeof item === "object" && !Array.isArray(item)) {
-      const rec = item as Record<string, unknown>;
-      const pe = rec.policy_enforcement as Record<string, unknown> | undefined;
-      if (pe?.id) {
-        const total = (Number(pe.allow_list_violation_count) || 0)
-                    + (Number(pe.deny_list_violation_count) || 0);
-        if (total > 0) {
-          rec._next_step = `${total} policy violations (summary only). `
-                + `MUST call harness_list(resource_type='scs_bom_violation', enforcement_id='${pe.id}') for details. `
-                + `Do NOT present violation data without that call.`;
-        }
-      }
-    }
-    return item;
-  });
-};
-
-/**
- * Custom extractor for scs_artifact_source list responses.
- * Appends a `_summary` with item count and breakdown by artifact_type
- * so the LLM doesn't need to manually count large lists.
- */
-const artifactSourceListExtract = (raw: unknown): unknown => {
-  const cleaned = scsListExtract(ARTIFACT_SOURCE_LIST_FIELDS)(raw);
-  if (!Array.isArray(cleaned) || cleaned.length === 0) return cleaned;
-  const byType: Record<string, number> = {};
-  for (const item of cleaned) {
-    if (item && typeof item === "object" && !Array.isArray(item)) {
-      const rec = item as Record<string, unknown>;
-      const at = rec.artifact_type as Record<string, unknown> | undefined;
-      const typeName = (at?.type as string) ?? "UNKNOWN";
-      byType[typeName] = (byType[typeName] || 0) + 1;
-    }
-  }
-  return [...cleaned, { _summary: { total: cleaned.length, by_type: byType } }];
-};
-
-/**
- * Custom extractor for scs_component_dependencies.
- * When the API returns an empty list the agent tends to fabricate dependencies
- * from training data. Inject an explicit "no results" message to prevent this.
- */
-const componentDependenciesExtract = (raw: unknown): unknown => {
-  const cleaned = scsListExtract(COMPONENT_DEPENDENCY_LIST_FIELDS)(raw);
-  if (Array.isArray(cleaned) && cleaned.length === 0) {
-    return { _result: "EMPTY", _message: "Zero sub-dependencies found. Do NOT fabricate — report as-is." };
-  }
-  return cleaned;
-};
-
-/**
- * Custom extractor for scs_component_vulnerability.
- * The agent often supplements real CVE results with CVEs from training data
- * (e.g. fabricating CVE IDs or CVSS scores). Append a count + reminder.
- */
-const componentVulnerabilityExtract = (raw: unknown): unknown => {
-  const cleaned = scsCleanExtract(raw);
-  if (Array.isArray(cleaned)) {
-    if (cleaned.length === 0) {
-      return { _result: "EMPTY", _message: "No CVEs found. If 2+ components return empty, stop querying — enrichment pipeline has not processed this artifact. "
-        + "Report aggregate counts from artifact_security instead. NEVER supplement with training-data CVEs." };
-    }
-    return [...cleaned, { _total_cves: cleaned.length, _reminder: "Report ONLY these CVEs. Do NOT add CVEs from training knowledge." }];
-  }
-  return cleaned;
-};
-
-/**
- * Custom extractor for scs_component_remediation.
- * The API sometimes returns "remediation guidance is not available" warnings.
- * The agent then invents upgrade versions from training data.
- */
-const componentRemediationExtract = (raw: unknown): unknown => {
-  const cleaned = scsCleanExtract(raw);
-  if (cleaned && typeof cleaned === "object" && !Array.isArray(cleaned)) {
-    const rec = cleaned as Record<string, unknown>;
-    const warnings = rec.remediation_warnings as Array<Record<string, unknown>> | undefined;
-    const hasUnavailable = warnings?.some(w => typeof w.message === "string" && w.message.includes("not available"));
-    if (hasUnavailable) {
-      rec._reminder = "Remediation not available. Do NOT fabricate versions. Suggest checking upstream project.";
-    } else if (rec.recommended_version || rec.current_version) {
-      rec._reminder = "Report ONLY these versions. Do NOT supplement from training knowledge.";
-    }
-  }
-  return cleaned;
-};
-
-/**
- * Chain of custody get returns a top-level JSON array. MCP harness_get declares an
- * output schema that requires structuredContent (objects only) — wrap as { items, total }.
- */
-export function chainOfCustodyExtract(raw: unknown): Record<string, unknown> {
-  const cleaned = scsCleanExtract(raw);
-  if (Array.isArray(cleaned)) {
-    return { items: cleaned, total: cleaned.length };
-  }
-  if (cleaned !== null && typeof cleaned === "object") {
-    return cleaned as Record<string, unknown>;
-  }
-  return { items: [], total: 0 };
-}
-
-/**
- * Custom extractor for scs_project_security_overview.
- * The agent tends to calculate percentages and invent total component counts
- * that are not present in the API response.
- */
-const projectSecurityOverviewExtract = (raw: unknown): unknown => {
-  const cleaned = scsCleanExtract(raw);
-  if (cleaned && typeof cleaned === "object" && !Array.isArray(cleaned)) {
-    (cleaned as Record<string, unknown>)._reminder = "Report ONLY these numbers. Do NOT calculate percentages, infer trends, or invent metrics.";
-  }
-  return cleaned;
-};
-
-/**
- * Custom extractor for scs_bom_violation list responses.
- * The agent confuses allow-list and deny-list violation types.
- */
-const bomViolationListExtract = (raw: unknown): unknown => {
-  const cleaned = scsListExtract(BOM_VIOLATION_LIST_FIELDS)(raw);
-  if (Array.isArray(cleaned) && cleaned.length > 0) {
-    const types = new Set<string>();
-    for (const item of cleaned) {
-      const vt = (item as Record<string, unknown>)?.violation_type
-        ?? (item as Record<string, unknown>)?.violationType;
-      if (typeof vt === "string") types.add(vt);
-    }
-    const typeStr = [...types].join(", ");
-    return [...cleaned, {
-      _total: cleaned.length,
-      _violation_types_found: typeStr,
-      _reminder: `Results contain ONLY: ${typeStr}. Report exact violation_type. Do NOT reclassify allow-list as deny-list or vice versa.`,
-    }];
-  }
-  return cleaned;
-};
-
-/**
- * Custom extractor for code_repo_security list responses.
- * Adds a _summary count so both LLM and ref judge have explicit total.
- */
-const codeRepoListExtract = (raw: unknown): unknown => {
-  const cleaned = scsListExtract(CODE_REPO_LIST_FIELDS)(raw);
-  if (Array.isArray(cleaned) && cleaned.length > 0) {
-    return [...cleaned, { _total: cleaned.length, _note: `This page contains exactly ${cleaned.length} code repositories.` }];
-  }
-  return cleaned;
-};
-
-/**
- * Custom extractor for scs_artifact_component list responses.
- * When any returned component has outdated or EOL indicators, append a _next_step
- * hint pointing the LLM toward scs_component_enrichment and scs_component_remediation.
- */
-const artifactComponentListExtract = (raw: unknown): unknown => {
-  const cleaned = scsListExtract(ARTIFACT_COMPONENT_LIST_FIELDS)(raw);
-  if (Array.isArray(cleaned) && cleaned.length > 0) {
-    const hasRisk = cleaned.some((c) => {
-      const rec = c as Record<string, unknown>;
-      return rec.is_outdated === true || rec.is_unmaintained === true
-        || (typeof rec.eol_status === "string" && rec.eol_status !== "NONE" && rec.eol_status !== "");
-    });
-    if (hasRisk) {
-      return [...cleaned, {
-        _next_step: "Components with risk detected. Use scs_component_enrichment (purl) for details, scs_component_remediation (purl) for upgrades.",
-      }];
-    }
-  }
-  return cleaned;
-};
-
-const ARTIFACT_COMPONENT_LIST_FIELDS = [
-  "purl", "packageUrl", "package_name", "name", "package_version", "version",
-  "package_license", "license", "dependency_type",
-  "vulnerability_count", "supplier",
-  "is_outdated", "is_unmaintained", "eol_status", "eol_score", "latest_version",
-];
-
-const COMPONENT_DEPENDENCY_LIST_FIELDS = [
-  "name", "version", "purl", "relationship", "relationship_path",
-  "vulnerabilities_count",
-];
-
-const CODE_REPO_LIST_FIELDS = [
-  "id", "repo_id", "identifier", "name", "repo_name", "repo_url",
-  "branch", "default_branch", "components_count",
-  "vulnerability_count", "updated",
-];
-
-const COMPONENT_ENRICHMENT_FIELDS = [
-  "purl", "package_name", "package_version", "version",
-  "is_outdated", "is_unmaintained", "is_deprecated", "latest_version",
-  "eol_status", "eol_score", "eol_findings", "eol_recommendation",
-  "package_license", "vulnerability_count",
-  "description",
-];
-
-const BOM_VIOLATION_LIST_FIELDS = [
-  "name", "version", "purl", "license",
-  "violation_type", "violationType", "violation_details", "violationDetails",
-  "supplier", "supplier_type", "supplierType", "package_manager", "packageManager",
-  "is_exempted", "isExempted", "exemption_id", "exemptionId",
-];
-
-const COMPONENT_DRIFT_LIST_FIELDS = [
-  "status", "old_component", "new_component",
-];
-
-const REMEDIATION_PR_LIST_FIELDS = [
-  "id", "purl", "package_name", "current_version", "target_version",
-  "pr_url", "pr_number", "pr_status", "repo_name",
-  "base_branch", "remediation_branch",
-  "created_at", "updated_at", "trigger_type", "created_by",
-];
-
-/**
- * Custom extractor for scs_remediation_pr list responses.
- * The API returns { items: [ {rich PR fields} ] }. If we kept the { items }
- * wrapper, harness-list's post-processing would apply compactItems() which
- * strips non-whitelisted PR fields (purl, pr_number, pr_url, target_version,
- * trigger_type, etc.) and collapse each PR to {}. Flatten to a bare array
- * — matching other SCS list extractors — so compactItems is bypassed, and
- * pick PR-specific fields explicitly.
- */
-const remediationPrListExtract = (raw: unknown): unknown => {
-  const items = (raw && typeof raw === "object" && !Array.isArray(raw))
-    ? (raw as Record<string, unknown>).items
-    : raw;
-  return scsListExtract(REMEDIATION_PR_LIST_FIELDS)(items);
-};
-
 /**
  * Normalize a value to an array. LLMs frequently send scalar strings
  * (e.g. "CIS") instead of arrays (["CIS"]) for array-typed parameters.
@@ -337,18 +98,6 @@ function ensureArray(val: unknown): unknown[] | undefined {
  * Endpoints use /v1/ (most) or /v2/ (chain of custody).
  */
 const SCS = "/ssca-manager";
-
-/** Presigned SBOM download URL — surface download_url to the user; do not fetch the blob. */
-export function sbomDownloadExtract(raw: unknown): Record<string, unknown> {
-  if (!isRecord(raw)) return {};
-  const out: Record<string, unknown> = {};
-  if (asString(raw.download_url)) out.download_url = raw.download_url;
-  if (asNumber(raw.expires_at) !== undefined) out.expires_at = raw.expires_at;
-  out._display_hint =
-    "ALWAYS show download_url as a clickable download link to the user. "
-    + "Do not omit it or only summarize. The URL expires at expires_at (epoch ms).";
-  return out;
-}
 
 export const scsToolset: ToolsetDefinition = {
   name: "scs",

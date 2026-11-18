@@ -157,13 +157,13 @@
   - **Body builders must not silent-drop falsy values.** `hqlRunBody` used truthiness (`timeoutMs ? ...`), rewriting `timeout_ms: 0` out of the request. Fix: `!= null` checks so `0`/`false` reach the API or fail loudly.
   - **Read-only/confirmation gating is risk-based, not tool-family-based.** The batch-HQL path blocked all execute actions in read-only mode while `registry.dispatchExecute()` allows `risk: "read"`. Fix: gate on `actionSpec.operationPolicy.risk !== "read"`, mirroring the registry. Classify `risk` by behavior — HQL is a pure query language (find/filter/select/join, no mutations), so `run` is `risk: "read"`, not `low_write`.
   - **List-only metadata on get-only resources misleads discovery.** `kg_related_type` (get-only) set `listFilterFields`, so `harness_describe`/`harness_list` advertised `kind`/`include_transitive` as list filters. Fix: drop `listFilterFields`; document get params via the get op's `paramsSchema`. Add local required-field validation (throw a plain `Error` from the body builder → surfaces as a clean `errorResult` via `isUserError`) so a missing id fails locally instead of sending an id-less body.
-- **Rule**: For every new/changed resource, run the **Pre-Push Architecture-Review Pass** in `AGENTS.md` §Workflow 7 before pushing, and pair every new extractor/body builder with both a response-shape test (envelope dropped, empty/edge cases) and a request-shape test. "No focused coverage" is itself a recurring review finding.
+- **Rule**: The general rules from these patterns are in `docs/coding-standards.md` §17. For every new/changed resource, run the **Pre-Push Architecture-Review Pass** in `AGENTS.md` before pushing, and pair every new extractor/body builder with both a response-shape test (envelope dropped, empty/edge cases) and a request-shape test. "No focused coverage" is itself a recurring review finding.
 - **Build/docs gotcha**: `pnpm docs:generate` and `docs:check` read from `build/`. Always `pnpm build` first or counts go stale and CI `docs:check` fails.
 
 ## External PR Hygiene (Sunil review, PR #325)
 - **Issue**: Commit message `fix: [AIDEVOSP-1830]: …` exposed an internal Jira ID in the public `mcp-server` repo.
 - **Fix**: Use user-facing commit/PR text (e.g. `fix: skip resource discovery when org/project defaults are missing`) with no ticket prefix.
-- **Rule**: Never put Harness-internal ticket IDs in external PR titles, descriptions, or commit messages — see **Pre-Push Architecture-Review Pass** in `AGENTS.md` §Workflow 7.
+- **Rule**: Never put Harness-internal ticket IDs in external PR titles, descriptions, or commit messages — see **Pre-Push Architecture-Review Pass** in `AGENTS.md`.
 
 ## v1 Pipeline Examples: Converter Output Is Ground Truth, Not the Bundled Schema
 - **Context**: Aligning `src/data/examples/pipeline-v1.ts` to real v1 conversions from the harness pipeline converter (the comparison HTML reports).
@@ -202,3 +202,23 @@
 
 ## Version-bump Git sequencing
 - If staging or committing fails because the sandbox blocks the Git index, retry with approved escalation and verify the commit succeeded before pushing or creating the PR.
+
+## MCP Apps View Coverage
+- **Issue**: Server tests covered the `_meta` view data, but nothing exercised the view's own behavior (refresh replacing the displayed view), so UI regressions could ship unnoticed. The new `HARNESS_MCP_APPS` knob also missed the packaged manifests (see Public Config Surface Alignment).
+- **Fix**: Keep view logic in DOM-free modules (`apps/harness-app/src/host.ts`, `chart-data.ts`) and test them from `tests/apps/` with the ext-apps `App` call stubbed.
+- **Rule**: Every view action that calls back to the server (refresh, re-run) needs a test asserting what the view displays after success, empty, and error results.
+
+## Postinstall Imports Must Ship in Every Install Context
+- **Issue**: Adding a local import to the postinstall entrypoint broke both Docker install stages because their pre-install COPY lists omitted the new helper; the npm publish allowlist omitted it too.
+- **Fix**: Include every local postinstall dependency in both Docker install stages and the package `files` list.
+- **Rule**: Verify postinstall from isolated Docker-stage and published-package file sets whenever adding a local import; running it in the full checkout can hide missing artifacts.
+
+## Alias Additions Must Be Verified Across Both Schema Modes and All Entry Points
+- **Issue**: Adding `PREFERRED_RESOURCE_TYPE_NAMES` and `TOOLSET_ALIASES` / `TOOLSET_GROUP_ALIASES` only updated `resolveAlias`, `parseToolsetFilter`, and `describeToolset`. In `HARNESS_SCHEMA_MODE=full`, `resourceTypeSchema()` and `registerDescribeTool()` validate inputs against a `z.enum(...)` before Registry dispatch runs, rejecting the new aliases, and `describeByOperation()` checked `ts.name === filter.toolset` without resolving `TOOLSET_ALIASES`.
+- **Fix**: Include preferred/deprecated resource aliases in `resourceTypeSchema()`'s full-mode enum, include toolset/group aliases in `registerDescribeTool()`'s full-mode `toolset` enum, resolve `TOOLSET_ALIASES` and `TOOLSET_GROUP_ALIASES` in `describeByOperation()`, and test explicit/`+`/`-` group expansion in `registry-contract.test.ts`.
+- **Rule**: Whenever adding a `resource_type` or `toolset` alias, trace every entry point where that parameter enters the server (Zod input schema in both `compact` and `full` modes, `getResource`, `describeToolset`, `describeByOperation`, and `parseToolsetFilter`) and assert all of them in `registry-contract.test.ts`. Never modify security scanners or `postinstall` scripts to work around a stale local `node_modules/` directory.
+
+## Agent Context Cost and Discovery Are Design Properties
+- **Issue**: A list/get/execute resource merged before design review. Afterwards the open questions were how large the objects are, whether the full response helps an agent, and how an agent finds one item when it must page through a catalog. The follow-up was a per-resource `search_term`, adding another search path beside search-service / UDP.
+- **Fix**: Make response size and discovery part of the design review before merge (`docs/coding-standards.md` §15).
+- **Rule**: State default list item size, project bulky fields out, and say how an agent discovers the right item. Prefer the shared search path over a new per-resource one, and link the follow-up if a stopgap is needed.
