@@ -4,6 +4,7 @@ import {
   commandUnitLogKey,
   resolveLogContent,
   resolveLogDownloadUrl,
+  rewriteLogBlobUrl,
 } from "../../src/utils/log-resolver.js";
 import { logKeysFromNode } from "../../src/utils/log-keys.js";
 import { gzipSync, deflateRawSync } from "node:zlib";
@@ -452,5 +453,76 @@ describe("resolveLogDownloadUrl", () => {
 
     expect(result).toBe(blobLink);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  describe("Shape-A sandbox proxy base URL", () => {
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=abc123";
+    const expected =
+      "http://sandbox-proxy:8443/proxy/app.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=abc123";
+
+    it("rewrites the blob URL under /proxy/<blob-host>/ and preserves the port", async () => {
+      const client = makeClient(
+        vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+        { baseURL: "http://sandbox-proxy:8443/proxy/app.harness.io" },
+      );
+
+      const result = await resolveLogDownloadUrl(client, "prefix");
+
+      expect(result).toBe(expected);
+      // STRICT negative: the broken pre-fix path (missing /proxy/<host>/) is never produced.
+      expect(result.startsWith("http://sandbox-proxy:8443/storage/")).toBe(false);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("does not leak a /gateway base suffix into the rewritten blob path", async () => {
+      const client = makeClient(
+        vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+        { baseURL: "http://sandbox-proxy:8443/proxy/app.harness.io/gateway" },
+      );
+
+      const result = await resolveLogDownloadUrl(client, "prefix");
+
+      expect(result).toBe(expected);
+      expect(result).not.toContain("/gateway");
+    });
+  });
+});
+
+describe("rewriteLogBlobUrl", () => {
+  const blobLink =
+    "https://app.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=abc123";
+  const expected =
+    "http://sandbox-proxy:8443/proxy/app.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=abc123";
+
+  it("rewrites to /proxy/<blob-host>/ for a Shape-A base", () => {
+    expect(rewriteLogBlobUrl(blobLink, "http://sandbox-proxy:8443/proxy/app.harness.io")).toBe(expected);
+  });
+
+  it("strips a /gateway suffix from a Shape-A base", () => {
+    expect(rewriteLogBlobUrl(blobLink, "http://sandbox-proxy:8443/proxy/app.harness.io/gateway")).toBe(expected);
+  });
+
+  it("uses the blob's host (not the base's) in the /proxy/ segment", () => {
+    const result = rewriteLogBlobUrl(
+      "https://cdn.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=abc123",
+      "http://sandbox-proxy:8443/proxy/app.harness.io",
+    );
+    expect(result).toBe(
+      "http://sandbox-proxy:8443/proxy/cdn.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=abc123",
+    );
+  });
+
+  it("only rewrites host/protocol for a non-Shape-A self-managed base (no /proxy/ prefix)", () => {
+    const result = rewriteLogBlobUrl(blobLink, "https://myhost.harness.io/gateway");
+    expect(result).toBe(
+      "https://myhost.harness.io/storage/harness-download/logs.zip?X-Amz-Signature=abc123",
+    );
+    expect(result).not.toContain("/proxy/");
+  });
+
+  it("leaves external storage (GCS/S3) URLs untouched even with a Shape-A base", () => {
+    const gcs = "https://storage.googleapis.com/bucket/logs.zip?X-Goog-Signature=abc";
+    expect(rewriteLogBlobUrl(gcs, "http://sandbox-proxy:8443/proxy/app.harness.io")).toBe(gcs);
   });
 });
