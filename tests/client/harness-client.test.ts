@@ -1760,4 +1760,30 @@ describe("HarnessClient", () => {
       expect(new Uint8Array(buf)).toEqual(payload);
     });
   });
+
+  describe("getCurrentUserId — credential-scoped caching", () => {
+    it("re-resolves currentUser when accountIdResolver or bearerTokenResolver changes", async () => {
+      let currentAccount = "acct-1";
+      let currentToken = "token-1";
+
+      fetchSpy
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: { uuid: "user-uuid-1" } }), { status: 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: { uuid: "user-uuid-2" } }), { status: 200 }));
+
+      const client = new HarnessClient(makeConfig({ HARNESS_MCP_MODE: "oauth" }));
+      client.setAccountIdResolver(() => currentAccount);
+      client.setBearerTokenResolver(() => currentToken);
+
+      expect(await client.getCurrentUserId()).toBe("user-uuid-1");
+      // Second call with same account + token hits cache
+      expect(await client.getCurrentUserId()).toBe("user-uuid-1");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      // Token rotation invalidates cache and fetches new user UUID
+      currentToken = "token-2";
+      currentAccount = "acct-2";
+      expect(await client.getCurrentUserId()).toBe("user-uuid-2");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+  });
 });

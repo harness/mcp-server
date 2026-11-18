@@ -1,6 +1,6 @@
 /**
- * HAR v3 Conan drill-down — nested path params, encoding, account-only scope
- * and required parent identifiers.
+ * HAR v3 Conan drill-down — one conan_revision resource whose path depth follows
+ * the ids given; encoding, account-only scope and parent-id validation.
  */
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
@@ -45,19 +45,20 @@ const IDS = {
   package_revision_id: "prev-1",
 };
 
-describe("HAR v3 Conan resources", () => {
+describe("HAR v3 conan_revision", () => {
   const registry = new Registry(makeConfig());
+  const { version_id, recipe_revision_id, conan_package_id, package_revision_id } = IDS;
 
   it.each([
-    ["conan_recipe_revision_v3", "list", BASE],
-    ["conan_recipe_revision_v3", "get", `${BASE}/rrev-1/details`],
-    ["conan_package_v3", "list", `${BASE}/rrev-1/packages`],
-    ["conan_package_v3", "get", `${BASE}/rrev-1/packages/pkg-1/details`],
-    ["conan_package_revision_v3", "list", `${BASE}/rrev-1/packages/pkg-1/package-revisions`],
-    ["conan_package_revision_v3", "get", `${BASE}/rrev-1/packages/pkg-1/package-revisions/prev-1/details`],
-  ] as const)("%s.%s builds %s with account-only scope", async (resourceType, op, path) => {
+    ["list", { version_id }, BASE],
+    ["list", { version_id, recipe_revision_id }, `${BASE}/rrev-1/packages`],
+    ["list", { version_id, recipe_revision_id, conan_package_id }, `${BASE}/rrev-1/packages/pkg-1/package-revisions`],
+    ["get", { version_id, recipe_revision_id }, `${BASE}/rrev-1/details`],
+    ["get", { version_id, recipe_revision_id, conan_package_id }, `${BASE}/rrev-1/packages/pkg-1/details`],
+    ["get", IDS, `${BASE}/rrev-1/packages/pkg-1/package-revisions/prev-1/details`],
+  ] as const)("%s with %o builds %s with account-only scope", async (op, input, path) => {
     const client = mockClient(op === "list" ? { items: [], page: 0, size: 20, hasMore: false } : { data: { id: "x" } });
-    await registry.dispatch(client, resourceType, op, { ...IDS });
+    await registry.dispatch(client, "conan_revision", op, { ...input });
 
     const call = lastCall(client);
     expect(call.method).toBe("GET");
@@ -69,37 +70,48 @@ describe("HAR v3 Conan resources", () => {
 
   it("detail responses are unwrapped from { data }", async () => {
     const client = mockClient({ data: { id: "rrev-1", recipeRevision: "abc", packageCount: 3 } });
-    const result = (await registry.dispatch(client, "conan_recipe_revision_v3", "get", IDS)) as Record<string, unknown>;
+    const result = (await registry.dispatch(client, "conan_revision", "get", { version_id, recipe_revision_id })) as Record<string, unknown>;
     expect(result.packageCount).toBe(3);
     expect(result.data).toBeUndefined();
   });
 
-  it("list keeps full items (no generic compaction) and forwards pagination", async () => {
-    const client = mockClient({ items: [{ id: "p", settings: { os: "Linux" } }], page: 1, size: 5, hasMore: true });
-    const result = (await registry.dispatch(client, "conan_package_v3", "list", { ...IDS, page: 1, size: 5 })) as Record<string, unknown>;
+  it("list keeps Conan settings on items and forwards pagination", async () => {
+    const settings = { os: "Linux", arch: "x86_64", compiler: "gcc" };
+    const client = mockClient({ items: [{ id: "p", settings }], page: 1, size: 5, hasMore: true });
+    const result = (await registry.dispatch(client, "conan_revision", "list", {
+      version_id, recipe_revision_id, page: 1, size: 5,
+    })) as { items: Array<Record<string, unknown>>; hasMore: boolean };
     const call = lastCall(client);
     expect(call.params.page).toBe(1);
     expect(call.params.size).toBe(5);
     expect(result.hasMore).toBe(true);
+    expect(result.items[0]!.settings).toEqual(settings);
+    expect(registry.getResource("conan_revision").operations.list!.skipCompact).toBe(true);
   });
 
   it("encodes nested path segments", async () => {
     const client = mockClient({ data: {} });
-    await registry.dispatch(client, "conan_package_v3", "get", { ...IDS, conan_package_id: "a/b" });
+    await registry.dispatch(client, "conan_revision", "get", { version_id, recipe_revision_id, conan_package_id: "a/b" });
     expect(lastCall(client).path).toBe(`${BASE}/rrev-1/packages/a%2Fb/details`);
   });
 
-  it("list fails fast when a parent id is missing", async () => {
+  it.each([
+    ["list", { recipe_revision_id }, /version_id/],
+    ["list", { version_id, conan_package_id }, /requires recipe_revision_id/],
+    ["get", { version_id }, /requires recipe_revision_id/],
+    ["get", { version_id, recipe_revision_id, package_revision_id }, /requires conan_package_id/],
+  ] as const)("%s with %o fails before any API call", async (op, input, error) => {
     const client = mockClient({ items: [] });
-    await expect(
-      registry.dispatch(client, "conan_package_revision_v3", "list", { version_id: "ver-1", recipe_revision_id: "rrev-1" }),
-    ).rejects.toThrow(/conan_package_id/);
+    await expect(registry.dispatch(client, "conan_revision", op, { ...input })).rejects.toThrow(error);
     expect(client.request).not.toHaveBeenCalled();
   });
 
-  it("stays behind the registries-v3 opt-in", () => {
-    const defaults = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined })).getAllResourceTypes();
-    expect(defaults).not.toContain("conan_recipe_revision_v3");
-    expect(new Registry(makeConfig()).getAllResourceTypes()).toContain("conan_package_revision_v3");
+  it("replaces the per-level Conan types and stays behind the registries-v3 opt-in", () => {
+    const types = new Registry(makeConfig()).getAllResourceTypes();
+    expect(types).toContain("conan_revision");
+    for (const old of ["conan_recipe_revision_v3", "conan_package_v3", "conan_package_revision_v3"]) {
+      expect(types).not.toContain(old);
+    }
+    expect(new Registry(makeConfig({ HARNESS_TOOLSETS: undefined })).getAllResourceTypes()).not.toContain("conan_revision");
   });
 });

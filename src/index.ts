@@ -15,7 +15,7 @@ import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
-import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
+import { resolveCorsAllowOrigin, resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createMcpHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import {
   refreshOAuthSessionCredential,
@@ -37,6 +37,7 @@ import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from ".
 import { buildHttpHealthResponse } from "./utils/http-health.js";
 import { beginSessionRequest, endSessionRequest, isSessionExpired, type HttpSessionActivity } from "./utils/http-sessions.js";
 import { createHarnessHttpExpressApp } from "./utils/http-app.js";
+import { MCP_APPS_EXTENSION_ID, mcpAppsEnabled } from "./apps/mcp-apps.js";
 
 
 const log = createLogger("main");
@@ -81,7 +82,10 @@ function createHarnessServer(
       websiteUrl: "https://harness.io",
     },
     {
-      capabilities: { logging: {} },
+      capabilities: {
+        logging: {},
+        ...(mcpAppsEnabled(config) ? { extensions: { [MCP_APPS_EXTENSION_ID]: {} } } : {}),
+      },
       instructions: [
         "Harness MCP server — manage CI/CD pipelines, code repos, PRs, services, environments, and more.",
         "",
@@ -282,7 +286,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   validateHttpAuthForBindHost(host, config);
 
-  const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions(host, config));
+  const hostValidationOptions = resolveHttpHostValidationOptions(host, config);
+  const app = createHarnessHttpExpressApp(hostValidationOptions);
   let oauthProxyRuntime: OAuthProxyRuntime | undefined;
 
   // Trust reverse proxies / load balancers in front of the server so req.ip
@@ -294,8 +299,13 @@ async function startHttp(config: Config, port: number): Promise<void> {
   }
 
   // CORS — allow GET, POST, DELETE for session-based MCP
-  app.use((_req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
+  app.use((req, res, next) => {
+    const requestOrigin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+    res.setHeader(
+      "Access-Control-Allow-Origin",
+      resolveCorsAllowOrigin(requestOrigin, host, port, hostValidationOptions.allowedHosts),
+    );
+    res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, x-harness-api-key, x-harness-appsec-api-key, x-harness-account-id, x-harness-org, x-harness-project, x-harness-pipeline-version, x-harness-auto-approve-risk");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");

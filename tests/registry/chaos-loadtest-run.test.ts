@@ -208,7 +208,7 @@ describe("chaos_loadtest_run execute actions", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/loadTest/manager/api/v1/runs/run-1/ai-insights");
-    expect(call.body).toEqual({});
+    expect(call.body).toBeUndefined();
     // passthrough: bare object, no envelope, no compaction (this is not a list).
     expect(result.status).toBe("Ready");
     expect((result.aiInsights as Record<string, unknown>).findings).toEqual([]);
