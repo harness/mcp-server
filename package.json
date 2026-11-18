@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "3.2.40",
+  "version": "3.2.41",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -11,16 +11,18 @@
     "build/",
     "npm-shrinkwrap.json",
     "scripts/adm-zip-security-lib.mjs",
+    "scripts/ip-address-security-lib.mjs",
     "scripts/ensure-secure-adm-zip.mjs"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "pnpm build:apps && tsc",
+    "build:apps": "vite build --config apps/harness-app/vite.config.ts",
     "dev": "tsc --watch",
     "start": "node build/index.js stdio",
     "start:http": "node build/index.js http",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js stdio",
     "prepare:mcpb": "node scripts/prepare-mcpb.js",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p apps/harness-app/tsconfig.json",
     "sync-schemas": "node scripts/sync-schemas.js",
     "sync-entity-schemas": "node scripts/sync-entity-schemas.js",
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
@@ -56,12 +58,12 @@
   },
   "homepage": "https://github.com/harness/mcp-server#readme",
   "dependencies": {
-    "@hono/node-server": "^2.1.3",
+    "@hono/node-server": "^2.1.6",
     "@modelcontextprotocol/sdk": "^1.31.0",
     "adm-zip": "^0.6.1",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "hono": "^4.13.11",
+    "hono": "^4.13.16",
     "jsonwebtoken": "^9.0.3",
     "redis": "^6.3.0",
     "yaml": "^2.8.3",
@@ -88,6 +90,7 @@
     }
   },
   "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.220.0",
     "@opentelemetry/resources": "^2.9.0",
@@ -95,6 +98,8 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
+    "chart.js": "^4.6.1",
+    "preact": "^11.2.0",
     "typescript": "^5.7.3",
     "vite": "^7.3.7",
     "vitest": "^4.1.12"
@@ -107,9 +112,9 @@
   "pnpm": {
     "overrides": {
       "picomatch": ">=4.0.4",
-      "hono": ">=4.13.11",
+      "hono": ">=4.13.16",
       "path-to-regexp": ">=8.4.0",
-      "@hono/node-server": ">=2.1.3",
+      "@hono/node-server": ">=2.1.6",
       "express-rate-limit": ">=8.2.2",
       "ip-address": ">=10.7.4",
       "vite": "^7.3.7",

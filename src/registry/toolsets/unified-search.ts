@@ -1,4 +1,11 @@
 import type { ToolsetDefinition } from "../types.js";
+import {
+  unifiedSearchExecuteExtract,
+  unifiedSearchListExtract,
+  unifiedSearchSourcesExtract,
+} from "../extractors.js";
+
+export { unifiedSearchExecuteExtract, unifiedSearchListExtract, unifiedSearchSourcesExtract };
 
 /**
  * Unified search: semantic (meaning-based) search via search-service across
@@ -120,89 +127,6 @@ export function unifiedSearchExecuteBody(input: Record<string, unknown>): Record
     sources: asList(body.sources),
     source_filters: sourceFilters,
   });
-}
-
-// ─── Response shaping ────────────────────────────────────────────────────────
-
-interface RawResult {
-  id?: string;
-  metadata?: Record<string, unknown>;
-  score?: number;
-}
-
-interface RawResponse {
-  query?: string;
-  sources?: Array<{ source?: string; results?: RawResult[] }>;
-}
-
-/** A hit as the service returns it, tagged with its source. Metadata is not reinterpreted. */
-function toHit(source: string, raw: RawResult): Record<string, unknown> {
-  return { source, id: raw.id ?? "", score: raw.score ?? 0, metadata: raw.metadata ?? {} };
-}
-
-const EMPTY_NOTE =
-  "No matches for this query. Auth and feature-flag failures return errors, so this is not one of them.";
-const FILTERED_EMPTY_NOTE =
-  "No matches with these filters. This does not mean nothing matching exists: a filter on a field the " +
-  "source does not index, or with a value type other than the one hit metadata shows (e.g. int_value " +
-  "on a field stored as a string), matches nothing instead of erroring. Re-run without the filter and " +
-  "check the field names and value types in the hits' metadata.";
-const MULTI_SOURCE_NOTE = "Scores are per source and not comparable across sources.";
-const ACCOUNT_WIDE_NOTE =
-  "org_id/project_id do not narrow unified search: results are account-wide. To scope them, filter on " +
-  "the metadata keys that carry org or project in the hits.";
-
-/** Whether the call narrowed the search, so an empty result may come from the filter. */
-function hasFilters(input: Record<string, unknown> | undefined): boolean {
-  const filters = ((input?.body ?? {}) as Record<string, unknown>).source_filters;
-  return isObject(filters) && Object.keys(filters).length > 0;
-}
-
-/** Joins the notes that apply to a result into one `note`, or nothing. */
-function noteFor(input: Record<string, unknown> | undefined, total: number, groups: number): Record<string, string> {
-  const notes: string[] = [];
-  if (total === 0) notes.push(hasFilters(input) ? FILTERED_EMPTY_NOTE : EMPTY_NOTE);
-  if (groups > 1 && total > 0) notes.push(MULTI_SOURCE_NOTE);
-  // The registry never sends org/project for this account-scoped type, so say so when the caller asked for them.
-  if (input?.org_id || input?.project_id) notes.push(ACCOUNT_WIDE_NOTE);
-  return notes.length > 0 ? { note: notes.join(" ") } : {};
-}
-
-/** harness_list / harness_search: one flat list, each hit tagged with its source. */
-export function unifiedSearchListExtract(raw: unknown, input?: Record<string, unknown>): Record<string, unknown> {
-  const r = (raw ?? {}) as RawResponse;
-  const groups = r.sources ?? [];
-  const items = groups.flatMap((g) => (g.results ?? []).map((res) => toHit(g.source ?? "unknown", res)));
-  return {
-    items,
-    total: items.length,
-    ...noteFor(input, items.length, groups.length),
-  };
-}
-
-/** harness_execute(action='search'): grouped per source, as the API returns it. */
-export function unifiedSearchExecuteExtract(raw: unknown, input?: Record<string, unknown>): Record<string, unknown> {
-  const r = (raw ?? {}) as RawResponse;
-  const sources = (r.sources ?? []).map((g) => {
-    const results = (g.results ?? []).map((res) => ({
-      id: res.id ?? "",
-      score: res.score ?? 0,
-      metadata: res.metadata ?? {},
-    }));
-    return { source: g.source ?? "unknown", count: results.length, results };
-  });
-  const total = sources.reduce((n, g) => n + g.count, 0);
-  return {
-    query: r.query ?? "",
-    total,
-    sources,
-    ...noteFor(input, total, sources.length),
-  };
-}
-
-/** Source objects pass through unchanged so whatever the service describes per source reaches the caller. */
-export function unifiedSearchSourcesExtract(raw: unknown): Record<string, unknown> {
-  return { sources: ((raw ?? {}) as { sources?: unknown[] }).sources ?? [] };
 }
 
 /**

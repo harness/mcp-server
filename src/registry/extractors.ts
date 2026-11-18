@@ -714,6 +714,8 @@ export const harV3ListExtract = (raw: unknown): unknown => {
   // backend `meta` envelope (which may gain new keys over time).
   const activeCount = typeof meta?.activeCount === "number" ? meta.activeCount : undefined;
   const deletedCount = typeof meta?.deletedCount === "number" ? meta.deletedCount : undefined;
+  const prodEnvCount = typeof meta?.prodEnvCount === "number" ? meta.prodEnvCount : undefined;
+  const nonProdEnvCount = typeof meta?.nonProdEnvCount === "number" ? meta.nonProdEnvCount : undefined;
   return {
     items,
     total,
@@ -722,6 +724,8 @@ export const harV3ListExtract = (raw: unknown): unknown => {
     hasMore: raw.hasMore,
     ...(activeCount !== undefined ? { activeCount } : {}),
     ...(deletedCount !== undefined ? { deletedCount } : {}),
+    ...(prodEnvCount !== undefined ? { prodEnvCount } : {}),
+    ...(nonProdEnvCount !== undefined ? { nonProdEnvCount } : {}),
   };
 };
 
@@ -748,6 +752,130 @@ export const harV3DataObjectUnwrap = (raw: unknown): unknown => {
   if (!isRecord(raw)) return raw;
   if (isRecord(raw.data)) return raw.data;
   return raw;
+};
+
+/**
+ * BulkEvaluateArtifactsV3 (`POST /scans/bulk-evaluate-sync`) returns `{ data: [ArtifactScanDetailsV3] }`,
+ * one entry per requested artifact. Project to `{ items, total }`; a missing or null `data` means nothing
+ * was evaluated, so return an empty list rather than the raw envelope.
+ */
+export const harV3ScanEvaluationExtract = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  const items = Array.isArray(raw.data) ? raw.data : [];
+  return { items, total: items.length };
+};
+
+/**
+ * HAR v3 `GET /build-info/pipeline/details` → `{ items, page, size, hasMore, totalBlocked* }`.
+ * The endpoint returns no row total; the meta counts are aggregates across all pages.
+ */
+export const harV3PipelineBuildInfoExtract = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  const meta = isRecord(raw.meta) ? raw.meta : undefined;
+  return {
+    items: Array.isArray(raw.pipelineData) ? raw.pipelineData : [],
+    page: raw.page,
+    size: raw.size,
+    hasMore: raw.hasMore,
+    totalBlockedPipelines: typeof meta?.totalBlockedPipelines === "number" ? meta.totalBlockedPipelines : 0,
+    totalBlockedDependencies: typeof meta?.totalBlockedDependencies === "number" ? meta.totalBlockedDependencies : 0,
+  };
+};
+
+/** Scans per page of a bulk evaluation poll. */
+export const BULK_SCAN_EVALUATION_PAGE_SIZE = 100;
+
+/** Reads `params.scan_status`; omitted or empty means the default (every non-ALLOWED scan). */
+const bulkScanEvaluationStatusFilter = (value: unknown): string | undefined => {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`bulk_scan_evaluation: params.scan_status must be a string, got ${JSON.stringify(value)}.`);
+  }
+  return value.toUpperCase();
+};
+
+/**
+ * Reads `params.page` (0-based). Omitted means page 0. Anything else that is not a non-negative integer (or its
+ * decimal string) throws, so a malformed continuation request fails instead of repeating page 0.
+ */
+const bulkScanEvaluationPage = (value: unknown): number => {
+  if (value === undefined || value === null) return 0;
+  const isDigits = typeof value === "string" && /^\d+$/.test(value);
+  const page = typeof value === "number" ? value : isDigits ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(page) || page < 0) {
+    throw new Error(
+      `bulk_scan_evaluation: params.page must be a non-negative integer, got ${JSON.stringify(value)}.`,
+    );
+  }
+  return page;
+};
+
+/**
+ * GetBulkScanEvaluationStatusV3 returns `{ data: { evaluationId, status, error, scans: [{ packageName, version,
+ * scanId, scanStatus }] } }`, and an evaluation can hold up to 10000 scans. Keep the agent's context small:
+ * report `scanStatusCounts` for every scan, and page through the selected scans BULK_SCAN_EVALUATION_PAGE_SIZE at
+ * a time. By default the selection is every non-ALLOWED scan (the ones an agent acts on); `input.scan_status`
+ * selects one status instead (including ALLOWED). `input.page` (0-based) picks the page, so every scan of any
+ * status stays reachable from this one call.
+ */
+export const bulkScanEvaluationExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
+  const unwrapped = harV3DataObjectUnwrap(raw);
+  if (!isRecord(unwrapped)) return unwrapped;
+  const { scans: rawScans, ...rest } = unwrapped;
+  const scans = Array.isArray(rawScans) ? rawScans : [];
+  const statusFilter = bulkScanEvaluationStatusFilter(input?.scan_status);
+  const page = bulkScanEvaluationPage(input?.page);
+  const scanStatusCounts: Record<string, number> = {};
+  const selected: unknown[] = [];
+  for (const scan of scans) {
+    const status = isRecord(scan) && typeof scan.scanStatus === "string" ? scan.scanStatus : "UNKNOWN";
+    scanStatusCounts[status] = (scanStatusCounts[status] ?? 0) + 1;
+    if (statusFilter ? status === statusFilter : status !== "ALLOWED") selected.push(scan);
+  }
+  const offset = page * BULK_SCAN_EVALUATION_PAGE_SIZE;
+  const hasMore = offset + BULK_SCAN_EVALUATION_PAGE_SIZE < selected.length;
+  return {
+    ...rest,
+    totalScans: scans.length,
+    scanStatusCounts,
+    selectedScans: selected.length,
+    page,
+    hasMore,
+    scans: selected.slice(offset, offset + BULK_SCAN_EVALUATION_PAGE_SIZE),
+    ...(hasMore ? { hint: `More scans: repeat this harness_get with params.page=${page + 1}.` } : {}),
+  };
+};
+
+const FIREWALL_EXCEPTION_STATUS_COUNT_KEYS: Record<string, string> = {
+  PENDING: "pendingCount",
+  APPROVED: "approvedCount",
+  REJECTED: "rejectedCount",
+  EXPIRED: "expiredCount",
+};
+
+/**
+ * ListFirewallExceptionsV3 returns `{ items, page, hasMore, meta: { totalCount, pendingCount, approvedCount,
+ * rejectedCount, expiredCount } }`. The backend computes these counts without the status filter (they feed the
+ * UI tabs), so `meta.totalCount` is the count across every status. Surface the per-status `counts` and, when a
+ * status filter is set, report `total` as that status's count so it matches the filtered items.
+ */
+export const firewallExceptionListExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
+  const base = harV3ListExtract(raw);
+  if (!isRecord(raw) || !isRecord(base) || !isRecord(raw.meta)) return base;
+  const meta = raw.meta;
+  const counts: Record<string, number> = {};
+  for (const [status, key] of Object.entries(FIREWALL_EXCEPTION_STATUS_COUNT_KEYS)) {
+    const value = meta[key];
+    if (typeof value === "number") counts[status.toLowerCase()] = value;
+  }
+  const status = typeof input?.status === "string" ? input.status.toUpperCase() : undefined;
+  const statusKey = status ? FIREWALL_EXCEPTION_STATUS_COUNT_KEYS[status] : undefined;
+  const statusTotal = statusKey ? meta[statusKey] : undefined;
+  return {
+    ...base,
+    ...(typeof statusTotal === "number" ? { total: statusTotal } : {}),
+    ...(Object.keys(counts).length > 0 ? { counts } : {}),
+  };
 };
 
 /**
@@ -2573,3 +2701,80 @@ export {
   sanitizeAndBoundSpanBody,
   unwrapAppSecGraphql,
 } from "./appsec/extractors.js";
+
+export {
+  ccmPerspectiveFilterValuesExtract,
+  chaosComponentVarExtract,
+  chaosEnvironmentsListExtract,
+  chaosProbesInRunExtract,
+  governanceEvaluationListExtract,
+  hqlValidateExtract,
+  idpScoresListExtract,
+  stoBulkExemptionExtract,
+  stoPipelineSecurityIssuesExtract,
+  stoPipelineSecurityStepsExtract,
+} from "./extractors/inline-migrated.js";
+
+export {
+  activityChangesExtract,
+  ansibleListExtract,
+  costsListExtract,
+  iacmResourcesExtract,
+  moduleExtract,
+  moduleListExtract,
+  providerExtract,
+  providerListExtract,
+  variableSetExtract,
+  variableSetListExtract,
+  workspaceGetExtract,
+  workspaceListExtract,
+  workspaceWriteExtract,
+} from "./extractors/iacm.js";
+
+export {
+  COMPONENT_DRIFT_LIST_FIELDS,
+  COMPONENT_ENRICHMENT_FIELDS,
+  artifactComponentListExtract,
+  artifactSecurityListExtract,
+  artifactSourceListExtract,
+  attestationDetailsExtract,
+  attestationDownloadExtract,
+  attestationListExtract,
+  bomViolationListExtract,
+  chainOfCustodyExtract,
+  codeRepoListExtract,
+  componentDependenciesExtract,
+  componentRemediationExtract,
+  componentVulnerabilityExtract,
+  projectAttestationListItem,
+  projectSecurityOverviewExtract,
+  remediationPrListExtract,
+  sbomDownloadExtract,
+} from "./extractors/scs.js";
+
+export {
+  addRootCauseTheoryExtract,
+  alertGetExtract,
+  deployGetExtract,
+  extractCostCategoryFilterPanel,
+  fmeActionExtract,
+  grammarExtract,
+  hqlRunExtract,
+  incidentGetExtract,
+  infrastructureExtract,
+  infrastructurePageExtract,
+  observabilityEvalExtract,
+  observabilityEvalListExtract,
+  projectAlert,
+  projectIncident,
+  queryableTypeSummaryExtract,
+  relatedTypesExtract,
+  schemaTypeExtract,
+  schemaTypesExtract,
+  scorecardStatsExtract,
+  securityIssueListExtract,
+  unifiedSearchExecuteExtract,
+  unifiedSearchListExtract,
+  unifiedSearchSourcesExtract,
+  workArtifactListExtract,
+} from "./extractors/domain.js";

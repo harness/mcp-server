@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
+import { resolveCorsAllowOrigin, resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
 
 describe("resolveHttpHostValidationOptions", () => {
   it("allows the hosted MCP hostname when binding to localhost", () => {
@@ -49,5 +49,29 @@ describe("resolveHttpHostValidationOptions", () => {
       host: "0.0.0.0",
       allowedHosts: ["mcp.example.com", "mcp.internal.example"],
     });
+  });
+});
+
+describe("resolveCorsAllowOrigin", () => {
+  it("normalizes wildcard bind addresses (0.0.0.0, ::) to 127.0.0.1 when no Origin header is present", () => {
+    expect(resolveCorsAllowOrigin(undefined, "0.0.0.0", 3000)).toBe("http://127.0.0.1:3000");
+    expect(resolveCorsAllowOrigin(undefined, "::", 3000)).toBe("http://127.0.0.1:3000");
+  });
+
+  it("reflects request Origin when its hostname is in allowedHosts", () => {
+    const allowedHosts = ["localhost", "127.0.0.1", "[::1]", "mcp.harness.io", "mcp.example.com"];
+    expect(resolveCorsAllowOrigin("https://mcp.harness.io", "127.0.0.1", 3000, allowedHosts)).toBe(
+      "https://mcp.harness.io",
+    );
+    expect(resolveCorsAllowOrigin("https://mcp.example.com:8443", "0.0.0.0", 3000, allowedHosts)).toBe(
+      "https://mcp.example.com:8443",
+    );
+  });
+
+  it("does not reflect untrusted request Origins", () => {
+    const allowedHosts = ["localhost", "127.0.0.1", "mcp.harness.io"];
+    expect(resolveCorsAllowOrigin("https://evil.example.com", "0.0.0.0", 3000, allowedHosts)).toBe(
+      "http://127.0.0.1:3000",
+    );
   });
 });
