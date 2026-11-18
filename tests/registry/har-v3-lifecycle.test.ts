@@ -1,6 +1,7 @@
 /**
- * HAR v3 lifecycle rules, executions, execution items, stats and dry run —
- * paths, multi-scope params, required filters, compaction and write gating.
+ * HAR v3 lifecycle: lifecycle_rule (list/get + dry_run, stats actions) and
+ * lifecycle_execution (list/get + items action) — paths, multi-scope params,
+ * required ids, compaction and write gating.
  */
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
@@ -37,7 +38,7 @@ function mockClient(response: unknown): HarnessClient {
 const lastCall = (client: HarnessClient) =>
   (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
 
-const LIFECYCLE_TYPES = ["lifecycle_rule_v3", "lifecycle_execution_v3", "lifecycle_execution_item_v3", "lifecycle_stats_v3"];
+const LIFECYCLE_TYPES = ["lifecycle_rule", "lifecycle_execution"];
 
 const rule = {
   id: "rule-1",
@@ -51,12 +52,12 @@ const rule = {
   createdBy: { name: "someone" },
 };
 
-describe("lifecycle_rule_v3", () => {
+describe("lifecycle_rule", () => {
   const registry = new Registry(makeConfig());
 
   it("list hits /lifecycle/rules with project scope and forwards filters", async () => {
     const client = mockClient({ items: [rule], page: 0, size: 20, hasMore: false });
-    const result = (await registry.dispatch(client, "lifecycle_rule_v3", "list", {
+    const result = (await registry.dispatch(client, "lifecycle_rule", "list", {
       action: "DELETE",
       package_types: "MAVEN",
       registry_ids: "reg-1",
@@ -75,14 +76,14 @@ describe("lifecycle_rule_v3", () => {
       registry_ids: "reg-1",
       scope: "descendants",
     });
-    const [compacted] = compactItems(result.items, registry.getResource("lifecycle_rule_v3").compactItem) as Record<string, unknown>[];
+    const [compacted] = compactItems(result.items, registry.getResource("lifecycle_rule").compactItem) as Record<string, unknown>[];
     expect(compacted).toMatchObject({ rule_id: "rule-1", action: "DELETE", criteria: rule.criteria, applyTo: rule.applyTo });
     expect(compacted.createdBy).toBeUndefined();
   });
 
   it("resource_scope=account sends no org/project", async () => {
     const client = mockClient({ items: [], hasMore: false });
-    await registry.dispatch(client, "lifecycle_rule_v3", "list", { resource_scope: "account" });
+    await registry.dispatch(client, "lifecycle_rule", "list", { resource_scope: "account" });
     const call = lastCall(client);
     expect(call.params.account_identifier).toBe("acct123");
     expect(call.params.org_identifier).toBeUndefined();
@@ -91,7 +92,7 @@ describe("lifecycle_rule_v3", () => {
 
   it("resource_scope=org sends org only", async () => {
     const client = mockClient({ items: [], hasMore: false });
-    await registry.dispatch(client, "lifecycle_rule_v3", "list", { resource_scope: "org", org_id: "eng" });
+    await registry.dispatch(client, "lifecycle_rule", "list", { resource_scope: "org", org_id: "eng" });
     const call = lastCall(client);
     expect(call.params.org_identifier).toBe("eng");
     expect(call.params.project_identifier).toBeUndefined();
@@ -99,7 +100,7 @@ describe("lifecycle_rule_v3", () => {
 
   it("get hits /lifecycle/rules/{id} with the same scope params as list", async () => {
     const client = mockClient(rule);
-    const result = (await registry.dispatch(client, "lifecycle_rule_v3", "get", { rule_id: "rule-1" })) as Record<string, unknown>;
+    const result = (await registry.dispatch(client, "lifecycle_rule", "get", { rule_id: "rule-1" })) as Record<string, unknown>;
     const call = lastCall(client);
     expect(call.path).toBe("/har/api/v3/lifecycle/rules/rule-1");
     expect(call.params).toMatchObject({ account_identifier: "acct123", org_identifier: "PROD", project_identifier: "Harness_Commons" });
@@ -107,11 +108,11 @@ describe("lifecycle_rule_v3", () => {
   });
 });
 
-describe("lifecycle_rule_v3 dry_run", () => {
+describe("lifecycle_rule dry_run", () => {
   it("POSTs { policyId } to /lifecycle/executions with project scope params", async () => {
     const registry = new Registry(makeConfig());
     const client = mockClient({ id: "exec-1", policyId: "rule-1", status: "PENDING", triggerType: "DRY_RUN" });
-    const result = (await registry.dispatchExecute(client, "lifecycle_rule_v3", "dry_run", { rule_id: " rule-1 " })) as Record<string, unknown>;
+    const result = (await registry.dispatchExecute(client, "lifecycle_rule", "dry_run", { rule_id: " rule-1 " })) as Record<string, unknown>;
 
     const call = lastCall(client);
     expect(call.method).toBe("POST");
@@ -124,33 +125,33 @@ describe("lifecycle_rule_v3 dry_run", () => {
   it("accepts body.policyId", async () => {
     const registry = new Registry(makeConfig());
     const client = mockClient({ id: "exec-1" });
-    await registry.dispatchExecute(client, "lifecycle_rule_v3", "dry_run", { body: { policyId: "rule-2" } });
+    await registry.dispatchExecute(client, "lifecycle_rule", "dry_run", { body: { policyId: "rule-2" } });
     expect(lastCall(client).body).toEqual({ policyId: "rule-2" });
   });
 
   it("rejects a missing rule id before calling the API", async () => {
     const registry = new Registry(makeConfig());
     const client = mockClient({});
-    await expect(registry.dispatchExecute(client, "lifecycle_rule_v3", "dry_run", {})).rejects.toThrow(/rule_id/);
+    await expect(registry.dispatchExecute(client, "lifecycle_rule", "dry_run", {})).rejects.toThrow(/rule_id/);
     expect(client.request).not.toHaveBeenCalled();
   });
 
   it("is blocked in read-only mode", async () => {
     const registry = new Registry(makeConfig({ HARNESS_READ_ONLY: true }));
     const client = mockClient({});
-    await expect(registry.dispatchExecute(client, "lifecycle_rule_v3", "dry_run", { rule_id: "rule-1" })).rejects.toThrow();
+    await expect(registry.dispatchExecute(client, "lifecycle_rule", "dry_run", { rule_id: "rule-1" })).rejects.toThrow();
     expect(client.request).not.toHaveBeenCalled();
   });
 
   it("does not expose rule create/update/delete", () => {
     const registry = new Registry(makeConfig());
-    const def = registry.getResource("lifecycle_rule_v3");
+    const def = registry.getResource("lifecycle_rule");
     expect(Object.keys(def.operations).sort()).toEqual(["get", "list"]);
-    expect(Object.keys(def.executeActions ?? {})).toEqual(["dry_run"]);
+    expect(Object.keys(def.executeActions ?? {})).toEqual(["dry_run", "stats"]);
   });
 });
 
-describe("lifecycle_execution_v3", () => {
+describe("lifecycle_execution", () => {
   const registry = new Registry(makeConfig());
 
   it("list forwards status and keeps the affected counts in compact mode", async () => {
@@ -158,34 +159,35 @@ describe("lifecycle_execution_v3", () => {
       items: [{ id: "exec-1", policyId: "rule-1", policyName: "cleanup", status: "SUCCESS", triggerType: "DRY_RUN", versionsDeleted: 12, protected: 3, storageReclaimed: "1024" }],
       hasMore: false,
     });
-    const result = (await registry.dispatch(client, "lifecycle_execution_v3", "list", { status: "SUCCESS" })) as { items: Record<string, unknown>[] };
+    const result = (await registry.dispatch(client, "lifecycle_execution", "list", { status: "SUCCESS" })) as { items: Record<string, unknown>[] };
     const call = lastCall(client);
     expect(call.path).toBe("/har/api/v3/lifecycle/executions");
     expect(call.params.status).toBe("SUCCESS");
-    const [compacted] = compactItems(result.items, registry.getResource("lifecycle_execution_v3").compactItem) as Record<string, unknown>[];
+    const [compacted] = compactItems(result.items, registry.getResource("lifecycle_execution").compactItem) as Record<string, unknown>[];
     expect(compacted).toMatchObject({ execution_id: "exec-1", triggerType: "DRY_RUN", versionsDeleted: 12, protected: 3 });
   });
 
   it("get hits /lifecycle/executions/{executionId}", async () => {
     const client = mockClient({ id: "exec-1", status: "INPROGRESS" });
-    await registry.dispatch(client, "lifecycle_execution_v3", "get", { execution_id: "exec-1" });
+    await registry.dispatch(client, "lifecycle_execution", "get", { execution_id: "exec-1" });
     expect(lastCall(client).path).toBe("/har/api/v3/lifecycle/executions/exec-1");
   });
 });
 
-describe("lifecycle_execution_item_v3", () => {
+describe("lifecycle_execution items action", () => {
   const registry = new Registry(makeConfig());
 
-  it("list nests execution_id in the path and keeps item fields", async () => {
+  it("nests execution_id in the path, forwards filters and keeps item fields", async () => {
     const client = mockClient({
       items: [{ packageName: "app", version: "1.0.0-SNAPSHOT", registryName: "maven-local", status: "WOULD_BE_DELETED", reason: "older than last 5" }],
       hasMore: false,
     });
-    const result = (await registry.dispatch(client, "lifecycle_execution_item_v3", "list", {
+    const result = (await registry.dispatchExecute(client, "lifecycle_execution", "items", {
       execution_id: "exec-1",
       status: "WOULD_BE_DELETED",
     })) as { items: Record<string, unknown>[] };
     const call = lastCall(client);
+    expect(call.method).toBe("GET");
     expect(call.path).toBe("/har/api/v3/lifecycle/executions/exec-1/items");
     expect(call.params.status).toBe("WOULD_BE_DELETED");
     expect(result.items[0]).toMatchObject({ packageName: "app", version: "1.0.0-SNAPSHOT", status: "WOULD_BE_DELETED", reason: "older than last 5" });
@@ -193,17 +195,18 @@ describe("lifecycle_execution_item_v3", () => {
 
   it("requires execution_id", async () => {
     const client = mockClient({ items: [] });
-    await expect(registry.dispatch(client, "lifecycle_execution_item_v3", "list", {})).rejects.toThrow(/execution_id/);
+    await expect(registry.dispatchExecute(client, "lifecycle_execution", "items", {})).rejects.toThrow(/execution_id|executionId/);
     expect(client.request).not.toHaveBeenCalled();
   });
 });
 
-describe("lifecycle_stats_v3", () => {
-  it("get needs no identifier and forwards optional filters", async () => {
+describe("lifecycle_rule stats action", () => {
+  it("needs no identifier and forwards optional filters", async () => {
     const registry = new Registry(makeConfig());
     const client = mockClient({ storageReclaimed: "2048", artifactsCleaned: 4, executionsLast30Days: 2 });
-    const result = (await registry.dispatch(client, "lifecycle_stats_v3", "get", { action: "DELETE", scope: "descendants" })) as Record<string, unknown>;
+    const result = (await registry.dispatchExecute(client, "lifecycle_rule", "stats", { action: "DELETE", scope: "descendants" })) as Record<string, unknown>;
     const call = lastCall(client);
+    expect(call.method).toBe("GET");
     expect(call.path).toBe("/har/api/v3/lifecycle/stats");
     expect(call.params).toMatchObject({ action: "DELETE", scope: "descendants", project_identifier: "Harness_Commons" });
     expect(result.artifactsCleaned).toBe(4);
@@ -219,8 +222,24 @@ describe("registries-lifecycle toolset", () => {
   it("reads stay available in read-only mode", async () => {
     const registry = new Registry(makeConfig({ HARNESS_READ_ONLY: true }));
     const client = mockClient({ items: [], hasMore: false });
-    await registry.dispatch(client, "lifecycle_execution_v3", "list", {});
-    expect(client.request).toHaveBeenCalledOnce();
+    await registry.dispatch(client, "lifecycle_execution", "list", {});
+    await registry.dispatchExecute(client, "lifecycle_execution", "items", { execution_id: "exec-1" });
+    await registry.dispatchExecute(client, "lifecycle_rule", "stats", {});
+    expect(client.request).toHaveBeenCalledTimes(3);
+  });
+
+  it("stats and items are read-risk actions, dry_run stays a write", () => {
+    const registry = new Registry(makeConfig());
+    expect(registry.getResource("lifecycle_rule").executeActions!.stats!.operationPolicy!.risk).toBe("read");
+    expect(registry.getResource("lifecycle_execution").executeActions!.items!.operationPolicy!.risk).toBe("read");
+    expect(registry.getResource("lifecycle_rule").executeActions!.dry_run!.operationPolicy!.risk).toBe("low_write");
+  });
+
+  it("has no suffixed or per-endpoint lifecycle types", () => {
+    const types = new Registry(makeConfig()).getAllResourceTypes();
+    for (const t of ["lifecycle_rule_v3", "lifecycle_execution_v3", "lifecycle_execution_item_v3", "lifecycle_stats_v3", "lifecycle_execution_item", "lifecycle_stats"]) {
+      expect(types).not.toContain(t);
+    }
   });
 
   it("every lifecycle resource supports account, org and project scope", () => {

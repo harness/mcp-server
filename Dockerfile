@@ -14,13 +14,14 @@ FROM toolchain AS build
 
 # Install dependencies (layer cache: only re-run when lockfile changes)
 COPY package.json pnpm-lock.yaml ./
-# package.json postinstall imports both files, so they must exist before install.
-COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/
+# Copy the postinstall entrypoint and all its local imports before install.
+COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/ip-address-security-lib.mjs scripts/
 RUN pnpm install --frozen-lockfile
 
 # Copy source and compile
 COPY tsconfig.json ./
 COPY src/ src/
+COPY apps/ apps/
 COPY scripts/preload-hf-model.mjs scripts/
 RUN pnpm build
 
@@ -32,7 +33,7 @@ RUN node scripts/preload-hf-model.mjs /app/.cache/hf
 FROM toolchain AS production-dependencies
 
 COPY package.json pnpm-lock.yaml ./
-COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/
+COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/ip-address-security-lib.mjs scripts/
 RUN pnpm install --frozen-lockfile --prod
 
 # Stage 3 — production runtime

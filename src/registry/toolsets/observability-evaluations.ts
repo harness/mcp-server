@@ -7,7 +7,7 @@ import { encodePathSegment } from "../../utils/path.js";
  * this toolset owns the persisted rules consumed by the Spark scorer.
  */
 import type { BodySchema, PathBuilderConfig, PreflightContext, ToolsetDefinition } from "../types.js";
-import { aiEvalsListExtract, passthrough } from "../extractors.js";
+import { observabilityEvalExtract, observabilityEvalListExtract, passthrough } from "../extractors.js";
 import { getConnector } from "./ai-evals.js";
 
 const AI = "/gateway/ai-evals/api/v1";
@@ -76,18 +76,6 @@ function base(input: JsonRecord, config: PathBuilderConfig): string {
 function configPath(input: JsonRecord, config: PathBuilderConfig): string {
   const evalId = requireUuid(input.eval_id, "eval_id");
   return `${base(input, config)}/online-eval-configs/${encodePathSegment(evalId)}`;
-}
-
-function observabilityEvalExtract(raw: unknown): unknown {
-  const record = asRecord(raw);
-  if (!record || typeof record.config_id !== "string") return raw;
-  const { config_id: evalId, ...response } = record;
-  return { ...response, eval_id: evalId };
-}
-
-function observabilityEvalListExtract(raw: unknown): { items: unknown[]; total: number } {
-  const { items, total } = aiEvalsListExtract(raw);
-  return { items: items.map(observabilityEvalExtract), total };
 }
 
 function unwrapRecord(value: unknown, description: string): JsonRecord {

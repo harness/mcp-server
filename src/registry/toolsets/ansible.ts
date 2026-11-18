@@ -1,37 +1,5 @@
 import type { ToolsetDefinition, PreflightContext } from "../types.js";
-
-// ─── Response extractors ─────────────────────────────────────────────────────
-
-/** Must match harness_list tool default size (src/tools/harness-list.ts). */
-const ANSIBLE_PAGE_SIZE = 20;
-
-/**
- * All Ansible list endpoints return a raw JSON array.
- * `page_count` = items on THIS page only (never the real total).
- * `has_more`   = true when the page is full (another page likely exists).
- */
-const ansibleListExtract = (
-  raw: unknown,
-  input?: Record<string, unknown>,
-): { items: unknown[]; page_count: number; has_more: boolean; pagination_note: string } => {
-  if (!Array.isArray(raw)) {
-    throw new Error(
-      `Ansible list endpoint returned unexpected payload shape: expected a JSON array, got ${raw === null ? "null" : typeof raw}. ` +
-        `Payload: ${JSON.stringify(raw)}`,
-    );
-  }
-  const items = raw;
-  const requestedSize = typeof input?.["size"] === "number" ? input["size"] : ANSIBLE_PAGE_SIZE;
-  const has_more = items.length >= requestedSize;
-  return {
-    items,
-    page_count: items.length,
-    has_more,
-    pagination_note: has_more
-      ? `Only ${items.length} items returned (page is full). Call again with page+1 to fetch the next batch. Do NOT report ${items.length} as the total count.`
-      : `All items on this page returned (${items.length} items). has_more=false means this is the last page.`,
-  };
-};
+import { ansibleListExtract, passthrough } from "../extractors.js";
 
 // ─── Preflight guards ────────────────────────────────────────────────────────
 
@@ -123,7 +91,7 @@ export const ansibleToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", inventory_id: "inventoryId" },
           preflight: requireProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: (raw: unknown) => raw,
+          responseExtractor: passthrough,
           description: "Get full details for a specific Ansible inventory.",
         },
       },
@@ -191,7 +159,7 @@ export const ansibleToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", playbook_id: "playbookId" },
           preflight: requireProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: (raw: unknown) => raw,
+          responseExtractor: passthrough,
           description: "Get full details for a specific Ansible playbook.",
         },
       },
@@ -257,7 +225,7 @@ export const ansibleToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", host_id: "hostId" },
           preflight: requireProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: (raw: unknown) => raw,
+          responseExtractor: passthrough,
           description: "Get full details for a specific Ansible host including last_activity and stats.",
         },
       },
@@ -324,7 +292,7 @@ export const ansibleToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", activity_id: "activityId" },
           preflight: requireProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: (raw: unknown) => raw,
+          responseExtractor: passthrough,
           description: "Get full details for a specific Ansible activity including metrics and git context.",
         },
       },

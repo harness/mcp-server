@@ -15,6 +15,7 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const README_PATH = join(ROOT, "README.md");
+const GEMINI_PATH = join(ROOT, "docs", "gemini.md");
 // Other README sections have historical drift; expand this set as those tables are normalized.
 const README_COVERAGE_TOOLSETS = new Map([
   ["connectors", { sectionTitle: "Connectors" }],
@@ -75,6 +76,11 @@ async function getCounts() {
     : config;
   const regAll = additive ? new Registry(configAll) : reg;
   const totalToolsets = regAll.getAllToolsets().length;
+  const allToolsetResources = regAll.getAllToolsets().map((toolset) => ({
+    name: toolset.name,
+    optIn: Boolean(toolset.optIn),
+    resourceTypes: toolset.resources.map((resource) => resource.resourceType),
+  }));
 
   // Prompt count: count source prompt modules (excludes index bundler).
   // Counting build/prompts is vulnerable to stale tsc output because tsc does not clean deleted files.
@@ -87,7 +93,7 @@ async function getCounts() {
     console.error("WARNING: No prompt files found in src/prompts/ — expected at least 1");
   }
 
-  return { resourceTypes, defaultToolsets, totalToolsets, promptCount, coverageToolsetResources };
+  return { resourceTypes, defaultToolsets, totalToolsets, promptCount, coverageToolsetResources, allToolsetResources };
 }
 
 function escapeRegExp(value) {
@@ -200,11 +206,12 @@ function validateReadmeCoverage(readme, counts) {
     errors.push(...validateResourceMatrix(readme, toolset));
   }
 
-  for (const toolset of counts.coverageToolsetResources) {
+  for (const toolset of counts.allToolsetResources) {
     const expectedResourceTypes = new Set(toolset.resourceTypes);
-    const rowCells = findMarkdownTableRow(readme, `\`${toolset.name}\``, 2);
+    const expectedFirstCell = toolset.optIn ? `\`${toolset.name}\` *(opt-in)*` : `\`${toolset.name}\``;
+    const rowCells = findMarkdownTableRow(readme, expectedFirstCell, 2);
     if (!rowCells) {
-      errors.push(`README.md Toolset Filtering table is missing a row for toolset: ${toolset.name}`);
+      errors.push(`README.md Toolset Filtering table is missing a row for toolset: ${expectedFirstCell}`);
       continue;
     }
 
@@ -237,8 +244,9 @@ const REPLACEMENTS = [
   { pattern: /\b\d+ of \d+ toolsets?\b/g, replacement: (c) => `${c.defaultToolsets} of ${c.totalToolsets} toolsets` },
   // "31 toolsets" — only when NOT preceded by "of " (avoids double-replacing "N of M toolsets")
   { pattern: /(?<!of )\b\d+ toolsets?\b/g, replacement: (c) => `${c.defaultToolsets} toolsets` },
-  // Architecture diagram: |  31 Toolsets      |
+  // Architecture diagram: |  31 Toolsets      | or | 50 Toolsets (44 default) |
   { pattern: /\|\s+\d+ Toolsets\s+\|/g, replacement: (c) => `|  ${c.defaultToolsets} Toolsets      |` },
+  { pattern: /\|\s*\d+ Toolsets \(\d+ default\)\s*\|/g, replacement: (c) => `| ${c.totalToolsets} Toolsets (${c.defaultToolsets} default) |` },
   // Architecture diagram: |  163 Resource Types|
   { pattern: /\|\s+\d+ Resource Types\|/g, replacement: (c) => `|  ${c.resourceTypes} Resource Types|` },
   // Clone instructions: cd harness-mcp-v2 -> cd mcp-server
@@ -251,17 +259,20 @@ async function main() {
 
   const original = readFileSync(README_PATH, "utf-8");
   let updated = original;
+  const originalGemini = readFileSync(GEMINI_PATH, "utf-8");
+  let updatedGemini = originalGemini;
 
   for (const { pattern, replacement } of REPLACEMENTS) {
     updated = updated.replace(pattern, replacement(counts));
+    updatedGemini = updatedGemini.replace(pattern, replacement(counts));
   }
 
   const coverageErrors = validateReadmeCoverage(updated, counts);
 
   if (checkMode) {
-    if (original !== updated || coverageErrors.length > 0) {
-      if (original !== updated) {
-        console.error("README.md is stale. Run `pnpm docs:generate` to refresh.");
+    if (original !== updated || originalGemini !== updatedGemini || coverageErrors.length > 0) {
+      if (original !== updated || originalGemini !== updatedGemini) {
+        console.error("Documentation is stale. Run `pnpm docs:generate` to refresh.");
         console.error("Differences found in counts or clone instructions.");
       }
       if (coverageErrors.length > 0) {
@@ -276,11 +287,12 @@ async function main() {
     process.exit(0);
   }
 
-  if (original === updated) {
+  if (original === updated && originalGemini === updatedGemini) {
     console.error("README.md is already up to date.");
   } else {
-    writeFileSync(README_PATH, updated);
-    console.error(`README.md updated: ${counts.resourceTypes} resource types, ${counts.defaultToolsets}/${counts.totalToolsets} toolsets, ${counts.promptCount} prompts.`);
+    if (original !== updated) writeFileSync(README_PATH, updated);
+    if (originalGemini !== updatedGemini) writeFileSync(GEMINI_PATH, updatedGemini);
+    console.error(`Documentation updated: ${counts.resourceTypes} resource types, ${counts.defaultToolsets}/${counts.totalToolsets} toolsets, ${counts.promptCount} prompts.`);
   }
 
   if (coverageErrors.length > 0) {

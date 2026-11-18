@@ -327,8 +327,21 @@ export interface EndpointSpec {
    * resources whose NG endpoints require `orgIdentifier` on the query string (e.g. POST /ng/api/projects).
    */
   injectOrgQueryFallback?: boolean;
+  /**
+   * Optional per-operation scope override when an endpoint's scope differs from
+   * the resource default (e.g. a project-scoped `list` paired with an
+   * account-scoped `get`-by-UUID on the same `resourceType`).
+   */
+  scope?: ResourceScope;
   /** Override default scope query param names (e.g. for APIs using snake_case) */
   scopeParams?: { account?: string; org?: string; project?: string };
+  /**
+   * Optional pre-resolution input normalizer. Use when an endpoint needs to
+   * normalize or hoist fields on `input` before path/query parameters are built
+   * (e.g. auto-detecting UUID vs slug on `GET` endpoints). Never use `bodyBuilder`
+   * on `GET` requests for input side effects.
+   */
+  inputNormalizer?: (input: Record<string, unknown>, config: PathBuilderConfig) => void;
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => unknown;
   /**
@@ -442,6 +455,29 @@ export interface EndpointSpec {
 /**
  * Declarative definition of a Harness resource type and how it maps to CRUD endpoints.
  */
+/** One detail row on an approval card. */
+export interface ReviewCardField {
+  /** Row label; must be unique within the card. */
+  label: string;
+  /** Dotted path into the create/update input body. */
+  path: string;
+  /** Enum value -> display text. */
+  labels?: Record<string, string>;
+  /** Template for object values, e.g. "{identifierName}: {fieldName}". */
+  template?: string;
+  /** Shown when the path is missing or empty. */
+  default?: string;
+  /** Read-only id -> display-name lookup via harness_list. */
+  lookup?: { resourceType: string; match: string; display: string };
+}
+
+export interface ReviewCardSpec {
+  version: 1;
+  /** Noun used in the card title (e.g. "View"); defaults to the resource displayName. */
+  label?: string;
+  fields: ReviewCardField[];
+}
+
 export interface ResourceDefinition {
   /** Unique key: "pipeline", "service", "connector", etc. */
   resourceType: string;
@@ -507,6 +543,12 @@ export interface ResourceDefinition {
     relationship: string;
     description: string;
   }>;
+  /**
+   * Optional approval-card layout for create/update review. Absent = the chat
+   * shows its generic confirm card. Pure JSON data (no functions): it is
+   * consumed outside this process via `harness_describe(resource_type=...)`.
+   */
+  reviewCard?: ReviewCardSpec;
   /** Execution guidance for LLMs. Describes how to discover and provide runtime inputs. */
   executeHint?: string;
   /** CRUD endpoint mappings */

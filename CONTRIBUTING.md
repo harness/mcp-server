@@ -82,13 +82,15 @@ export const myModuleToolset: ToolsetDefinition = {
       scope: "project",                      // "project" | "org" | "account"
       supportedScopes: ["project"],           // optional; use multiple values for multi-scope APIs
       identifierFields: ["resource_id"],     // maps to harness_get's resource_id param
-      listFilterFields: ["search_term"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter resources by name or keyword" },
+      ],
       operations: {
         list: {
           method: "GET",
           path: "/my-module/api/resources",
           queryParams: { search_term: "search", page: "page", size: "size" },
-          responseExtractor: pageExtract,    // use shared extractor — don't inline lambdas
+          responseExtractor: pageExtract,    // use shared extractor from ../extractors.js — never define inline/local extractors
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description: "List resources",
         },
@@ -96,7 +98,8 @@ export const myModuleToolset: ToolsetDefinition = {
           method: "GET",
           path: "/my-module/api/resources/{resourceId}",
           pathParams: { resource_id: "resourceId" },
-          responseExtractor: ngExtract,      // use shared extractor — don't inline lambdas
+          // Optional: set scope: "account" if get-by-UUID is account-scoped while list is project-scoped
+          responseExtractor: ngExtract,      // use shared extractor from ../extractors.js
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description: "Get resource details",
         },
@@ -166,14 +169,20 @@ operations: {
 },
 ```
 
-### 6. Avoiding parameter bloat
+### 6. Resource taxonomy, compaction, and avoiding bloat
 
-Each resource type adds to the `harness_describe` output that the LLM must process. Keep definitions lean:
+Each resource type adds to the `harness_describe` catalog and full-mode tool schemas that the LLM must process. Keep definitions cohesive and lean (`docs/coding-standards.md` §13, `docs/schema-budget.md`):
 
+- **Model around domain entities, never 1 `resource_type` per REST endpoint**:
+  - Keep `list` and `get` on the same `resourceType`. Never create a separate `*_detail` resource type; if `get` is account-scoped while `list` is project-scoped, set `scope: "account"` on the `get` `EndpointSpec`.
+  - Attach RPCs, evaluations, and batch/stats queries to the parent resource's `executeActions` (`operationPolicy: { risk: "read", retryPolicy: "safe" }` for read-only stats/queries) instead of creating standalone single-action or `*_stats` / `*_count` resource types.
+  - Consolidate hierarchical sub-routes under a single resource using `pathBuilder` when the route is determined by which parent IDs are provided.
+  - Never suffix `resourceType` with backend URL route versions (`_v1`, `_v2`, `_v3`) unless an older resource with the **exact same `resourceType` name** already coexists (`pipeline_v1`, `template_v1`, `runtime_input_template_v1`).
+- **List item compaction (`compactItem` / `skipCompact`)**: `harness_list` runs `compactItems()` by default (`compact: true`), which strips fields not in the generic key whitelist (`src/utils/compact.ts`). If your list items have domain-specific fields agents need to act on (e.g. `packageType`, `scanStatus`, `pullCommand`), define a `compactItem` projector on the `ResourceDefinition` (or set `skipCompact: true` on the `list` `EndpointSpec` when items are already minimal).
 - **identifierFields**: Only the primary key(s). Don't add fields that are just query params.
-- **listFilterFields**: Only fields the LLM would realistically use to narrow results. Skip internal API params like `sort` or `getDistinctFromBranches`.
+- **listFilterFields**: Only fields the LLM would realistically use to narrow results.
 - **queryParams**: Map only the params that matter. The registry auto-injects `accountIdentifier`, `orgIdentifier`, and `projectIdentifier` based on `scope`.
-- **responseExtractor**: Always unwrap the Harness envelope (`data`, `data.content`). Don't return raw responses — they contain pagination metadata the LLM doesn't need.
+- **responseExtractor**: Always import shared extractors from `src/registry/extractors.ts` and unwrap the Harness envelope (`data`, `data.content`). Never define inline or toolset-local extractor functions.
 
 ## Adding a Prompt Template
 
@@ -191,7 +200,7 @@ export function registerMyPrompt(server: McpServer): void {
       description: "Short description of what this prompt does",
       argsSchema: {
         requiredParam: z.string().describe("What this param is"),
-        optionalParam: z.string().describe("Optional context").optional(),
+        optionalParam: z.string().optional().describe("Optional context"), // .describe() MUST be last in Zod v4
       },
     },
     async ({ requiredParam, optionalParam }) => ({

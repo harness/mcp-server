@@ -8,7 +8,7 @@ import { registerAllTools } from "../../src/tools/index.js";
 
 // Pinned hash of the full-mode tool schemas (descriptions, input and output schemas as advertised by tools/list). Full mode must stay byte-identical when compact-mode
 // copy changes; update this only for an intentional full-mode contract change.
-const FULL_MODE_SCHEMA_SHA256 = "81aa018d206356e0131709915c94e4b3e465355ec18274989f7ca1169df23764";
+const FULL_MODE_SCHEMA_SHA256 = "cdb41dbf07a6a28d7197c1cf0c04ec3055cc2d0719e30a0fa052e4f638ad764c";
 
 // Measured: tool descriptions + input and output schemas in compact mode. Measured 21372 B total, 3585 B largest tool; headroom is deliberately small (~5%).
 const COMPACT_TOTAL_BUDGET_BYTES = 22500;
@@ -52,6 +52,24 @@ describe("HARNESS_SCHEMA_MODE", () => {
   it("full mode tool schemas are unchanged", () => {
     const hash = createHash("sha256").update(serialize(collectTools("full"))).digest("hex");
     expect(hash).toBe(FULL_MODE_SCHEMA_SHA256);
+  });
+
+  it("full mode enums include preferred domain aliases, deprecated _v3 aliases, and nav toolset aliases", () => {
+    const tools = collectTools("full");
+    const listSchema = tools.get("harness_list")!.schema as {
+      properties: Record<string, { enum?: string[] }>;
+    };
+    expect(listSchema.properties.resource_type?.enum).toContain("workspace");
+    expect(listSchema.properties.resource_type?.enum).toContain("feature_flag");
+    expect(listSchema.properties.resource_type?.enum).toContain("artifact_scan_v3");
+
+    const describeSchema = tools.get("harness_describe")!.schema as {
+      properties: Record<string, { enum?: string[] }>;
+    };
+    expect(describeSchema.properties.resource_type?.enum).toContain("workspace");
+    expect(describeSchema.properties.toolset?.enum).toContain("flags");
+    expect(describeSchema.properties.toolset?.enum).toContain("infra-deploys");
+    expect(describeSchema.properties.toolset?.enum).toContain("artifacts");
   });
 
   it("compact mode is meaningfully smaller than full", () => {
