@@ -72,6 +72,24 @@ describe("HARNESS_SCHEMA_MODE", () => {
     expect(describeSchema.properties.toolset?.enum).toContain("artifacts");
   });
 
+  it("full mode enums accept flag_experiment_summary and its canonical fme_experiment_summary", () => {
+    const tools = collectTools("full");
+    for (const name of ["harness_get", "harness_describe"]) {
+      const schema = tools.get(name)!.schema as { properties: Record<string, { enum?: string[] }> };
+      expect(schema.properties.resource_type?.enum, name).toContain("flag_experiment_summary");
+      expect(schema.properties.resource_type?.enum, name).toContain("fme_experiment_summary");
+    }
+  });
+
+  it("compact mode does not enum-gate resource_type, so flag_experiment_summary is not rejected pre-dispatch", () => {
+    const tools = collectTools("compact");
+    for (const name of ["harness_get", "harness_describe"]) {
+      const schema = tools.get(name)!.schema as { properties: Record<string, { type?: string; enum?: string[] }> };
+      expect(schema.properties.resource_type?.type, name).toBe("string");
+      expect(schema.properties.resource_type?.enum, name).toBeUndefined();
+    }
+  });
+
   it("compact mode is meaningfully smaller than full", () => {
     expect(serialize(collectTools("compact")).length).toBeLessThan(serialize(collectTools("full")).length * 0.65);
   });

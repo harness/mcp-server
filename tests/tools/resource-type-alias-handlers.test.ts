@@ -53,6 +53,24 @@ describe("resource_type aliases reach handlers in canonical form", () => {
     expect(dispatchExecute.mock.calls[0]![1]).toBe("pipeline");
   });
 
+  it("harness_get dispatches fme_experiment_summary for the flag_experiment_summary alias", async () => {
+    const { call, dispatch } = setup();
+    await call("harness_get", { resource_type: "flag_experiment_summary", resource_id: "e1", org_id: "o1", project_id: "p1" });
+    expect(dispatch.mock.calls[0]![1]).toBe("fme_experiment_summary");
+  });
+
+  it("harness_describe resolves the flag_experiment_summary alias to fme_experiment_summary", async () => {
+    const { call } = setup();
+    const result = (await call("harness_describe", { resource_type: "flag_experiment_summary" })) as {
+      content: Array<{ text: string }>;
+      isError?: boolean;
+    };
+    expect(result.isError).toBeFalsy();
+    const text = result.content.map((c) => c.text).join("");
+    expect(text).toContain("fme_experiment_summary");
+    expect(text).toContain("get");
+  });
+
   it("harness_search canonicalizes resource_types", async () => {
     const { call, dispatch } = setup();
     await call("harness_search", { query: "x", resource_types: ["pipelines", "repo"] });
