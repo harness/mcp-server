@@ -79,6 +79,45 @@ describe("HarnessClient", () => {
       expect(init?.headers?.["Harness-Account"]).toBe("other-account");
       expect(client.account).toBe("test-account");
     });
+
+    it("keeps overlapping requests on their own account and API key", async () => {
+      let release: () => void = () => {};
+      const bothEntered = new Promise<void>((resolve) => {
+        let entered = 0;
+        release = () => {
+          entered += 1;
+          if (entered === 2) resolve();
+        };
+      });
+      fetchSpy.mockImplementation(async () => {
+        release();
+        await bothEntered;
+        return new Response("{}", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      });
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0, HARNESS_RATE_LIMIT_RPS: 1000 }));
+      await Promise.all([
+        runWithHarnessRequestCredentials(
+          { apiKey: "pat.alpha.token.secret", accountId: "alpha" },
+          () => client.request({ path: "/ng/api/projects" }),
+        ),
+        runWithHarnessRequestCredentials(
+          { apiKey: "pat.beta.token.secret", accountId: "beta" },
+          () => client.request({ path: "/ng/api/projects" }),
+        ),
+      ]);
+      const seen = fetchSpy.mock.calls.map((call) => {
+        const init = call[1] as { headers?: Record<string, string> };
+        return `${init.headers?.["Harness-Account"]}:${init.headers?.["x-api-key"]}`;
+      });
+      expect(seen).toEqual(expect.arrayContaining([
+        "alpha:pat.alpha.token.secret",
+        "beta:pat.beta.token.secret",
+      ]));
+      expect(client.account).toBe("test-account");
+    });
   });
 
   describe("request — URL building", () => {
