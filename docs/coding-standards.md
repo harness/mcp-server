@@ -421,7 +421,7 @@ Before every commit, verify:
 | Build | `tsc` → `build/` | Yes |
 | Package manager | pnpm | Yes |
 | Schema validation | Zod v4 (`import * as z from "zod/v4"`) | Yes |
-| MCP SDK | `@modelcontextprotocol/sdk` v1.x | Yes |
+| MCP SDK | `@modelcontextprotocol/server` v2.x (plus `@modelcontextprotocol/node` and `@modelcontextprotocol/express`) | Yes |
 | Transport | Stdio + Streamable HTTP | Yes |
 | Test runner | Vitest | Yes |
 

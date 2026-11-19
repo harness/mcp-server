@@ -132,7 +132,10 @@ When running in HTTP mode, the server exposes:
 | `/oauth/token` | `POST` | Return or refresh upstream tokens for the MCP client; never returns HarnessID tokens |
 
 
-The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.
+The HTTP transport serves two protocol eras on `POST /mcp`.
+
+- **2025-11-25 and earlier.** Session-based. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header. `GET /mcp` streams SSE notifications and `DELETE /mcp` ends the session.
+- **2026-07-28.** Stateless. Each request carries the protocol envelope and `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` headers. There is no session id. `server/discover` replaces the initialize handshake, and write confirmations use multi-round-trip `input_required` results. Set `HARNESS_MCP_REQUEST_STATE_KEY` (at least 32 bytes, identical on every replica) so a confirmation started on one process can be finished on another.
 
 Operational constraints in HTTP mode:
 
@@ -140,7 +143,7 @@ Operational constraints in HTTP mode:
 - OAuth mode accepts HarnessID access tokens instead of `HARNESS_MCP_AUTH_TOKEN` and can bind to a non-loopback address without the unauthenticated opt-out.
 - OAuth proxy mode accepts an upstream identity-provider token, exchanges it internally for a per-user HarnessID token, and requires the upstream token on every request.
 - Non-loopback single-user and multi-user binds require `HARNESS_MCP_AUTH_TOKEN` by default. To run unauthenticated on a non-loopback interface anyway, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` explicitly.
-- `POST /mcp` without `mcp-session-id` must be an `initialize` request.
+- A 2025 `POST /mcp` without `mcp-session-id` must be an `initialize` request. A 2026-07-28 request is recognized by its protocol envelope and does not use a session.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
 - Idle sessions are reaped after `MCP_SESSION_TTL_MS` milliseconds once no request or SSE stream is active (default `1800000`, or 30 minutes).
@@ -644,6 +647,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_APPS`          | No       | `off`                       | [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) views. `off` (default) keeps text-only results. `auto` serves the `ui://harness/app` resource and adds view data to `harness_get`, `harness_execute`, and `harness_status` results only for hosts that declare the `io.modelcontextprotocol/ui` extension; other clients still get unchanged text results |
 | `HARNESS_AUTO_APPROVE_RISK` | No       | `none`                      | Risk-based auto-approve threshold for autonomous workflows. Operations at or below this risk proceed without confirmation. Values: `none`, `low_write`, `medium_write`, `high_write`, `all`. See [Elicitation](#elicitation)                          |
 | `HARNESS_SKIP_ELICITATION`  | No       | `false`                     | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility                                                                                                                                                         |
+| `HARNESS_MCP_REQUEST_STATE_KEY` | No   | random per process          | HMAC key (at least 32 bytes) for 2026-07-28 write-confirmation state. Set the same value on every replica so a confirmation can finish on a different process                                                                                       |
 | `HARNESS_ALLOW_HTTP`        | No       | `false`                     | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                                   |
 | `HARNESS_PIPELINE_VERSION`  | No       | `0`                         | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
@@ -2362,12 +2366,12 @@ tests/
 
 ## Elicitation
 
-The write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation when the action's risk requires it — `medium_write`, `high_write`, and `destructive` operations only. Low-risk creates / updates / reads (e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt. When a prompt is surfaced, the user sees what's about to happen and accepts or declines, giving real human-in-the-loop approval for the operations that actually mutate or run things.
+The write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) confirm with the user when the action's risk requires it — `medium_write`, `high_write`, and `destructive` operations only. Low-risk creates / updates / reads (e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt. On the 2026-07-28 protocol the tool returns an `input_required` result and the client retries with the answer. On 2025-era clients the SDK delivers the same decision as an [elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation) prompt. When a prompt is surfaced, the user sees what's about to happen and accepts or declines.
 
 **How it works:**
 
 1. The LLM calls a write tool with `medium_write`+ risk (e.g. `harness_delete`, `harness_execute pipeline.run`). Low-risk creates / updates / reads do not surface a prompt.
-2. The server sends an elicitation request to the client with a summary of the operation and a `confirm` checkbox (default checked).
+2. The server asks the client to confirm, with a summary of the operation and a `confirm` checkbox (default checked). 2026-07-28 clients receive that ask as `input_required`; 2025 clients receive `elicitation/create`.
 3. The user sees the details and clicks **Accept** (with `confirm` checked) or **Decline / Cancel**.
 4. If accepted with `confirm: true`, the operation proceeds. If accepted with `confirm` unchecked, declined, or cancelled, it's blocked and the LLM is told (an explicit decline is **authoritative** and not bypassed by `confirm: true` on the tool call).
 

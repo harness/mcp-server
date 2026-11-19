@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { appendFileSync } from "node:fs";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { Request, Response } from "express";
+import { NodeStreamableHTTPServerTransport, toNodeHandler, toWebRequest } from "@modelcontextprotocol/node";
+import { serveStdio, StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { createMcpHandler, isLegacyRequest, McpServer } from "@modelcontextprotocol/server";
 import { json } from "express";
 import { loadConfig, type Config } from "./config.js";
 import { setLogLevel, createLogger } from "./utils/logger.js";
@@ -14,7 +17,7 @@ import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
-import { configureElicitation } from "./utils/elicitation.js";
+import { configureElicitation, confirmationRequestStateVerifier } from "./utils/elicitation.js";
 import { resolveCorsAllowOrigin, resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createMcpHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import {
@@ -42,6 +45,33 @@ import { MCP_APPS_EXTENSION_ID, mcpAppsEnabled } from "./apps/mcp-apps.js";
 
 const log = createLogger("main");
 
+const registryCache = new Map<string, Registry>();
+
+/** Registries are immutable for a config fingerprint, so modern per-request servers reuse one. */
+function registryFor(config: Config, auditManager: AuditManager): Registry {
+  const key = [
+    config.HARNESS_TOOLSETS ?? "",
+    config.HARNESS_SCHEMA_MODE,
+    config.HARNESS_PIPELINE_VERSION ?? "",
+    String(config.HARNESS_READ_ONLY),
+    config.HARNESS_ORG ?? "",
+    config.HARNESS_PROJECT ?? "",
+    config.HARNESS_MCP_APPS ?? "",
+    config.HARNESS_ACCOUNT_ID,
+    config.HARNESS_MCP_MODE ?? "",
+    config.HARNESS_BASE_URL,
+  ].join("\0");
+  const cached = registryCache.get(key);
+  if (cached) return cached;
+  const registry = new Registry(config, { auditManager });
+  if (registryCache.size >= 64) {
+    const oldest = registryCache.keys().next().value;
+    if (oldest !== undefined) registryCache.delete(oldest);
+  }
+  registryCache.set(key, registry);
+  return registry;
+}
+
 interface HarnessServerResult {
   server: McpServer;
   auditManager: AuditManager;
@@ -59,7 +89,7 @@ interface OAuthSessionCredential {
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  */
-function createHarnessServer(
+export function createHarnessServer(
   config: Config,
   sharedAuditManager?: AuditManager,
   sharedSearchManager?: SearchManager,
@@ -71,7 +101,7 @@ function createHarnessServer(
     client.setAccountIdResolver(() => oauthCredential.accountId);
     client.setBearerTokenResolver(() => oauthCredential.accessToken);
   }
-  const registry = new Registry(config, { auditManager });
+  const registry = registryFor(config, auditManager);
   const searchManager = sharedSearchManager ?? new SearchManager(config);
 
   const server = new McpServer(
@@ -86,6 +116,13 @@ function createHarnessServer(
         logging: {},
         ...(mcpAppsEnabled(config) ? { extensions: { [MCP_APPS_EXTENSION_ID]: {} } } : {}),
       },
+      cacheHints: {
+        "tools/list": { ttlMs: 60_000, cacheScope: "private" },
+        "prompts/list": { ttlMs: 60_000, cacheScope: "private" },
+        "resources/list": { ttlMs: 60_000, cacheScope: "private" },
+        "server/discover": { ttlMs: 60_000, cacheScope: "private" },
+      },
+      requestState: confirmationRequestStateVerifier(),
       instructions: [
         "Harness MCP server — manage CI/CD pipelines, code repos, PRs, services, environments, and more.",
         "",
@@ -115,7 +152,10 @@ function createHarnessServer(
     },
   );
 
-  configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
+  configureElicitation({
+    autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk,
+    requestStateKey: config.HARNESS_MCP_REQUEST_STATE_KEY,
+  });
   // Initialize search provider only if we created it (shared instances are pre-initialized)
   if (!sharedSearchManager) {
     searchManager.initialize().then(async () => {
@@ -169,9 +209,9 @@ function logToFile(message: string, data?: Record<string, unknown>): void {
  * Start the server in stdio mode — single persistent connection.
  */
 async function startStdio(config: Config): Promise<void> {
-  const { server, auditManager } = createHarnessServer(config);
+  const boot = createHarnessServer(config);
+  const auditManager = boot.auditManager;
   const transport = new StdioServerTransport();
-  await server.connect(transport);
   log.info("harness-mcp-server connected via stdio", {
     pid: process.pid,
     node_version: process.version,
@@ -188,6 +228,11 @@ async function startStdio(config: Config): Promise<void> {
     lastActivityTs = Date.now();
     return originalSend(msg);
   };
+  const stdioHandle = serveStdio(
+    () => createHarnessServer(config, boot.auditManager, boot.searchManager).server,
+    { transport },
+  );
+
   process.stdin.on("data", () => { lastActivityTs = Date.now(); });
 
   process.stdin.on("end", () => {
@@ -219,8 +264,7 @@ async function startStdio(config: Config): Promise<void> {
       uptime_s: Math.round(process.uptime()),
     });
     await auditManager.close();
-    await transport.close();
-    await server.close();
+    await stdioHandle.close();
     log.info("Stdio server closed");
     process.exit(0);
   };
@@ -266,7 +310,7 @@ async function startStdio(config: Config): Promise<void> {
 // ---------------------------------------------------------------------------
 interface Session extends HttpSessionActivity {
   server: McpServer;
-  transport: StreamableHTTPServerTransport;
+  transport: NodeStreamableHTTPServerTransport;
   oauthCredential?: OAuthSessionCredential;
 }
 
@@ -307,7 +351,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     );
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, x-harness-api-key, x-harness-appsec-api-key, x-harness-account-id, x-harness-org, x-harness-project, x-harness-pipeline-version, x-harness-auto-approve-risk");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, MCP-Protocol-Version, Mcp-Method, Mcp-Name, x-harness-api-key, x-harness-appsec-api-key, x-harness-account-id, x-harness-org, x-harness-project, x-harness-pipeline-version, x-harness-auto-approve-risk");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
@@ -397,6 +441,33 @@ async function startHttp(config: Config, port: number): Promise<void> {
   }, REAP_INTERVAL_MS);
   reaper.unref();
 
+  const httpCall = new AsyncLocalStorage<{ req: Request; res: Response }>();
+  const modernHandler = toNodeHandler(createMcpHandler(() => {
+    const stored = httpCall.getStore();
+    const oauthCredential = stored && (
+      config.HARNESS_MCP_MODE === "oauth" || config.HARNESS_MCP_MODE === "oauth-proxy"
+    )
+      ? {
+        subject: stored.res.locals.harnessOAuthClaims.sub as string,
+        identitySubject: (
+          stored.res.locals.harnessOAuthIdentitySubject as string | undefined
+        ) ?? stored.res.locals.harnessOAuthClaims.sub as string,
+        accountId: stored.res.locals.harnessOAuthAccountId as string,
+        accessToken: stored.res.locals.harnessOAuthAccessToken as string,
+      }
+      : undefined;
+    const headerConfig = mergeConfigWithSessionHeaders(config, stored?.req.headers ?? {});
+    const sessionConfig = oauthCredential
+      ? { ...headerConfig, HARNESS_ACCOUNT_ID: oauthCredential.accountId }
+      : headerConfig;
+    return createHarnessServer(
+      sessionConfig,
+      sharedAuditManager,
+      sharedSearchManager,
+      oauthCredential,
+    ).server;
+  }, { legacy: "reject" }), { maxRequestBodySize: maxBodySize });
+
   // ---- Routes ----
 
   // Health check (includes session count and search readiness for observability)
@@ -406,8 +477,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
     res.status(health.statusCode).json(health.body);
   });
 
-  // POST /mcp — initialize new sessions or route to existing session
+  // POST /mcp — 2026-07-28 requests are stateless; 2025 clients keep session routing.
   app.post("/mcp", async (req, res) => {
+    const webRequest = await toWebRequest(req, req.body);
+    if (!(await isLegacyRequest(webRequest, req.body))) {
+      await httpCall.run({ req, res }, () => modernHandler(req, res, req.body));
+      return;
+    }
+
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
     // Existing session — route request to its transport
@@ -449,7 +526,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
     // No session header — must be an initialize request. Create a new session.
     let server: McpServer | undefined;
-    let transport: StreamableHTTPServerTransport | undefined;
+    let transport: NodeStreamableHTTPServerTransport | undefined;
     try {
       const oauthCredential = (
         config.HARNESS_MCP_MODE === "oauth"
@@ -475,7 +552,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
         oauthCredential,
       );
       server = result.server;
-      transport = new StreamableHTTPServerTransport({
+      transport = new NodeStreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
           sessions.set(id, {
@@ -744,7 +821,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+const entryArg = process.argv[1];
+if (entryArg && import.meta.url === pathToFileURL(entryArg).href) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}

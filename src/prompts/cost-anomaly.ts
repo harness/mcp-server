@@ -1,14 +1,14 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerCostAnomalyPrompt(server: McpServer): void {
   server.registerPrompt(
     "cost-anomaly-investigation",
     {
       description: "Investigate cost anomalies — determine root cause, impacted resources, and remediation",
-      argsSchema: {
-        projectId: z.string().describe("Project identifier").optional(),
-      },
+      argsSchema: z.object({
+              projectId: z.string().describe("Project identifier").optional(),
+            }),
     },
     async ({ projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

@@ -12,6 +12,7 @@ import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { listOutputSchema } from "../../src/tools/output-schemas.js";
+import { ACCEPTED_CONFIRMATION, inputShape, toolHandlerContext } from "../helpers/request-context.js";
 
 // Top-level mocks for execution_log tests — must be before any imports that pull these in
 vi.mock("../../src/utils/log-resolver.js", () => ({
@@ -51,7 +52,7 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 }
 
 /** Minimal McpServer stub that captures registered tools. */
-function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept") {
+function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" | "none" = "accept") {
   const tools = new Map<string, { schema: unknown; handler: (...args: unknown[]) => Promise<ToolResult> }>();
   return {
     server: {
@@ -68,13 +69,22 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
     async call(name: string, args: Record<string, unknown>, extra?: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const confirmation = elicitAction === "none"
+        ? undefined
+        : elicitAction === "accept"
+          ? ACCEPTED_CONFIRMATION
+          : { action: elicitAction };
+      const defaultExtra = toolHandlerContext(new AbortController().signal, confirmation);
       return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
     },
     /** Return the registration schema for assertions about agent-facing metadata. */
     schema(name: string): unknown {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
+      const registered = tool.schema as { inputSchema?: Record<string, unknown> | { shape: Record<string, unknown> } };
+      if (registered?.inputSchema) {
+        return { ...registered, inputSchema: inputShape(registered as { inputSchema: Record<string, unknown> }) };
+      }
       return tool.schema;
     },
   } as any;
@@ -82,6 +92,11 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
 
 function parseResult(result: ToolResult): unknown {
   return JSON.parse(result.content[0]!.text);
+}
+
+function confirmationMessage(result: unknown): string {
+  const requests = (result as { inputRequests?: { confirm?: { params?: { message?: string } } } }).inputRequests;
+  return requests?.confirm?.params?.message ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -977,7 +992,7 @@ describe("harness_create", () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
     client = makeClient(mockRequest);
-    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreServer = makeMcpServer("none");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(fileStoreServer, registry, client, makeConfig());
     const contentBase64 = Buffer.from("sensitive file payload").toString("base64");
@@ -993,16 +1008,16 @@ describe("harness_create", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
-    expect(elicitationCall.message).toContain("[redacted");
-    expect(elicitationCall.message).not.toContain(contentBase64);
+    const message = confirmationMessage(result);
+    expect(message).toContain("[redacted");
+    expect(message).not.toContain(contentBase64);
   });
 
   it("redacts File Store upload content from JSON-string create confirmation prompts", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
     client = makeClient(mockRequest);
-    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreServer = makeMcpServer("none");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(fileStoreServer, registry, client, makeConfig());
     const contentBase64 = Buffer.from("sensitive json body payload").toString("base64");
@@ -1018,9 +1033,9 @@ describe("harness_create", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
-    expect(elicitationCall.message).toContain("[redacted");
-    expect(elicitationCall.message).not.toContain(contentBase64);
+    const message = confirmationMessage(result);
+    expect(message).toContain("[redacted");
+    expect(message).not.toContain(contentBase64);
   });
 });
 
@@ -1582,7 +1597,7 @@ environment:
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
     client = makeClient(mockRequest);
-    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreServer = makeMcpServer("none");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
     registerUpdateTool(fileStoreServer, registry, client, makeConfig());
     const content = "sensitive replacement file payload";
@@ -1599,16 +1614,16 @@ environment:
     });
 
     expect(result.isError).toBeUndefined();
-    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
-    expect(elicitationCall.message).toContain("[redacted");
-    expect(elicitationCall.message).not.toContain(content);
+    const message = confirmationMessage(result);
+    expect(message).toContain("[redacted");
+    expect(message).not.toContain(content);
   });
 
   it("redacts File Store upload content from JSON-string update confirmation prompts", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
     client = makeClient(mockRequest);
-    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreServer = makeMcpServer("none");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
     registerUpdateTool(fileStoreServer, registry, client, makeConfig());
     const content = "sensitive json replacement file payload";
@@ -1625,9 +1640,9 @@ environment:
     });
 
     expect(result.isError).toBeUndefined();
-    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
-    expect(elicitationCall.message).toContain("[redacted");
-    expect(elicitationCall.message).not.toContain(content);
+    const message = confirmationMessage(result);
+    expect(message).toContain("[redacted");
+    expect(message).not.toContain(content);
   });
 
   it("fails loudly when update has neither resource_id nor URL id", async () => {
@@ -4608,7 +4623,7 @@ describe("MCP Apps view data", () => {
 describe("approval prompt notes (confirmNote)", () => {
   /** The prompt a declining user sees for one call, and whether anything was sent. */
   async function promptFor(registry: Registry, tool: string, args: Record<string, unknown>, row: unknown = {}) {
-    const server = makeMcpServer("decline");
+    const server = makeMcpServer("none");
     const request = row instanceof Error ? vi.fn().mockRejectedValue(row) : vi.fn().mockResolvedValue(row);
     const client = makeClient(request);
     const config = makeConfig();
@@ -4620,10 +4635,10 @@ describe("approval prompt notes (confirmNote)", () => {
       register(server, registry, client, config);
     }
     const result = await server.call(tool, args);
-    expect(result.isError).toBe(true);
+    expect(result).toMatchObject({ resultType: "input_required" });
     // Only the title lookup behind the prompt may run, and only as a read; the write itself never goes out.
     expect(request.mock.calls.every(([o]) => o.method === "GET")).toBe(true);
-    return server.server.elicitInput.mock.calls[0]![0].message as string;
+    return confirmationMessage(result);
   }
 
   it("only the AI Code Review writes set a note, across every toolset", async () => {

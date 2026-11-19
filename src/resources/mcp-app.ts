@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Config } from "../config.js";
 import { createLogger } from "../utils/logger.js";
 import { MCP_APP_MIME_TYPE, MCP_APP_RESOURCE_URI, mcpAppsEnabled } from "../apps/mcp-apps.js";

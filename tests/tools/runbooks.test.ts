@@ -3,6 +3,7 @@
  *
  * All REST calls go through a mocked client.request; no real API is hit.
  */
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -45,7 +46,7 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
     async call(name: string, args: Record<string, unknown>, extra?: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const defaultExtra = toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION);
       return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
     },
   } as any;

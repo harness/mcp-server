@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
@@ -29,16 +29,16 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
     "harness_get",
     {
       description: "Get a Harness resource by ID. Accepts a Harness URL to auto-extract identifiers. For failure analysis, prefer harness_diagnose.",
-      inputSchema: {
-        resource_type: resourceTypeSchema(gettableTypes, registry.compactSchemas).optional().describe("Resource type to retrieve. Auto-detected from url."),
-        resource_id: z.string().optional().describe("Primary resource identifier. Auto-detected from url."),
-        url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
-        resource_scope: resourceScopeField(registry.compactSchemas),
-        org_id: orgIdField(registry.orgId, registry.compactSchemas),
-        project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type."),
-        return_download_url: z.union([z.boolean(), z.enum(["true", "false"])]).optional().describe("For execution_log only: return a directly fetchable log download URL instead of buffering log content."),
-      },
+      inputSchema: z.object({
+              resource_type: resourceTypeSchema(gettableTypes, registry.compactSchemas).optional().describe("Resource type to retrieve. Auto-detected from url."),
+              resource_id: z.string().optional().describe("Primary resource identifier. Auto-detected from url."),
+              url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
+              resource_scope: resourceScopeField(registry.compactSchemas),
+              org_id: orgIdField(registry.orgId, registry.compactSchemas),
+              project_id: projectIdField(registry.projectId, registry.compactSchemas),
+              params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type."),
+              return_download_url: z.union([z.boolean(), z.enum(["true", "false"])]).optional().describe("For execution_log only: return a directly fetchable log download URL instead of buffering log content."),
+            }),
       outputSchema: compactOutputSchema(getOutputSchema, registry.compactSchemas),
       ...appView.toolMeta,
       annotations: {
@@ -48,7 +48,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         openWorldHint: true,
       },
     },
-    async (rawArgs) => {
+    async (rawArgs, ctx) => {
       const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, ...rest } = args;
@@ -157,20 +157,18 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           }
         }
 
-        return appView.attach(jsonResult(result), () =>
-          (resourceType === "execution"
-            ? buildPipelineExecutionView(result, {
-                orgId: asString(input.org_id) ?? registry.orgId,
-                projectId: asString(input.project_id) ?? registry.projectId,
-                deepLink: (template, linkParams) => registry.deepLink(template, linkParams),
-              })
-            : undefined) ??
-          buildResultView(result, {
+        const view = (resourceType === "execution"
+          ? buildPipelineExecutionView(result, {
+              orgId: asString(input.org_id) ?? registry.orgId,
+              projectId: asString(input.project_id) ?? registry.projectId,
+              deepLink: (template, linkParams) => registry.deepLink(template, linkParams),
+            })
+          : undefined) ?? buildResultView(result, {
             displayName: def.displayName,
             resourceId,
             refresh: { tool: "harness_get", arguments: rawArgs as Record<string, unknown> },
-          }),
-        );
+          });
+        return appView.attach(jsonResult(result), () => view, ctx);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) {

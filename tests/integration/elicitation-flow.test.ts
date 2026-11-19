@@ -7,6 +7,7 @@
  * - Non-destructive ops (create/update) proceed silently when unavailable
  * - User declining/cancelling stops the operation
  */
+import { toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
@@ -43,6 +44,8 @@ function makeMcpServer(opts: {
   supportsElicitation: boolean;
   elicitAction?: ElicitAction;
   elicitThrows?: boolean;
+  /** Accepted form content. Defaults to `{ confirm: true }` for accept. */
+  elicitContent?: Record<string, unknown>;
 }) {
   const tools = new Map<string, { handler: (...args: unknown[]) => Promise<ToolResult> }>();
   const elicitInput = vi.fn();
@@ -68,7 +71,12 @@ function makeMcpServer(opts: {
     async call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      const extra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const confirmation = opts.elicitThrows
+        ? undefined
+        : opts.elicitAction === "decline" || opts.elicitAction === "cancel"
+          ? { action: opts.elicitAction }
+          : { action: "accept" as const, content: opts.elicitContent ?? { confirm: true } };
+      const extra = toolHandlerContext(new AbortController().signal, confirmation);
       return tool.handler(args, extra) as Promise<ToolResult>;
     },
   } as any;
@@ -169,9 +177,9 @@ describe("Elicitation flow: harness_delete (destructive)", () => {
       resource_id: "my-pipe",
     });
 
-    // Destructive + elicitation throws → blocked (client-side, not human decline)
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Operation blocked") });
+    // A client that advertises elicitation is asked in-band. Delivery failure
+    // is no longer a push-style exception inside the handler.
+    expect(result).toMatchObject({ resultType: "input_required" });
   });
 
   it("proceeds when user accepts", async () => {
@@ -245,7 +253,7 @@ describe("Elicitation flow: harness_execute", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
   });
 
   it("stops on decline", async () => {
@@ -366,7 +374,7 @@ describe("Elicitation flow: iacm_workspace medium_write", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
     expect(mockRequest).toHaveBeenCalledOnce();
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       policy_evaluation: { status: "success" },
@@ -386,7 +394,7 @@ describe("Elicitation flow: iacm_workspace medium_write", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
@@ -406,7 +414,7 @@ describe("Elicitation flow: iacm_workspace medium_write", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
     expect(mockRequest).toHaveBeenCalledOnce();
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       policy_evaluation: { status: "success" },
@@ -456,7 +464,7 @@ describe("Elicitation flow: iacm_workspace medium_write", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
     expect(mockRequest).toHaveBeenCalledOnce();
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       identifier: "shared-env",
@@ -490,7 +498,7 @@ describe("Elicitation flow: iacm_workspace medium_write", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
     expect(mockRequest).toHaveBeenCalledOnce();
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       id: "4640",
@@ -522,7 +530,7 @@ describe("Elicitation flow: iacm_workspace medium_write", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
     expect(mockRequest).toHaveBeenCalledOnce();
     expect(JSON.parse(result.content[0]!.text)).toEqual({
       id: "1",
@@ -647,8 +655,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     // degenerate accept (no confirm field). callerConfirmed is the opt-in.
     // Using a destructive resource so the elicitation prompt is actually
     // surfaced (low_write resources short-circuit before elicitInput runs).
-    const server = makeMcpServer({ supportsElicitation: true });
-    server._elicitInput.mockResolvedValue({ action: "accept", content: {} });
+    const server = makeMcpServer({ supportsElicitation: true, elicitContent: {} });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
     registerDeleteTool(server, registry, client, makeConfig());
 
@@ -659,7 +666,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
   });
 
   it("harness_delete still blocks on explicit decline EVEN with confirm:true (authoritative human decline)", async () => {
@@ -721,8 +728,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     // caller "confirm: true does not bypass an explicit decline" — there
     // was no explicit decline. Routing this through method:"blocked" gives
     // them the recovery hint matching the documented contract.
-    const server = makeMcpServer({ supportsElicitation: true });
-    server._elicitInput.mockResolvedValue({ action: "accept", content: {} });
+    const server = makeMcpServer({ supportsElicitation: true, elicitContent: {} });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
     registerDeleteTool(server, registry, client, makeConfig());
 

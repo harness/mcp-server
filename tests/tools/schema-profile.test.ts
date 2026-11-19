@@ -28,6 +28,13 @@ function makeConfig(mode: "full" | "compact"): Config {
   } as Config;
 }
 
+function jsonInputSchema(schema: z.ZodRawShape | z.ZodType): z.ZodType {
+  if (schema && typeof schema === "object" && "~standard" in schema) {
+    return schema as z.ZodType;
+  }
+  return z.object(schema as z.ZodRawShape);
+}
+
 function collectTools(mode: "full" | "compact") {
   const config = makeConfig(mode);
   const tools = new Map<string, { description?: string; schema: unknown; output?: unknown }>();
@@ -35,7 +42,7 @@ function collectTools(mode: "full" | "compact") {
     registerTool: vi.fn((name: string, def: { description?: string; inputSchema: z.ZodRawShape; outputSchema?: z.ZodType }) => {
       tools.set(name, {
         description: def.description,
-        schema: z.toJSONSchema(z.object(def.inputSchema)),
+        schema: z.toJSONSchema(jsonInputSchema(def.inputSchema)),
         output: def.outputSchema ? z.toJSONSchema(def.outputSchema) : undefined,
       });
     }),

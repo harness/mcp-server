@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 // snake_case id required by ml-infra (prompt_ref: "pipeline_summarizer")
 const PIPELINE_SUMMARIZER_PROMPT = {

@@ -1,4 +1,4 @@
-import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 
 /*
  * Error handling convention for tool handlers:
@@ -39,7 +39,7 @@ export class HarnessApiError extends Error {
  * unknown resource types) — i.e. plain Errors that are NOT HarnessApiErrors.
  */
 export function isUserError(err: unknown): err is Error {
-  return err instanceof Error && !(err instanceof HarnessApiError) && !(err instanceof McpError);
+  return err instanceof Error && !(err instanceof HarnessApiError) && !(err instanceof ProtocolError);
 }
 
 /**
@@ -68,25 +68,25 @@ function sanitizeErrorMessage(message: string): string {
 /**
  * Map a HarnessApiError (or generic Error) to an MCP-friendly McpError.
  */
-export function toMcpError(err: unknown): McpError {
-  if (err instanceof McpError) return err;
+export function toMcpError(err: unknown): ProtocolError {
+  if (err instanceof ProtocolError) return err;
 
   if (err instanceof HarnessApiError) {
     const code = mapHttpStatusToMcpCode(err.statusCode);
     const detail = err.correlationId ? ` (correlationId: ${err.correlationId})` : "";
     const cleanMessage = sanitizeErrorMessage(err.message);
-    const mcpErr = new McpError(code, `${cleanMessage}${detail}`);
+    const mcpErr = new ProtocolError(code, `${cleanMessage}${detail}`);
     mcpErr.cause = err;
     return mcpErr;
   }
 
   if (err instanceof Error) {
-    const mcpErr = new McpError(ErrorCode.InternalError, err.message);
+    const mcpErr = new ProtocolError(ProtocolErrorCode.InternalError, err.message);
     mcpErr.cause = err;
     return mcpErr;
   }
 
-  return new McpError(ErrorCode.InternalError, String(err));
+  return new ProtocolError(ProtocolErrorCode.InternalError, String(err));
 }
 
 /**
@@ -98,10 +98,10 @@ export function enrichErrorWithHint(message: string, diagnosticHint?: string): s
   return `${message}\n\nRecovery hint: ${diagnosticHint}`;
 }
 
-function mapHttpStatusToMcpCode(status: number): ErrorCode {
-  if (status === 400) return ErrorCode.InvalidParams;
-  if (status === 401 || status === 403) return ErrorCode.InvalidRequest;
-  if (status === 404) return ErrorCode.InvalidParams;
-  if (status === 429) return ErrorCode.InternalError;
-  return ErrorCode.InternalError;
+function mapHttpStatusToMcpCode(status: number): ProtocolErrorCode {
+  if (status === 400) return ProtocolErrorCode.InvalidParams;
+  if (status === 401 || status === 403) return ProtocolErrorCode.InvalidRequest;
+  if (status === 404) return ProtocolErrorCode.InvalidParams;
+  if (status === 429) return ProtocolErrorCode.InternalError;
+  return ProtocolErrorCode.InternalError;
 }
