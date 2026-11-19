@@ -141,7 +141,7 @@ const compositionFields = (kind: "connector" | "auth") => [
 const integrationCreateBody: BodySchema = {
   description: "Integration to create. Fill connector.with and auth.with from the definitions' templates (harness_get integration_definition).",
   fields: [
-    { name: "identifier", type: "string", required: true, description: "Unique within the scope. Letter or underscore first, then letters, digits, _ or $ (max 128). Cannot change later." },
+    { name: "identifier", type: "string", required: true, description: "Unique within the scope, e.g. my_github. Cannot change later; the backend error states the allowed format." },
     { name: "name", type: "string", required: true, description: "Display name." },
     { name: "description", type: "string", required: false, description: "Free text." },
     { name: "tags", type: "object", required: false, description: "String key/value map." },
@@ -150,52 +150,35 @@ const integrationCreateBody: BodySchema = {
     {
       name: "runner", type: "object", required: true, description: "Where the plugin runs. No default.",
       fields: [
-        { name: "type", type: "string", required: true, description: "harness_cloud or self_hosted (one the connector offers)." },
-        { name: "selectors", type: "array", itemType: "string", required: false, description: "Delegate selectors. Required for self_hosted; not allowed for harness_cloud." },
+        { name: "type", type: "string", required: true, description: "One of the runner types the connector definition offers (e.g. harness_cloud, self_hosted)." },
+        { name: "selectors", type: "array", itemType: "string", required: false, description: "Delegate selectors, for self-hosted runners." },
       ],
     },
   ],
 };
 
-/** Fields the integration PUT reads. Everything else in a GET response is server-owned. */
-export const INTEGRATION_WRITE_FIELDS = [
-  "identifier", "name", "description", "tags", "connector", "auth", "runner", "version",
-] as const;
-
-/** Server-owned fields of IntegrationResponse; dropped silently so an agent can send back what it read. */
-const INTEGRATION_READ_ONLY_FIELDS = new Set([
+/**
+ * Server-owned fields of IntegrationResponse. Removed before a PUT; everything else is carried over,
+ * so a field the backend adds later survives a partial update instead of being reset. The backend
+ * ignores unknown fields, so a read-only field added later is harmless too.
+ */
+export const INTEGRATION_READ_ONLY_FIELDS = [
   "id", "uniqueId", "parentUniqueId", "accountId", "created", "updated", "createdBy", "updatedBy", "health",
-]);
-
-const pickComposition = (v: unknown): unknown => (isRecord(v) ? dropUndefined({ uses: v.uses, with: v.with }) : v);
-const pickRunner = (v: unknown): unknown => (isRecord(v) ? dropUndefined({ type: v.type, selectors: v.selectors }) : v);
+] as const;
 
 /**
  * Build a full-replace PUT body from the current integration and a partial patch.
- * Top-level fields in the patch replace the current ones whole (no deep merge);
- * `null` clears a field; `version` comes from the patch when given, else from current.
+ * Top-level patch fields replace current ones whole (no deep merge); `null` clears a field;
+ * `version` comes from the patch when given, else from current. The backend validates fields.
  */
-function assertKnownIntegrationFields(patch: Item): void {
-  const unknown = Object.keys(patch).filter(
-    (k) => !(INTEGRATION_WRITE_FIELDS as readonly string[]).includes(k) && !INTEGRATION_READ_ONLY_FIELDS.has(k),
-  );
-  if (unknown.length > 0) {
-    throw new Error(
-      `Unknown integration field(s): ${unknown.join(", ")}. Updatable fields: ${INTEGRATION_WRITE_FIELDS.join(", ")}.`,
-    );
-  }
-}
-
 export function mergeIntegrationUpdate(current: Item, patch: Item): Item {
-  assertKnownIntegrationFields(patch);
-  const merged: Item = {};
-  for (const field of INTEGRATION_WRITE_FIELDS) {
-    const value = patch[field] !== undefined ? patch[field] : current[field];
-    if (value === undefined || value === null) continue;
-    merged[field] =
-      field === "connector" || field === "auth" ? pickComposition(value)
-      : field === "runner" ? pickRunner(value)
-      : value;
+  const merged: Item = { ...current };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v !== undefined) merged[k] = v;
+  }
+  for (const k of INTEGRATION_READ_ONLY_FIELDS) delete merged[k];
+  for (const [k, v] of Object.entries(merged)) {
+    if (v === null) delete merged[k];
   }
   return merged;
 }
@@ -206,13 +189,43 @@ async function mergeIntegrationBeforeUpdate(ctx: PreflightContext): Promise<void
   if (!isRecord(patch) || Object.keys(patch).length === 0) {
     throw new Error("integration update needs a body with at least one field to change (e.g. {\"name\": \"New name\"}).");
   }
-  assertKnownIntegrationFields(patch);
   const current = await ctx.registry.dispatch(ctx.client, "integration", "get", { ...ctx.input, body: undefined }, ctx.signal);
   if (!isRecord(current)) {
     throw new Error("integration update: could not read the current integration to merge the change into.");
   }
   ctx.input.body = mergeIntegrationUpdate(current, patch);
 }
+
+/** Job body: must be a JSON object. Fields are validated by the backend, which rejects unknown ones by name. */
+export function jobBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body = input.body;
+  if (!isRecord(body)) {
+    throw new Error('integration_job needs a JSON object body. Use harness_describe(resource_type="integration_job") for the fields.');
+  }
+  return body;
+}
+
+const useFields = (kind: "action" | "trigger", example: string) => [
+  { name: "uses", type: "string" as const, required: true, description: `${kind} definition id (integration_definition, category=${kind}), e.g. ${example}.` },
+  { name: "with", type: "object" as const, required: false, description: `Values for the ${kind} definition's template inputs.` },
+];
+
+const jobCreateBody: BodySchema = {
+  description:
+    "Ingest job to create. Fill action.with and trigger.with from the definitions' templates (harness_get integration_definition). " +
+    "The backend rejects fields not listed here (400 naming the field).",
+  fields: [
+    { name: "identifier", type: "string", required: true, description: "Unique within the integration, e.g. nightly-sync (lowercase, digits, '-'). Cannot change later; the backend error states the allowed format." },
+    { name: "name", type: "string", required: false, description: "Display name." },
+    { name: "action", type: "object", required: true, description: "The ingest action (one of the connector's actions ids) and its inputs.", fields: useFields("action", "an ingest action of the connector") },
+    { name: "trigger", type: "object", required: true, description: "When the job runs (a trigger definition, e.g. schedule or webhook) and its inputs.", fields: useFields("trigger", "schedule or webhook") },
+    { name: "streams", type: "array", itemType: "string", required: false, description: "Streams to ingest (names from the action definition's streams). Omit for all streams." },
+    { name: "enabled", type: "boolean", required: false, description: "An enabled job starts ingesting on its trigger right away; pass false to create it paused." },
+    { name: "syncModes", type: "object", required: false, description: "Per-stream sync mode: {\"<stream>\": \"<mode>\"}, e.g. incremental or full_refresh." },
+    { name: "reconcile", type: "boolean", required: false, description: "Reconcile deletions on full refresh." },
+    { name: "resources", type: "object", required: false, description: "Runner resource override, e.g. {cpu: \"500m\", memory: \"1Gi\", ephemeralStorage: \"1Gi\"}." },
+  ],
+};
 
 const SCOPE_NOTE =
   "Default scope is project — pass org_id and project_id (or rely on HARNESS_ORG/HARNESS_PROJECT). " +
@@ -242,10 +255,10 @@ export const integrationsToolset: ToolsetDefinition = {
         { resourceType: "integration_job", relationship: "child", description: "Ingest jobs of this integration (pass integration_id)." },
       ],
       listFilterFields: [
-        { name: "search_term", description: "Match on name or identifier (max 128 chars)." },
-        { name: "connector", description: "Comma-separated connector definition ids (e.g. github), max 20." },
-        { name: "auth", description: "Comma-separated auth definition ids, max 20." },
-        { name: "sort", description: "Sort key and direction: name|identifier|created|updated with ,asc|,desc. Default updated,desc." },
+        { name: "search_term", description: "Match on name or identifier." },
+        { name: "connector", description: "Comma-separated connector definition ids (e.g. github)." },
+        { name: "auth", description: "Comma-separated auth definition ids." },
+        { name: "sort", description: "Sort key and direction, e.g. name,asc or updated,desc." },
       ],
       operations: {
         list: {
@@ -261,7 +274,6 @@ export const integrationsToolset: ToolsetDefinition = {
             auth: "auth",
             sort: "sort",
           },
-          defaultQueryParams: { page: "0", limit: "30" },
           responseExtractor: v1ListExtract(),
           headerPagination: true,
           description:
@@ -355,6 +367,27 @@ export const integrationsToolset: ToolsetDefinition = {
             "Get one job by integration_id + job_id (resource_id fills job_id), including action config, " +
             "checkpoints, last run, next run and health.",
         },
+        create: {
+          method: "POST",
+          path: "/connector-control-plane/v1/orgs/{org}/projects/{project}/integrations/{integration}/jobs",
+          pathBuilder: jobCollectionPath,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: jobBody,
+          bodySchema: jobCreateBody,
+          responseExtractor: passthrough,
+          description:
+            "Create a job under integration_id. Enabled by default, so it starts ingesting on its trigger — pass " +
+            "enabled:false to create it paused. 409 if the identifier exists. For a webhook trigger the response " +
+            "carries webhook.token once; it is never returned again.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/connector-control-plane/v1/orgs/{org}/projects/{project}/integrations/{integration}/jobs/{job}",
+          pathBuilder: jobPath,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description: "Delete a job by integration_id + job_id. Stops its ingestion. Cannot be undone.",
+        },
       },
     },
     {
@@ -377,8 +410,7 @@ export const integrationsToolset: ToolsetDefinition = {
       listFilterFields: [
         {
           name: "category",
-          description: "Only definitions of this category.",
-          enum: ["connector", "auth", "action", "trigger", "stream"],
+          description: "Only definitions of this category, e.g. connector, auth, action, trigger or stream.",
         },
       ],
       operations: {

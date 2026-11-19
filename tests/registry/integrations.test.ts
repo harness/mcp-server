@@ -91,12 +91,12 @@ describe("integrations toolset registration", () => {
 });
 
 describe("integration list", () => {
-  it("project scope by default, with default paging", async () => {
+  it("project scope by default, leaving paging defaults to the backend", async () => {
     const { registry, client, call } = setup();
     await registry.dispatch(client, "integration", "list", {});
     expect(call().method).toBe("GET");
     expect(call().path).toBe(`${PROJECT}/integrations`);
-    expect(call().params).toMatchObject({ page: "0", limit: "30" });
+    expect(call().params?.limit).toBeUndefined();
   });
 
   it("org and account scopes", async () => {
@@ -253,6 +253,12 @@ describe("integration_definition", () => {
     const { registry, client, call } = setup([]);
     await registry.dispatch(client, "integration_definition", "list", { org_id: "o", project_id: "p" });
     expect(call().path).toBe("/connector-control-plane/v1/definitions");
+  });
+
+  it("forwards a category it does not know (the backend owns the list)", async () => {
+    const { registry, client, call } = setup([]);
+    await registry.dispatch(client, "integration_definition", "list", { category: "sink" });
+    expect(call().params).toMatchObject({ category: "sink" });
   });
 
   it("filters by category", async () => {
@@ -441,12 +447,16 @@ describe("integration update", () => {
     expect(calls()[1]!.body).toEqual({ ...writable, name: "New" });
   });
 
-  it("rejects unknown fields before any request", async () => {
-    const { registry, client, request } = setupUpdate();
-    await expect(
-      registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { naem: "typo" } }),
-    ).rejects.toThrow(/Unknown integration field\(s\): naem/);
-    expect(request).not.toHaveBeenCalled();
+  it("a field the backend adds later survives a partial update", async () => {
+    const { registry, client, calls } = setupUpdate({ ...current, labels: ["a"] });
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { name: "New" } });
+    expect(calls()[1]!.body).toEqual({ ...writable, labels: ["a"], name: "New" });
+  });
+
+  it("forwards fields it does not know to the backend, which validates them", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { newField: 1 } });
+    expect(calls()[1]!.body).toMatchObject({ newField: 1 });
   });
 
   it("empty or missing body throws before any request", async () => {
@@ -482,5 +492,100 @@ describe("integration update", () => {
 
   it("mergeIntegrationUpdate keeps falsy-but-set values", () => {
     expect(mergeIntegrationUpdate({ ...writable }, { description: "", tags: {} })).toMatchObject({ description: "", tags: {} });
+  });
+});
+
+describe("integration_job create/delete", () => {
+  const body = {
+    identifier: "nightly",
+    action: { uses: "githubIngest", with: { org_names: ["harness"] } },
+    trigger: { uses: "schedule", with: { frequency: "24h" } },
+    streams: ["pull_requests"],
+    enabled: false,
+  };
+
+  it("create POSTs the body unchanged under the integration", async () => {
+    const { registry, client, call } = setup({ ...body, id: "job_1" });
+    await registry.dispatch(client, "integration_job", "create", { integration_id: "gh", body });
+    expect(call().method).toBe("POST");
+    expect(call().path).toBe(`${PROJECT}/integrations/gh/jobs`);
+    expect(call().body).toEqual(body);
+  });
+
+  it("enabled false and empty streams reach the API", async () => {
+    const { registry, client, call } = setup({});
+    await registry.dispatch(client, "integration_job", "create", {
+      integration_id: "gh", body: { ...body, enabled: false, streams: [], reconcile: false },
+    });
+    expect(call().body).toMatchObject({ enabled: false, streams: [], reconcile: false });
+  });
+
+  it("create does not inject scope fields into the strict body", async () => {
+    const { registry, client, call } = setup({});
+    await registry.dispatch(client, "integration_job", "create", { integration_id: "gh", org_id: "o", project_id: "p", body });
+    expect(call().path).toBe("/connector-control-plane/v1/orgs/o/projects/p/integrations/gh/jobs");
+    expect(Object.keys(call().body as object).sort()).toEqual(Object.keys(body).sort());
+  });
+
+  it("create at account scope", async () => {
+    const { registry, client, call } = setup({});
+    await registry.dispatch(client, "integration_job", "create", { integration_id: "gh", resource_scope: "account", body });
+    expect(call().path).toBe("/connector-control-plane/v1/integrations/gh/jobs");
+  });
+
+  it("create forwards fields it does not know; the strict backend validates them", async () => {
+    const { registry, client, call } = setup({});
+    await registry.dispatch(client, "integration_job", "create", { integration_id: "gh", body: { ...body, futureField: true } });
+    expect(call().body).toEqual({ ...body, futureField: true });
+  });
+
+  it("create missing action/trigger names them before any request", async () => {
+    const { registry, client, request } = setup({});
+    await expect(
+      registry.dispatch(client, "integration_job", "create", { integration_id: "gh", body: { identifier: "nightly" } }),
+    ).rejects.toThrow(/action, trigger/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("create without integration_id throws before any request", async () => {
+    const { registry, client, request } = setup({});
+    await expect(registry.dispatch(client, "integration_job", "create", { body })).rejects.toThrow(/integration_id/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("create returns the response (including a minted webhook token) unchanged", async () => {
+    const created = { identifier: "hook", webhook: { path: "gh-events", token: "once" } };
+    const { registry, client } = setup(created);
+    const result = await registry.dispatch(client, "integration_job", "create", {
+      integration_id: "gh", body: { identifier: "hook", action: body.action, trigger: { uses: "webhook", with: { path: "gh-events" } } },
+    });
+    expect(result).toEqual(created);
+  });
+
+  it("create is medium_write and never retried", () => {
+    const { registry } = setup();
+    expect(registry.getResource("integration_job").operations.create?.operationPolicy).toEqual({
+      risk: "medium_write", retryPolicy: "do_not_retry",
+    });
+  });
+
+  it("delete sends DELETE to the job path", async () => {
+    const { registry, client, call } = setup(undefined);
+    await registry.dispatch(client, "integration_job", "delete", { integration_id: "gh", job_id: "nightly", resource_scope: "account" });
+    expect(call().method).toBe("DELETE");
+    expect(call().path).toBe("/connector-control-plane/v1/integrations/gh/jobs/nightly");
+  });
+
+  it("delete without job_id throws before any request", async () => {
+    const { registry, client, request } = setup(undefined);
+    await expect(registry.dispatch(client, "integration_job", "delete", { integration_id: "gh" })).rejects.toThrow(/job_id/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("delete is destructive and never retried", () => {
+    const { registry } = setup();
+    expect(registry.getResource("integration_job").operations.delete?.operationPolicy).toEqual({
+      risk: "destructive", retryPolicy: "do_not_retry",
+    });
   });
 });

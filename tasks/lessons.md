@@ -222,3 +222,7 @@
 - **Issue**: A list/get/execute resource merged before design review. Afterwards the open questions were how large the objects are, whether the full response helps an agent, and how an agent finds one item when it must page through a catalog. The follow-up was a per-resource `search_term`, adding another search path beside search-service / UDP.
 - **Fix**: Make response size and discovery part of the design review before merge (`docs/coding-standards.md` §15).
 - **Rule**: State default list item size, project bulky fields out, and say how an agent discovers the right item. Prefer the shared search path over a new per-resource one, and link the follow-up if a stopgap is needed.
+
+## Read-Modify-Write Merges Must Not Allowlist Writable Fields
+- **Issue**: A full-replace update preflight (GET, merge the patch, PUT) built the PUT from a fixed allowlist of writable fields (first seen in `integration` update). A field the backend adds later would be reset on every MCP partial update.
+- **Rule**: Build the PUT from the current record minus a denylist of known server-owned fields, overlay the patch, and let the backend validate field names. A new read-only field then fails loudly (strict backend 400) or is ignored (lenient backend) instead of losing data.
