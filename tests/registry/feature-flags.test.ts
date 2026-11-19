@@ -3653,6 +3653,84 @@ describe("fme_experiment_result", () => {
   });
 });
 
+describe("fme_experiment_summary", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("get: routes to /fme/api/v4/experiments/{experiment_id}/summary with account_id/organization_identifier/project_identifier params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ sampleCounts: [], calculatedAt: null });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_summary", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1%2Fwith%20slash/summary");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.params).not.toHaveProperty("environment_id");
+  });
+
+  it("get: throws when experiment_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_summary", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/experiment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws when org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_summary", "get", { experiment_id: "e1" }),
+    ).rejects.toThrow("fme_experiment_summary: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: returns per-treatment counts and srmState unchanged", async () => {
+    const summary = {
+      sampleCounts: [
+        { treatment: "off", count: 48213, srmState: null },
+        { treatment: "on", count: 48097, srmState: "BALANCED" },
+      ],
+      calculatedAt: "2025-06-10T08:00:00Z",
+    };
+    const mockRequest = vi.fn().mockResolvedValue(summary);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_summary", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+    });
+
+    expect(result).toEqual(summary);
+  });
+
+  it("is get-only: no list, create, update, or delete", () => {
+    const resource = findResource("fme_experiment_summary");
+    expect(resource.operations.get).toBeDefined();
+    expect(resource.operations.list).toBeUndefined();
+    expect(resource.operations.create).toBeUndefined();
+    expect(resource.operations.update).toBeUndefined();
+    expect(resource.operations.delete).toBeUndefined();
+  });
+});
+
 describe("fme_event_type", () => {
   let registry: Registry;
 

@@ -67,7 +67,7 @@ const ALLOWED_SINGLE_OP_COUNTS_BY_TOOLSET: Readonly<Record<string, number>> = {
   dashboards: 2,
   idp: 5,
   "pull-requests": 2,
-  "feature-flags": 4,
+  "feature-flags": 5,
   gitops: 9,
   chaos: 12,
   ccm: 12,

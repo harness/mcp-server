@@ -309,6 +309,7 @@ export const PREFERRED_RESOURCE_TYPE_NAMES: Readonly<Record<string, string>> = {
   fme_experiment_settings: "flag_experiment_settings",
   fme_experiment_alerting: "flag_experiment_alerting",
   fme_experiment_result: "flag_experiment_result",
+  fme_experiment_summary: "flag_experiment_summary",
   fme_event_type: "event_type",
   fme_segment_keys: "segment_keys",
   // Infrastructure (`alias: infra-deploys`)
