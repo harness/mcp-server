@@ -134,9 +134,14 @@ export const registriesToolset: ToolsetDefinition = {
           responseExtractor: harListExtract("registries"),
           description: "List artifact registries",
         },
+        // get/create/update stay pinned to project scope: their HAR builders (harRegistryRef/
+        // harSpaceRef) always resolve org/project from input or configured defaults, so without
+        // this override the resource-level supportedScopes above would let a caller pass
+        // resource_scope=account/org here and silently get project-scoped behavior instead.
         get: {
           method: "GET",
           path: "/har/api/v1/registry",
+          scope: "project",
           pathBuilder: (input, config) =>
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
           pathParams: { registry_id: "registryIdentifier" },
@@ -147,6 +152,7 @@ export const registriesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/har/api/v1/registry",
+          scope: "project",
           // HAR create requires space_ref=<accountId>/<orgId>/<projectId>/+
           queryParams: { space_ref: "space_ref" },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
@@ -166,6 +172,7 @@ export const registriesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/har/api/v1/registry",
+          scope: "project",
           pathBuilder: (input, config) =>
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
           pathParams: { registry_id: "registryIdentifier" },
