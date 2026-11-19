@@ -2063,12 +2063,13 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 44 of 51 toolsets are enabled. Seven toolsets are opt-in and excluded from the defaults:
+By default, 44 of 52 toolsets are enabled. Eight toolsets are opt-in and excluded from the defaults:
 
 - **`aicr`** — AI Code Review (reviews, findings, runs, gates, rules, conventions, settings). Opt-in until the gateway route is confirmed on every production environment.
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`appsec`** — Traceable Application & API Security (API inventory, OpenAPI specs, sample spans, sensitive data types, runtime threat activities, security events, AST scans, and inventory trends). Opt-in because it requires a dedicated `HARNESS_APPSEC_API_KEY` and targets `api.traceable.ai`.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
+- **`ci`** — Harness CI (test results reported by CI test steps, via `test_case`). Opt-in until the gateway route to the TI service public API is confirmed on every production environment.
 - **`observability-evaluations`** — Scheduled production-telemetry evaluation rules. Opt-in because it depends on the deployed scoring control plane.
 - **`unified-search`** — Semantic search across every source search-service serves. Opt-in because the backend is not deployed on every cluster and is feature-flagged per account (see [Unified Search](#unified-search)).
 - **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions). Opt-in until v3 writes land, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
@@ -2153,6 +2154,7 @@ Available toolset names:
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_git_registration, eval_prompt, online_eval |
 | `observability-evaluations` *(opt-in)* | observability_eval                                                                                                                                                                                                                                                               |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
+| `ci` *(opt-in)*         | test_case |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 | `registries-v3` *(opt-in)* | package, package_version, package_file, registry_metadata, package_metadata, version_metadata, file_metadata, metadata_key, metadata_value                                                                                                                                                      |
 | `incidents`             | incident                                                                                                                                                                                                                                                                                        |
@@ -2180,7 +2182,7 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 51 Toolsets (44 default) |
+                | 52 Toolsets (44 default) |
                 |  274 Resource Types|
                  +--------+---------+
                           |
