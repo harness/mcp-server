@@ -1,5 +1,5 @@
 import { encodePathSegment } from "../../utils/path.js";
-import type { BodySchema, PathBuilderConfig, ResourceScope, ToolsetDefinition } from "../types.js";
+import type { BodySchema, PathBuilderConfig, PreflightContext, ResourceScope, ToolsetDefinition } from "../types.js";
 import { passthrough, v1ListExtract } from "../extractors.js";
 
 /** API gateway prefix for the connector-control-plane service. */
@@ -128,7 +128,7 @@ export function compactDefinition(raw: Item): Item {
 export function integrationBody(input: Record<string, unknown>): Record<string, unknown> {
   const body = input.body;
   if (!isRecord(body)) {
-    throw new Error('integration create needs a JSON object body. Use harness_describe(resource_type="integration") for the fields.');
+    throw new Error('integration needs a JSON object body. Use harness_describe(resource_type="integration") for the fields.');
   }
   return body;
 }
@@ -156,6 +156,63 @@ const integrationCreateBody: BodySchema = {
     },
   ],
 };
+
+/** Fields the integration PUT reads. Everything else in a GET response is server-owned. */
+export const INTEGRATION_WRITE_FIELDS = [
+  "identifier", "name", "description", "tags", "connector", "auth", "runner", "version",
+] as const;
+
+/** Server-owned fields of IntegrationResponse; dropped silently so an agent can send back what it read. */
+const INTEGRATION_READ_ONLY_FIELDS = new Set([
+  "id", "uniqueId", "parentUniqueId", "accountId", "created", "updated", "createdBy", "updatedBy", "health",
+]);
+
+const pickComposition = (v: unknown): unknown => (isRecord(v) ? dropUndefined({ uses: v.uses, with: v.with }) : v);
+const pickRunner = (v: unknown): unknown => (isRecord(v) ? dropUndefined({ type: v.type, selectors: v.selectors }) : v);
+
+/**
+ * Build a full-replace PUT body from the current integration and a partial patch.
+ * Top-level fields in the patch replace the current ones whole (no deep merge);
+ * `null` clears a field; `version` comes from the patch when given, else from current.
+ */
+function assertKnownIntegrationFields(patch: Item): void {
+  const unknown = Object.keys(patch).filter(
+    (k) => !(INTEGRATION_WRITE_FIELDS as readonly string[]).includes(k) && !INTEGRATION_READ_ONLY_FIELDS.has(k),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `Unknown integration field(s): ${unknown.join(", ")}. Updatable fields: ${INTEGRATION_WRITE_FIELDS.join(", ")}.`,
+    );
+  }
+}
+
+export function mergeIntegrationUpdate(current: Item, patch: Item): Item {
+  assertKnownIntegrationFields(patch);
+  const merged: Item = {};
+  for (const field of INTEGRATION_WRITE_FIELDS) {
+    const value = patch[field] !== undefined ? patch[field] : current[field];
+    if (value === undefined || value === null) continue;
+    merged[field] =
+      field === "connector" || field === "auth" ? pickComposition(value)
+      : field === "runner" ? pickRunner(value)
+      : value;
+  }
+  return merged;
+}
+
+/** Read the integration at the same scope, then replace input.body with the merged full record. */
+async function mergeIntegrationBeforeUpdate(ctx: PreflightContext): Promise<void> {
+  const patch = ctx.input.body;
+  if (!isRecord(patch) || Object.keys(patch).length === 0) {
+    throw new Error("integration update needs a body with at least one field to change (e.g. {\"name\": \"New name\"}).");
+  }
+  assertKnownIntegrationFields(patch);
+  const current = await ctx.registry.dispatch(ctx.client, "integration", "get", { ...ctx.input, body: undefined }, ctx.signal);
+  if (!isRecord(current)) {
+    throw new Error("integration update: could not read the current integration to merge the change into.");
+  }
+  ctx.input.body = mergeIntegrationUpdate(current, patch);
+}
 
 const SCOPE_NOTE =
   "Default scope is project — pass org_id and project_id (or rely on HARNESS_ORG/HARNESS_PROJECT). " +
@@ -232,6 +289,27 @@ export const integrationsToolset: ToolsetDefinition = {
           description:
             "Create an integration at the requested scope (project by default). Returns the stored integration. " +
             "409 if the identifier exists in that scope.",
+        },
+        update: {
+          method: "PUT",
+          path: "/connector-control-plane/v1/orgs/{org}/projects/{project}/integrations/{integration}",
+          pathBuilder: integrationPath,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          preflight: mergeIntegrationBeforeUpdate,
+          bodyBuilder: integrationBody,
+          bodySchema: {
+            description:
+              "Partial update: send only the fields to change; the rest keep their current values. connector, auth, " +
+              "tags and runner are replaced whole, so send the complete object. null clears description or tags.",
+            fields: integrationCreateBody.fields
+              .filter((f) => f.name !== "identifier")
+              .map((f) => ({ ...f, required: false }))
+              .concat({ name: "version", type: "number", required: false, description: "Optional. Defaults to the version just read; pass the version you read to fail with 409 if someone changed it since." }),
+          },
+          responseExtractor: passthrough,
+          description:
+            "Update an integration by integration_id with a partial body. Reads the current record and writes the " +
+            "merged result. 409 means it changed concurrently — get it again and retry.",
         },
         delete: {
           method: "DELETE",

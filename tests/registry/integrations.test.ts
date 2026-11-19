@@ -5,6 +5,7 @@ import {
   compactIntegration,
   compactJob,
   integrationScopeBase,
+  mergeIntegrationUpdate,
   integrationsToolset,
 } from "../../src/registry/toolsets/integrations.js";
 import type { Config } from "../../src/config.js";
@@ -366,5 +367,120 @@ describe("integration create/delete", () => {
     const { registry, client, request } = setup(undefined);
     await expect(registry.dispatch(client, "integration", "delete", {})).rejects.toThrow(/integration_id/);
     expect(request).not.toHaveBeenCalled();
+  });
+});
+
+describe("integration update", () => {
+  const current = {
+    id: "gh", uniqueId: "u1", parentUniqueId: "p1", accountId: "test-account",
+    identifier: "gh", name: "Old", description: "desc", tags: { team: "a" },
+    connector: { uses: "github", with: { url: "https://api.github.com" } },
+    auth: { uses: "pat", with: { token: "account.ghToken" } },
+    runner: { type: "harness_cloud", selectors: [] },
+    created: 1, updated: 2, createdBy: "x", updatedBy: "y", version: 4, health: "healthy",
+  };
+  const writable = {
+    identifier: "gh", name: "Old", description: "desc", tags: { team: "a" },
+    connector: { uses: "github", with: { url: "https://api.github.com" } },
+    auth: { uses: "pat", with: { token: "account.ghToken" } },
+    runner: { type: "harness_cloud", selectors: [] },
+    version: 4,
+  };
+
+  function setupUpdate(getBody: unknown = current) {
+    const request = vi.fn(async (options: { method: string }) => (options.method === "GET" ? getBody : { ok: true }));
+    const client = { request, account: "test-account" } as unknown as HarnessClient;
+    const registry = new Registry(makeConfig());
+    const calls = () => request.mock.calls.map((c) => c[0] as unknown as Call);
+    return { registry, client, request, calls };
+  }
+
+  it("GETs then PUTs the merged record with the read version", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { name: "New" } });
+    const [get, put] = calls();
+    expect(get!.method).toBe("GET");
+    expect(get!.path).toBe(`${PROJECT}/integrations/gh`);
+    expect(put!.method).toBe("PUT");
+    expect(put!.path).toBe(`${PROJECT}/integrations/gh`);
+    expect(put!.body).toEqual({ ...writable, name: "New" });
+  });
+
+  it("drops server-owned fields from the PUT body", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { name: "New" } });
+    const put = calls()[1]!.body as Record<string, unknown>;
+    for (const k of ["id", "uniqueId", "parentUniqueId", "accountId", "created", "updated", "createdBy", "updatedBy", "health"]) {
+      expect(put).not.toHaveProperty(k);
+    }
+  });
+
+  it("explicit version is not overwritten", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { name: "New", version: 2 } });
+    expect((calls()[1]!.body as Record<string, unknown>).version).toBe(2);
+  });
+
+  it("top-level objects replace, not deep-merge", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", {
+      integration_id: "gh", body: { connector: { uses: "github", with: { url: "https://ghe.example.com" } } },
+    });
+    expect((calls()[1]!.body as Record<string, unknown>).connector).toEqual({ uses: "github", with: { url: "https://ghe.example.com" } });
+  });
+
+  it("null clears a field", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { description: null } });
+    expect(calls()[1]!.body).not.toHaveProperty("description");
+  });
+
+  it("accepts a full read-back body (server-owned fields ignored)", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { ...current, name: "New" } });
+    expect(calls()[1]!.body).toEqual({ ...writable, name: "New" });
+  });
+
+  it("rejects unknown fields before any request", async () => {
+    const { registry, client, request } = setupUpdate();
+    await expect(
+      registry.dispatch(client, "integration", "update", { integration_id: "gh", body: { naem: "typo" } }),
+    ).rejects.toThrow(/Unknown integration field\(s\): naem/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("empty or missing body throws before any request", async () => {
+    const { registry, client, request } = setupUpdate();
+    await expect(registry.dispatch(client, "integration", "update", { integration_id: "gh", body: {} })).rejects.toThrow(/at least one field/);
+    await expect(registry.dispatch(client, "integration", "update", { integration_id: "gh" })).rejects.toThrow(/at least one field/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("GET and PUT use the same scope", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", resource_scope: "account", body: { name: "New" } });
+    expect(calls().map((c) => c.path)).toEqual([
+      "/connector-control-plane/v1/integrations/gh",
+      "/connector-control-plane/v1/integrations/gh",
+    ]);
+  });
+
+  it("update does not inject scope fields into the body", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration", "update", { integration_id: "gh", org_id: "o", project_id: "p", body: { name: "New" } });
+    const put = calls()[1]!.body as Record<string, unknown>;
+    expect(put).not.toHaveProperty("orgIdentifier");
+    expect(put).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("update is medium_write and never retried", () => {
+    const { registry } = setupUpdate();
+    expect(registry.getResource("integration").operations.update?.operationPolicy).toEqual({
+      risk: "medium_write", retryPolicy: "do_not_retry",
+    });
+  });
+
+  it("mergeIntegrationUpdate keeps falsy-but-set values", () => {
+    expect(mergeIntegrationUpdate({ ...writable }, { description: "", tags: {} })).toMatchObject({ description: "", tags: {} });
   });
 });
