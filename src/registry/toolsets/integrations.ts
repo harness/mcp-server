@@ -1,6 +1,6 @@
 import { encodePathSegment } from "../../utils/path.js";
 import type { BodySchema, PathBuilderConfig, PreflightContext, ResourceScope, ToolsetDefinition } from "../types.js";
-import { passthrough, v1ListExtract } from "../extractors.js";
+import { hintWhenBodyOmits, passthrough, v1ListExtract } from "../extractors.js";
 
 /** API gateway prefix for the connector-control-plane service. */
 const CCP = "/connector-control-plane";
@@ -196,6 +196,56 @@ async function mergeIntegrationBeforeUpdate(ctx: PreflightContext): Promise<void
   ctx.input.body = mergeIntegrationUpdate(current, patch);
 }
 
+/**
+ * Fields of the job read (JobView) that the strict job PUT rejects. Removed before the PUT;
+ * everything else is carried over. If the backend adds a read-only field to JobView, the PUT fails
+ * with a 400 naming it (add it here), rather than silently dropping a new writable field.
+ */
+export const JOB_READ_ONLY_FIELDS = [
+  "id", "default", "webhook", "nextRunAt", "lastRun", "createdAt", "updatedAt", "integration",
+  "checkpoints", "backfillFrom", "sink", "health", "rateLimitedUntil", "actionVersion",
+] as const;
+
+/**
+ * Writable job fields the job read does not return, so a PUT without them resets them
+ * (syncModes to {}, reconcile to false). Same as an edit in the UI today.
+ */
+export const JOB_FIELDS_NOT_READ_BACK = ["syncModes", "reconcile"] as const;
+
+/**
+ * Build a full-replace job PUT body from the current job and a partial patch. Top-level patch
+ * fields replace current ones whole; `null` clears a field. Strips read-only fields and the
+ * computed `resources.empty` flag, which the strict PUT would reject.
+ */
+export function mergeJobUpdate(current: Item, patch: Item): Item {
+  const merged: Item = { ...current };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v !== undefined) merged[k] = v;
+  }
+  for (const k of JOB_READ_ONLY_FIELDS) delete merged[k];
+  if (isRecord(merged.resources)) {
+    const { empty: _empty, ...resources } = merged.resources;
+    merged.resources = resources;
+  }
+  for (const [k, v] of Object.entries(merged)) {
+    if (v === null) delete merged[k];
+  }
+  return merged;
+}
+
+/** Read the job at the same scope, then replace input.body with the merged full record. */
+async function mergeJobBeforeUpdate(ctx: PreflightContext): Promise<void> {
+  const patch = ctx.input.body;
+  if (!isRecord(patch) || Object.keys(patch).length === 0) {
+    throw new Error("integration_job update needs a body with at least one field to change (e.g. {\"enabled\": false}).");
+  }
+  const current = await ctx.registry.dispatch(ctx.client, "integration_job", "get", { ...ctx.input, body: undefined }, ctx.signal);
+  if (!isRecord(current)) {
+    throw new Error("integration_job update: could not read the current job to merge the change into.");
+  }
+  ctx.input.body = mergeJobUpdate(current, patch);
+}
+
 /** Job body: must be a JSON object. Fields are validated by the backend, which rejects unknown ones by name. */
 export function jobBody(input: Record<string, unknown>): Record<string, unknown> {
   const body = input.body;
@@ -379,6 +429,31 @@ export const integrationsToolset: ToolsetDefinition = {
             "Create a job under integration_id. Enabled by default, so it starts ingesting on its trigger — pass " +
             "enabled:false to create it paused. 409 if the identifier exists. For a webhook trigger the response " +
             "carries webhook.token once; it is never returned again.",
+        },
+        update: {
+          method: "PUT",
+          path: "/connector-control-plane/v1/orgs/{org}/projects/{project}/integrations/{integration}/jobs/{job}",
+          pathBuilder: jobPath,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          preflight: mergeJobBeforeUpdate,
+          bodyBuilder: jobBody,
+          bodySchema: {
+            description:
+              "Partial update: send only the fields to change; the rest keep their current values. action, trigger, " +
+              "resources and syncModes are replaced whole, so send the complete object. syncModes and reconcile are " +
+              "not returned by a job get, so they are reset (to {} and false) unless you pass them here.",
+            fields: jobCreateBody.fields
+              .filter((f) => f.name !== "identifier")
+              .map((f) => ({ ...f, required: false })),
+          },
+          responseExtractor: hintWhenBodyOmits(
+            JOB_FIELDS_NOT_READ_BACK,
+            "not passed, so reset to the default (the job read does not return them). Pass them in the update to keep custom values.",
+          ),
+          description:
+            "Update a job by integration_id + job_id with a partial body (e.g. {\"enabled\": false} to pause it). " +
+            "Reads the current job and writes the merged result. action.uses cannot change (409); delete and " +
+            "recreate the job instead. syncModes and reconcile reset unless passed.",
         },
         delete: {
           method: "DELETE",

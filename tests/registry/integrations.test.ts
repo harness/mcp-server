@@ -6,6 +6,8 @@ import {
   compactJob,
   integrationScopeBase,
   mergeIntegrationUpdate,
+  mergeJobUpdate,
+  JOB_READ_ONLY_FIELDS,
   integrationsToolset,
 } from "../../src/registry/toolsets/integrations.js";
 import type { Config } from "../../src/config.js";
@@ -587,5 +589,161 @@ describe("integration_job create/delete", () => {
     expect(registry.getResource("integration_job").operations.delete?.operationPolicy).toEqual({
       risk: "destructive", retryPolicy: "do_not_retry",
     });
+  });
+});
+
+describe("integration_job update", () => {
+  // A JobView as the backend returns it (ApiSupport.JobView), including the computed resources.empty.
+  const current = {
+    id: "acc/u1/nightly", identifier: "nightly", name: "Nightly", default: true, enabled: false,
+    action: { uses: "githubIngest", with: { org: "harness" } },
+    streams: ["pull_requests"],
+    trigger: { uses: "schedule", with: { frequency: "1d" } },
+    webhook: null, nextRunAt: "2026-11-20T00:00:00Z", lastRun: { state: "succeeded" },
+    createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-02T00:00:00Z", integration: "gh",
+    checkpoints: { pull_requests: { runId: "r1", at: "2026-11-02T00:00:00Z" } },
+    backfillFrom: { pull_requests: "r0" }, sink: "topic-1", health: { state: "healthy" },
+    rateLimitedUntil: null, actionVersion: "1.3.2",
+    resources: { cpu: "500m", memory: "1Gi", ephemeralStorage: null, empty: false },
+  };
+  const JOB = `${PROJECT}/integrations/gh/jobs/nightly`;
+
+  function setupUpdate(getBody: unknown = current, putBody: unknown = { identifier: "nightly" }) {
+    const request = vi.fn(async (options: { method: string }) => (options.method === "GET" ? getBody : putBody));
+    const client = { request, account: "test-account" } as unknown as HarnessClient;
+    const registry = new Registry(makeConfig());
+    const calls = () => request.mock.calls.map((c) => c[0] as unknown as Call);
+    return { registry, client, request, calls };
+  }
+  const putBody = (calls: () => Call[]) => calls()[1]!.body as Record<string, unknown>;
+
+  it("GETs the job then PUTs the merged writable fields only", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body: { name: "Renamed" } });
+    const [get, put] = calls();
+    expect(get!.method).toBe("GET");
+    expect(get!.path).toBe(JOB);
+    expect(put!.method).toBe("PUT");
+    expect(put!.path).toBe(JOB);
+    expect(put!.body).toEqual({
+      identifier: "nightly", name: "Renamed", enabled: false,
+      action: { uses: "githubIngest", with: { org: "harness" } },
+      streams: ["pull_requests"],
+      trigger: { uses: "schedule", with: { frequency: "1d" } },
+      resources: { cpu: "500m", memory: "1Gi", ephemeralStorage: null },
+    });
+  });
+
+  it("strips every read-only JobView field and resources.empty (the strict PUT rejects them)", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body: { name: "x" } });
+    const body = putBody(calls);
+    for (const k of JOB_READ_ONLY_FIELDS) expect(body).not.toHaveProperty(k);
+    expect(body.resources).not.toHaveProperty("empty");
+  });
+
+  it("keeps enabled:false from the read, so an update does not re-enable a paused job", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body: { streams: [] } });
+    expect(putBody(calls).enabled).toBe(false);
+    expect(putBody(calls).streams).toEqual([]);
+  });
+
+  it("enabled:false in the patch is sent (falsy value kept)", async () => {
+    const { registry, client, calls } = setupUpdate({ ...current, enabled: true });
+    await registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body: { enabled: false } });
+    expect(putBody(calls).enabled).toBe(false);
+  });
+
+  it("top-level objects replace whole; null clears a field", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration_job", "update", {
+      integration_id: "gh", job_id: "nightly",
+      body: { trigger: { uses: "schedule", with: { frequency: "6h" } }, resources: null },
+    });
+    expect(putBody(calls).trigger).toEqual({ uses: "schedule", with: { frequency: "6h" } });
+    expect(putBody(calls)).not.toHaveProperty("resources");
+  });
+
+  it("a field the backend adds to JobView later is carried over", async () => {
+    const { registry, client, calls } = setupUpdate({ ...current, labels: { team: "a" } });
+    await registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body: { name: "x" } });
+    expect(putBody(calls).labels).toEqual({ team: "a" });
+  });
+
+  it("hints that syncModes and reconcile were reset when neither is passed", async () => {
+    const { registry, client } = setupUpdate();
+    const result = await registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body: { name: "x" } }) as Record<string, unknown>;
+    expect(result.identifier).toBe("nightly");
+    expect(String(result._hint)).toMatch(/^syncModes and reconcile: not passed, so reset/);
+  });
+
+  it("hint names only the field not passed", async () => {
+    const { registry, client } = setupUpdate();
+    const result = await registry.dispatch(client, "integration_job", "update", {
+      integration_id: "gh", job_id: "nightly", body: { syncModes: { pull_requests: "incremental" } },
+    }) as Record<string, unknown>;
+    expect(String(result._hint)).toMatch(/^reconcile: /);
+  });
+
+  it("no hint when both are passed, and they are sent", async () => {
+    const { registry, client, calls } = setupUpdate();
+    const result = await registry.dispatch(client, "integration_job", "update", {
+      integration_id: "gh", job_id: "nightly", body: { syncModes: { pull_requests: "full_refresh" }, reconcile: false },
+    }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("_hint");
+    expect(putBody(calls).syncModes).toEqual({ pull_requests: "full_refresh" });
+    expect(putBody(calls).reconcile).toBe(false);
+  });
+
+  it("forwards fields it does not know; the strict backend validates them", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body: { foo: 1 } });
+    expect(putBody(calls).foo).toBe(1);
+  });
+
+  it("does not inject scope keys into the strict body", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body: { name: "x" } });
+    const body = putBody(calls);
+    for (const k of ["orgIdentifier", "projectIdentifier", "accountIdentifier", "org", "project"]) expect(body).not.toHaveProperty(k);
+  });
+
+  it("GET and PUT use the same scope (account)", async () => {
+    const { registry, client, calls } = setupUpdate();
+    await registry.dispatch(client, "integration_job", "update", {
+      integration_id: "gh", job_id: "nightly", resource_scope: "account", body: { name: "x" },
+    });
+    const [get, put] = calls();
+    expect(get!.path).toBe("/connector-control-plane/v1/integrations/gh/jobs/nightly");
+    expect(put!.path).toBe(get!.path);
+  });
+
+  it("empty or missing body throws before any request", async () => {
+    for (const body of [undefined, {}, "x"]) {
+      const { registry, client, request } = setupUpdate();
+      await expect(
+        registry.dispatch(client, "integration_job", "update", { integration_id: "gh", job_id: "nightly", body }),
+      ).rejects.toThrow(/at least one field/);
+      expect(request).not.toHaveBeenCalled();
+    }
+  });
+
+  it("missing job_id throws before any request", async () => {
+    const { registry, client, request } = setupUpdate();
+    await expect(
+      registry.dispatch(client, "integration_job", "update", { integration_id: "gh", body: { name: "x" } }),
+    ).rejects.toThrow(/job_id/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("is medium_write", () => {
+    const def = integrationsToolset.resources.find((r) => r.resourceType === "integration_job")!;
+    expect(def.operations.update!.operationPolicy).toEqual({ risk: "medium_write", retryPolicy: "do_not_retry" });
+  });
+
+  it("mergeJobUpdate leaves resources alone when the read has none", () => {
+    const { resources: _r, ...withoutResources } = current;
+    expect(mergeJobUpdate(withoutResources, { name: "x" })).not.toHaveProperty("resources");
   });
 });
