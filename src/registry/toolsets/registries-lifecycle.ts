@@ -67,15 +67,15 @@ const dryRunBody = (input: Record<string, unknown>): Record<string, unknown> => 
  */
 export const registriesLifecycleToolset: ToolsetDefinition = {
   name: "registries-lifecycle",
-  displayName: "Artifact Registry Lifecycle (v3)",
+  displayName: "Artifact Registry Lifecycle",
   description:
-    "Harness Artifact Registry v3 lifecycle (retention/cleanup) rules, executions, execution items and stats, " +
+    "Harness Artifact Registry lifecycle (retention/cleanup) rules, executions, execution items and stats, " +
     "plus a dry run that reports which versions a rule would delete without deleting anything.",
   optIn: false,
   resources: [
     {
       resourceType: "lifecycle_rule",
-      displayName: "Lifecycle Rule (v3)",
+      displayName: "Lifecycle Rule",
       description:
         "Artifact Registry retention rule: DELETE (cleanup) or PROTECT, its criteria (KEEP_LAST_N / AGE_BASED / UNUSED_FOR), " +
         "target registries, package filters and schedule. Actions: dry_run previews what a rule would delete; stats gives scope totals.",
@@ -110,7 +110,7 @@ export const registriesLifecycleToolset: ToolsetDefinition = {
             size: "size",
           },
           responseExtractor: harV3ListExtract,
-          description: "List lifecycle rules (v3)",
+          description: "List lifecycle rules",
         },
         get: {
           method: "GET",
@@ -118,7 +118,7 @@ export const registriesLifecycleToolset: ToolsetDefinition = {
           pathParams: { rule_id: "id" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "Get a lifecycle rule by ID (v3)",
+          description: "Get a lifecycle rule by ID",
         },
       },
       executeActions: {
@@ -156,7 +156,7 @@ export const registriesLifecycleToolset: ToolsetDefinition = {
     },
     {
       resourceType: "lifecycle_execution",
-      displayName: "Lifecycle Execution (v3)",
+      displayName: "Lifecycle Execution",
       description:
         "A scheduled or dry-run evaluation of a lifecycle rule, with counts of registries, packages and versions affected, " +
         "versions deleted (would-be-deleted for DRY_RUN), versions protected and storage reclaimed. Action items lists the evaluated versions.",
@@ -188,7 +188,7 @@ export const registriesLifecycleToolset: ToolsetDefinition = {
             size: "size",
           },
           responseExtractor: harV3ListExtract,
-          description: "List lifecycle executions (v3)",
+          description: "List lifecycle executions",
         },
         get: {
           method: "GET",
@@ -196,7 +196,7 @@ export const registriesLifecycleToolset: ToolsetDefinition = {
           pathParams: { execution_id: "executionId" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "Get a lifecycle execution by ID (v3)",
+          description: "Get a lifecycle execution by ID",
         },
       },
       executeActions: {
