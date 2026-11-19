@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HarnessClient } from "../../src/client/harness-client.js";
+import { RateLimiter } from "../../src/utils/rate-limiter.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import type { Config } from "../../src/config.js";
 import { getVersion } from "../../src/utils/cli.js";
@@ -40,6 +41,20 @@ describe("HarnessClient", () => {
     it("exposes account ID", () => {
       const client = new HarnessClient(makeConfig());
       expect(client.account).toBe("test-account");
+    });
+
+    it("shares one rate limiter across clients", async () => {
+      fetchSpy.mockImplementation(async () => new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+      const limiter = new RateLimiter(1);
+      const first = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }), limiter);
+      const second = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }), limiter);
+      await first.request({ path: "/ng/api/projects" });
+      const started = Date.now();
+      await second.request({ path: "/ng/api/projects" });
+      expect(Date.now() - started).toBeGreaterThan(200);
     });
 
     it("uses resolved account ID when resolver is set", () => {

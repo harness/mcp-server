@@ -12,6 +12,7 @@ import { json } from "express";
 import { loadConfig, type Config } from "./config.js";
 import { setLogLevel, createLogger } from "./utils/logger.js";
 import { HarnessClient } from "./client/harness-client.js";
+import { RateLimiter } from "./utils/rate-limiter.js";
 import { Registry } from "./registry/index.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
@@ -88,15 +89,17 @@ interface OAuthSessionCredential {
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
+ * @param sharedRateLimiter When set (HTTP mode), every session and 2026 request shares one API throttle.
  */
 export function createHarnessServer(
   config: Config,
   sharedAuditManager?: AuditManager,
   sharedSearchManager?: SearchManager,
   oauthCredential?: OAuthSessionCredential,
+  sharedRateLimiter?: RateLimiter,
 ): HarnessServerResult {
   const auditManager = sharedAuditManager ?? createAuditManager(config);
-  const client = new HarnessClient(config);
+  const client = new HarnessClient(config, sharedRateLimiter);
   if (oauthCredential) {
     client.setAccountIdResolver(() => oauthCredential.accountId);
     client.setBearerTokenResolver(() => oauthCredential.accessToken);
@@ -404,6 +407,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const sessions = new Map<string, Session>();
   const sharedAuditManager = createAuditManager(config);
   const sharedSearchManager = new SearchManager(config);
+  const sharedRateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
   // In HTTP mode: initialize + index static content using a baseline registry (no account needed)
   const baseRegistry = new Registry(config, { auditManager: sharedAuditManager });
   sharedSearchManager.initialize().then(async () => {
@@ -465,6 +469,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
       sharedAuditManager,
       sharedSearchManager,
       oauthCredential,
+      sharedRateLimiter,
     ).server;
   }, { legacy: "reject" }), { maxRequestBodySize: maxBodySize });
 
@@ -550,6 +555,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
         sharedAuditManager,
         sharedSearchManager,
         oauthCredential,
+        sharedRateLimiter,
       );
       server = result.server;
       transport = new NodeStreamableHTTPServerTransport({

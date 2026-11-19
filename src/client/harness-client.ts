@@ -315,13 +315,13 @@ export class HarnessClient {
   private currentUserCacheKey?: string;
   private currentUserPromise?: Promise<string>;
 
-  constructor(config: Config) {
+  constructor(config: Config, sharedRateLimiter?: RateLimiter) {
     this.baseUrl = config.HARNESS_BASE_URL.replace(/\/$/, "");
     this.token = config.HARNESS_API_KEY;
     this.accountId = config.HARNESS_ACCOUNT_ID;
     this.timeout = config.HARNESS_API_TIMEOUT_MS;
     this.maxRetries = config.HARNESS_MAX_RETRIES;
-    this.rateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
+    this.rateLimiter = sharedRateLimiter ?? new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
     this.logUnsafeBodies = config.HARNESS_LOG_UNSAFE_BODIES;
     this.fmeApiKey = resolveFmeApiKey(config);
     this.appsecApiKey = resolveAppSecApiKey(config);
