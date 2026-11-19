@@ -1,5 +1,5 @@
 import { encodePathSegment } from "../../utils/path.js";
-import type { PathBuilderConfig, ResourceScope, ToolsetDefinition } from "../types.js";
+import type { BodySchema, PathBuilderConfig, ResourceScope, ToolsetDefinition } from "../types.js";
 import { passthrough, v1ListExtract } from "../extractors.js";
 
 /** API gateway prefix for the connector-control-plane service. */
@@ -124,6 +124,39 @@ export function compactDefinition(raw: Item): Item {
   });
 }
 
+/** Pass the agent's body through as-is; reject a missing or non-object body before any request. */
+export function integrationBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body = input.body;
+  if (!isRecord(body)) {
+    throw new Error('integration create needs a JSON object body. Use harness_describe(resource_type="integration") for the fields.');
+  }
+  return body;
+}
+
+const compositionFields = (kind: "connector" | "auth") => [
+  { name: "uses", type: "string" as const, required: true, description: `${kind} definition id (integration_definition, category=${kind}).` },
+  { name: "with", type: "object" as const, required: false, description: `Values for the ${kind} definition's template inputs. Secrets are Harness secret refs (id, org.id, account.id), never raw values.` },
+];
+
+const integrationCreateBody: BodySchema = {
+  description: "Integration to create. Fill connector.with and auth.with from the definitions' templates (harness_get integration_definition).",
+  fields: [
+    { name: "identifier", type: "string", required: true, description: "Unique within the scope. Letter or underscore first, then letters, digits, _ or $ (max 128). Cannot change later." },
+    { name: "name", type: "string", required: true, description: "Display name." },
+    { name: "description", type: "string", required: false, description: "Free text." },
+    { name: "tags", type: "object", required: false, description: "String key/value map." },
+    { name: "connector", type: "object", required: true, description: "Which connector and its settings.", fields: compositionFields("connector") },
+    { name: "auth", type: "object", required: true, description: "Which auth method (one of the connector's auth ids) and its settings.", fields: compositionFields("auth") },
+    {
+      name: "runner", type: "object", required: true, description: "Where the plugin runs. No default.",
+      fields: [
+        { name: "type", type: "string", required: true, description: "harness_cloud or self_hosted (one the connector offers)." },
+        { name: "selectors", type: "array", itemType: "string", required: false, description: "Delegate selectors. Required for self_hosted; not allowed for harness_cloud." },
+      ],
+    },
+  ],
+};
+
 const SCOPE_NOTE =
   "Default scope is project — pass org_id and project_id (or rely on HARNESS_ORG/HARNESS_PROJECT). " +
   "Use resource_scope='org' or 'account' only when the user asked for org- or account-level integrations.";
@@ -187,6 +220,26 @@ export const integrationsToolset: ToolsetDefinition = {
           description:
             "Get one integration by integration_id, including connector/auth config (connector.with, auth.with), " +
             "runner, health and version.",
+        },
+        create: {
+          method: "POST",
+          path: "/connector-control-plane/v1/orgs/{org}/projects/{project}/integrations",
+          pathBuilder: integrationCollectionPath,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: integrationBody,
+          bodySchema: integrationCreateBody,
+          responseExtractor: passthrough,
+          description:
+            "Create an integration at the requested scope (project by default). Returns the stored integration. " +
+            "409 if the identifier exists in that scope.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/connector-control-plane/v1/orgs/{org}/projects/{project}/integrations/{integration}",
+          pathBuilder: integrationPath,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description: "Delete an integration by integration_id. Also deletes all of its jobs. Cannot be undone.",
         },
       },
     },

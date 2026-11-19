@@ -292,3 +292,79 @@ describe("integration_definition", () => {
     });
   });
 });
+
+describe("integration create/delete", () => {
+  const body = {
+    identifier: "gh",
+    name: "GitHub",
+    connector: { uses: "github", with: { url: "https://api.github.com" } },
+    auth: { uses: "pat", with: { token: "account.ghToken" } },
+    runner: { type: "harness_cloud" },
+  };
+
+  it("create POSTs the body unchanged at project scope", async () => {
+    const { registry, client, call } = setup({ ...body, version: 1 });
+    const result = await registry.dispatch(client, "integration", "create", { body });
+    expect(call().method).toBe("POST");
+    expect(call().path).toBe(`${PROJECT}/integrations`);
+    expect(call().body).toEqual(body);
+    expect(result).toEqual({ ...body, version: 1 });
+  });
+
+  it("create does not inject scope fields into the body", async () => {
+    const { registry, client, call } = setup({});
+    await registry.dispatch(client, "integration", "create", { body, org_id: "o", project_id: "p" });
+    expect(call().path).toBe("/connector-control-plane/v1/orgs/o/projects/p/integrations");
+    expect(call().body).not.toHaveProperty("orgIdentifier");
+    expect(call().body).not.toHaveProperty("projectIdentifier");
+    expect(call().body).not.toHaveProperty("accountIdentifier");
+  });
+
+  it("create at account scope", async () => {
+    const { registry, client, call } = setup({});
+    await registry.dispatch(client, "integration", "create", { body, resource_scope: "account" });
+    expect(call().path).toBe("/connector-control-plane/v1/integrations");
+  });
+
+  it("create without a body throws before any request", async () => {
+    const { registry, client, request } = setup({});
+    await expect(registry.dispatch(client, "integration", "create", {})).rejects.toThrow(/body/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("create missing required fields names them before any request", async () => {
+    const { registry, client, request } = setup({});
+    await expect(
+      registry.dispatch(client, "integration", "create", { body: { identifier: "gh", name: "GitHub" } }),
+    ).rejects.toThrow(/connector, auth, runner/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("create is low_write and never retried", () => {
+    const { registry } = setup();
+    expect(registry.getResource("integration").operations.create?.operationPolicy).toEqual({
+      risk: "low_write", retryPolicy: "do_not_retry",
+    });
+  });
+
+  it("delete sends DELETE to the integration path at the requested scope", async () => {
+    const { registry, client, call } = setup(undefined);
+    await registry.dispatch(client, "integration", "delete", { integration_id: "gh", resource_scope: "account" });
+    expect(call().method).toBe("DELETE");
+    expect(call().path).toBe("/connector-control-plane/v1/integrations/gh");
+    expect(call().body).toBeUndefined();
+  });
+
+  it("delete is destructive and never retried", () => {
+    const { registry } = setup();
+    expect(registry.getResource("integration").operations.delete?.operationPolicy).toEqual({
+      risk: "destructive", retryPolicy: "do_not_retry",
+    });
+  });
+
+  it("delete without integration_id throws before any request", async () => {
+    const { registry, client, request } = setup(undefined);
+    await expect(registry.dispatch(client, "integration", "delete", {})).rejects.toThrow(/integration_id/);
+    expect(request).not.toHaveBeenCalled();
+  });
+});
