@@ -471,7 +471,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
     },
     {
       resourceType: "conan_revision",
-      displayName: "Conan Revision (v3)",
+      displayName: "Conan Revision",
       description:
         "Conan drill-down under a CONAN version. version_id alone lists recipe revisions (RREV); add recipe_revision_id to list packages (PKGID); add conan_package_id to list package revisions (PREV). get returns the deepest level given. conan_package_id is the Conan PKGID, not a package UUID.",
       toolset: "registries-v3",
@@ -492,7 +492,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           queryParams: { page: "page", size: "size" },
           skipCompact: true,
           responseExtractor: harV3ListExtract,
-          description: "List Conan recipe revisions, packages or package revisions (v3)",
+          description: "List Conan recipe revisions, packages or package revisions",
         },
         get: {
           method: "GET",
@@ -500,7 +500,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           pathBuilder: conanRevisionPath("get"),
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: harV3DataObjectUnwrap,
-          description: "Get a Conan recipe revision, package or package revision (v3). Requires version_id and recipe_revision_id.",
+          description: "Get a Conan recipe revision, package or package revision. Requires version_id and recipe_revision_id.",
         },
       },
     },
