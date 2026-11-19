@@ -1,4 +1,5 @@
 import { type Config, isPlaceholderCredential, resolveAppSecApiKey, resolveFmeApiKey } from "../config.js";
+import { currentHarnessRequestCredentials } from "./request-credentials.js";
 import type { RequestOptions } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
@@ -341,9 +342,32 @@ export class HarnessClient {
     this.bearerTokenResolver = resolver;
   }
 
-  /** Resolve the account ID: per-request override → static config fallback. */
+  /** Resolve the account ID: active request → resolver → static config. */
   private resolveAccountId(): string {
-    return this.accountIdResolver?.() ?? this.accountId;
+    return currentHarnessRequestCredentials()?.accountId
+      ?? this.accountIdResolver?.()
+      ?? this.accountId;
+  }
+
+  /** API key for this call. The active HTTP request wins over the process config. */
+  private resolveApiKey(): string {
+    return currentHarnessRequestCredentials()?.apiKey ?? this.token;
+  }
+
+  private resolveAccessToken(): string | undefined {
+    return currentHarnessRequestCredentials()?.accessToken ?? this.bearerTokenResolver?.();
+  }
+
+  private resolveAppSecKey(): string | undefined {
+    return currentHarnessRequestCredentials()?.appsecApiKey ?? this.appsecApiKey;
+  }
+
+  private resolveFmeKey(): string | undefined {
+    if (this.mcpMode === "oauth" || this.mcpMode === "oauth-proxy") return undefined;
+    if (this.fmeApiKey) return this.fmeApiKey;
+    const sessionKey = currentHarnessRequestCredentials()?.apiKey;
+    if (sessionKey && !isPlaceholderCredential(sessionKey)) return sessionKey;
+    return undefined;
   }
 
   get account(): string {
@@ -386,7 +410,7 @@ export class HarnessClient {
 
       if (getHeaderValue(headers, "authorization")) return;
 
-      const appsecApiKey = headerAppSecKey ?? this.appsecApiKey;
+      const appsecApiKey = headerAppSecKey ?? this.resolveAppSecKey();
       if (!appsecApiKey) {
         const remediation =
           this.mcpMode === "single-user"
@@ -415,7 +439,7 @@ export class HarnessClient {
       }
       if (getHeaderValue(headers, "authorization")) return;
 
-      const token = this.bearerTokenResolver?.();
+      const token = this.resolveAccessToken();
       if (!token) {
         throw new HarnessApiError(
           "OAuth access token is unavailable for this MCP session.",
@@ -439,7 +463,7 @@ export class HarnessClient {
 
       const fmeApiKey = headerApiKey && !isPlaceholderCredential(headerApiKey)
         ? headerApiKey
-        : this.fmeApiKey;
+        : this.resolveFmeKey();
 
       if (!fmeApiKey) {
         const remediation = this.mcpMode === "multi-user"
@@ -466,7 +490,7 @@ export class HarnessClient {
 
     // Non-FME Harness services continue to use the standard API-key header.
     if (!getHeaderValue(headers, "x-api-key")) {
-      headers["x-api-key"] = this.token;
+      headers["x-api-key"] = this.resolveApiKey();
     }
   }
 
@@ -480,7 +504,7 @@ export class HarnessClient {
    * the human for a UUID.
    */
   async getCurrentUserId(): Promise<string> {
-    const cacheKey = `${this.resolveAccountId()}:${this.bearerTokenResolver?.() ?? this.token}`;
+    const cacheKey = `${this.resolveAccountId()}:${this.resolveAccessToken() ?? this.resolveApiKey()}`;
     if (this.currentUserCacheKey !== cacheKey) {
       this.currentUserId = undefined;
       this.currentUserPromise = undefined;

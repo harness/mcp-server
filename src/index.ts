@@ -12,6 +12,10 @@ import { json } from "express";
 import { loadConfig, type Config } from "./config.js";
 import { setLogLevel, createLogger } from "./utils/logger.js";
 import { HarnessClient } from "./client/harness-client.js";
+import {
+  runWithHarnessRequestCredentials,
+  type HarnessRequestCredentials,
+} from "./client/request-credentials.js";
 import { RateLimiter } from "./utils/rate-limiter.js";
 import { Registry } from "./registry/index.js";
 import { registerAllTools } from "./tools/index.js";
@@ -90,6 +94,7 @@ interface OAuthSessionCredential {
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  * @param sharedRateLimiter When set (HTTP mode), every session and 2026 request shares one API throttle.
+ * @param sharedClient When set, reuse this process-wide client. Request credentials come from the active HTTP call.
  */
 export function createHarnessServer(
   config: Config,
@@ -97,10 +102,11 @@ export function createHarnessServer(
   sharedSearchManager?: SearchManager,
   oauthCredential?: OAuthSessionCredential,
   sharedRateLimiter?: RateLimiter,
+  sharedClient?: HarnessClient,
 ): HarnessServerResult {
   const auditManager = sharedAuditManager ?? createAuditManager(config);
-  const client = new HarnessClient(config, sharedRateLimiter);
-  if (oauthCredential) {
+  const client = sharedClient ?? new HarnessClient(config, sharedRateLimiter);
+  if (!sharedClient && oauthCredential) {
     client.setAccountIdResolver(() => oauthCredential.accountId);
     client.setBearerTokenResolver(() => oauthCredential.accessToken);
   }
@@ -212,7 +218,8 @@ function logToFile(message: string, data?: Record<string, unknown>): void {
  * Start the server in stdio mode — single persistent connection.
  */
 async function startStdio(config: Config): Promise<void> {
-  const boot = createHarnessServer(config);
+  const client = new HarnessClient(config);
+  const boot = createHarnessServer(config, undefined, undefined, undefined, undefined, client);
   const auditManager = boot.auditManager;
   const transport = new StdioServerTransport();
   log.info("harness-mcp-server connected via stdio", {
@@ -232,7 +239,7 @@ async function startStdio(config: Config): Promise<void> {
     return originalSend(msg);
   };
   const stdioHandle = serveStdio(
-    () => createHarnessServer(config, boot.auditManager, boot.searchManager).server,
+    () => createHarnessServer(config, boot.auditManager, boot.searchManager, undefined, undefined, client).server,
     { transport },
   );
 
@@ -315,6 +322,8 @@ interface Session extends HttpSessionActivity {
   server: McpServer;
   transport: NodeStreamableHTTPServerTransport;
   oauthCredential?: OAuthSessionCredential;
+  /** Captured at initialize. The access token is read from oauthCredential on each request. */
+  credentials: HarnessRequestCredentials;
 }
 
 const REAP_INTERVAL_MS = 60_000; // check every minute
@@ -408,6 +417,41 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const sharedAuditManager = createAuditManager(config);
   const sharedSearchManager = new SearchManager(config);
   const sharedRateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
+  const sharedClient = new HarnessClient(config, sharedRateLimiter);
+
+  function readOAuthCredential(res: Response): OAuthSessionCredential | undefined {
+    if (config.HARNESS_MCP_MODE !== "oauth" && config.HARNESS_MCP_MODE !== "oauth-proxy") {
+      return undefined;
+    }
+    return {
+      subject: res.locals.harnessOAuthClaims.sub as string,
+      identitySubject: (
+        res.locals.harnessOAuthIdentitySubject as string | undefined
+      ) ?? res.locals.harnessOAuthClaims.sub as string,
+      accountId: res.locals.harnessOAuthAccountId as string,
+      accessToken: res.locals.harnessOAuthAccessToken as string,
+    };
+  }
+
+  function credentialsFor(
+    sessionConfig: Config & { HARNESS_APPSEC_SESSION_API_KEY?: string },
+    oauth?: OAuthSessionCredential,
+  ): HarnessRequestCredentials {
+    return {
+      apiKey: sessionConfig.HARNESS_API_KEY,
+      accountId: oauth?.accountId ?? sessionConfig.HARNESS_ACCOUNT_ID,
+      accessToken: oauth?.accessToken,
+      appsecApiKey: sessionConfig.HARNESS_APPSEC_SESSION_API_KEY,
+    };
+  }
+
+  function liveCredentials(session: Session): HarnessRequestCredentials {
+    return {
+      ...session.credentials,
+      accountId: session.oauthCredential?.accountId ?? session.credentials.accountId,
+      accessToken: session.oauthCredential?.accessToken,
+    };
+  }
   // In HTTP mode: initialize + index static content using a baseline registry (no account needed)
   const baseRegistry = new Registry(config, { auditManager: sharedAuditManager });
   sharedSearchManager.initialize().then(async () => {
@@ -448,18 +492,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const httpCall = new AsyncLocalStorage<{ req: Request; res: Response }>();
   const modernHandler = toNodeHandler(createMcpHandler(() => {
     const stored = httpCall.getStore();
-    const oauthCredential = stored && (
-      config.HARNESS_MCP_MODE === "oauth" || config.HARNESS_MCP_MODE === "oauth-proxy"
-    )
-      ? {
-        subject: stored.res.locals.harnessOAuthClaims.sub as string,
-        identitySubject: (
-          stored.res.locals.harnessOAuthIdentitySubject as string | undefined
-        ) ?? stored.res.locals.harnessOAuthClaims.sub as string,
-        accountId: stored.res.locals.harnessOAuthAccountId as string,
-        accessToken: stored.res.locals.harnessOAuthAccessToken as string,
-      }
-      : undefined;
+    const oauthCredential = stored ? readOAuthCredential(stored.res) : undefined;
     const headerConfig = mergeConfigWithSessionHeaders(config, stored?.req.headers ?? {});
     const sessionConfig = oauthCredential
       ? { ...headerConfig, HARNESS_ACCOUNT_ID: oauthCredential.accountId }
@@ -468,8 +501,9 @@ async function startHttp(config: Config, port: number): Promise<void> {
       sessionConfig,
       sharedAuditManager,
       sharedSearchManager,
-      oauthCredential,
+      undefined,
       sharedRateLimiter,
+      sharedClient,
     ).server;
   }, { legacy: "reject" }), { maxRequestBodySize: maxBodySize });
 
@@ -486,7 +520,15 @@ async function startHttp(config: Config, port: number): Promise<void> {
   app.post("/mcp", async (req, res) => {
     const webRequest = await toWebRequest(req, req.body);
     if (!(await isLegacyRequest(webRequest, req.body))) {
-      await httpCall.run({ req, res }, () => modernHandler(req, res, req.body));
+      const oauthCredential = readOAuthCredential(res);
+      const headerConfig = mergeConfigWithSessionHeaders(config, req.headers);
+      const sessionConfig = oauthCredential
+        ? { ...headerConfig, HARNESS_ACCOUNT_ID: oauthCredential.accountId }
+        : headerConfig;
+      await httpCall.run({ req, res }, () => runWithHarnessRequestCredentials(
+        credentialsFor(sessionConfig, oauthCredential),
+        () => modernHandler(req, res, req.body),
+      ));
       return;
     }
 
@@ -513,7 +555,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
       }
       beginSessionRequest(session);
       try {
-        await session.transport.handleRequest(req, res, req.body);
+        await runWithHarnessRequestCredentials(liveCredentials(session), () =>
+          session.transport.handleRequest(req, res, req.body));
       } catch (err) {
         log.error("Error handling session request", { sessionId, error: String(err) });
         if (!res.headersSent) {
@@ -533,29 +576,19 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let server: McpServer | undefined;
     let transport: NodeStreamableHTTPServerTransport | undefined;
     try {
-      const oauthCredential = (
-        config.HARNESS_MCP_MODE === "oauth"
-        || config.HARNESS_MCP_MODE === "oauth-proxy"
-      )
-        ? {
-          subject: res.locals.harnessOAuthClaims.sub as string,
-          identitySubject: (
-            res.locals.harnessOAuthIdentitySubject as string | undefined
-          ) ?? res.locals.harnessOAuthClaims.sub as string,
-          accountId: res.locals.harnessOAuthAccountId as string,
-          accessToken: res.locals.harnessOAuthAccessToken as string,
-        }
-        : undefined;
+      const oauthCredential = readOAuthCredential(res);
       const headerConfig = mergeConfigWithSessionHeaders(config, req.headers);
       const sessionConfig = oauthCredential
         ? { ...headerConfig, HARNESS_ACCOUNT_ID: oauthCredential.accountId }
         : headerConfig;
+      const credentials = credentialsFor(sessionConfig, oauthCredential);
       const result = createHarnessServer(
         sessionConfig,
         sharedAuditManager,
         sharedSearchManager,
-        oauthCredential,
+        undefined,
         sharedRateLimiter,
+        sharedClient,
       );
       server = result.server;
       transport = new NodeStreamableHTTPServerTransport({
@@ -567,6 +600,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
             lastActivity: Date.now(),
             activeRequests: 0,
             oauthCredential,
+            credentials,
           });
           log.info("Session created", { sessionId: id, total: sessions.size });
         },
@@ -579,7 +613,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
       };
 
       await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
+      await runWithHarnessRequestCredentials(credentials, () => transport!.handleRequest(req, res, req.body));
     } catch (err) {
       if (err instanceof MissingSessionCredentialsError) {
         log.warn("Session rejected — missing credentials", { error: err.message });
@@ -644,7 +678,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     };
     res.once("close", markStreamClosed);
     try {
-      await session.transport.handleRequest(req, res);
+      await runWithHarnessRequestCredentials(liveCredentials(session), () => session.transport.handleRequest(req, res));
     } catch (err) {
       log.error("Error handling SSE request", { sessionId, error: String(err) });
       if (!res.headersSent) {
@@ -694,7 +728,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
     beginSessionRequest(session);
     try {
-      await session.transport.handleRequest(req, res);
+      await runWithHarnessRequestCredentials(liveCredentials(session), () => session.transport.handleRequest(req, res));
     } catch (err) {
       log.error("Error handling DELETE request", { sessionId, error: String(err) });
     } finally {

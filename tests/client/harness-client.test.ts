@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HarnessClient } from "../../src/client/harness-client.js";
+import { runWithHarnessRequestCredentials } from "../../src/client/request-credentials.js";
 import { RateLimiter } from "../../src/utils/rate-limiter.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import type { Config } from "../../src/config.js";
@@ -61,6 +62,22 @@ describe("HarnessClient", () => {
       const client = new HarnessClient(makeConfig());
       client.setAccountIdResolver(() => "resolved-account");
       expect(client.account).toBe("resolved-account");
+    });
+
+    it("reads account and API key from the active request on one client", async () => {
+      fetchSpy.mockImplementation(async () => new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+      await runWithHarnessRequestCredentials(
+        { apiKey: "pat.other-account.token.secret", accountId: "other-account" },
+        () => client.request({ path: "/ng/api/projects" }),
+      );
+      const init = fetchSpy.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined;
+      expect(init?.headers?.["x-api-key"]).toBe("pat.other-account.token.secret");
+      expect(init?.headers?.["Harness-Account"]).toBe("other-account");
+      expect(client.account).toBe("test-account");
     });
   });
 

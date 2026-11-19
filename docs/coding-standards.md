@@ -140,7 +140,7 @@ All Zod schemas in tool handlers must:
 
 ### 11. HTTP Client Is Singleton
 
-`HarnessClient` is constructed in `src/index.ts` and passed into the registry and tool handlers. Stdio keeps one client for the process. HTTP builds one client per 2025 session and one per 2026 request, because those MCP server instances cannot be shared. Every HTTP client in the process uses the same `RateLimiter`, so `HARNESS_RATE_LIMIT_RPS` still applies across concurrent requests. Do NOT:
+`HarnessClient` is constructed once per process in `src/index.ts` and passed into every registry and tool handler. Stdio uses that client for the connection. HTTP uses the same client for every 2025 session and every 2026 request. The account, API key, and OAuth token for the active HTTP call come from that request, so concurrent calls do not share credentials. `HARNESS_RATE_LIMIT_RPS` applies across all of them. Do NOT:
 
 - Create additional `HarnessClient` instances
 - Make raw `fetch()` calls from tool handlers or toolset definitions
