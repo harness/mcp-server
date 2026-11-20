@@ -3224,3 +3224,14 @@ export {
   unifiedSearchSourcesExtract,
   workArtifactListExtract,
 } from "./extractors/domain.js";
+
+/**
+ * Extract the public CI test-cases response ({ data: { totalItems, ... }, content: [...] })
+ * into the standard { items, total } list shape. A 204 (no test cases found) arrives as an
+ * empty body and yields an empty list.
+ */
+export const testCaseListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = (raw ?? {}) as { content?: unknown[] | null; data?: { totalItems?: number } };
+  const items = Array.isArray(r.content) ? r.content : [];
+  return { items, total: r.data?.totalItems ?? items.length };
+};
