@@ -1347,11 +1347,10 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       resourceType: "aicr_review",
       displayName: "AI Code Review",
       description:
-        "Latest AI Code Review of a pull request: criteria checks, overview (risk, status, summary), finding counts, and up to 100 open issues. " +
+        "Latest AI Code Review of a pull request: criteria checks, overview (risk, status, summary), verdict (gate result and grade), finding counts, and up to 100 open issues. " +
         "Pass repo_id + pr_number (with the repo's org_id/project_id) or a Harness PR URL. " +
-        "Execute request_review to review the PR's current commit now, and review_status to follow it. " +
-        "Grade, score, and per-issue gate results are not exposed by the API yet. " +
-        "List: reviewed PRs of an account, org or project, newest first; merged and closed stay listed.",
+        "Execute request_review to review the current commit, and review_status to follow it. " +
+        "List: reviewed PRs of an account, org or project with review status (e.g. blocked) and grade, newest first; merged and closed stay listed.",
       toolset: "aicr",
       scope: "account",
       scopeOptional: true,
@@ -1359,6 +1358,19 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       compactItem: aicrPullRequestCompact,
       listFilterFields: [
         { name: "query", description: "Search by pull request title" },
+        {
+          name: "status",
+          description: "Review status (one value): blocked = an open issue fails a gate",
+          enum: ["pending", "reviewing", "passed", "blocked", "failed"],
+        },
+        {
+          name: "sort",
+          description:
+            "Sort column (default updated). grade: asc puts A first and ungraded last, desc puts ungraded first, then F. " +
+            "issues: by critical, then major, then minor count",
+          enum: ["updated", "title", "repo", "author", "grade", "issues", "status"],
+        },
+        { name: "order", description: "Sort order (default desc)", enum: ["asc", "desc"] },
       ],
       diagnosticHint: DIAGNOSTIC_HINT,
       searchAliases: ["ai code review", "aicr"],
@@ -1383,11 +1395,13 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           preflight: aicrSpacePreflight,
           pageOneIndexed: true,
           headerPagination: true,
-          queryParams: SPACE_LIST_QUERY,
+          queryParams: { ...SPACE_LIST_QUERY, status: "status", sort: "sort", order: "order" },
           responseExtractor: aicrPullRequestListExtract,
           description:
-            "List reviewed pull requests under a space with number, title, repo_path, risk, and author. " +
-            "Pass an item's repo_path and number to get, aicr_finding, or aicr_run. Only query filters; PR state and branches are on pull_request.",
+            "List reviewed pull requests under a space with number, title, repo_path, risk, author, status, grade, and issue counts per severity. " +
+            "status: pending (no run), reviewing, passed, blocked (an open issue fails a gate), or failed (the run errored). " +
+            "grade and issues come from the latest successful review; grade is absent when the changed line count is unknown. " +
+            "Pass an item's repo_path and number to get, aicr_finding, or aicr_run. PR state and branches are on pull_request.",
           paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
         get: {
@@ -1401,7 +1415,11 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrReviewExtract,
           description:
-            "Get the latest AI Code Review. If the overview or findings fail to load, the error is reported under `unavailable` and the checks are still returned.",
+            "Get the latest AI Code Review. If the overview or findings fail to load, the error is reported under `unavailable` and the checks are still returned. " +
+            "verdict is from the latest successful review, saved when it finished: passed is false when an open issue fails a gate (failing counts them); " +
+            "new counts issues the previous review did not have, resolved counts the previous review's issues that are gone; " +
+            "failed team rules are counted in rules_failed but do not block. Dismissals and new commits show in it only after the next review. " +
+            "verdict is absent until a review has finished; its grade is absent when the changed line count is unknown.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
         },
       },
