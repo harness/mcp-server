@@ -3643,28 +3643,11 @@ describe("fme_experiment_result", () => {
     expect(stripped).not.toHaveProperty("pvalue");
   });
 
-  it("is list-only: no get, create, update, or delete", () => {
-    const resource = findResource("fme_experiment_result");
-    expect(resource.operations.list).toBeDefined();
-    expect(resource.operations.get).toBeUndefined();
-    expect(resource.operations.create).toBeUndefined();
-    expect(resource.operations.update).toBeUndefined();
-    expect(resource.operations.delete).toBeUndefined();
-  });
-});
-
-describe("fme_experiment_summary", () => {
-  let registry: Registry;
-
-  beforeEach(() => {
-    registry = new Registry(makeConfig());
-  });
-
-  it("get: routes to /fme/api/v4/experiments/{experiment_id}/summary with account_id/organization_identifier/project_identifier params", async () => {
+  it("execute summary: routes to /fme/api/v4/experiments/{experiment_id}/summary with account_id/organization_identifier/project_identifier params", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ sampleCounts: [], calculatedAt: null });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "fme_experiment_summary", "get", {
+    await registry.dispatchExecute(client, "fme_experiment_result", "summary", {
       org_id: "o1",
       project_id: "p1",
       experiment_id: "e1/with slash",
@@ -3679,29 +3662,30 @@ describe("fme_experiment_summary", () => {
       project_identifier: "p1",
     });
     expect(req.params).not.toHaveProperty("environment_id");
+    expect(req.body).toBeUndefined();
   });
 
-  it("get: throws when experiment_id missing", async () => {
+  it("execute summary: throws when experiment_id missing", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await expect(
-      registry.dispatch(client, "fme_experiment_summary", "get", { org_id: "o1", project_id: "p1" }),
+      registry.dispatchExecute(client, "fme_experiment_result", "summary", { org_id: "o1", project_id: "p1" }),
     ).rejects.toThrow(/experiment_id/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("get: throws when org_id/project_id missing", async () => {
+  it("execute summary: throws when org_id/project_id missing", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await expect(
-      registry.dispatch(client, "fme_experiment_summary", "get", { experiment_id: "e1" }),
-    ).rejects.toThrow("fme_experiment_summary: org_id and project_id are required (account is taken from config).");
+      registry.dispatchExecute(client, "fme_experiment_result", "summary", { experiment_id: "e1" }),
+    ).rejects.toThrow("fme_experiment_result: org_id and project_id are required (account is taken from config).");
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("get: returns per-treatment counts and srmState unchanged", async () => {
+  it("execute summary: returns per-treatment counts and srmState unchanged", async () => {
     const summary = {
       sampleCounts: [
         { treatment: "off", count: 48213, srmState: null },
@@ -3712,7 +3696,7 @@ describe("fme_experiment_summary", () => {
     const mockRequest = vi.fn().mockResolvedValue(summary);
     const client = makeClient(mockRequest);
 
-    const result = await registry.dispatch(client, "fme_experiment_summary", "get", {
+    const result = await registry.dispatchExecute(client, "fme_experiment_result", "summary", {
       org_id: "o1",
       project_id: "p1",
       experiment_id: "e1",
@@ -3721,10 +3705,16 @@ describe("fme_experiment_summary", () => {
     expect(result).toEqual(summary);
   });
 
-  it("is get-only: no list, create, update, or delete", () => {
-    const resource = findResource("fme_experiment_summary");
-    expect(resource.operations.get).toBeDefined();
-    expect(resource.operations.list).toBeUndefined();
+  it("summary action is read/safe", () => {
+    const action = findResource("fme_experiment_result").executeActions?.summary;
+    expect(action?.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
+  });
+
+  it("is list-only plus the read-only summary action: no get, create, update, or delete", () => {
+    const resource = findResource("fme_experiment_result");
+    expect(resource.operations.list).toBeDefined();
+    expect(Object.keys(resource.executeActions ?? {})).toEqual(["summary"]);
+    expect(resource.operations.get).toBeUndefined();
     expect(resource.operations.create).toBeUndefined();
     expect(resource.operations.update).toBeUndefined();
     expect(resource.operations.delete).toBeUndefined();

@@ -8,7 +8,7 @@ import { registerAllTools } from "../../src/tools/index.js";
 
 // Pinned hash of the full-mode tool schemas (descriptions, input and output schemas as advertised by tools/list). Full mode must stay byte-identical when compact-mode
 // copy changes; update this only for an intentional full-mode contract change.
-const FULL_MODE_SCHEMA_SHA256 = "5e37954a8875fa797e122a94a23cbafae3f2950165e3c4bfebd9a745906c3782";
+const FULL_MODE_SCHEMA_SHA256 = "ad7c5b0a3ab61396fbb68e4a90f2decbd0fc8e5c45605528c3c7debe9e5adb2b";
 
 // Measured: tool descriptions + input and output schemas in compact mode. Measured 21372 B total, 3585 B largest tool; headroom is deliberately small (~5%).
 const COMPACT_TOTAL_BUDGET_BYTES = 22500;
@@ -70,24 +70,6 @@ describe("HARNESS_SCHEMA_MODE", () => {
     expect(describeSchema.properties.toolset?.enum).toContain("flags");
     expect(describeSchema.properties.toolset?.enum).toContain("infra-deploys");
     expect(describeSchema.properties.toolset?.enum).toContain("artifacts");
-  });
-
-  it("full mode enums accept flag_experiment_summary and its canonical fme_experiment_summary", () => {
-    const tools = collectTools("full");
-    for (const name of ["harness_get", "harness_describe"]) {
-      const schema = tools.get(name)!.schema as { properties: Record<string, { enum?: string[] }> };
-      expect(schema.properties.resource_type?.enum, name).toContain("flag_experiment_summary");
-      expect(schema.properties.resource_type?.enum, name).toContain("fme_experiment_summary");
-    }
-  });
-
-  it("compact mode does not enum-gate resource_type, so flag_experiment_summary is not rejected pre-dispatch", () => {
-    const tools = collectTools("compact");
-    for (const name of ["harness_get", "harness_describe"]) {
-      const schema = tools.get(name)!.schema as { properties: Record<string, { type?: string; enum?: string[] }> };
-      expect(schema.properties.resource_type?.type, name).toBe("string");
-      expect(schema.properties.resource_type?.enum, name).toBeUndefined();
-    }
   });
 
   it("compact mode is meaningfully smaller than full", () => {
