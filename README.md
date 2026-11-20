@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 274 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 276 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 274 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 44 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
+- **11 tools, 276 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 45 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1307,7 +1307,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-274 resource types organized across 44 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+276 resource types organized across 45 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -2063,7 +2063,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 44 of 51 toolsets are enabled. Seven toolsets are opt-in and excluded from the defaults:
+By default, 45 of 52 toolsets are enabled. Seven toolsets are opt-in and excluded from the defaults:
 
 - **`aicr`** — AI Code Review (reviews, findings, runs, gates, rules, conventions, settings). Opt-in until the gateway route is confirmed on every production environment.
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
@@ -2126,6 +2126,7 @@ Available toolset names:
 | `repositories`          | repository, branch, commit, file_content, tag, repo_rule, space_rule                                                                                                                                                                                                                            |
 | `registries`            | registry, artifact, artifact_version, artifact_file, quarantine                                                                                                                                                                                                                                 |
 | `registries-firewall`   | artifact_scan, bulk_scan_evaluation, firewall_exception, firewall_exception_version                                                                                                                                                                                                             |
+| `registries-lifecycle`  | lifecycle_rule, lifecycle_execution                                                                                                                                                                                                                                                             |
 | `file_store`            | file_store                                                                                                                                                                                                                                                                                      |
 | `templates`             | template, template_v1                                                                                                                                                                                                                                                                           |
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
@@ -2180,8 +2181,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 51 Toolsets (44 default) |
-                |  274 Resource Types|
+                | 52 Toolsets (45 default) |
+                |  276 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
