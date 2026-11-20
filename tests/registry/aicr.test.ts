@@ -181,9 +181,9 @@ describe("aicr toolset registration", () => {
       // Dismissing can let a PR pass the gate, so it needs confirmation; undo only reopens.
       "aicr_finding.dismiss": { risk: "medium_write", retryPolicy: "do_not_retry" },
       "aicr_finding.undo_dismiss": { risk: "low_write", retryPolicy: "do_not_retry" },
-      // Enabling adds a trigger (and maybe a pipeline and service account); disabling deletes the repo's config.
+      // Enabling adds a trigger (and maybe a pipeline and service account); disabling removes its triggers only (config, rules and history are kept).
       "aicr_repository.enable": { risk: "high_write", retryPolicy: "do_not_retry" },
-      "aicr_repository.disable": { risk: "destructive", retryPolicy: "do_not_retry" },
+      "aicr_repository.disable": { risk: "high_write", retryPolicy: "do_not_retry" },
       // Loosening a gate lets PRs pass with findings that failed them.
       "aicr_gate.set": { risk: "high_write", retryPolicy: "do_not_retry" },
       // A rule can fail the Team rules check on every PR under its scope; turning one off lets them pass.
@@ -497,14 +497,33 @@ describe("aicr_repository enable / disable", () => {
     expect(result.warning).toMatch(/could not be turned on/);
   });
 
-  it("disables by repo_path alone and reports the repo as off", async () => {
-    const { client, request } = makeClient(() => ({ status: "SUCCESS", message: "No content" }));
+  it("disables through the Code repository settings and reports the repo as off", async () => {
+    const { client, request } = makeClient(() => ({ ai_pullreq_review_enabled: false }));
     const result = await registry().dispatchExecute(client, "aicr_repository", "disable", { ...SCOPE });
     const opts = request.mock.calls[0][0];
-    expect(opts.path).toBe("/gateway/aicr/api/v2/offboard");
-    expect(opts.params).toEqual({ repo_path: REPO_PATH });
-    expect(opts.body).toBeUndefined();
+    expect(opts.method).toBe("PATCH");
+    expect(opts.path).toBe("/code/api/v1/repos/aicr-runs-fixtures/settings/general");
+    expect(opts.params).toEqual({ orgIdentifier: "code", projectIdentifier: "DeepSourceAICR" });
+    expect(opts.body).toEqual({ ai_pullreq_review_enabled: false });
     expect(result).toEqual({ repo_path: REPO_PATH, enabled: false });
+  });
+
+  it("disables an org-level repo with no projectIdentifier", async () => {
+    const { client, request } = makeClient(() => ({ ai_pullreq_review_enabled: false }));
+    const result = await registry().dispatchExecute(client, "aicr_repository", "disable", { repo_path: `${ACCOUNT}/code/orgrepo` });
+    const opts = request.mock.calls[0][0];
+    expect(opts.method).toBe("PATCH");
+    expect(opts.path).toBe("/code/api/v1/repos/orgrepo/settings/general");
+    expect(opts.params).toEqual({ orgIdentifier: "code" });
+    expect(opts.body).toEqual({ ai_pullreq_review_enabled: false });
+    expect(result).toEqual({ repo_path: `${ACCOUNT}/code/orgrepo`, enabled: false });
+  });
+
+  it("disables an account-level repo with no scope params", async () => {
+    const { client, request } = makeClient(() => ({}));
+    await registry().dispatchExecute(client, "aicr_repository", "disable", { repo_path: `${ACCOUNT}/acctrepo` });
+    expect(request.mock.calls[0][0].path).toBe("/code/api/v1/repos/acctrepo/settings/general");
+    expect(request.mock.calls[0][0].params).toEqual({});
   });
 
   it("rejects an account path with no repo segment before any request", async () => {
@@ -964,10 +983,10 @@ describe("aicr_review request_review / review_status", () => {
 });
 
 describe("aicr_review.get", () => {
-  function reviewClient(overrides: { overview?: () => unknown; findings?: () => unknown } = {}) {
+  function reviewClient(overrides: { review?: unknown; overview?: () => unknown; findings?: () => unknown } = {}) {
     return makeClient((opts) => {
       if (opts.path.startsWith("/code/")) return {};
-      if (opts.path.endsWith("/review")) return REVIEW;
+      if (opts.path.endsWith("/review")) return overrides.review ?? REVIEW;
       if (opts.path.endsWith("/overview")) return (overrides.overview ?? (() => OVERVIEW))();
       if (opts.path.endsWith("/findings")) return (overrides.findings ?? (() => FINDINGS))();
       throw new Error(`unexpected path ${opts.path}`);
@@ -1001,6 +1020,22 @@ describe("aicr_review.get", () => {
     expect(result.unavailable).toBeUndefined();
     expect(result.open_issues_truncated).toBeUndefined();
     expect(typeof result.openInHarness).toBe("string");
+  });
+
+  it("returns the stored verdict, only its known fields, and omits it when there is none", async () => {
+    const verdict = {
+      run_id: RUN_ID, passed: false, grade: "C", failing: 2, open: 5, new: 1, resolved: 3,
+      rules_total: 4, rules_failed: 1, created: 1, updated: 2, internal: "x",
+    };
+    const withVerdict = reviewClient({ review: { ...REVIEW, verdict } });
+    const got = await registry().dispatch(withVerdict.client, "aicr_review", "get", { ...SCOPE, pr_number: 7 }) as Record<string, unknown>;
+    expect(got.verdict).toEqual({
+      run_id: RUN_ID, passed: false, grade: "C", failing: 2, open: 5, new: 1, resolved: 3, rules_total: 4, rules_failed: 1,
+    });
+
+    const without = reviewClient();
+    const none = await registry().dispatch(without.client, "aicr_review", "get", { ...SCOPE, pr_number: 7 }) as Record<string, unknown>;
+    expect("verdict" in none).toBe(false);
   });
 
   it.each([
@@ -1064,6 +1099,7 @@ const REVIEWED_PR = {
   number: 7, title: "rules-e2e: team rules", state: "", is_draft: false, repo_id: 0,
   repo_path: REPO_PATH, author: { id: 12, uid: "sawez", display_name: "Sawez Faisal" },
   source_branch: "", target_branch: "", source_sha: "ccf86324", risk: "medium",
+  status: "blocked", grade: "C", issues: { critical: 1, major: 2, minor: 0 }, latest_run_id: "run-7",
   created: 1793706302278, updated: 1793706880305,
 };
 
@@ -1107,24 +1143,29 @@ describe("space-level lists (aicr_review, aicr_repository)", () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  it("lists reviewed PRs with title search, 1-based paging, and header totals", async () => {
+  it("lists reviewed PRs with title search, status and sort filters, 1-based paging, and header totals", async () => {
     const { client, request } = makeClient((opts) => {
       opts.onResponseHeaders?.(PAGE_HEADERS);
       return [REVIEWED_PR, { ...REVIEWED_PR, number: 8 }];
     });
     const result = await registry().dispatch(client, "aicr_review", "list", {
-      org_id: "code", project_id: "DeepSourceAICR", query: "rules", page: 0, size: 2,
+      org_id: "code", project_id: "DeepSourceAICR", query: "rules", status: "Blocked", sort: "grade", order: "asc",
+      page: 0, size: 2,
     }) as Record<string, unknown>;
 
     const opts = request.mock.calls[0][0];
     expect(opts.path).toBe("/gateway/aicr/api/v1/prs");
-    expect(opts.params).toEqual({ space_path: `${ACCOUNT}/code/DeepSourceAICR`, query: "rules", page: 1, limit: 2 });
+    expect(opts.params).toEqual({
+      space_path: `${ACCOUNT}/code/DeepSourceAICR`, query: "rules", status: "blocked", sort: "grade", order: "asc",
+      page: 1, limit: 2,
+    });
     expect(result).toMatchObject({ total: 3, has_more: true, page: 0, page_size: 2 });
 
     const [pr] = result.items as Array<Record<string, unknown>>;
     expect(pr).toEqual({
       number: 7, title: REVIEWED_PR.title, repo_path: REPO_PATH, source_sha: "ccf86324",
-      author: REVIEWED_PR.author, risk: "medium", created: REVIEWED_PR.created, updated: REVIEWED_PR.updated,
+      author: REVIEWED_PR.author, risk: "medium", status: "blocked", grade: "C", issues: REVIEWED_PR.issues,
+      latest_run_id: "run-7", created: REVIEWED_PR.created, updated: REVIEWED_PR.updated,
     });
   });
 
@@ -1136,11 +1177,11 @@ describe("space-level lists (aicr_review, aicr_repository)", () => {
     expect(request.mock.calls[0][0].params).toEqual({ space_path: ACCOUNT, page: 1, limit: 20 });
   });
 
-  it("compacts reviewed PRs to number, title, repo_path, risk, and author name", () => {
+  it("compacts reviewed PRs to number, title, repo_path, risk, status, grade, issues, and author name", () => {
     const [compact] = compactItems([REVIEWED_PR], aicrPullRequestCompact) as Array<Record<string, unknown>>;
     expect(compact).toEqual({
-      number: 7, title: REVIEWED_PR.title, repo_path: REPO_PATH, risk: "medium",
-      updated: REVIEWED_PR.updated, author: "Sawez Faisal",
+      number: 7, title: REVIEWED_PR.title, repo_path: REPO_PATH, risk: "medium", status: "blocked", grade: "C",
+      issues: REVIEWED_PR.issues, updated: REVIEWED_PR.updated, author: "Sawez Faisal",
     });
   });
 
@@ -1232,7 +1273,7 @@ describe("aicr approval prompt notes", () => {
     expect(note(override, { rule_id: "5", body: { enabled: false } })).toBeUndefined();
   });
 
-  it("repository enable says which pipelines get the trigger; disable says what is deleted", () => {
+  it("repository enable says which pipelines get the trigger; disable says what is kept", () => {
     const { enable, disable } = def("aicr_repository").executeActions!;
     expect(note(enable, REPO)).toBe(
       "Enable AI Code Review on repo demo in project acme/web: " +
@@ -1247,7 +1288,7 @@ describe("aicr approval prompt notes", () => {
     expect(accountRepo).toContain("every project under the account");
     expect(note(disable, REPO)).toBe(
       "Disable AI Code Review on repo demo in project acme/web: " +
-        "removes its PR triggers, gates, rules, overrides and conventions. Enabling again does not bring them back.",
+        "removes its PR triggers; its gates, rules, overrides, conventions and past reviews are kept. enable turns it back on.",
     );
     expect(note(disable, {})).toBeUndefined();
   });
