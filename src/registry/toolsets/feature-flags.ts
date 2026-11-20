@@ -2413,12 +2413,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_experiment_result",
       displayName: "FME Experiment Result",
       description:
-        "Evaluated (post-statistics) per-metric results for an Experiment's latest calculation run. Harness-native only " +
-        "(org_id + project_id). Read-only: list only (no get by id — results have no identifier of their own, and no " +
-        "environment_id filter — the experiment has exactly one environment, already embedded on the fme_experiment " +
-        "object). One row per (metric, comparison treatment) pair, flattened across all four metric categories " +
-        "(KEY, SUPPORTING, GUARDRAIL, ALERT) with a response-only category field. Reflects only the latest calculation " +
-        "run — no historical-run access. Action summary returns per-treatment sample counts and SRM state.",
+        "Evaluated (post-statistics) per-metric results for an Experiment's latest calculation run (no historical " +
+        "runs). Harness-native only (org_id + project_id). Read-only. list: one row per (metric, comparison treatment) " +
+        "pair across KEY, SUPPORTING, GUARDRAIL, ALERT metrics, with a response-only category field; no get by id and " +
+        "no environment_id filter (the experiment has one environment, on fme_experiment). Action summary: " +
+        "per-treatment sample counts and SRM state.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
