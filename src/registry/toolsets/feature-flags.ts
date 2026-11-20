@@ -2413,10 +2413,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_experiment_result",
       displayName: "FME Experiment Result",
       description:
-        "Evaluated (post-statistics) per-metric results for an Experiment's latest calculation run (no historical " +
-        "runs). Harness-native only (org_id + project_id). Read-only. list: one row per (metric, comparison treatment) " +
-        "pair across KEY, SUPPORTING, GUARDRAIL, ALERT metrics, with a response-only category field; no get by id and " +
-        "no environment_id filter (the experiment has one environment, on fme_experiment). Action summary: " +
+        "Evaluated (post-statistics) per-metric results for an Experiment's latest calculation run; Harness-native " +
+        "only (org_id + project_id), read-only. list returns one row per (metric, comparison treatment) pair across " +
+        "KEY, SUPPORTING, GUARDRAIL and ALERT metrics (no get, no environment_id filter); the summary action returns " +
         "per-treatment sample counts and SRM state.",
       toolset: "feature-flags",
       scope: "project",
