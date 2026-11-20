@@ -59,7 +59,9 @@
   "homepage": "https://github.com/harness/mcp-server#readme",
   "dependencies": {
     "@hono/node-server": "^2.1.6",
-    "@modelcontextprotocol/sdk": "^1.31.0",
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "adm-zip": "^0.6.1",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -90,7 +92,8 @@
     }
   },
   "devDependencies": {
-    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/ext-apps": "^2.0.4",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.220.0",
     "@opentelemetry/resources": "^2.9.0",

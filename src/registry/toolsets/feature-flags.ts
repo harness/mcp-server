@@ -2460,12 +2460,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_experiment_result",
       displayName: "FME Experiment Result",
       description:
-        "Evaluated (post-statistics) per-metric results for an Experiment's latest calculation run. Harness-native only " +
-        "(org_id + project_id). Read-only: list only (no get by id — results have no identifier of their own, and no " +
-        "environment_id filter — the experiment has exactly one environment, already embedded on the fme_experiment " +
-        "object). One row per (metric, comparison treatment) pair, flattened across all four metric categories " +
-        "(KEY, SUPPORTING, GUARDRAIL, ALERT) with a response-only category field. Reflects only the latest calculation " +
-        "run — no historical-run access.",
+        "Evaluated (post-statistics) per-metric results for an Experiment's latest calculation run; Harness-native " +
+        "only (org_id + project_id), read-only. list returns one row per (metric, comparison treatment) pair across " +
+        "KEY, SUPPORTING, GUARDRAIL and ALERT metrics (no get, no environment_id filter); the summary action returns " +
+        "per-treatment sample counts and SRM state.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -2496,6 +2494,23 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "comparison treatment) pair. If the experiment has never been calculated, or a filtered metric id doesn't " +
             "exist on the experiment, returns 200 with a partial/empty result. No environment_id filter — the " +
             "experiment has exactly one environment (see fme_experiment.environment).",
+        },
+      },
+      executeActions: {
+        summary: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_result");
+            const id = encodePathSegment(requireFmeIdentifier(input, "experiment_id", "fme_experiment_result"));
+            return { path: `/fme/api/v4/experiments/${id}/summary` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          actionDescription:
+            "Get the experiment's overall summary: {sampleCounts: [{treatment, count, srmState}], calculatedAt}. Requires " +
+            "org_id, project_id, experiment_id. srmState is null for the baseline. If the experiment has never been " +
+            "calculated, returns 200 with zero counts, srmState INSUFFICIENT_DATA per comparison treatment, and calculatedAt null.",
         },
       },
     },

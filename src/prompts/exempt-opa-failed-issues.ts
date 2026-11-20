@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { parseHarnessUrl } from "../utils/url-parser.js";
 
 /**
@@ -28,26 +28,26 @@ export function registerExemptOpaFailedIssuesPrompt(server: McpServer): void {
         + "pipeline execution. Reads policy_evaluation results for the execution, pulls the "
         + "execution's Pipeline Security issues + scan steps, correlates the deny signals to "
         + "specific issue_ids, asks for confirmation, then bulk-creates exemptions.",
-      argsSchema: {
-        executionId: z.string().describe("Pipeline plan execution ID (e.g. 'ehsPKtczTRO5CUDAt-NR'). Either this OR `url` is required. If both are supplied, `executionId` wins.").optional(),
-        url: z.string().describe("Any Harness UI URL referencing the failed execution — pipeline run page, Security Tests tab, Policy Evaluations tab, etc. Auto-extracts executionId, pipelineId, orgId, projectId. Works for both '/executions/<id>/' and '/deployments/<id>/' URL shapes.").optional(),
-        projectId: z.string().describe("Project identifier (optional; defaults to configured project or URL-extracted value)").optional(),
-        orgId: z.string().describe("Organization identifier (optional; defaults to configured org or URL-extracted value)").optional(),
-        exemption_type: z.string().describe("Exemption type to apply: 'Compensating Controls' | 'Acceptable Use' | 'Acceptable Risk' | 'False Positive' | 'Fix Unavailable' | 'Other'. Optional — if omitted, the prompt will ask after showing the candidate table.").optional(),
-        reason: z.string().describe("Business/security justification for the exemption. Optional — if omitted, the prompt will ask after showing the candidate table.").optional(),
-        duration_days: z.number().describe("Exemption duration in days (defaults to 30 when omitted)").optional(),
-        link: z.string().describe("Optional URL for Jira / ticket / reference").optional(),
-        expiration: z.number().describe("Optional Unix timestamp at which exemptions expire").optional(),
-        extra_filters: z.object({
-          severity_codes: z.string().optional(),
-          issue_types: z.string().optional(),
-          target_ids: z.string().optional(),
-          target_types: z.string().optional(),
-          search: z.string().optional(),
-          steps: z.string().optional(),
-        }).describe("Optional additional pipeline_security_issue filters to narrow further (e.g. severity_codes='Critical').").optional(),
-        dry_run: z.boolean().describe("When true, stop after the candidate table — do not create exemptions even on user confirmation. Useful for previewing.").optional(),
-      },
+      argsSchema: z.object({
+              executionId: z.string().describe("Pipeline plan execution ID (e.g. 'ehsPKtczTRO5CUDAt-NR'). Either this OR `url` is required. If both are supplied, `executionId` wins.").optional(),
+              url: z.string().describe("Any Harness UI URL referencing the failed execution — pipeline run page, Security Tests tab, Policy Evaluations tab, etc. Auto-extracts executionId, pipelineId, orgId, projectId. Works for both '/executions/<id>/' and '/deployments/<id>/' URL shapes.").optional(),
+              projectId: z.string().describe("Project identifier (optional; defaults to configured project or URL-extracted value)").optional(),
+              orgId: z.string().describe("Organization identifier (optional; defaults to configured org or URL-extracted value)").optional(),
+              exemption_type: z.string().describe("Exemption type to apply: 'Compensating Controls' | 'Acceptable Use' | 'Acceptable Risk' | 'False Positive' | 'Fix Unavailable' | 'Other'. Optional — if omitted, the prompt will ask after showing the candidate table.").optional(),
+              reason: z.string().describe("Business/security justification for the exemption. Optional — if omitted, the prompt will ask after showing the candidate table.").optional(),
+              duration_days: z.number().describe("Exemption duration in days (defaults to 30 when omitted)").optional(),
+              link: z.string().describe("Optional URL for Jira / ticket / reference").optional(),
+              expiration: z.number().describe("Optional Unix timestamp at which exemptions expire").optional(),
+              extra_filters: z.object({
+                severity_codes: z.string().optional(),
+                issue_types: z.string().optional(),
+                target_ids: z.string().optional(),
+                target_types: z.string().optional(),
+                search: z.string().optional(),
+                steps: z.string().optional(),
+              }).describe("Optional additional pipeline_security_issue filters to narrow further (e.g. severity_codes='Critical').").optional(),
+              dry_run: z.boolean().describe("When true, stop after the candidate table — do not create exemptions even on user confirmation. Useful for previewing.").optional(),
+            }),
     },
     async ({
       executionId,

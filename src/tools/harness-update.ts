@@ -1,11 +1,12 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
+import { confirmationArgsHash, confirmViaElicitation, describeElicitationFailure, describeBlockedAudit, isConfirmationPrompt } from "../utils/elicitation.js";
+import { resolveConfirmNoteAsync, withConfirmNoteFirst } from "../utils/confirm-note.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
@@ -21,20 +22,20 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
     "harness_update",
     {
       description: "Update an existing Harness resource. For pipelines/input sets: pass body as a YAML string directly (recommended for complex definitions), or use body.yamlPipeline/body.pipeline. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable.",
-      inputSchema: {
-        resource_type: resourceTypeSchema(updatableTypes, registry.compactSchemas).describe("The type of resource to update"),
-        resource_id: z.string().optional().describe("The identifier of the resource to update. Optional when url contains the resource ID."),
-        url: z.string().optional().describe("A Harness UI URL — org, project, resource type, ID, and supported resource_scope are extracted automatically"),
-        resource_scope: resourceScopeField(registry.compactSchemas),
-        body: z.union([
-          z.record(z.string(), z.unknown()),
-          z.string(),
-        ]).describe("The updated resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
-        org_id: orgIdField(registry.orgId, registry.compactSchemas),
-        project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        confirm: z.boolean().optional().describe(fieldCopy("confirm.update", registry.schemaProfile)),
-        params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates)."),
-      },
+      inputSchema: z.object({
+              resource_type: resourceTypeSchema(updatableTypes, registry.compactSchemas).describe("The type of resource to update"),
+              resource_id: z.string().optional().describe("The identifier of the resource to update. Optional when url contains the resource ID."),
+              url: z.string().optional().describe("A Harness UI URL — org, project, resource type, ID, and supported resource_scope are extracted automatically"),
+              resource_scope: resourceScopeField(registry.compactSchemas),
+              body: z.union([
+                z.record(z.string(), z.unknown()),
+                z.string(),
+              ]).describe("The updated resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
+              org_id: orgIdField(registry.orgId, registry.compactSchemas),
+              project_id: projectIdField(registry.projectId, registry.compactSchemas),
+              confirm: z.boolean().optional().describe(fieldCopy("confirm.update", registry.schemaProfile)),
+              params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates)."),
+            }),
       outputSchema: compactOutputSchema(updateOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Update Harness Resource",
@@ -44,7 +45,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         openWorldHint: true,
       },
     },
-    async (rawArgs) => {
+    async (rawArgs, ctx) => {
       const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         // Validate resource_type and operation before asking user to confirm
@@ -101,12 +102,19 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         const bodyPreview = formatBodyPreview(args.body);
         const elicit = await confirmViaElicitation({
           server,
+          ctx,
           toolName: "harness_update",
-          message: `Update ${args.resource_type} "${resolvedResourceId}"?\n\n${bodyPreview}`,
+          message: withConfirmNoteFirst(
+            `Update ${args.resource_type} "${resolvedResourceId}"?`,
+            bodyPreview,
+            await resolveConfirmNoteAsync(def.operations.update, input, { client, registry, accountId: registry.getAccountId() }),
+          ),
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
+          argsHash: confirmationArgsHash(rawArgs),
         });
+        if (isConfirmationPrompt(elicit)) return elicit.needsInput;
         if (!elicit.proceed) {
           registry.auditBlockedAttempt(
             args.resource_type,

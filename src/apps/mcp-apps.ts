@@ -7,7 +7,8 @@
  * results.
  */
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
+import { requestClientCapabilities } from "../utils/elicitation.js";
 import { parse as parseYaml } from "yaml";
 import type { Config } from "../config.js";
 import type { ToolResult } from "../utils/response-formatter.js";
@@ -35,15 +36,15 @@ export interface AppViewContext {
   /** Spread into a tool's registration config. Empty when MCP Apps is off. */
   readonly toolMeta: { _meta?: Record<string, unknown> };
   /** Add view data to a successful result when the connected host renders MCP Apps. */
-  attach(result: ToolResult, build: () => HarnessView | undefined): ToolResult;
+  attach(result: ToolResult, build: () => HarnessView | undefined, ctx?: ServerContext): ToolResult;
 }
 
 export function createAppViewContext(server: McpServer, enabled: boolean): AppViewContext {
   return {
     toolMeta: enabled ? { _meta: { ui: { resourceUri: MCP_APP_RESOURCE_URI } } } : {},
-    attach(result, build) {
+    attach(result, build, ctx) {
       if (!enabled || result.isError) return result;
-      if (!clientSupportsMcpApps(server.server?.getClientCapabilities?.())) return result;
+      if (!clientSupportsMcpApps(requestClientCapabilities(ctx, server.server))) return result;
       const view = build();
       if (!view) return result;
       const meta = asRecord(result._meta) ?? {};

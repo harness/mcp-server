@@ -11,6 +11,11 @@ describe("k8s HTTP session routing", () => {
     expect(deployment).toContain("Session not found");
   });
 
+  it("publishes the confirmation state key for multi-replica HTTP", () => {
+    const secret = readFileSync(join(root, "k8s/secret.yaml"), "utf8");
+    expect(secret).toContain("HARNESS_MCP_REQUEST_STATE_KEY");
+  });
+
   it("pins clients to the same pod via ClientIP session affinity", () => {
     const service = readFileSync(join(root, "k8s/service.yaml"), "utf8");
     expect(service).toContain("sessionAffinity: ClientIP");

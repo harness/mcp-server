@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Config } from "../../src/config.js";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { HarnessClient } from "../../src/client/harness-client.js";
@@ -9,6 +9,7 @@ import { registerCreateTool } from "../../src/tools/harness-create.js";
 import { registerExecuteTool } from "../../src/tools/harness-execute.js";
 import { registerGetTool } from "../../src/tools/harness-get.js";
 import { registerDescribeTool } from "../../src/tools/harness-describe.js";
+import { toolHandlerContext } from "../helpers/request-context.js";
 
 const appId = "08aff27b-6108-4589-bc39-eb32f94c8d5e";
 function setup(overrides: Partial<Config> = {}) {
@@ -31,8 +32,9 @@ function setup(overrides: Partial<Config> = {}) {
   return {
     async call(name: string, args: Record<string, unknown>, signal = new AbortController().signal) {
       const tool = registrations.get(name)!;
-      const parsed = z.object(tool.schema.inputSchema).parse(args);
-      return tool.handler(parsed, { signal, sendNotification: async () => {}, _meta: {} });
+      const inputSchema = tool.schema.inputSchema as z.ZodRawShape | z.ZodType;
+      const parsed = ("~standard" in inputSchema ? inputSchema as z.ZodType : z.object(inputSchema)).parse(args);
+      return tool.handler(parsed, toolHandlerContext(signal));
     },
   };
 }
