@@ -345,6 +345,37 @@ function aicrNamedRepoPreflight(validate: (input: Record<string, unknown>) => un
 }
 
 /**
+ * Soft disable keeps the repository's AI Code Review config, and the backend only checks that the config
+ * exists, so a review would start on a repository whose AI review is off. Read the setting from Code and
+ * refuse only on an explicit false: a missing field, a non-boolean or a 404 (no Code repository, as for a
+ * GitHub App repo) is left for the backend to answer.
+ */
+async function aicrCheckReviewEnabled(ctx: PreflightContext, repoPath: string): Promise<void> {
+  const { spacePath, repoIdentifier } = splitAicrRepoPath(repoPath);
+  const [, org, project] = spacePath.split("/");
+  let settings: unknown;
+  try {
+    settings = await aicrGet(ctx, `/code/api/v1/repos/${encodePathSegment(repoIdentifier)}/settings/general`, {
+      ...(org ? { orgIdentifier: org } : {}),
+      ...(project ? { projectIdentifier: project } : {}),
+    });
+  } catch (err) {
+    if (err instanceof HarnessApiError && err.statusCode === 404) return;
+    throw err;
+  }
+  if (typeof settings === "object" && settings !== null && (settings as Record<string, unknown>).ai_pullreq_review_enabled === false) {
+    throw new Error(
+      'AI Code Review is turned off for this repository; run harness_execute(resource_type="aicr_repository", action="enable") first.',
+    );
+  }
+}
+
+async function aicrRequestReviewPreflight(ctx: PreflightContext): Promise<void> {
+  await aicrNamedRepoPreflight(aicrPrNumber)(ctx);
+  await aicrCheckReviewEnabled(ctx, resolveAicrRepoPath(ctx.input, ctx.accountId));
+}
+
+/**
  * Gates, rules and conventions are scoped by `space_path` or by the repo's config id, never both.
  * `repo_path` goes along with the id because auth reads the account from it (a 401 otherwise).
  * A repo without a config row is answered by `noRepoConfig`, the way reviews treat it.
@@ -832,6 +863,8 @@ async function aicrRepoActionPreflight(ctx: PreflightContext): Promise<void> {
  */
 async function aicrDisablePreflight(ctx: PreflightContext): Promise<void> {
   await aicrRepoActionPreflight(ctx);
+  // Only a Harness Code repository has these settings; a GitHub App repo is recorded without one.
+  await aicrCheckRepoExists(ctx, String(ctx.input.repo_path));
   const [, org, project] = String(ctx.input.space_path).split("/");
   if (org) ctx.input.org_id = org;
   if (project) ctx.input.project_id = project;
@@ -1445,7 +1478,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           // could start a second pipeline, so it is never retried. It runs a pipeline as the caller, so it
           // asks first, and auto-approving medium writes does not cover it (the same level as enable).
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
-          preflight: aicrNamedRepoPreflight(aicrPrNumber),
+          preflight: aicrRequestReviewPreflight,
           confirmNote: aicrReviewRequestNote,
           bodyBuilder: hoistAicrRepoPath,
           queryParams: { repo_path: "repo_path" },
@@ -1454,6 +1487,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             "Start an AI Code Review of the pull request's current commit, run by the repo's AI Code Review pipeline as you. " +
             "Works only for an open PR in a project repository with AI Code Review enabled. " +
             "If a review of that commit is already running, that one is returned and no new one starts. " +
+            "Fails with a conflict while a review of an older commit of the PR is still running. " +
+            "Requesting a review of an already reviewed commit starts a new review of the whole pull request. " +
             "Returns status running with the run; follow it with review_status.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
           bodySchema: { description: "No body", fields: [] },
@@ -1471,7 +1506,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           actionDescription:
             "Status of the pull request's latest review run: running, success, failure, or none. " +
             "Read-only, takes a Harness PR URL. run.head_sha is the commit reviewed; if the PR has newer commits, request_review again. " +
-            "A running review whose pipeline has ended is marked failed here, when you can edit reviews.",
+            "A running review whose pipeline has ended is marked failed here, when you can edit reviews. " +
+            "A cancelled run (superseded, or nothing to review) also reports status failure; check run.status to tell cancelled from error.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
           bodySchema: { description: "No body", fields: [] },
         },
@@ -1673,7 +1709,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       displayName: "AI Code Review Repository",
       description:
         "Repositories with an AI Code Review config under an account, org, or project. " +
-        "A disabled repository can still be listed; its on/off state is its AI review setting. " +
+        "A disabled repository is still listed; the list does not show whether review is on. " +
         "Execute enable or disable to turn it on or off for one Harness Code repository.",
       toolset: "aicr",
       scope: "account",
@@ -1699,7 +1735,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: SPACE_LIST_QUERY,
           responseExtractor: aicrRepositoryListExtract,
           description:
-            "List repositories with an AI Code Review config (a disabled one can be listed) with repo_path and SCM source (Harness Code or linked provider).",
+            "List repositories with an AI Code Review config (a disabled one is still listed; the list does not show whether review is on) with repo_path and SCM source (Harness Code or linked provider).",
           paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
       },
@@ -1748,7 +1784,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             "Turn off AI Code Review for a repository, the same as the repository's AI review setting in Harness: " +
             "removes its pull request triggers, so new commits are not reviewed automatically. " +
             "Keeps the repository's AI Code Review config, gates, rules, overrides, conventions and past reviews; " +
-            "enable turns it back on. Succeeds if it is already disabled.",
+            "enable turns it back on. Succeeds if it is already disabled. Only for Harness Code repositories.",
           paramsSchema: { fields: REPO_PARAM_FIELDS },
           bodySchema: { description: "No body", fields: [] },
         },

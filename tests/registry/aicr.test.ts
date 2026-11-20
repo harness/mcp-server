@@ -501,7 +501,7 @@ describe("aicr_repository enable / disable", () => {
   it("disables through the Code repository settings and reports the repo as off", async () => {
     const { client, request } = makeClient(() => ({ ai_pullreq_review_enabled: false }));
     const result = await registry().dispatchExecute(client, "aicr_repository", "disable", { ...SCOPE });
-    const opts = request.mock.calls[0][0];
+    const opts = request.mock.calls.map((c) => c[0]).find((o) => o.method === "PATCH")!;
     expect(opts.method).toBe("PATCH");
     expect(opts.path).toBe("/code/api/v1/repos/aicr-runs-fixtures/settings/general");
     expect(opts.params).toEqual({ orgIdentifier: "code", projectIdentifier: "DeepSourceAICR" });
@@ -509,10 +509,16 @@ describe("aicr_repository enable / disable", () => {
     expect(result).toEqual({ repo_path: REPO_PATH, enabled: false });
   });
 
+  it("disable on a repo with no Harness Code repository gives a clear error and sends no PATCH", async () => {
+    const { client, request } = makeClient(() => { throw new HarnessApiError("Not Found", 404); });
+    await expect(registry().dispatchExecute(client, "aicr_repository", "disable", { ...SCOPE })).rejects.toThrow(/No repository/);
+    expect(request.mock.calls.some((c) => c[0].method === "PATCH")).toBe(false);
+  });
+
   it("disables an org-level repo with no projectIdentifier", async () => {
     const { client, request } = makeClient(() => ({ ai_pullreq_review_enabled: false }));
     const result = await registry().dispatchExecute(client, "aicr_repository", "disable", { repo_path: `${ACCOUNT}/code/orgrepo` });
-    const opts = request.mock.calls[0][0];
+    const opts = request.mock.calls.map((c) => c[0]).find((o) => o.method === "PATCH")!;
     expect(opts.method).toBe("PATCH");
     expect(opts.path).toBe("/code/api/v1/repos/orgrepo/settings/general");
     expect(opts.params).toEqual({ orgIdentifier: "code" });
@@ -523,8 +529,9 @@ describe("aicr_repository enable / disable", () => {
   it("disables an account-level repo with no scope params", async () => {
     const { client, request } = makeClient(() => ({}));
     await registry().dispatchExecute(client, "aicr_repository", "disable", { repo_path: `${ACCOUNT}/acctrepo` });
-    expect(request.mock.calls[0][0].path).toBe("/code/api/v1/repos/acctrepo/settings/general");
-    expect(request.mock.calls[0][0].params).toEqual({});
+    const patch = request.mock.calls.map((c) => c[0]).find((o) => o.method === "PATCH")!;
+    expect(patch.path).toBe("/code/api/v1/repos/acctrepo/settings/general");
+    expect(patch.params).toEqual({});
   });
 
   it("rejects an account path with no repo segment before any request", async () => {
@@ -963,6 +970,34 @@ describe("aicr_review request_review / review_status", () => {
     });
     await expect(registry().dispatchExecute(client, "aicr_review", "request_review", { ...SCOPE, pr_number: 7 })).rejects.toThrow(/No repository/);
     expect(request.mock.calls.some((c) => c[0].path.endsWith("/review/start"))).toBe(false);
+  });
+
+  describe("when AI review is turned off", () => {
+    const withSettings = (settings: unknown) => (opts: RequestOpts) => {
+      if (opts.path.endsWith("/settings/general")) return settings;
+      return opts.path.startsWith("/code/api/v1/repos/") ? { identifier: "aicr-runs-fixtures" } : { pr_number: 7, status: "running", run: RUNNING };
+    };
+    const started = (request: { mock: { calls: { 0: RequestOpts }[] } }) => request.mock.calls.some((c) => c[0].path.endsWith("/review/start"));
+
+    it("refuses to start when ai_pullreq_review_enabled is false", async () => {
+      const { client, request } = makeClient(withSettings({ ai_pullreq_review_enabled: false }));
+      await expect(registry().dispatchExecute(client, "aicr_review", "request_review", { ...SCOPE, pr_number: 7 })).rejects.toThrow(/turned off.*action="enable"/);
+      const get = request.mock.calls.map((c) => c[0]).find((o) => o.path.endsWith("/settings/general"))!;
+      expect(get).toMatchObject({ method: "GET", path: "/code/api/v1/repos/aicr-runs-fixtures/settings/general", params: { orgIdentifier: "code", projectIdentifier: "DeepSourceAICR" } });
+      expect(started(request)).toBe(false);
+    });
+
+    it("starts when it is true", async () => {
+      const { client, request } = makeClient(withSettings({ ai_pullreq_review_enabled: true }));
+      await registry().dispatchExecute(client, "aicr_review", "request_review", { ...SCOPE, pr_number: 7 });
+      expect(started(request)).toBe(true);
+    });
+
+    it("starts when the field is absent", async () => {
+      const { client, request } = makeClient(withSettings({}));
+      await registry().dispatchExecute(client, "aicr_review", "request_review", { ...SCOPE, pr_number: 7 });
+      expect(started(request)).toBe(true);
+    });
   });
 
   it("reads the status with a GET, takes a URL, and points to request_review when there is no run", async () => {
