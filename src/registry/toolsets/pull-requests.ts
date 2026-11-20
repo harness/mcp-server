@@ -340,6 +340,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "state", description: "Pull request state filter", enum: ["open", "closed", "merged"] },
         { name: "query", description: "Search pull requests by keyword" },
+        { name: "source_branch", description: "Only pull requests from this source branch (exact name)" },
       ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/pulls/{number}",
@@ -354,6 +355,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             state: "state",
             query: "query",
             search_term: "query",
+            source_branch: "source_branch",
             page: "page",
             limit: "limit",
             size: "limit",

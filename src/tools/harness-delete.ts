@@ -6,6 +6,7 @@ import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
+import { resolveConfirmNoteAsync, withConfirmNote } from "../utils/confirm-note.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord, asString } from "../utils/type-guards.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
@@ -93,11 +94,17 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           );
           return errorResult(reason);
         }
+        const deleteNote = await resolveConfirmNoteAsync(def.operations.delete, input, { client, registry, accountId: registry.getAccountId() });
         const risk = def.operations.delete!.operationPolicy.risk;
+        // Same layout as create/update/execute: the note is the line under the title. It replaces the
+        // generic warning because it already says what the delete does (e.g. archives, not erases).
+        const deleteTitle = `Delete ${args.resource_type} "${resolvedResourceId}"?`;
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_delete",
-          message: `Delete ${args.resource_type} "${resolvedResourceId}"?\n\nThis is destructive and cannot be undone.`,
+          message: deleteNote
+            ? withConfirmNote(deleteTitle, deleteNote)
+            : `${deleteTitle}\n\nThis is destructive and cannot be undone.`,
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,

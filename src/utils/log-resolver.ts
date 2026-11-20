@@ -484,16 +484,35 @@ async function requestLogBlobLink(
   );
 }
 
-function rewriteDownloadUrlIfNeeded(client: HarnessClient, blobLink: string): string {
+/**
+ * Shape-A sandbox proxy base URLs look like `http://sandbox-proxy:8443/proxy/app.harness.io`
+ * (optionally with a `/gateway` suffix). The proxy only forwards requests whose
+ * path is `/proxy/<upstream-host>/...`, so blob URLs must be rewritten into that form.
+ */
+const SHAPE_A_PROXY_PATH_RE = /^\/proxy\/[^/]+/;
+
+/**
+ * Rewrite a Harness-hosted presigned blob link so it is reachable via the
+ * configured `HARNESS_BASE_URL`. Non-Harness / non-presigned links are returned unchanged.
+ *
+ * Exported for unit testing; production callers use {@link resolveLogDownloadUrl}.
+ */
+export function rewriteLogBlobUrl(blobLink: string, baseURL: string): string {
   const blobUrl = safeParseUrl(blobLink);
   if (!blobUrl || isExternalStorageHost(blobUrl.hostname)) {
     return blobLink;
   }
 
   if (isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname) && blobUrl.pathname.startsWith("/storage/")) {
-    const baseUrl = safeParseUrl(client.baseURL);
+    const baseUrl = safeParseUrl(baseURL);
     if (!baseUrl) {
-      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
+      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${baseURL}" is not a valid URL`);
+    }
+    if (SHAPE_A_PROXY_PATH_RE.test(baseUrl.pathname)) {
+      // Keep the blob's original host (in the /proxy/<host>/ segment) so presigned
+      // signatures stay valid. base.origin preserves the proxy port; any base path
+      // suffix such as /gateway must not leak into the blob path.
+      return `${baseUrl.origin}/proxy/${blobUrl.host}${blobUrl.pathname}${blobUrl.search}`;
     }
     if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
       return blobLink;
@@ -513,7 +532,7 @@ export async function resolveLogDownloadUrl(
   options?: LogResolveOptions,
 ): Promise<string> {
   const blobLink = await requestLogBlobLink(client, prefix, options);
-  return rewriteDownloadUrlIfNeeded(client, blobLink);
+  return rewriteLogBlobUrl(blobLink, client.baseURL);
 }
 
 /** GET /blob for one key; returns the decompressed raw text ("" when empty). */

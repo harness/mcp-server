@@ -49,8 +49,11 @@ const dryRunBodySchema: BodySchema = {
 const dryRunBody = (input: Record<string, unknown>): Record<string, unknown> => {
   const body = input.body as Record<string, unknown> | undefined;
   const policyId = input.rule_id ?? body?.policyId ?? body?.rule_id;
-  if (typeof policyId !== "string" || policyId.trim() === "") {
+  if (policyId === undefined || policyId === null || policyId === "") {
     throw new Error("dry_run needs rule_id (the lifecycle rule ID from lifecycle_rule list).");
+  }
+  if (typeof policyId !== "string" || policyId.trim() === "") {
+    throw new Error(`dry_run rule_id must be a non-empty string, got ${typeof policyId}.`);
   }
   return { policyId: policyId.trim() };
 };

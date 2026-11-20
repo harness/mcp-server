@@ -6,6 +6,7 @@ import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
+import { resolveConfirmNoteAsync, withConfirmNoteFirst } from "../utils/confirm-note.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
@@ -84,7 +85,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_create",
-          message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
+          message: withConfirmNoteFirst(`Create ${args.resource_type}?`, bodyPreview, await resolveConfirmNoteAsync(def.operations.create, input, { client, registry, accountId: registry.getAccountId() })),
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,

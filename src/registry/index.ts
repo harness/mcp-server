@@ -56,6 +56,7 @@ import { observabilityEvaluationsToolset } from "./toolsets/observability-evalua
 import { iacmToolset } from "./toolsets/iacm.js";
 import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
 import { unifiedSearchToolset } from "./toolsets/unified-search.js";
+import { aicrToolset } from "./toolsets/aicr.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
@@ -227,6 +228,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   knowledgeGraphToolset,
   semanticLayerToolset,
   unifiedSearchToolset,
+  aicrToolset,
   ansibleToolset,
   incidentsToolset,
   alertsToolset,
@@ -952,7 +954,8 @@ export class Registry {
     // Pass registry-resolved accountId so hooks do not depend on client.account,
     // which is the process placeholder in multi-tenant chat MCP.
     if (spec.preflight) {
-      await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
+      const answered = await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
+      if (answered) return answered.result;
     }
 
     if (spec.inputNormalizer) {
@@ -1172,6 +1175,7 @@ export class Registry {
     const requestOpts = {
       method: resolvedMethod,
       path,
+      errorPath: path,
       params,
       body,
       ...(baseUrl ? { baseUrl } : {}),

@@ -60,6 +60,17 @@ function harSpacePath(input: Record<string, unknown>, config: PathBuilderConfig)
     (input.project_id as string) || config.HARNESS_PROJECT || ""].map(encodePathSegment).join("/");
 }
 
+// `GetAllRegistries` (list) is the one v1 endpoint whose `space_ref` genuinely supports
+// account-only (`accountId/+`) and org-only (`accountId/org/+`) refs, not just project-level —
+// so unlike harSpacePath, an explicit resource_scope of "account"/"org" must omit the
+// trailing segments entirely rather than falling back to configured org/project defaults.
+function harListSpacePath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  const scope = input.resource_scope as string | undefined;
+  const org = scope === "account" ? "" : (input.org_id as string) || config.HARNESS_ORG || "";
+  const project = scope === "account" || scope === "org" ? "" : (input.project_id as string) || config.HARNESS_PROJECT || "";
+  return [config.HARNESS_ACCOUNT_ID ?? "", org, project].filter((segment) => segment !== "").map(encodePathSegment).join("/");
+}
+
 function harRegistryRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
   const registry = input.registry_id as string;
   return `${harSpacePath(input, config)}/${encodePathSegment(registry)}`;
@@ -73,18 +84,34 @@ export const registriesToolset: ToolsetDefinition = {
     {
       resourceType: "registry",
       displayName: "Registry",
-      description: "Artifact registry. Supports list, get, create, and update.",
+      description:
+        "Artifact registry. list supports account/org/project scope with a scope=ancestors/descendants " +
+        "filter, so a registry can be located by name from account level without knowing its exact org/" +
+        "project first. get, create, and update remain project-scoped, keyed by the registry's slug.",
       toolset: "registries",
       scope: "project",
+      // Only `list` genuinely supports account/org scope (GetAllRegistries' space_ref can be
+      // account-only or org-only); get/create/update/quarantine stay project-scoped.
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["registry_id"],
       listFilterFields: [
-        { name: "search", description: "Filter artifact registries by name or keyword" },
+        { name: "search_term", description: "Filter artifact registries by name or keyword" },
         { name: "type", description: "Registry type filter", enum: ["UPSTREAM", "VIRTUAL"] },
         {
           name: "package_type",
           description: "Filter registries by package type",
           enum: PACKAGE_TYPES,
         },
+        {
+          name: "scope",
+          description: "Which registries to include relative to the requested scope: none (default, that " +
+            "level only), ancestors (plus parent levels), descendants (plus all child orgs/projects). " +
+            "Combine with resource_scope=account and search_term to find a registry by name anywhere in " +
+            "the account.",
+          enum: ["none", "ancestors", "descendants"],
+        },
+        { name: "sort_field", description: "Field to sort by" },
+        { name: "sort_order", description: "Sort order (asc/desc)" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/registries/{registryIdentifier}",
       operations: {
@@ -92,21 +119,29 @@ export const registriesToolset: ToolsetDefinition = {
           method: "GET",
           path: "/har/api/v1/spaces",
           pathBuilder: (input, config) =>
-            `/har/api/v1/spaces/${harSpacePath(input, config)}/+/registries`,
+            `/har/api/v1/spaces/${harListSpacePath(input, config)}/+/registries`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "search_term",
             type: "type",
             package_type: "package_type",
+            scope: "scope",
+            sort_field: "sort_field",
+            sort_order: "sort_order",
             page: "page",
             size: "size",
           },
           responseExtractor: harListExtract("registries"),
           description: "List artifact registries",
         },
+        // get/create/update stay pinned to project scope: their HAR builders (harRegistryRef/
+        // harSpaceRef) always resolve org/project from input or configured defaults, so without
+        // this override the resource-level supportedScopes above would let a caller pass
+        // resource_scope=account/org here and silently get project-scoped behavior instead.
         get: {
           method: "GET",
           path: "/har/api/v1/registry",
+          scope: "project",
           pathBuilder: (input, config) =>
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
           pathParams: { registry_id: "registryIdentifier" },
@@ -117,6 +152,7 @@ export const registriesToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/har/api/v1/registry",
+          scope: "project",
           // HAR create requires space_ref=<accountId>/<orgId>/<projectId>/+
           queryParams: { space_ref: "space_ref" },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
@@ -136,6 +172,7 @@ export const registriesToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/har/api/v1/registry",
+          scope: "project",
           pathBuilder: (input, config) =>
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
           pathParams: { registry_id: "registryIdentifier" },

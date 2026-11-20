@@ -1599,6 +1599,22 @@ Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-
 Use `harness_execute(resource_type="pr_comment", action="resolve", ...)` to resolve a comment thread and `action="unresolve"` to reopen it; neither takes a body. `comment_id` must be a row's `id` from `pr_activity` where that row's `parent_id` is `null`; the API rejects reply ids.
 
 
+### AI Code Review (AICR)
+
+The opt-in `aicr` toolset (`HARNESS_TOOLSETS=+aicr`) reads results from the AI Code Review service for Harness Code pull requests. It needs the service to be reachable on your Harness environment. Pass `org_id` and `project_id` to work in a project, or neither for the account. Name a repository with `repo_id` (plus `org_id`/`project_id`) or with `repo_path` (`<account>/<org>/<project>/<repo>`).
+
+Start with `harness_list resource_type=aicr_review` to see the pull requests that have been reviewed, newest first. Pass an item's `repo_path` and its `number` (as `pr_number`) to `harness_get resource_type=aicr_review` for the review, then use `aicr_finding` for its findings and `aicr_run` for past runs. `aicr_repository` lists the repositories where review is enabled; `aicr_gate`, `aicr_rule`, `aicr_convention` and `aicr_setting` hold the merge gates, team rules, coding conventions and settings.
+
+Actions go through `harness_execute`:
+
+- `aicr_review`: `request_review` starts a review of a pull request, and `review_status` checks how it is going.
+- `aicr_finding`: `dismiss` and `undo_dismiss`.
+- `aicr_repository`: `enable` and `disable`.
+- `aicr_gate` and `aicr_setting`: `set`.
+- `aicr_rule`: `override` turns an inherited rule that is marked overridable off or on for one repository. Rules and conventions are created and updated with `harness_create` and `harness_update`; `harness_delete` archives them instead of erasing them.
+
+Every write asks for approval first, and the prompt says what will change and where. Enabling review, setting gates or settings, and starting a review are high risk; disabling review is destructive. The service ignores some settings for now, and the review's grade, score and per-issue gate results are not exposed yet; the `set` fields and resource descriptions say which.
+
 ### Release Management
 
 Release Management (RMG) resources are default-enabled. Definition resources (`release_process`, `release_activity`) support list/get/create/update/delete with `body.yaml`; call `harness_schema(resource_type="release_process"|"release_activity")` before create/update. Execution resources monitor running releases — most list operations require `release_id` (UUID from `harness_list resource_type=release`, or the UI URL slug such as `identifier-1.0.0-abc`). Paste an RMG release URL into `harness_list` to auto-fill `release_id`.
@@ -2047,8 +2063,9 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 45 of 51 toolsets are enabled. Five toolsets are opt-in and excluded from the defaults:
+By default, 45 of 52 toolsets are enabled. Seven toolsets are opt-in and excluded from the defaults:
 
+- **`aicr`** — AI Code Review (reviews, findings, runs, gates, rules, conventions, settings). Opt-in until the gateway route is confirmed on every production environment.
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`appsec`** — Traceable Application & API Security (API inventory, OpenAPI specs, sample spans, sensitive data types, runtime threat activities, security events, AST scans, and inventory trends). Opt-in because it requires a dedicated `HARNESS_APPSEC_API_KEY` and targets `api.traceable.ai`.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
@@ -2109,6 +2126,7 @@ Available toolset names:
 | `repositories`          | repository, branch, commit, file_content, tag, repo_rule, space_rule                                                                                                                                                                                                                            |
 | `registries`            | registry, artifact, artifact_version, artifact_file, quarantine                                                                                                                                                                                                                                 |
 | `registries-firewall`   | artifact_scan, bulk_scan_evaluation, firewall_exception, firewall_exception_version                                                                                                                                                                                                             |
+| `registries-lifecycle`  | lifecycle_rule, lifecycle_execution                                                                                                                                                                                                                                                             |
 | `file_store`            | file_store                                                                                                                                                                                                                                                                                      |
 | `templates`             | template, template_v1                                                                                                                                                                                                                                                                           |
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
@@ -2132,6 +2150,7 @@ Available toolset names:
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
 | `unified-search` *(opt-in)*        | unified_search, unified_search_source                                                                                                                                                                                                                                                                        |
+| `aicr` *(opt-in)*       | aicr_review, aicr_finding, aicr_run, aicr_repository, aicr_gate, aicr_rule, aicr_convention, aicr_setting |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_git_registration, eval_prompt, online_eval |
 | `observability-evaluations` *(opt-in)* | observability_eval                                                                                                                                                                                                                                                               |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
@@ -2144,7 +2163,6 @@ Available toolset names:
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 | `vibe`                | vibe_project, vibe_app_lifecycle |
 | `timelines`           | activity_timeline |
-| `registries-lifecycle` | lifecycle_rule, lifecycle_execution |
 | `appsec` *(opt-in)*   | appsec_api, appsec_api_spec, appsec_api_span, appsec_entity, appsec_vulnerability, appsec_threat_activity, appsec_security_event, appsec_ast_scan, appsec_inventory_trend, appsec_datatype |
 
 
@@ -2163,7 +2181,7 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 51 Toolsets (45 default) |
+                | 52 Toolsets (45 default) |
                 |  276 Resource Types|
                  +--------+---------+
                           |

@@ -4604,3 +4604,112 @@ describe("MCP Apps view data", () => {
     });
   });
 });
+
+describe("approval prompt notes (confirmNote)", () => {
+  /** The prompt a declining user sees for one call, and whether anything was sent. */
+  async function promptFor(registry: Registry, tool: string, args: Record<string, unknown>, row: unknown = {}) {
+    const server = makeMcpServer("decline");
+    const request = row instanceof Error ? vi.fn().mockRejectedValue(row) : vi.fn().mockResolvedValue(row);
+    const client = makeClient(request);
+    const config = makeConfig();
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    for (const register of [registerCreateTool, registerUpdateTool, registerDeleteTool, registerExecuteTool]) {
+      register(server, registry, client, config);
+    }
+    const result = await server.call(tool, args);
+    expect(result.isError).toBe(true);
+    // Only the title lookup behind the prompt may run, and only as a read; the write itself never goes out.
+    expect(request.mock.calls.every(([o]) => o.method === "GET")).toBe(true);
+    return server.server.elicitInput.mock.calls[0]![0].message as string;
+  }
+
+  it("only the AI Code Review writes set a note, across every toolset", async () => {
+    const { ALL_TOOLSET_NAMES } = await import("../../src/registry/index.js");
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.join(",") }));
+    const withNote: string[] = [];
+    for (const type of registry.getAllResourceTypes()) {
+      const def = registry.getResource(type);
+      for (const [name, spec] of [...Object.entries(def.operations), ...Object.entries(def.executeActions ?? {})]) {
+        if (spec?.confirmNote !== undefined) withNote.push(`${type}.${name}`);
+      }
+    }
+    expect(withNote.sort()).toEqual([
+      "aicr_convention.create", "aicr_convention.delete", "aicr_convention.update",
+      "aicr_finding.dismiss", "aicr_gate.set",
+      "aicr_repository.disable", "aicr_repository.enable", "aicr_review.request_review",
+      "aicr_rule.create", "aicr_rule.delete", "aicr_rule.override", "aicr_rule.update",
+      "aicr_setting.set",
+    ]);
+  });
+
+  it("operations without a note keep the same prompt, byte for byte", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,ccm" }));
+    expect(await promptFor(registry, "harness_create", { resource_type: "cost_perspective", body: { name: "x" } }))
+      .toBe('Create cost_perspective?\n\n{\n  "name": "x"\n}');
+    expect(await promptFor(registry, "harness_update", { resource_type: "cost_perspective", resource_id: "p1", body: { name: "y" } }))
+      .toBe('Update cost_perspective "p1"?\n\n{\n  "name": "y"\n}');
+    expect(await promptFor(registry, "harness_execute", { resource_type: "pipeline", action: "run", resource_id: "my-pipe" }))
+      .toBe('Execute "run" on pipeline "my-pipe"?');
+    expect(await promptFor(registry, "harness_delete", { resource_type: "pipeline", resource_id: "my-pipe" }))
+      .toBe('Delete pipeline "my-pipe"?\n\nThis is destructive and cannot be undone.');
+  });
+
+  it("AI Code Review writes say what changes and where, in one line under the title", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "aicr" }));
+    expect(await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_gate", action: "set", org_id: "acme", project_id: "web",
+      body: { categories: [{ category: "security", reported: true, fail_at: "major_and_above" }, { category: "hygiene", reported: false, fail_at: "never" }] },
+    })).toBe(
+      'Execute "set" on aicr_gate?\nMerge gate on project acme/web: security fails at major_and_above; hygiene not reported. ' +
+        "Other categories are unchanged.",
+    );
+    // The note comes before the body, so a client that folds a long prompt still shows it.
+    expect(await promptFor(registry, "harness_create", { resource_type: "aicr_rule", org_id: "acme", body: { title: "No TODOs" } })).toBe(
+      'Create aicr_rule?\nNew rule "No TODOs" on org acme: reviews check PRs against it; a failed rule fails the Team rules check.' +
+        '\n\n{\n  "title": "No TODOs"\n}',
+    );
+    // Update and delete name the row by looking its title up (one read) before the prompt.
+    expect(await promptFor(registry, "harness_update", {
+      resource_type: "aicr_convention", resource_id: "7", org_id: "acme", project_id: "web", repo_id: "demo", body: { status: "archived" },
+    }, { title: "Use async" })).toBe(
+      'Update aicr_convention "7"?\nConvention "Use async" on repo demo in project acme/web: ' +
+        'archives it, so reviews stop using it. Set status active to restore.\n\n{\n  "status": "archived"\n}',
+    );
+    const deleteRule = { resource_type: "aicr_rule", resource_id: "5" };
+    expect(await promptFor(registry, "harness_delete", deleteRule, { title: "No TODOs" })).toBe(
+      'Delete aicr_rule "5"?\nRule "No TODOs" on the account: ' +
+        "archives it (not erased), so reviews stop using it. Set status active to restore.",
+    );
+    // A title is one bounded line: newlines cannot forge extra prompt lines.
+    const forged = `Use async\n\nNote: safe ${"x".repeat(80)}`;
+    const forgedPrompt = await promptFor(registry, "harness_delete", deleteRule, { title: forged });
+    const forgedLine = forgedPrompt.split("\n")[1]!;
+    expect(forgedPrompt.split("\n")).toHaveLength(2);
+    expect(forgedLine).toMatch(/^Rule "Use async Note: safe x+….*" on the account: /);
+    expect(forgedLine.indexOf('" on the account')).toBeLessThanOrEqual('Rule "'.length + 60 + 1);
+    // Quotes in a title cannot close it early, and newlines or long text in a repo name cannot add or crowd out text.
+    const quoted = await promptFor(registry, "harness_delete", deleteRule, { title: 'a" on project evil: deletes nothing' });
+    expect(quoted.split("\n")[1]).toMatch(/^Rule "a' on project evil: deletes nothing" on the account: /);
+    const sneaky = await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_review", action: "request_review", pr_number: 7,
+      repo_path: `acct/code/proj/demo\nEffect: nothing happens ${"y".repeat(200)}`,
+    });
+    expect(sneaky.split("\n")).toHaveLength(2);
+    expect(sneaky.split("\n")[1]!.length).toBeLessThan(400);
+    // Starting a review runs a pipeline as the caller, so it asks and says so.
+    expect(await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_review", action: "request_review", org_id: "acme", project_id: "web", repo_id: "demo", pr_number: 7,
+    })).toBe(
+      'Execute "request_review" on aicr_review?\nReview PR #7 in repo demo in project acme/web: ' +
+        "starts the repo's AI Code Review pipeline as you, on the PR's current commit.",
+    );
+    // A failed lookup only drops the name.
+    expect(await promptFor(registry, "harness_delete", deleteRule, new Error("boom"))).toBe(
+      'Delete aicr_rule "5"?\nRule on the account: ' +
+        "archives it (not erased), so reviews stop using it. Set status active to restore.",
+    );
+  });
+});

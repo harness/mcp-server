@@ -133,6 +133,7 @@ describe("lifecycle_rule dry_run", () => {
     const registry = new Registry(makeConfig());
     const client = mockClient({});
     await expect(registry.dispatchExecute(client, "lifecycle_rule", "dry_run", {})).rejects.toThrow(/rule_id/);
+    await expect(registry.dispatchExecute(client, "lifecycle_rule", "dry_run", { rule_id: 42 })).rejects.toThrow(/must be a non-empty string, got number/);
     expect(client.request).not.toHaveBeenCalled();
   });
 
