@@ -65,6 +65,12 @@ export function jobPath(input: Record<string, unknown>, config: PathBuilderConfi
   return `${jobCollectionPath(input, config)}/${encodePathSegment(jobId)}`;
 }
 
+/** Options route: scope-level, the integration is named in the body. Requires integration_id. */
+export function optionsPath(input: Record<string, unknown>, config: PathBuilderConfig): string {
+  requireField(input, "integration_id", "integration");
+  return `${integrationScopeBase(input, config)}/options`;
+}
+
 type Item = Record<string, unknown>;
 const isRecord = (v: unknown): v is Item => typeof v === "object" && v !== null && !Array.isArray(v);
 const usesOf = (v: unknown): unknown => (isRecord(v) ? v.uses : undefined);
@@ -246,6 +252,30 @@ async function mergeJobBeforeUpdate(ctx: PreflightContext): Promise<void> {
   ctx.input.body = mergeJobUpdate(current, patch);
 }
 
+/**
+ * Options body: the backend's own shape, {source, refresh}, passed through so the strict backend
+ * validates it (and new fields work without an MCP change). Only source.integration is filled in,
+ * from integration_id, so the picker runs against the integration the call names.
+ */
+export function optionsBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body = input.body;
+  if (!isRecord(body) || !isRecord(body.source)) {
+    throw new Error(
+      'list_options needs a body {"source": {"action": ..., "items": ..., "value": ..., "label": ...}}. ' +
+      'Use harness_describe(resource_type="integration") for the fields.',
+    );
+  }
+  const integration = String(input.integration_id);
+  const named = body.source.integration;
+  if (named !== undefined && named !== integration) {
+    throw new Error(
+      `list_options: source.integration "${String(named)}" does not match integration_id "${integration}". ` +
+      "Pass only integration_id (and resource_scope for where the integration lives).",
+    );
+  }
+  return { ...body, source: { ...body.source, integration } };
+}
+
 /** Job body: must be a JSON object. Fields are validated by the backend, which rejects unknown ones by name. */
 export function jobBody(input: Record<string, unknown>): Record<string, unknown> {
   const body = input.body;
@@ -380,6 +410,40 @@ export const integrationsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete an integration by integration_id. Also deletes all of its jobs. Cannot be undone.",
+        },
+      },
+      executeActions: {
+        list_options: {
+          method: "POST",
+          path: "/connector-control-plane/v1/orgs/{org}/projects/{project}/options",
+          pathBuilder: optionsPath,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          bodyBuilder: optionsBody,
+          bodySchema: {
+            description:
+              "The values for a dynamic form input (e.g. GitHub orgs or repos), from a discover action run on the " +
+              "integration's runner. Read the action with harness_get integration_definition: its template inputs " +
+              "fill source.with, and its outputs.schema names the items array and the keys for value, label and fields.",
+            fields: [
+              {
+                name: "source", type: "object", required: true, description: "What to list.",
+                fields: [
+                  { name: "action", type: "string", required: false, description: "Discover action definition id, e.g. githubListRepos." },
+                  { name: "with", type: "object", required: false, description: "Literal inputs for the action, e.g. {\"orgs\": [\"harness\"]}." },
+                  { name: "items", type: "string", required: false, description: "Name of the array in the action's output data, e.g. repositories." },
+                  { name: "value", type: "string", required: false, description: "Key of each item to use as the value, e.g. full_name." },
+                  { name: "label", type: "string", required: false, description: "Key of each item to show as the label." },
+                  { name: "fields", type: "array", itemType: "string", required: false, description: "Extra keys of each item to return, e.g. [\"default_branch\"]." },
+                ],
+              },
+              { name: "refresh", type: "boolean", required: false, description: "true to rerun the action instead of using the cached answer." },
+            ],
+          },
+          responseExtractor: passthrough,
+          actionDescription:
+            "List the values for a dynamic form input by running a discover action on integration_id " +
+            "(resource_id). Returns {options: [{value, label, fields}], truncated, cached, age}. Needs a " +
+            "self-hosted runner (Harness Cloud integrations get 409) and the options feature enabled for the account.",
         },
       },
     },

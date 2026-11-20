@@ -747,3 +747,69 @@ describe("integration_job update", () => {
     expect(mergeJobUpdate(withoutResources, { name: "x" })).not.toHaveProperty("resources");
   });
 });
+
+describe("integration list_options", () => {
+  const source = {
+    action: "githubListRepos", with: { orgs: ["harness"] },
+    items: "repositories", value: "full_name", label: "full_name", fields: ["default_branch"],
+  };
+  const answer = { options: [{ value: "harness/a", label: "harness/a", fields: { default_branch: "main" } }], truncated: false, cached: true, age: "PT42S" };
+
+  it("POSTs to the scope's options route with the integration named in the body", async () => {
+    const { registry, client, call } = setup(answer);
+    const result = await registry.dispatchExecute(client, "integration", "list_options", { integration_id: "gh", body: { source } });
+    expect(call().method).toBe("POST");
+    expect(call().path).toBe(`${PROJECT}/options`);
+    expect(call().body).toEqual({ source: { ...source, integration: "gh" } });
+    expect(result).toEqual(answer);
+  });
+
+  it("account and org scope use their own options route", async () => {
+    let s = setup(answer);
+    await s.registry.dispatchExecute(s.client, "integration", "list_options", { integration_id: "gh", resource_scope: "account", body: { source } });
+    expect(s.call().path).toBe("/connector-control-plane/v1/options");
+    s = setup(answer);
+    await s.registry.dispatchExecute(s.client, "integration", "list_options", { integration_id: "gh", resource_scope: "org", body: { source } });
+    expect(s.call().path).toBe("/connector-control-plane/v1/orgs/default/options");
+  });
+
+  it("passes refresh and fields it does not know through; the strict backend validates them", async () => {
+    const { registry, client, call } = setup(answer);
+    await registry.dispatchExecute(client, "integration", "list_options", {
+      integration_id: "gh", body: { source: { ...source, search: "a" }, refresh: false },
+    });
+    expect(call().body).toEqual({ source: { ...source, search: "a", integration: "gh" }, refresh: false });
+  });
+
+  it("does not inject scope keys into the strict body", async () => {
+    const { registry, client, call } = setup(answer);
+    await registry.dispatchExecute(client, "integration", "list_options", { integration_id: "gh", body: { source } });
+    const body = call().body as Record<string, unknown>;
+    expect(Object.keys(body)).toEqual(["source"]);
+    expect(call().headerBasedScoping).toBe(true);
+  });
+
+  it("source.integration matching integration_id is accepted; a different one throws before any request", async () => {
+    let s = setup(answer);
+    await s.registry.dispatchExecute(s.client, "integration", "list_options", { integration_id: "gh", body: { source: { ...source, integration: "gh" } } });
+    expect(s.request).toHaveBeenCalledTimes(1);
+    s = setup(answer);
+    await expect(
+      s.registry.dispatchExecute(s.client, "integration", "list_options", { integration_id: "gh", body: { source: { ...source, integration: "account.other" } } }),
+    ).rejects.toThrow(/does not match integration_id/);
+    expect(s.request).not.toHaveBeenCalled();
+  });
+
+  it("missing integration_id or source throws before any request", async () => {
+    for (const input of [{ body: { source } }, { integration_id: "gh" }, { integration_id: "gh", body: { refresh: true } }]) {
+      const { registry, client, request } = setup(answer);
+      await expect(registry.dispatchExecute(client, "integration", "list_options", input)).rejects.toThrow(/integration_id|source/);
+      expect(request).not.toHaveBeenCalled();
+    }
+  });
+
+  it("is a read with safe retries", () => {
+    const def = integrationsToolset.resources.find((r) => r.resourceType === "integration")!;
+    expect(def.executeActions!.list_options!.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
+  });
+});
