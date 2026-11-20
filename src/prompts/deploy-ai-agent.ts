@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerDeployAiAgentPrompt(server: McpServer): void {
   server.registerPrompt(
@@ -7,21 +7,21 @@ export function registerDeployAiAgentPrompt(server: McpServer): void {
     {
       description:
         "End-to-end workflow: ship an AI agent from an IDE to a cloud agent runtime (Google Agent Runtime or AWS AgentCore) through Harness CD — get code into a repo, build & push the agent image, then create the AiAgent service, environment, infrastructure, and a build→deploy pipeline",
-      argsSchema: {
-        platform: z
-          .enum(["GoogleAgentRuntime", "AwsAgentCore"])
-          .describe("Target agent runtime: GoogleAgentRuntime (Vertex/GAR) or AwsAgentCore (Bedrock/ECR)")
-          .optional(),
-        repoUrl: z
-          .string()
-          .describe("Git repo URL of the agent code. Leave blank to create a Harness Code repo and push.")
-          .optional(),
-        projectId: z.string().describe("Harness project identifier").optional(),
-        executionRoleArn: z
-          .string()
-          .describe("AWS IAM execution role ARN (required for AwsAgentCore only)")
-          .optional(),
-      },
+      argsSchema: z.object({
+              platform: z
+                .enum(["GoogleAgentRuntime", "AwsAgentCore"])
+                .describe("Target agent runtime: GoogleAgentRuntime (Vertex/GAR) or AwsAgentCore (Bedrock/ECR)")
+                .optional(),
+              repoUrl: z
+                .string()
+                .describe("Git repo URL of the agent code. Leave blank to create a Harness Code repo and push.")
+                .optional(),
+              projectId: z.string().describe("Harness project identifier").optional(),
+              executionRoleArn: z
+                .string()
+                .describe("AWS IAM execution role ARN (required for AwsAgentCore only)")
+                .optional(),
+            }),
     },
     async ({ platform, repoUrl, projectId, executionRoleArn }) => ({
       messages: [

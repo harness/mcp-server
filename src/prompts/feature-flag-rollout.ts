@@ -1,17 +1,17 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerFeatureFlagRolloutPrompt(server: McpServer): void {
   server.registerPrompt(
     "feature-flag-rollout",
     {
       description: "Plan and execute a progressive FME feature flag rollout across environments",
-      argsSchema: {
-        featureFlagName: z.string().describe("Feature flag name to roll out"),
-        workspaceId: z.string().describe("FME workspace ID (deprecated — omit if passing orgId+projectId)").optional(),
-        orgId: z.string().describe("Harness org identifier (pass together with projectId)").optional(),
-        projectId: z.string().describe("Harness project identifier (pass together with orgId)").optional(),
-      },
+      argsSchema: z.object({
+              featureFlagName: z.string().describe("Feature flag name to roll out"),
+              workspaceId: z.string().describe("FME workspace ID (deprecated — omit if passing orgId+projectId)").optional(),
+              orgId: z.string().describe("Harness org identifier (pass together with projectId)").optional(),
+              projectId: z.string().describe("Harness project identifier (pass together with orgId)").optional(),
+            }),
     },
     async ({ featureFlagName, workspaceId, orgId, projectId }) => {
       if (!workspaceId && !(orgId && projectId)) {

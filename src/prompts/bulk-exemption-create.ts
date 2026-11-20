@@ -1,39 +1,39 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerBulkExemptionCreatePrompt(server: McpServer): void {
   server.registerPrompt(
     "bulk-exemption-create",
     {
       description: "Create STO security exemptions in bulk from issue filters or explicit issue IDs. Optimized for repeated component-level exemptions.",
-      argsSchema: {
-        projectId: z.string().describe("Project identifier where STO issues/exemptions are scoped"),
-        orgId: z.string().describe("Organization identifier (optional; defaults to configured org)").optional(),
-        issue_ids: z.string().describe("Optional comma-separated STO issue IDs. If supplied, issue search is skipped").optional(),
-        issue_filter_input_set: z.object({
-          search: z.string().optional(),
-          severity_codes: z.string().optional(),
-          issue_types: z.string().optional(),
-          target_ids: z.string().optional(),
-          target_types: z.string().optional(),
-          pipeline_ids: z.string().optional(),
-          scan_tools: z.string().optional(),
-          exemption_statuses: z.string().optional(),
-        }).describe("Optional security_issue filter input set. All fields are optional and map directly to harness_list(resource_type='security_issue') filters.").optional(),
-        search: z.string().describe("Optional issue search term (component name, CVE, keyword)").optional(),
-        severity_codes: z.string().describe("Optional comma-separated severities (Critical,High,Medium,Low,Info)").optional(),
-        issue_types: z.string().describe("Optional comma-separated issue types (SAST,DAST,SCA,IAC,SECRET,MISCONFIG)").optional(),
-        target_ids: z.string().describe("Optional comma-separated target IDs").optional(),
-        target_types: z.string().describe("Optional comma-separated target types (configuration,container,instance,repository)").optional(),
-        pipeline_ids: z.string().describe("Optional comma-separated pipeline IDs").optional(),
-        scan_tools: z.string().describe("Optional comma-separated scan tools (for example, aqua-trivy, semgrep)").optional(),
-        exemption_statuses: z.string().describe("Optional comma-separated exemption statuses (None,Pending,Approved,Rejected,Expired)").optional(),
-        exemption_type: z.string().describe("Exemption type to apply: Compensating Controls | Acceptable Use | Acceptable Risk | False Positive | Fix Unavailable | Other"),
-        reason: z.string().describe("Business/security justification for creating the exemption"),
-        duration_days: z.number().describe("Optional exemption duration in days (defaults to 30 when omitted)").optional(),
-        link: z.string().describe("Optional URL for Jira/ticket/reference").optional(),
-        expiration: z.number().describe("Optional Unix timestamp when exemption expires").optional(),
-      },
+      argsSchema: z.object({
+              projectId: z.string().describe("Project identifier where STO issues/exemptions are scoped"),
+              orgId: z.string().describe("Organization identifier (optional; defaults to configured org)").optional(),
+              issue_ids: z.string().describe("Optional comma-separated STO issue IDs. If supplied, issue search is skipped").optional(),
+              issue_filter_input_set: z.object({
+                search: z.string().optional(),
+                severity_codes: z.string().optional(),
+                issue_types: z.string().optional(),
+                target_ids: z.string().optional(),
+                target_types: z.string().optional(),
+                pipeline_ids: z.string().optional(),
+                scan_tools: z.string().optional(),
+                exemption_statuses: z.string().optional(),
+              }).describe("Optional security_issue filter input set. All fields are optional and map directly to harness_list(resource_type='security_issue') filters.").optional(),
+              search: z.string().describe("Optional issue search term (component name, CVE, keyword)").optional(),
+              severity_codes: z.string().describe("Optional comma-separated severities (Critical,High,Medium,Low,Info)").optional(),
+              issue_types: z.string().describe("Optional comma-separated issue types (SAST,DAST,SCA,IAC,SECRET,MISCONFIG)").optional(),
+              target_ids: z.string().describe("Optional comma-separated target IDs").optional(),
+              target_types: z.string().describe("Optional comma-separated target types (configuration,container,instance,repository)").optional(),
+              pipeline_ids: z.string().describe("Optional comma-separated pipeline IDs").optional(),
+              scan_tools: z.string().describe("Optional comma-separated scan tools (for example, aqua-trivy, semgrep)").optional(),
+              exemption_statuses: z.string().describe("Optional comma-separated exemption statuses (None,Pending,Approved,Rejected,Expired)").optional(),
+              exemption_type: z.string().describe("Exemption type to apply: Compensating Controls | Acceptable Use | Acceptable Risk | False Positive | Fix Unavailable | Other"),
+              reason: z.string().describe("Business/security justification for creating the exemption"),
+              duration_days: z.number().describe("Optional exemption duration in days (defaults to 30 when omitted)").optional(),
+              link: z.string().describe("Optional URL for Jira/ticket/reference").optional(),
+              expiration: z.number().describe("Optional Unix timestamp when exemption expires").optional(),
+            }),
     },
     async ({
       projectId,

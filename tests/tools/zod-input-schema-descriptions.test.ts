@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
+import { inputShape } from "../helpers/request-context.js";
 
 type InputSchema = Record<string, { description?: string | null } | undefined>;
 
@@ -43,7 +44,7 @@ function makeMcpServer() {
     schema(name: string): { inputSchema: InputSchema } {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      return tool.schema;
+      return { inputSchema: inputShape(tool.schema as { inputSchema: InputSchema | { shape: InputSchema } }) };
     },
   };
 }

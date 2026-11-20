@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerCreateEvalSuitePrompt(server: McpServer): void {
   server.registerPrompt(
@@ -7,14 +7,14 @@ export function registerCreateEvalSuitePrompt(server: McpServer): void {
     {
       description:
         "Build a multi-evaluation suite in AI Evals: create suite, add members, optional suite run",
-      argsSchema: {
-        suite_name: z.string().describe("Name for the eval suite"),
-        pass_strategy: z
-          .enum(["all_must_pass", "weighted_threshold"])
-          .describe("How the suite decides pass/fail")
-          .optional(),
-        goal: z.string().describe("What evaluations should be included and any ordering constraints").optional(),
-      },
+      argsSchema: z.object({
+              suite_name: z.string().describe("Name for the eval suite"),
+              pass_strategy: z
+                .enum(["all_must_pass", "weighted_threshold"])
+                .describe("How the suite decides pass/fail")
+                .optional(),
+              goal: z.string().describe("What evaluations should be included and any ordering constraints").optional(),
+            }),
     },
     async ({ suite_name, pass_strategy, goal }) => ({
       messages: [

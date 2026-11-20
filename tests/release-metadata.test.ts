@@ -161,6 +161,18 @@ describe("release metadata", () => {
     }
   });
 
+  it("exposes the confirmation state key in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.HARNESS_MCP_REQUEST_STATE_KEY).toBe(
+        "${user_config.HARNESS_MCP_REQUEST_STATE_KEY}",
+      );
+      expect(manifest.user_config.HARNESS_MCP_REQUEST_STATE_KEY).toMatchObject({
+        required: false,
+        sensitive: true,
+      });
+    }
+  });
+
   it("exposes HTTP session TTL config in packaged manifests", () => {
     for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
       expect(manifest.server.mcp_config.env.MCP_SESSION_TTL_MS).toBe("${user_config.MCP_SESSION_TTL_MS}");

@@ -140,7 +140,7 @@ All Zod schemas in tool handlers must:
 
 ### 11. HTTP Client Is Singleton
 
-`HarnessClient` is instantiated once in `src/index.ts` and passed via dependency injection to the registry and tool handlers. Do NOT:
+`HarnessClient` is constructed once per process in `src/index.ts` and passed into every registry and tool handler. Stdio uses that client for the connection. HTTP uses the same client for every 2025 session and every 2026 request. The account, API key, and OAuth token for the active HTTP call come from that request, so concurrent calls do not share credentials. `HARNESS_RATE_LIMIT_RPS` applies across all of them. Do NOT:
 
 - Create additional `HarnessClient` instances
 - Make raw `fetch()` calls from tool handlers or toolset definitions
@@ -421,7 +421,7 @@ Before every commit, verify:
 | Build | `tsc` → `build/` | Yes |
 | Package manager | pnpm | Yes |
 | Schema validation | Zod v4 (`import * as z from "zod/v4"`) | Yes |
-| MCP SDK | `@modelcontextprotocol/sdk` v1.x | Yes |
+| MCP SDK | `@modelcontextprotocol/server` v2.x (plus `@modelcontextprotocol/node` and `@modelcontextprotocol/express`) | Yes |
 | Transport | Stdio + Streamable HTTP | Yes |
 | Test runner | Vitest | Yes |
 

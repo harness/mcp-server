@@ -1,5 +1,5 @@
 import express, { type Express } from "express";
-import { hostHeaderValidation, localhostHostValidation } from "@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js";
+import { hostHeaderValidation, localhostHostValidation } from "@modelcontextprotocol/express";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("http-app");

@@ -1,3 +1,4 @@
+import { toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -14,7 +15,7 @@ function makeMcpServer() {
     async call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      const extra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const extra = toolHandlerContext();
       return tool.handler(args, extra) as Promise<ToolResult>;
     },
   } as any;

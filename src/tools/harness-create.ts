@@ -1,11 +1,11 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
+import { confirmationArgsHash, confirmViaElicitation, describeElicitationFailure, describeBlockedAudit, isConfirmationPrompt } from "../utils/elicitation.js";
 import { resolveConfirmNoteAsync, withConfirmNoteFirst } from "../utils/confirm-note.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
@@ -22,19 +22,19 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     "harness_create",
     {
       description: "Create a Harness resource. For pipelines/input sets: pass body as a YAML string directly (recommended for complex definitions), or use body.yamlPipeline (YAML string), or body.pipeline (JSON object). For remote pipelines, pass git details in params: external Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path) or Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). For others: call harness_describe for the body format.",
-      inputSchema: {
-        resource_type: resourceTypeSchema(creatableTypes, registry.compactSchemas).describe("The type of resource to create"),
-        body: z.union([
-          z.record(z.string(), z.unknown()),
-          z.string(),
-        ]).describe("The resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object). For other resources: pass a JSON object"),
-        url: z.string().optional().describe("A Harness UI URL — org, project, and supported resource_scope are extracted automatically"),
-        resource_scope: resourceScopeField(registry.compactSchemas),
-        org_id: orgIdField(registry.orgId, registry.compactSchemas),
-        project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        confirm: z.boolean().optional().describe(fieldCopy("confirm.create", registry.schemaProfile)),
-        params: z.record(z.string(), z.unknown()).optional().describe(fieldCopy("create.params", registry.schemaProfile)),
-      },
+      inputSchema: z.object({
+              resource_type: resourceTypeSchema(creatableTypes, registry.compactSchemas).describe("The type of resource to create"),
+              body: z.union([
+                z.record(z.string(), z.unknown()),
+                z.string(),
+              ]).describe("The resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object). For other resources: pass a JSON object"),
+              url: z.string().optional().describe("A Harness UI URL — org, project, and supported resource_scope are extracted automatically"),
+              resource_scope: resourceScopeField(registry.compactSchemas),
+              org_id: orgIdField(registry.orgId, registry.compactSchemas),
+              project_id: projectIdField(registry.projectId, registry.compactSchemas),
+              confirm: z.boolean().optional().describe(fieldCopy("confirm.create", registry.schemaProfile)),
+              params: z.record(z.string(), z.unknown()).optional().describe(fieldCopy("create.params", registry.schemaProfile)),
+            }),
       outputSchema: compactOutputSchema(createOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Create Harness Resource",
@@ -44,7 +44,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         openWorldHint: true,
       },
     },
-    async (rawArgs) => {
+    async (rawArgs, ctx) => {
       const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, body, confirm: _confirm, ...rest } = args;
@@ -84,12 +84,15 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         const bodyPreview = formatBodyPreview(args.body);
         const elicit = await confirmViaElicitation({
           server,
+          ctx,
           toolName: "harness_create",
           message: withConfirmNoteFirst(`Create ${args.resource_type}?`, bodyPreview, await resolveConfirmNoteAsync(def.operations.create, input, { client, registry, accountId: registry.getAccountId() })),
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
+          argsHash: confirmationArgsHash(rawArgs),
         });
+        if (isConfirmationPrompt(elicit)) return elicit.needsInput;
         if (!elicit.proceed) {
           registry.auditBlockedAttempt(
             args.resource_type,

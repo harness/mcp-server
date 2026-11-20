@@ -1,17 +1,17 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerBuildDeployAppPrompt(server: McpServer): void {
   server.registerPrompt(
     "build-deploy-app",
     {
       description: "End-to-end workflow: scan a repo, generate CI/CD pipelines in Harness, build a Docker image, generate K8s manifests, and deploy",
-      argsSchema: {
-        repoUrl: z.string().describe("Git repository URL (e.g. https://github.com/org/repo)"),
-        imageName: z.string().describe("Docker image name including registry (e.g. docker.io/myorg/myapp)"),
-        projectId: z.string().describe("Harness project identifier").optional(),
-        namespace: z.string().describe("Kubernetes namespace for deployment").optional(),
-      },
+      argsSchema: z.object({
+              repoUrl: z.string().describe("Git repository URL (e.g. https://github.com/org/repo)"),
+              imageName: z.string().describe("Docker image name including registry (e.g. docker.io/myorg/myapp)"),
+              projectId: z.string().describe("Harness project identifier").optional(),
+              namespace: z.string().describe("Kubernetes namespace for deployment").optional(),
+            }),
     },
     async ({ repoUrl, imageName, projectId, namespace }) => ({
       messages: [{

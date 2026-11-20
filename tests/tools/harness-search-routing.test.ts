@@ -1,6 +1,7 @@
 /**
  * Unit tests for semantic search routing and tier-0 merge/dedup in harness_search.
  */
+import { toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -70,7 +71,7 @@ function makeMcpServer() {
     async call(name: string, args: Record<string, unknown>, extra?: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const defaultExtra = toolHandlerContext();
       return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
     },
   };
