@@ -86,8 +86,8 @@ function assertObjectBody(body: unknown): void {
 }
 
 export interface IdListBodyOptions {
-  /** Input key holding a single id (usually the resource's identifier field, filled from resource_id). */
-  singleKey: string;
+  /** Input key holding a single id; set only when it is the resource's identifier field, so resource_id fills it. */
+  singleKey?: string;
   /** Input key holding several ids, as an array or a comma-separated string. */
   listKey: string;
   /** Body key the ids are sent under. */
@@ -105,14 +105,20 @@ export function buildIdListBody(opts: IdListBodyOptions): (input: Record<string,
   return (input: Record<string, unknown>) => {
     const raw = input[opts.listKey];
     const listed = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",") : [];
-    const single = input[opts.singleKey];
+    const single = opts.singleKey ? input[opts.singleKey] : undefined;
     const ids = [...new Set(
       [...(single == null ? [] : [single]), ...listed]
-        .map((v) => String(v).trim())
+        .map((v) => {
+          if (typeof v !== "string" && typeof v !== "number") {
+            throw new Error(`${opts.listKey} must contain string ids, got ${v === null ? "null" : typeof v}.`);
+          }
+          return String(v).trim();
+        })
         .filter((v) => v.length > 0),
     )];
     if (ids.length === 0) {
-      throw new Error(`Pass ${opts.singleKey} (resource_id) or ${opts.listKey} (comma-separated, up to ${opts.max}).`);
+      const single = opts.singleKey ? `${opts.singleKey} (resource_id) or ` : "";
+      throw new Error(`Pass ${single}${opts.listKey} (comma-separated, up to ${opts.max}).`);
     }
     if (ids.length > opts.max) {
       throw new Error(`${opts.listKey} accepts at most ${opts.max} ids (got ${ids.length}).`);

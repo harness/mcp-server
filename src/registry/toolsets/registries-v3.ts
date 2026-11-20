@@ -1,17 +1,10 @@
-import type { ToolsetDefinition, BodySchema } from "../types.js";
+import type { ToolsetDefinition } from "../types.js";
 import { harV3ListExtract, harV3DataArrayUnwrap, harV3DataObjectUnwrap } from "../extractors.js";
 import { buildIdListBody } from "../../utils/body-normalizer.js";
 import { encodePathSegment } from "../../utils/path.js";
+import { V3_SCOPE_PARAMS, V3_STATS_MAX_IDS, statsBodySchema } from "./har-common.js";
 
-// PackageStatsRequestV3 / VersionStatsRequestV3 / RegistryStatsRequestV3 accept at most 100 ids.
-export const V3_STATS_MAX_IDS = 100;
-
-export const v3StatsBodySchema = (listParam: string, bodyKey: string): BodySchema => ({
-  description: `Built from params.${listParam} (and resource_id where supported); you do not need to send a body.`,
-  fields: [
-    { name: bodyKey, type: "array", required: true, itemType: "string", description: `UUIDs to fetch stats for (1-${V3_STATS_MAX_IDS})` },
-  ],
-});
+export { V3_SCOPE_PARAMS };
 
 // Projects a raw v3 package list item down to the fields agents actually need.
 // The default `compactItems()` whitelist keeps `id`/`name`/timestamps but drops
@@ -82,14 +75,6 @@ const compactFileV3 = (item: Record<string, unknown>): Record<string, unknown> =
  * `x-internal: true` operations are excluded on purpose.
  */
 
-// Shared with `registries-firewall.ts`, which has no v1 equivalent to collide
-// with and so does not need this toolset's opt-in gating.
-export const V3_SCOPE_PARAMS = {
-  account: "account_identifier",
-  org: "org_identifier",
-  project: "project_identifier",
-} as const;
-
 // Known values from api.yaml PackageTypeV3. Extensible — the API may add more
 // (e.g. GITLFS) so treat this as guidance for agents, not a hard whitelist.
 export const V3_PACKAGE_TYPES = [
@@ -122,6 +107,7 @@ const conanRevisionPath = (mode: "list" | "get") => (input: Record<string, unkno
 
   const base = `/har/api/v3/versions/${versionId}/conan/recipe-revisions`;
   if (mode === "list") {
+    if (prev) throw new Error("package_revision_id is not a list level; use get for one package revision, or drop it to list package revisions.");
     if (!rrev) return base;
     if (!pkg) return `${base}/${rrev}/packages`;
     return `${base}/${rrev}/packages/${pkg}/package-revisions`;
@@ -204,7 +190,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           responseExtractor: harV3ListExtract,
           actionDescription:
             `Download count, size and version count for one package (resource_id) or up to ${V3_STATS_MAX_IDS} (params.package_ids, comma-separated UUIDs from list).`,
-          bodySchema: v3StatsBodySchema("package_ids", "packageIds"),
+          bodySchema: statsBodySchema("package_ids", "packageIds", true),
         },
       },
     },
@@ -265,7 +251,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           responseExtractor: harV3ListExtract,
           actionDescription:
             `Download count, size and scan status for one version (resource_id) or up to ${V3_STATS_MAX_IDS} (params.version_ids, comma-separated UUIDs from list).`,
-          bodySchema: v3StatsBodySchema("version_ids", "versionIds"),
+          bodySchema: statsBodySchema("version_ids", "versionIds", true),
         },
         deployments: {
           method: "GET",
@@ -473,11 +459,13 @@ export const registriesV3Toolset: ToolsetDefinition = {
       resourceType: "conan_revision",
       displayName: "Conan Revision",
       description:
-        "Conan drill-down under a CONAN version. version_id alone lists recipe revisions (RREV); add recipe_revision_id to list packages (PKGID); add conan_package_id to list package revisions (PREV). get returns the deepest level given. conan_package_id is the Conan PKGID, not a package UUID.",
+        "Conan drill-down under a CONAN version. version_id alone lists recipe revisions (RREV); add recipe_revision_id to list packages (PKGID); add conan_package_id to list package revisions (PREV). get returns the deepest level given; resource_id fills recipe_revision_id, deeper ids go in params. conan_package_id is the Conan PKGID, not a package UUID.",
       toolset: "registries-v3",
       scope: "account",
       scopeParams: V3_SCOPE_PARAMS,
-      identifierFields: ["version_id", "recipe_revision_id", "conan_package_id", "package_revision_id"],
+      // harness_get maps resource_id to the last identifier field, so stop at the
+      // recipe revision; conan_package_id / package_revision_id are passed as params.
+      identifierFields: ["version_id", "recipe_revision_id"],
       listFilterFields: [
         { name: "version_id", description: "Version UUID of a CONAN package version (required)", required: true },
         { name: "recipe_revision_id", description: "Recipe revision (RREV); lists its packages" },

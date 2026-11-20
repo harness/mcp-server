@@ -97,6 +97,7 @@ describe("HAR v3 conan_revision", () => {
 
   it.each([
     ["list", { recipe_revision_id }, /version_id/],
+    ["list", IDS, /package_revision_id is not a list level/],
     ["list", { version_id, conan_package_id }, /requires recipe_revision_id/],
     ["get", { version_id }, /requires recipe_revision_id/],
     ["get", { version_id, recipe_revision_id, package_revision_id }, /requires conan_package_id/],
@@ -113,5 +114,36 @@ describe("HAR v3 conan_revision", () => {
       expect(types).not.toContain(old);
     }
     expect(new Registry(makeConfig({ HARNESS_TOOLSETS: undefined })).getAllResourceTypes()).not.toContain("conan_revision");
+  });
+});
+
+describe("harness_get conan_revision", () => {
+  async function callGet(args: Record<string, unknown>) {
+    const request = vi.fn().mockResolvedValue({ data: { id: "x" } });
+    const client = { request, account: "acct123" } as unknown as HarnessClient;
+    let handler: ((a: unknown, extra: unknown) => Promise<{ isError?: boolean }>) | undefined;
+    const server = {
+      server: { getClientCapabilities: () => ({}) },
+      registerTool: (_name: string, _schema: unknown, h: typeof handler) => { handler = h; },
+    };
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server as never, new Registry(makeConfig()), client);
+    const result = await handler!(args, { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} });
+    return { result, request };
+  }
+
+  it("maps resource_id to recipe_revision_id with version_id in params", async () => {
+    const { result, request } = await callGet({ resource_type: "conan_revision", resource_id: "rrev-1", params: { version_id: "ver-1" } });
+    expect(result.isError).toBeUndefined();
+    expect(request.mock.calls[0][0].path).toBe(`${BASE}/rrev-1/details`);
+  });
+
+  it("reaches deeper levels with the later ids passed only as params", async () => {
+    const { result, request } = await callGet({
+      resource_type: "conan_revision",
+      params: { version_id: "ver-1", recipe_revision_id: "rrev-1", conan_package_id: "pkg-1", package_revision_id: "prev-1" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(request.mock.calls[0][0].path).toBe(`${BASE}/rrev-1/packages/pkg-1/package-revisions/prev-1/details`);
   });
 });
