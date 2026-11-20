@@ -1740,7 +1740,7 @@ Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id=
 | `fme_rollout_status`                | x    |     |        |        |        |                                           |
 | `fme_rule_based_segment`            | x    | x   | x      |        | x      |                                           |
 | `fme_rule_based_segment_definition` | x    |     |        | x      |        | `enable`, `disable`, `change_request`     |
-| `fme_traffic_type`                  | x    |     |        |        |        |                                           |
+| `fme_traffic_type`                  | x    |     | x      |        | x      |                                           |
 | `fme_identity`                      |      |     | x      | x      |        |                                           |
 | `fme_standard_segment`              | x    | x   |        |        |        |                                           |
 | `fme_segment_keys`                  | x    |     |        | x      |        |                                           |
@@ -1764,7 +1764,7 @@ Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id=
 
 - **`fme_rule_based_segment`** — (Deprecated — see `fme_segment`.) Harness-native mode is rejected on every operation (`list`/`get`/`create`/`delete`) — use `fme_segment` instead; this resource supports only the legacy `workspace_id` contract.
 - **`fme_rule_based_segment_definition`** — (Deprecated — see `fme_segment_definition`.) Harness-native mode is rejected on every operation/action (`list`/`update`/`enable`/`disable`/`change_request`) — use `fme_segment_definition` instead (no `enable`/`disable`/`change_request` equivalent there); this resource supports only the legacy `workspace_id`/`environment_id` contract.
-- **`fme_traffic_type`** — dual-mode `list`. Pass `org_id`+`project_id` (preferred) or the deprecated `workspace_id`. Native pagination uses `offset`/`limit` (max 100; `harness_list` `size` maps to `limit`); results are promoted to `items`/`total`. Each item has `id` and `name` (no `displayAttributeId`).
+- **`fme_traffic_type`** — dual-mode `list`. Pass `org_id`+`project_id` (preferred) or the deprecated `workspace_id`. Native pagination uses `offset`/`limit` (max 100; `harness_list` `size` maps to `limit`); results are promoted to `items`/`total`. Each item has `id` and `name` (no `displayAttributeId`). `create`/`delete` require `org_id`+`project_id` (`/fme/api/v4/traffic-types`): create takes `name` (max 50, `^[a-z][a-z0-9\-_]*$`) and returns 400 for invalid/reserved names or a full project (10 by default), 402 when the account plan enforces the limit, 409 for a duplicate; delete returns 404 for unknown IDs and 409 `hasDependents` while flags, segments, large segments, rule-based segments, or metrics use it.
 - **`fme_identity`** — `create`/`update` are not yet implemented if `org_id`+`project_id` are passed together; otherwise proceeds as a normal legacy call.
 - **`fme_standard_segment`** — deprecated. Legacy `workspace_id` still hits Split v2. Harness-native is rejected — use `fme_segment`.
 - **`fme_segment_keys`** — `list`/`update` remain legacy (`workspace_id` / `environment_id`+`segment_name`). Harness-native (`org_id`+`project_id`) is rejected — use `fme_segment_definition` execute `list_keys`/`add_keys`/`remove_keys`.
