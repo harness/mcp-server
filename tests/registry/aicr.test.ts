@@ -182,9 +182,9 @@ describe("aicr toolset registration", () => {
       // Dismissing can let a PR pass the gate, so it needs confirmation; undo only reopens.
       "aicr_finding.dismiss": { risk: "medium_write", retryPolicy: "do_not_retry" },
       "aicr_finding.undo_dismiss": { risk: "low_write", retryPolicy: "do_not_retry" },
-      // Enabling adds a trigger (and maybe a pipeline and service account); disabling deletes the repo's config.
+      // Enabling adds a trigger (and maybe a pipeline and service account); disabling removes its triggers only (config, rules and history are kept).
       "aicr_repository.enable": { risk: "high_write", retryPolicy: "do_not_retry" },
-      "aicr_repository.disable": { risk: "destructive", retryPolicy: "do_not_retry" },
+      "aicr_repository.disable": { risk: "high_write", retryPolicy: "do_not_retry" },
       // Loosening a gate lets PRs pass with findings that failed them.
       "aicr_gate.set": { risk: "high_write", retryPolicy: "do_not_retry" },
       // A rule can fail the Team rules check on every PR under its scope; turning one off lets them pass.
@@ -498,14 +498,33 @@ describe("aicr_repository enable / disable", () => {
     expect(result.warning).toMatch(/could not be turned on/);
   });
 
-  it("disables by repo_path alone and reports the repo as off", async () => {
-    const { client, request } = makeClient(() => ({ status: "SUCCESS", message: "No content" }));
+  it("disables through the Code repository settings and reports the repo as off", async () => {
+    const { client, request } = makeClient(() => ({ ai_pullreq_review_enabled: false }));
     const result = await registry().dispatchExecute(client, "aicr_repository", "disable", { ...SCOPE });
     const opts = request.mock.calls[0][0];
-    expect(opts.path).toBe("/gateway/aicr/api/v2/offboard");
-    expect(opts.params).toEqual({ repo_path: REPO_PATH });
-    expect(opts.body).toBeUndefined();
+    expect(opts.method).toBe("PATCH");
+    expect(opts.path).toBe("/code/api/v1/repos/aicr-runs-fixtures/settings/general");
+    expect(opts.params).toEqual({ orgIdentifier: "code", projectIdentifier: "DeepSourceAICR" });
+    expect(opts.body).toEqual({ ai_pullreq_review_enabled: false });
     expect(result).toEqual({ repo_path: REPO_PATH, enabled: false });
+  });
+
+  it("disables an org-level repo with no projectIdentifier", async () => {
+    const { client, request } = makeClient(() => ({ ai_pullreq_review_enabled: false }));
+    const result = await registry().dispatchExecute(client, "aicr_repository", "disable", { repo_path: `${ACCOUNT}/code/orgrepo` });
+    const opts = request.mock.calls[0][0];
+    expect(opts.method).toBe("PATCH");
+    expect(opts.path).toBe("/code/api/v1/repos/orgrepo/settings/general");
+    expect(opts.params).toEqual({ orgIdentifier: "code" });
+    expect(opts.body).toEqual({ ai_pullreq_review_enabled: false });
+    expect(result).toEqual({ repo_path: `${ACCOUNT}/code/orgrepo`, enabled: false });
+  });
+
+  it("disables an account-level repo with no scope params", async () => {
+    const { client, request } = makeClient(() => ({}));
+    await registry().dispatchExecute(client, "aicr_repository", "disable", { repo_path: `${ACCOUNT}/acctrepo` });
+    expect(request.mock.calls[0][0].path).toBe("/code/api/v1/repos/acctrepo/settings/general");
+    expect(request.mock.calls[0][0].params).toEqual({});
   });
 
   it("rejects an account path with no repo segment before any request", async () => {
@@ -1255,7 +1274,7 @@ describe("aicr approval prompt notes", () => {
     expect(note(override, { rule_id: "5", body: { enabled: false } })).toBeUndefined();
   });
 
-  it("repository enable says which pipelines get the trigger; disable says what is deleted", () => {
+  it("repository enable says which pipelines get the trigger; disable says what is kept", () => {
     const { enable, disable } = def("aicr_repository").executeActions!;
     expect(note(enable, REPO)).toBe(
       "Enable AI Code Review on repo demo in project acme/web: " +
@@ -1270,7 +1289,7 @@ describe("aicr approval prompt notes", () => {
     expect(accountRepo).toContain("every project under the account");
     expect(note(disable, REPO)).toBe(
       "Disable AI Code Review on repo demo in project acme/web: " +
-        "removes its PR triggers, gates, rules, overrides and conventions. Enabling again does not bring them back.",
+        "removes its PR triggers; its gates, rules, overrides, conventions and past reviews are kept. enable turns it back on.",
     );
     expect(note(disable, {})).toBeUndefined();
   });
