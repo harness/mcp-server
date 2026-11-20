@@ -2,7 +2,7 @@ import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
 import { ngExtract, harListExtract, harV3ListExtract, passthrough } from "../extractors.js";
 import { buildIdListBody } from "../../utils/body-normalizer.js";
-import { V3_SCOPE_PARAMS, V3_STATS_MAX_IDS, v3StatsBodySchema } from "./registries-v3.js";
+import { V3_SCOPE_PARAMS, V3_STATS_MAX_IDS, statsBodySchema } from "./har-common.js";
 
 // Canonical PackageType enum — matches RegistryRequest.PackageType in the v1 OpenAPI spec.
 const PACKAGE_TYPES = [
@@ -163,12 +163,12 @@ export const registriesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           skipScopeBodyInjection: true,
           queryParams: { scope: "scope" },
-          bodyBuilder: buildIdListBody({ singleKey: "registry_uuid", listKey: "registry_uuids", bodyKey: "registryIds", max: V3_STATS_MAX_IDS }),
+          bodyBuilder: buildIdListBody({ listKey: "registry_uuids", bodyKey: "registryIds", max: V3_STATS_MAX_IDS }),
           responseExtractor: harV3ListExtract,
           actionDescription:
             `Package count, size, downloads and firewall mode for up to ${V3_STATS_MAX_IDS} registries. Pass params.registry_uuids ` +
             "(comma-separated `uuid` values from registry list/get, not the identifier). Optional: scope (none|ancestors|descendants).",
-          bodySchema: v3StatsBodySchema("registry_uuids", "registryIds"),
+          bodySchema: statsBodySchema("registry_uuids", "registryIds", false),
         },
       },
     },

@@ -56,6 +56,21 @@ describe("buildIdListBody", () => {
   it("rejects more than max ids", () => {
     expect(() => build({ package_ids: "a,b,c,d" })).toThrow(/at most 3/);
   });
+
+  it("rejects non-string ids instead of sending \"[object Object]\"", () => {
+    expect(() => build({ package_ids: [{ id: "a" }] })).toThrow(/must contain string ids, got object/);
+    expect(() => build({ package_ids: ["a", null] })).toThrow(/got null/);
+  });
+
+  it("accepts numeric ids as strings", () => {
+    expect(build({ package_ids: [1, 2] })).toEqual({ packageIds: ["1", "2"] });
+  });
+
+  it("only mentions resource_id when a single-id key is configured", () => {
+    const listOnly = buildIdListBody({ listKey: "registry_uuids", bodyKey: "registryIds", max: 3 });
+    expect(() => listOnly({ registry_uuids: "" })).toThrow("Pass registry_uuids (comma-separated, up to 3).");
+    expect(() => listOnly({ registry_uuid: "r1" })).toThrow(/Pass registry_uuids/);
+  });
 });
 
 describe("stats execute actions", () => {
@@ -92,6 +107,13 @@ describe("stats execute actions", () => {
     const client = mockClient({ items: [] });
     await readOnly.dispatchExecute(client, "package_version", "stats", { version_ids: "v1" });
     expect(client.request).toHaveBeenCalledOnce();
+  });
+
+  it("accepts exactly 100 ids", async () => {
+    const client = mockClient({ items: [] });
+    const ids = Array.from({ length: 100 }, (_, i) => `id-${i}`).join(",");
+    await registry.dispatchExecute(client, "package", "stats", { package_ids: ids });
+    expect((lastCall(client).body as { packageIds: string[] }).packageIds).toHaveLength(100);
   });
 
   it("rejects over-limit ids before calling the API", async () => {
