@@ -3224,3 +3224,17 @@ export {
   unifiedSearchSourcesExtract,
   workArtifactListExtract,
 } from "./extractors/domain.js";
+
+/**
+ * Passthrough that adds `_hint` when the request body sent none of `fields`. For full-replace
+ * updates whose read response omits writable fields: the PUT then resets those fields, and the
+ * agent should be told rather than finding out later.
+ */
+export const hintWhenBodyOmits = (fields: readonly string[], hint: string) =>
+  (raw: unknown, input?: Record<string, unknown>): unknown => {
+    const body = input?.body;
+    const sent = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+    const omitted = fields.filter((f) => sent[f] === undefined);
+    if (omitted.length === 0 || !raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+    return { ...(raw as Record<string, unknown>), _hint: `${omitted.join(" and ")}: ${hint}` };
+  };

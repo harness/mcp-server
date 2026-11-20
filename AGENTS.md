@@ -1,6 +1,6 @@
 # AGENTS.md — Harness.io MCP Server
 
-Registry-based MCP server: 11 consolidated tools (`harness_list`, `harness_get`, `harness_create`, `harness_update`, `harness_delete`, `harness_execute`, `harness_search`, `harness_describe`, `harness_diagnose`, `harness_status`, `harness_schema`) dispatching across 274+ default (318+ total) resource types in 50 toolsets. TypeScript (Node.js 20+), ESM, pnpm, Zod v4.
+Registry-based MCP server: 11 consolidated tools (`harness_list`, `harness_get`, `harness_create`, `harness_update`, `harness_delete`, `harness_execute`, `harness_search`, `harness_describe`, `harness_diagnose`, `harness_status`, `harness_schema`) dispatching across 274+ default (318+ total) resource types in 52 toolsets. TypeScript (Node.js 20+), ESM, pnpm, Zod v4.
 
 ---
 
@@ -33,7 +33,7 @@ src/
 │   ├── types.ts        # Registry types: ResourceDefinition, EndpointSpec, OperationPolicy
 │   ├── extractors.ts   # Response shape extractors for all resource types
 │   ├── scope-utils.ts  # Scope resolution utilities
-│   └── toolsets/       # 50 declarative toolset definition files (pure data — add new resources here)
+│   └── toolsets/       # 52 declarative toolset definition files (pure data — add new resources here)
 ├── tools/              # 11 consolidated tool handlers
 ├── apps/               # MCP Apps UI views (pipeline execution card, KG dashboard)
 ├── prompts/            # 35 prompt templates (one per workflow)
