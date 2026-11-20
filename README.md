@@ -2063,7 +2063,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 44 of 51 toolsets are enabled. Seven toolsets are opt-in and excluded from the defaults:
+By default, 44 of 52 toolsets are enabled. Eight toolsets are opt-in and excluded from the defaults:
 
 - **`aicr`** — AI Code Review (reviews, findings, runs, gates, rules, conventions, settings). Opt-in until the gateway route is confirmed on every production environment.
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
@@ -2182,7 +2182,7 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 51 Toolsets (44 default) |
+                | 52 Toolsets (44 default) |
                 |  274 Resource Types|
                  +--------+---------+
                           |
