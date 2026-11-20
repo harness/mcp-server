@@ -1173,6 +1173,7 @@ export class Registry {
     const requestOpts = {
       method: resolvedMethod,
       path,
+      errorPath: path,
       params,
       body,
       ...(baseUrl ? { baseUrl } : {}),
