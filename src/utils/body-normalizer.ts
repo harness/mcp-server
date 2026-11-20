@@ -85,6 +85,48 @@ function assertObjectBody(body: unknown): void {
   }
 }
 
+export interface IdListBodyOptions {
+  /** Input key holding a single id; set only when it is the resource's identifier field, so resource_id fills it. */
+  singleKey?: string;
+  /** Input key holding several ids, as an array or a comma-separated string. */
+  listKey: string;
+  /** Body key the ids are sent under. */
+  bodyKey: string;
+  /** Maximum number of ids the endpoint accepts. */
+  max: number;
+}
+
+/**
+ * Factory: returns a bodyBuilder for batch endpoints that take `{ <bodyKey>: [id, ...] }`.
+ * Accepts one id via `singleKey` and/or many via `listKey`, de-duplicates them, and
+ * rejects an empty or over-limit list before the API is called.
+ */
+export function buildIdListBody(opts: IdListBodyOptions): (input: Record<string, unknown>) => Record<string, string[]> {
+  return (input: Record<string, unknown>) => {
+    const raw = input[opts.listKey];
+    const listed = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",") : [];
+    const single = opts.singleKey ? input[opts.singleKey] : undefined;
+    const ids = [...new Set(
+      [...(single == null ? [] : [single]), ...listed]
+        .map((v) => {
+          if (typeof v !== "string" && typeof v !== "number") {
+            throw new Error(`${opts.listKey} must contain string ids, got ${v === null ? "null" : typeof v}.`);
+          }
+          return String(v).trim();
+        })
+        .filter((v) => v.length > 0),
+    )];
+    if (ids.length === 0) {
+      const single = opts.singleKey ? `${opts.singleKey} (resource_id) or ` : "";
+      throw new Error(`Pass ${single}${opts.listKey} (comma-separated, up to ${opts.max}).`);
+    }
+    if (ids.length > opts.max) {
+      throw new Error(`${opts.listKey} accepts at most ${opts.max} ids (got ${ids.length}).`);
+    }
+    return { [opts.bodyKey]: ids };
+  };
+}
+
 /**
  * Options for the standardized body builder factory.
  */
