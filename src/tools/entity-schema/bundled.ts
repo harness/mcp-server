@@ -5,8 +5,8 @@ import {
   ENTITY_BUNDLED_SCHEMAS,
 } from "../../data/schemas/entities/index.js";
 import type { JsonObject } from "./normalize.js";
-import type { EntitySchemaCacheEntry, HarnessYamlScope } from "./types.js";
-import { buildBundledSchemaKey, buildLiveSchemaCacheKey } from "./cache-keys.js";
+import type { HarnessYamlScope } from "./types.js";
+import { buildBundledSchemaKey } from "./cache-keys.js";
 
 const log = createLogger("entity-schema:bundled");
 
@@ -66,46 +66,6 @@ export function bundledSnapshotMatchesScope(
     return false;
   }
   return true;
-}
-
-/**
- * Load vendored entity schemas at process startup (no HTTP).
- * Warms the live runtime cache when snapshots match the configured account (OSS / reference account).
- */
-export function preloadBundledEntitySchemas(
-  runtimeCache: Map<string, EntitySchemaCacheEntry>,
-  accountId?: string,
-): number {
-  ensureLoaded();
-  if (!accountId || bundledByScopeKey.size === 0 || !bundledSnapshotsMatchAccount(accountId)) {
-    return bundledByScopeKey.size;
-  }
-
-  let warmed = 0;
-  for (const [bundledKey, schema] of bundledByScopeKey) {
-    const dot = bundledKey.lastIndexOf(".");
-    if (dot < 0) continue;
-    const resourceType = bundledKey.slice(0, dot);
-    const scope = bundledKey.slice(dot + 1) as HarnessYamlScope;
-    const meta = ENTITY_BUNDLED_META[bundledKey];
-    const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope, {
-      orgId: meta?.orgId,
-      projectId: meta?.projectId,
-    });
-    if (!runtimeCache.has(cacheKey)) {
-      runtimeCache.set(cacheKey, { schema, source: "bundled" });
-      warmed += 1;
-    }
-  }
-
-  if (warmed > 0) {
-    log.info("Warmed entity schema cache from bundled snapshots", {
-      account_id: accountId,
-      entries: warmed,
-    });
-  }
-
-  return bundledByScopeKey.size;
 }
 
 export function hasBundledEntitySchemas(): boolean {

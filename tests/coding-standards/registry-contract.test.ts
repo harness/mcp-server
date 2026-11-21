@@ -7,6 +7,8 @@ import {
   Registry,
   ALL_TOOLSET_NAMES,
   DEPRECATED_RESOURCE_TYPE_ALIASES,
+  invertResourceTypeAliases,
+  mergeResourceTypeAliases,
   NAV_DOMAIN_RESOURCE_ALIASES,
   PREFERRED_RESOURCE_TYPE_NAMES,
   TOOLSET_ALIASES,
@@ -366,6 +368,94 @@ describe("Coding standards — registry resource contract", () => {
       unmapped,
       `New resources must use clean domain nouns aligned with harness-nav-config.yaml instead of legacy module acronym prefixes: ${unmapped.join(", ")}`,
     ).toEqual([]);
+  });
+
+  it("rejects duplicate canonical resource types at Registry construction", () => {
+    const makeCollisionToolset = (name: string): ToolsetDefinition => ({
+      name,
+      displayName: name,
+      description: "Collision regression fixture",
+      resources: [{
+        resourceType: "shared_collision_resource",
+        displayName: "Shared Collision Resource",
+        description: "Collision regression fixture",
+        toolset: name,
+        scope: "account",
+        identifierFields: [],
+        operations: {},
+      }],
+    });
+
+    expect(() => new Registry(
+      {
+        ...MINIMAL_CONFIG,
+        HARNESS_TOOLSETS: `${MINIMAL_CONFIG.HARNESS_TOOLSETS},+collision-a,+collision-b`,
+      },
+      { additionalToolsets: [makeCollisionToolset("collision-a"), makeCollisionToolset("collision-b")] },
+    )).toThrow(
+      'Duplicate resource_type "shared_collision_resource" registered by toolsets "collision-a" and "collision-b"',
+    );
+  });
+
+  it("allows duplicate definitions in toolsets excluded from the active configuration", () => {
+    const makeCollisionToolset = (name: string): ToolsetDefinition => ({
+      name,
+      displayName: name,
+      description: "Disabled collision fixture",
+      resources: [{
+        resourceType: "disabled_collision_resource",
+        displayName: "Disabled Collision Resource",
+        description: "Disabled collision fixture",
+        toolset: name,
+        scope: "account",
+        identifierFields: [],
+        operations: {},
+      }],
+    });
+
+    const filtered = new Registry(
+      { ...MINIMAL_CONFIG, HARNESS_TOOLSETS: "pipelines" },
+      { additionalToolsets: [makeCollisionToolset("disabled-a"), makeCollisionToolset("disabled-b")] },
+    );
+    expect(filtered.getAllResourceTypes()).toContain("pipeline");
+    expect(filtered.getAllResourceTypes()).not.toContain("disabled_collision_resource");
+  });
+
+  it("rejects an enabled canonical resource that shadows a resource alias", () => {
+    const shadowingToolset: ToolsetDefinition = {
+      name: "alias-shadow-fixture",
+      displayName: "Alias Shadow Fixture",
+      description: "Alias collision regression fixture",
+      resources: [{
+        resourceType: "repo",
+        displayName: "Conflicting Repo",
+        description: "Alias collision regression fixture",
+        toolset: "alias-shadow-fixture",
+        scope: "account",
+        identifierFields: [],
+        operations: {},
+      }],
+    };
+
+    expect(() => new Registry(
+      {
+        ...MINIMAL_CONFIG,
+        HARNESS_TOOLSETS: `${MINIMAL_CONFIG.HARNESS_TOOLSETS},+alias-shadow-fixture`,
+      },
+      { additionalToolsets: [shadowingToolset] },
+    )).toThrow('Resource alias "repo" conflicts with an enabled canonical resource');
+  });
+
+  it("fails loudly when alias composition or inversion encounters conflicting names", () => {
+    expect(() => mergeResourceTypeAliases([
+      ["first", { repo: "repository" }],
+      ["second", { repo: "different_repository" }],
+    ])).toThrow('Resource alias "repo" from second targets "different_repository"');
+
+    expect(invertResourceTypeAliases({ legacy: "preferred" })).toEqual({ preferred: "legacy" });
+    expect(() => invertResourceTypeAliases({ legacy_a: "shared", legacy_b: "shared" })).toThrow(
+      'Resource alias "shared" maps to both "legacy_a" and "legacy_b"',
+    );
   });
 
   it("ensures every PREFERRED_RESOURCE_TYPE_NAMES entry has a unique, collision-free NAV_DOMAIN_RESOURCE_ALIASES reverse mapping and valid TOOLSET_ALIASES target", () => {

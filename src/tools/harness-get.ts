@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import { jsonResult, errorResult } from "../utils/response-formatter.js";
+import { jsonResult, errorResult, structuredErrorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, coerceRecord } from "../utils/type-guards.js";
@@ -12,10 +12,12 @@ import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
 import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } from "./input-schemas.js";
+import { fieldCopy } from "./field-copy.js";
 import { getOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 import { buildResultView, createAppViewContext } from "../apps/mcp-apps.js";
 import { buildPipelineExecutionView } from "../apps/pipeline-execution.js";
+import { CodeEngineError } from "../code-engine/types.js";
 
 function isTrue(value: unknown): boolean {
   return value === true || value === "true";
@@ -37,6 +39,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               org_id: orgIdField(registry.orgId, registry.compactSchemas),
               project_id: projectIdField(registry.projectId, registry.compactSchemas),
               params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type."),
+              select: z.string().optional().describe(fieldCopy("get.select", registry.schemaProfile)),
               return_download_url: z.union([z.boolean(), z.enum(["true", "false"])]).optional().describe("For execution_log only: return a directly fetchable log download URL instead of buffering log content."),
             }),
       outputSchema: compactOutputSchema(getOutputSchema, registry.compactSchemas),
@@ -138,6 +141,23 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           }
         }
 
+        const rawSelect = typeof args.select === "string" ? args.select.trim() : "";
+        const paramsView = asString(input.view);
+        if (rawSelect !== "" || paramsView === "outline") {
+          const { inspectResourceCode } = await import("../code-engine/index.js");
+          const isOutline = rawSelect.toLowerCase() === "outline" || (rawSelect === "" && paramsView === "outline");
+          const inspected = await inspectResourceCode({
+            registry,
+            client,
+            def,
+            input,
+            resourceId,
+            view: isOutline ? "outline" : "select",
+            select: isOutline ? undefined : rawSelect,
+          });
+          return jsonResult(inspected);
+        }
+
         const result = await registry.dispatch(client, resourceType, "get", input);
 
         // Fire-and-forget: index item for semantic search (skipped in multi-user + local)
@@ -170,6 +190,9 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           });
         return appView.attach(jsonResult(result), () => view, ctx);
       } catch (err) {
+        if (err instanceof CodeEngineError) {
+          return structuredErrorResult({ code: err.code, error: err.message, diagnostics: err.diagnostics });
+        }
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) {
           const rt = asString(args.resource_type);

@@ -130,6 +130,10 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
       toolset: "knowledge-graph",
       scope: "account",
       identifierFields: [],
+      codeSpec: {
+        format: "antlr4",
+        sourcePaths: ["grammar"],
+      },
       operations: {
         get: {
           method: "POST",

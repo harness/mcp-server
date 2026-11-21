@@ -83,6 +83,11 @@ export const governanceToolset: ToolsetDefinition = {
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       identifierFields: ["policy_id"],
+      codeSpec: {
+        format: "rego",
+        sourcePaths: ["rego"],
+        writeShape: { field: "rego", carryFields: ["name"] },
+      },
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policies/edit/{identifier}",
       listFilterFields: [
         { name: "search_term", description: "Filter policies by name or keyword" },
@@ -171,6 +176,18 @@ export const governanceToolset: ToolsetDefinition = {
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       identifierFields: ["policy_set_id"],
+      codeSpec: {
+        format: "json",
+        writeShape: "root_object",
+        collections: [
+          {
+            segment: "policy",
+            path: "policies",
+            keyFields: ["identifier"],
+            typeField: "severity",
+          },
+        ],
+      },
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policy-sets/{identifier}",
       listFilterFields: [
         { name: "search_term", description: "Filter policy sets by name or keyword" },

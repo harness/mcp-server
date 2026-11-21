@@ -10,6 +10,8 @@ import {
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
+import { resolveEffectiveCodeSpec } from "../code-engine/auto-spec.js";
+import { CODEC_CAPABILITIES } from "../code-engine/capabilities.js";
 import { describeOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { describeScopeHint, resourceTypeSchema } from "./input-schemas.js";
 
@@ -111,6 +113,22 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             executeHint: def.executeHint ?? undefined,
             // Only resources that opt in declare this; consumed by the chat approval card.
             ...(def.reviewCard ? { reviewCard: def.reviewCard } : {}),
+            ...(() => {
+              if (!def.operations.get) return {};
+              const effCode = resolveEffectiveCodeSpec(def);
+              return {
+                codeEditing: {
+                  format: effCode.format,
+                  supportsInspect: true,
+                  supportsPatch: Boolean(def.operations.update && CODEC_CAPABILITIES[effCode.format].supportsWrite),
+                  ...(effCode.collections?.length
+                    ? { collections: effCode.collections.map((c) => ({ segment: c.segment, path: c.path, keyFields: c.keyFields })) }
+                    : {}),
+                  ...(effCode.dynamicExpressions?.length ? { dynamicExpressions: effCode.dynamicExpressions } : {}),
+                  ...(effCode.treeGrammar ? { hierarchicalSelectors: true } : {}),
+                },
+              };
+            })(),
             ...(() => {
               const examples = getExamplesForResource(def.resourceType);
               return examples.length > 0

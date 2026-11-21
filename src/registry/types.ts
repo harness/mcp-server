@@ -3,6 +3,17 @@
  */
 
 import type { RequestOptions } from "../client/types.js";
+import type { ResourceCodeSpec } from "../code-engine/types.js";
+
+export type {
+  AddressableCollectionSpec,
+  CodeFormat,
+  DynamicExpressionFlavor,
+  ResourceCodeSpec,
+  YamlChildContainerRule,
+  YamlNodeVariantRule,
+  YamlTreeGrammarSpec,
+} from "../code-engine/types.js";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -595,6 +606,13 @@ export interface ResourceDefinition {
    * consumed outside this process via `harness_describe(resource_type=...)`.
    */
   reviewCard?: ReviewCardSpec;
+  /**
+   * Optional declarative Resource-as-Code metadata configuring scoped inspection
+   * (`harness_get` `view='outline'` / `select`) and structured patching
+   * (`harness_update` `patches` / `dry_run` / `preview_token`).
+   * Pure JSON data (no functions) — surfaced via `harness_describe`.
+   */
+  codeSpec?: ResourceCodeSpec;
   /** Execution guidance for LLMs. Describes how to discover and provide runtime inputs. */
   executeHint?: string;
   /** CRUD endpoint mappings */

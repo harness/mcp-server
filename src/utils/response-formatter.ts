@@ -95,3 +95,10 @@ export function errorResult(message: string): ToolResult {
     isError: true,
   };
 }
+
+export function structuredErrorResult(payload: Record<string, unknown>): ToolResult {
+  return {
+    content: [{ type: "text", text: JSON.stringify(payload) }],
+    isError: true,
+  };
+}
