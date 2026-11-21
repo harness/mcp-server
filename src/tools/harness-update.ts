@@ -14,16 +14,7 @@ import { orgIdField, projectIdField, resourceScopeField, resourceTypeSchema } fr
 import { fieldCopy } from "./field-copy.js";
 import { updateOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
-import {
-  checkIdempotencyReceipt,
-  CodeEngineError,
-  commitPreparedPatch,
-  formatPatchDiffForConfirmation,
-  parsePatchOperations,
-  preparePatchCandidate,
-  previewResourcePatch,
-  verifyPreviewToken,
-} from "../code-engine/index.js";
+import { CodeEngineError } from "../code-engine/types.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
@@ -125,6 +116,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
 
         // --- Scoped Resource-as-Code dry_run preview (zero write side effects; allowed in read-only mode as preview_only) ---
         if (hasPatches && dryRun === true) {
+          const { parsePatchOperations, previewResourcePatch } = await import("../code-engine/index.js");
           const parsedPatches = parsePatchOperations(rawPatches);
           const preview = await previewResourcePatch({
             registry,
@@ -156,10 +148,19 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
 
         // --- Scoped Resource-as-Code apply (via preview_token OR direct patches) ---
         if (hasPreviewToken || hasPatches) {
+          const {
+            checkIdempotencyReceipt,
+            commitPreparedPatch,
+            formatPatchDiffForConfirmation,
+            parsePatchOperations,
+            preparePatchCandidate,
+            resolveCodeResourceScope,
+            verifyPreviewToken,
+          } = await import("../code-engine/index.js");
           const accountId = registry.getAccountId() || client.account;
           const orgId = asString(input.org_id) ?? registry.orgId;
           const projectId = asString(input.project_id) ?? registry.projectId;
-          const resourceScope = asString(input.resource_scope);
+          const resourceScope = resolveCodeResourceScope(def, input);
 
           let operationsToApply: ReturnType<typeof parsePatchOperations>;
           let effectiveExpectedRev = expectedRevision;
@@ -196,6 +197,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
               accountId,
               orgId,
               projectId,
+              resourceScope,
               resourceType: def.resourceType,
               resourceId: resolvedResourceId,
               idempotencyKey,
@@ -278,7 +280,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
             },
             idempotencyKey,
             previewFingerprint,
-            scopeContext: { accountId, orgId, projectId },
+            scopeContext: { accountId, orgId, projectId, resourceScope },
           });
           return jsonResult(applied);
         }

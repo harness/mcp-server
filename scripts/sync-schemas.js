@@ -72,26 +72,37 @@ function generateIndex(targetDir, entries) {
   const imports = entries.map((e) => `import ${e.importAs} from "${e.importPath}";`).join("\n");
   const props = entries.map((e) => `  "${e.key}": ${e.importAs},`).join("\n");
 
-  const indexContent = `// Auto-generated — do not edit manually. Run \`pnpm sync-schemas\` to regenerate.
-// @ts-nocheck
-${imports}
+  const catalogContent = `// Auto-generated — do not edit manually. Run \`pnpm sync-schemas\` to regenerate.
 
-type V0SchemaKey = ${v0Keys.join(" | ")};
-type V1SchemaKey = ${v1Keys.join(" | ")};
-type LocalSchemaKey = ${localKeys.join(" | ")};
-type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
-
-export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
-${props}
-};
-
-export const VALID_SCHEMAS = Object.keys(SCHEMAS) as AllSchemaKeys[];
+export type V0SchemaKey = ${v0Keys.join(" | ")};
+export type V1SchemaKey = ${v1Keys.join(" | ")};
+export type LocalSchemaKey = ${localKeys.join(" | ")};
+export type AllSchemaKeys = V0SchemaKey | V1SchemaKey | LocalSchemaKey;
 export type SchemaName = AllSchemaKeys;
 
 export const V0_SCHEMA_KEYS: V0SchemaKey[] = [${v0Keys.join(", ")}];
 export const V1_SCHEMA_KEYS: V1SchemaKey[] = [${v1Keys.join(", ")}];
+
+/** Lightweight schema catalog; importing it does not load any schema body. */
+export const VALID_SCHEMAS: AllSchemaKeys[] = [${entries.map((e) => `"${e.key}"`).join(", ")}];
 `;
 
+  const indexContent = `// Auto-generated — do not edit manually. Run \`pnpm sync-schemas\` to regenerate.
+// @ts-nocheck
+${imports}
+import type { AllSchemaKeys } from "./catalog.js";
+
+export type { V0SchemaKey, V1SchemaKey, LocalSchemaKey, AllSchemaKeys, SchemaName } from "./catalog.js";
+export { VALID_SCHEMAS, V0_SCHEMA_KEYS, V1_SCHEMA_KEYS } from "./catalog.js";
+
+export const SCHEMAS: Record<AllSchemaKeys, Record<string, any>> = {
+${props}
+};
+`;
+
+  const catalogPath = path.join(targetDir, "catalog.ts");
+  fs.writeFileSync(catalogPath, catalogContent);
+  console.log(`Saved ${catalogPath}`);
   const indexPath = path.join(targetDir, "index.ts");
   fs.writeFileSync(indexPath, indexContent);
   console.log(`Saved ${indexPath}`);

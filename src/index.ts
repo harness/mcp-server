@@ -23,7 +23,7 @@ import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation, confirmationRequestStateVerifier } from "./utils/elicitation.js";
-import { configurePreviewSigningKey } from "./code-engine/index.js";
+import { configurePreviewSigningKey } from "./code-engine/preview-token.js";
 import { resolveCorsAllowOrigin, resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createMcpHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import {

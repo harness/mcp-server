@@ -1,7 +1,7 @@
 import { ResourceTemplate } from "@modelcontextprotocol/server";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS, type SchemaName } from "../data/schemas/index.js";
+import { VALID_SCHEMAS, type SchemaName } from "../data/schemas/catalog.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 
 const log = createLogger("resource:harness-schema");
@@ -16,15 +16,12 @@ export function registerHarnessSchemaResource(
 ): void {
   if (additionalSchemas) {
     for (const key of Object.keys(additionalSchemas)) {
-      if (key in SCHEMAS) {
+      if ((VALID_SCHEMAS as string[]).includes(key)) {
         throw new Error(`additionalSchemas key '${key}' conflicts with a built-in schema name`);
       }
     }
   }
-  const allSchemas: Record<string, Record<string, any>> = additionalSchemas
-    ? { ...SCHEMAS, ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])) }
-    : { ...SCHEMAS };
-  const allSchemaNames = Object.keys(allSchemas);
+  const allSchemaNames = [...VALID_SCHEMAS, ...Object.keys(additionalSchemas ?? {})];
 
   const template = new ResourceTemplate("schema:///{schemaName}", {
     list: async () => ({
@@ -60,7 +57,8 @@ export function registerHarnessSchemaResource(
         );
       }
 
-      const schema = allSchemas[schemaName];
+      const schema = additionalSchemas?.[schemaName]?.schema
+        ?? (await import("../data/schemas/index.js")).SCHEMAS[schemaName];
 
       return {
         contents: [

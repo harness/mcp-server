@@ -17,7 +17,7 @@ import { getOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
 import { buildResultView, createAppViewContext } from "../apps/mcp-apps.js";
 import { buildPipelineExecutionView } from "../apps/pipeline-execution.js";
-import { CodeEngineError, inspectResourceCode } from "../code-engine/index.js";
+import { CodeEngineError } from "../code-engine/types.js";
 
 function isTrue(value: unknown): boolean {
   return value === true || value === "true";
@@ -144,6 +144,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         const rawSelect = typeof args.select === "string" ? args.select.trim() : "";
         const paramsView = asString(input.view);
         if (rawSelect !== "" || paramsView === "outline") {
+          const { inspectResourceCode } = await import("../code-engine/index.js");
           const isOutline = rawSelect.toLowerCase() === "outline" || (rawSelect === "" && paramsView === "outline");
           const inspected = await inspectResourceCode({
             registry,

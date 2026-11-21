@@ -1,6 +1,5 @@
 /**
- * Long-term maintainability guardrails for the Resource-as-Code (`src/code-engine/`)
- * and Code Mode (`src/code-mode/`) architecture.
+ * Long-term maintainability guardrails for the Resource-as-Code (`src/code-engine/`) architecture.
  *
  * Runs automatically as part of `pnpm standards:check`.
  *
@@ -13,7 +12,7 @@
  *     with `operationPolicy.risk === "read"`.
  *  5. Every writable `codeSpec` resource with `operations.update` also defines `operations.get` with
  *     symmetric scope configuration.
- *  6. `src/code-engine/` and `src/code-mode/` never write to stdout, never call raw `fetch()`, and never
+ *  6. `src/code-engine/` never writes to stdout, never calls raw `fetch()`, and never
  *     instantiate `HarnessClient` or call `client.request()` directly (all I/O routes through `Registry.dispatch`).
  */
 
@@ -27,7 +26,6 @@ import { LIVE_ENTITY_SCHEMAS } from "../../src/tools/entity-schema/live.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const CODE_ENGINE_DIR = join(REPO_ROOT, "src/code-engine");
-const CODE_MODE_DIR = join(REPO_ROOT, "src/code-mode");
 
 const ALL_ENABLED_CONFIG = {
   HARNESS_API_KEY: "pat.testaccount.testtoken.testsecret",
@@ -69,7 +67,7 @@ function assertPureJsonValue(value: unknown, path: string, violations: string[])
   }
 }
 
-describe("Coding standards — Resource-as-Code & Code Mode maintainability contracts", () => {
+describe("Coding standards — Resource-as-Code maintainability contracts", () => {
   const registry = new Registry(ALL_ENABLED_CONFIG as never);
   const allTypes = registry.getAllResourceTypes();
 
@@ -161,9 +159,9 @@ describe("Coding standards — Resource-as-Code & Code Mode maintainability cont
     expect(violations, violations.join("\n")).toEqual([]);
   });
 
-  it("code-engine and code-mode modules preserve transport, client singleton, and dispatch boundaries", () => {
+  it("code-engine modules preserve transport, client singleton, and dispatch boundaries", () => {
     const violations: string[] = [];
-    const files = [...walkTsFiles(CODE_ENGINE_DIR), ...walkTsFiles(CODE_MODE_DIR)];
+    const files = walkTsFiles(CODE_ENGINE_DIR);
 
     for (const file of files) {
       const relPath = relative(REPO_ROOT, file).replace(/\\/g, "/");
@@ -182,8 +180,54 @@ describe("Coding standards — Resource-as-Code & Code Mode maintainability cont
         violations.push(`${relPath}: direct client.request() forbidden (use registry.dispatch)`);
       }
       if (/from\s+["']@modelcontextprotocol\/server/.test(src)) {
-        violations.push(`${relPath}: code-engine/code-mode must stay transport-agnostic (no McpServer import)`);
+        violations.push(`${relPath}: code-engine must stay transport-agnostic (no McpServer import)`);
       }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("startup and tool registration lazy-load the code engine", () => {
+    const files = [
+      "src/index.ts",
+      "src/tools/harness-get.ts",
+      "src/tools/harness-update.ts",
+      "src/tools/harness-describe.ts",
+    ];
+    const staticEngineImport = /^import\s+(?!type\b).*from\s+["'][^"']*code-engine\/index\.js["'];/gm;
+    const violations: string[] = [];
+
+    for (const relPath of files) {
+      const src = readFileSync(join(REPO_ROOT, relPath), "utf8");
+      if (staticEngineImport.test(src)) {
+        violations.push(`${relPath}: use a dynamic import on code inspection/patch paths or a lightweight type/preview-token import`);
+      }
+      staticEngineImport.lastIndex = 0;
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("schema tools, resources, and search lazy-load bundled schema bodies", () => {
+    const files = [
+      "src/tools/harness-schema.ts",
+      "src/resources/harness-schema.ts",
+      "src/search/manager.ts",
+    ];
+    const staticSchemaImport = /^import\s+(?!type\b).*from\s+["'][^"']*data\/schemas\/(?:entities\/)?index\.js["'];/gm;
+    const violations: string[] = [];
+
+    for (const relPath of files) {
+      const src = readFileSync(join(REPO_ROOT, relPath), "utf8");
+      if (staticSchemaImport.test(src)) {
+        violations.push(`${relPath}: import the lightweight catalog and load schema bodies only on demand`);
+      }
+      staticSchemaImport.lastIndex = 0;
+    }
+
+    const liveSchemaSource = readFileSync(join(REPO_ROOT, "src/tools/entity-schema/live.ts"), "utf8");
+    if (/^import\s+(?!type\b).*from\s+["']\.\/bundled\.js["'];/m.test(liveSchemaSource)) {
+      violations.push("src/tools/entity-schema/live.ts: load bundled entity snapshots only on the generic NG fetch path");
     }
 
     expect(violations, violations.join("\n")).toEqual([]);

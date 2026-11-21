@@ -5,12 +5,6 @@ import {
   type JsonObject,
 } from "./normalize.js";
 import { buildLiveSchemaCacheKey } from "./cache-keys.js";
-import {
-  bundledSnapshotMatchesScope,
-  bundledSnapshotsMatchAccount,
-  getBundledEntitySchema,
-  preloadBundledEntitySchemas,
-} from "./bundled.js";
 import type {
   EntitySchemaCacheEntry,
   EntitySchemaFetchResult,
@@ -440,7 +434,6 @@ function logBundledServe(
 
 export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetcher {
   const cache = new Map<string, EntitySchemaCacheEntry>();
-  preloadBundledEntitySchemas(cache, client.account);
 
   return {
     listResourceTypes() {
@@ -503,11 +496,13 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
       }
 
       // Explicit identifier requests entity-specific schema — bundled snapshots are type-level only.
-      const bundled = params.identifier ? undefined : getBundledEntitySchema(resourceType, scope);
+      // Load the large vendored snapshots only when a generic NG schema is actually requested.
+      const bundledModule = params.identifier ? undefined : await import("./bundled.js");
+      const bundled = bundledModule?.getBundledEntitySchema(resourceType, scope);
       if (
         bundled &&
-        bundledSnapshotsMatchAccount(accountId) &&
-        bundledSnapshotMatchesScope(resourceType, scope, params.orgId, params.projectId)
+        bundledModule?.bundledSnapshotsMatchAccount(accountId) &&
+        bundledModule.bundledSnapshotMatchesScope(resourceType, scope, params.orgId, params.projectId)
       ) {
         logBundledServe(resourceType, scope, accountId, false);
         const entry: EntitySchemaCacheEntry = { schema: bundled, source: "bundled" };

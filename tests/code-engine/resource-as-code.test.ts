@@ -1,13 +1,11 @@
 /**
- * End-to-end & invariant test suite for Option A Resource-as-Code (`harness_get` + `harness_update`)
- * AND the client-side Code Mode sandbox runtime (`executeInCodeMode`), including HQL authoring
- * and 3-way context-window byte comparisons.
+ * End-to-end and invariant tests for Resource-as-Code (`harness_get` + `harness_update`),
+ * including scoped HQL grammar inspection and context-window byte comparisons.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import YAML from "yaml";
 import { clearIdempotencyStoreForTests } from "../../src/code-engine/index.js";
-import { executeInCodeMode, type McpToolInvoker } from "../../src/code-mode/runtime.js";
 import type { Config } from "../../src/config.js";
 import { createHarnessServer } from "../../src/index.js";
 
@@ -254,45 +252,18 @@ INTEGER_LITERAL : [0-9]+ ;
 PIPE : '|' ;
 `;
 
-/** Create an in-process MCP tool invoker backed by a real `createHarnessServer` instance. */
-function buildDirectInvoker(config: Config): {
-  invoker: McpToolInvoker;
-} {
-  const { server } = createHarnessServer(config);
-  // Access registered tool handlers via lightweight InMemory / internal map shim:
-  // Better yet, intercept `registerTool` or drive via `@modelcontextprotocol/client` + `InMemoryTransport`!
-  return {
-    invoker: {
-      async callTool(name, args) {
-        const { Client } = await import("@modelcontextprotocol/client");
-        const { InMemoryTransport } = await import("@modelcontextprotocol/server");
-        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-        await server.connect(serverTransport);
-        const mcpClient = new Client({ name: "test-client", version: "1.0.0" });
-        await mcpClient.connect(clientTransport);
-        try {
-          const res = await mcpClient.callTool({ name, arguments: args });
-          return res as Awaited<ReturnType<McpToolInvoker["callTool"]>>;
-        } finally {
-          await mcpClient.close();
-        }
-      },
-    },
-  };
-}
-
 async function createConnectedMcpSession(config: Config) {
   const { Client } = await import("@modelcontextprotocol/client");
   const { InMemoryTransport } = await import("@modelcontextprotocol/server");
   const { server } = createHarnessServer(config);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
-  const mcpClient = new Client({ name: "code-mode-eval", version: "1.0.0" });
+  const mcpClient = new Client({ name: "resource-as-code-test", version: "1.0.0" });
   await mcpClient.connect(clientTransport);
 
-  const invoker: McpToolInvoker = {
-    callTool: async (name, args) =>
-      (await mcpClient.callTool({ name, arguments: args })) as Awaited<ReturnType<McpToolInvoker["callTool"]>>,
+  const invoker = {
+    callTool: async (name: string, args: Record<string, unknown>) =>
+      mcpClient.callTool({ name, arguments: args }),
   };
 
   return {
@@ -312,7 +283,7 @@ async function createConnectedMcpSession(config: Config) {
   };
 }
 
-describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode", () => {
+describe("Resource-as-Code (harness_get + harness_update)", () => {
   beforeEach(() => {
     clearIdempotencyStoreForTests();
     vi.restoreAllMocks();
@@ -418,7 +389,19 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
         },
       ]);
 
-      // 3. Apply via `preview_token` + `idempotency_key`
+      // 3. The preview is bound to the effective project scope and cannot cross to account scope.
+      const wrongScopeRes = await session.callJson<{ code: string }>("harness_update", {
+        resource_type: "pipeline",
+        resource_id: "platform_ci_cd",
+        resource_scope: "account",
+        preview_token: previewRes.data.preview_token,
+      });
+      expect(wrongScopeRes.isError).toBe(true);
+      expect(wrongScopeRes.data.code).toBe("PREVIEW_MISMATCH");
+      expect(putCalls).toBe(0);
+
+      // 4. Apply via `preview_token` + `idempotency_key`. Explicit project scope is
+      // equivalent to the omitted/default project scope used when issuing the preview.
       const applyRes = await session.callJson<{
         status: string;
         replayed?: boolean;
@@ -426,6 +409,7 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
       }>("harness_update", {
         resource_type: "pipeline",
         resource_id: "platform_ci_cd",
+        resource_scope: "project",
         preview_token: previewRes.data.preview_token,
         params: { idempotency_key: "idem-timeout-20m-1" },
       });
@@ -443,7 +427,7 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
       expect(parsedAfter.pipeline.stages[0].stage.spec.execution.rollbackSteps[0].step.timeout).toBe("5m");
       expect(parsedAfter.pipeline.stages[1].stage.spec.execution.steps[0].step.timeout).toBe("12m");
 
-      // 4. Retry with same `idempotency_key` + `preview_token` -> returns recorded outcome WITHOUT a second PUT!
+      // 5. Retry with the same key/token and omitted default scope -> replay without a second PUT!
       const replayRes = await session.callJson<{ status: string; replayed?: boolean }>("harness_update", {
         resource_type: "pipeline",
         resource_id: "platform_ci_cd",
@@ -454,7 +438,7 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
       expect(replayRes.data.replayed).toBe(true);
       expect(putCalls).toBe(1);
 
-      // 5. Reusing `idempotency_key` with a different patch -> IDEMPOTENCY_KEY_CONFLICT!
+      // 6. Reusing `idempotency_key` with a different patch -> IDEMPOTENCY_KEY_CONFLICT!
       const conflictIdem = await session.callJson<{ code: string }>("harness_update", {
         resource_type: "pipeline",
         resource_id: "platform_ci_cd",
@@ -761,7 +745,7 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
     }
   });
 
-  it("supports HQL query authoring via scoped ANTLR4 grammar select + Code Mode programmatic discovery/validation, and quantifies 3-way context savings", async () => {
+  it("supports scoped ANTLR4 grammar inspection and keeps pipeline edits smaller than full-YAML replacement", async () => {
     // Generate a realistic 60-step pipeline (~18 KB YAML) to measure bounded context size!
     const extraStepsYaml = Array.from({ length: 55 }, (_, idx) => {
       return `                    - step:\n                        type: Run\n                        name: Generated Check ${idx}\n                        identifier: gen_check_${idx}\n                        timeout: 10m\n                        spec:\n                          shell: Bash\n                          command: |\n                            echo "Step ${idx} executing long boilerplate script line 1"\n                            echo "Step ${idx} executing long boilerplate script line 2"`;
@@ -776,43 +760,6 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
       vi.fn(async (url: string, init?: RequestInit) => {
         if (url.includes("/getGrammar")) {
           return new Response(JSON.stringify({ grammar: SAMPLE_HQL_GRAMMAR }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
-        }
-        if (url.includes("/getQueryableTypes")) {
-          const queryable_types = Array.from({ length: 80 }, (_, idx) => ({
-            type_reference: { object_kind: "OBJECT_KIND_VIEW" },
-            connector_mapping_config: { connector_reference: { identifier: "clickhouse_main" } },
-            type: {
-              view_type: {
-                id: idx === 17 ? "ci:pipeline_execution_summary_ci" : `mod:irrelevant_view_${idx}`,
-                name: idx === 17 ? "CI Pipeline Execution Summary" : `Irrelevant View ${idx}`,
-                description: idx === 17 ? "CI build durations and status" : "Unrelated telemetry table",
-              },
-            },
-          }));
-          return new Response(JSON.stringify({ queryable_types }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
-        }
-        if (url.includes("/getType")) {
-          const fields = [
-            { name: "pipeline_id", dataType: "STRING" },
-            { name: "status", dataType: "STRING" },
-            { name: "duration_ms", dataType: "INT64" },
-            ...Array.from({ length: 60 }, (_, idx) => ({ name: `extra_col_${idx}`, dataType: "STRING" })),
-          ];
-          return new Response(
-            JSON.stringify({ type: { view_type: { id: "ci:pipeline_execution_summary_ci", fields } } }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        }
-        if (url.includes("/validateQuery")) {
-          const req = JSON.parse(String(init?.body ?? "{}")) as { query_string: string };
-          const valid = req.query_string.includes("ci:pipeline_execution_summary_ci") && req.query_string.includes("duration_ms");
-          return new Response(JSON.stringify({ is_valid: valid, errors: valid ? [] : ["Unknown column"] }), {
             status: 200,
             headers: { "content-type": "application/json" },
           });
@@ -845,35 +792,7 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
       expect(scopedGrammar.data.nodes.map((n) => n.selector)).toEqual(["rule:joinClause", "rule:joinType"]);
       expect(scopedGrammar.rawText.length).toBeLessThan(fullGrammar.rawText.length);
 
-      // 2. Code Mode HQL Authoring Loop: filters 80 types + 63 columns + validates query inside sandbox,
-      //    emitting <250B into LLM context while consuming >12KB of schema/catalog data in sandbox!
-      const hqlCodeMode = await executeInCodeMode<{ query: string; valid: boolean }>(
-        session.invoker,
-        `
-          const catalog = await harness.list({ resource_type: "kg_queryable_type_summary" });
-          const ciView = catalog.items.find((t) => t.identifier.includes("pipeline_execution_summary_ci"));
-          const typeMeta = await harness.get({
-            resource_type: "kg_type",
-            resource_id: ciView.identifier,
-            params: { kind: ciView.kind },
-            select: "field:duration_ms,field:status"
-          });
-          const cols = typeMeta.nodes.map((n) => n.id);
-          const query = \`find view "\${ciView.identifier}" | filter \${cols[1]} == "Failed" | select {\${cols[0]}}\`;
-          const check = await harness.execute({
-            resource_type: "hql_query",
-            action: "validate",
-            body: { query_string: query }
-          });
-          return { query, valid: Boolean(check.is_valid ?? check.valid ?? true), matchedColumns: cols };
-        `,
-      );
-      expect(hqlCodeMode.ok, hqlCodeMode.error).toBe(true);
-      expect(hqlCodeMode.result?.valid).toBe(true);
-      expect(hqlCodeMode.metrics.modelVisibleBytes).toBeLessThan(260);
-      expect(hqlCodeMode.metrics.sandboxConsumedBytes).toBeGreaterThan(hqlCodeMode.metrics.modelVisibleBytes * 10);
-
-      // 3. Three-way Pipeline Edit Context Comparison on the 60-step (~18 KB) pipeline:
+      // 2. Pipeline edit context comparison on the 60-step (~18 KB) pipeline:
       //    (a) Full-YAML baseline (`harness_get` full + `harness_update` full YAML)
       const baselineGet = await session.callJson("harness_get", {
         resource_type: "pipeline",
@@ -881,24 +800,7 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
       });
       const baselineContextBytes = Buffer.byteLength(baselineGet.rawText, "utf8") * 2; // GET output + LLM-emitted PUT input
 
-      //    (b) Code Mode prototype over raw `harness_get` + CST patch
-      const codeModeEdit = await executeInCodeMode<{ before: unknown; after: unknown }>(
-        session.invoker,
-        `
-          const raw = await harness.get({ resource_type: "pipeline", resource_id: "large_pipe" });
-          const doc = YAML.parseDocument(raw.yamlPipeline);
-          const preview = await harness.update({
-            resource_type: "pipeline",
-            resource_id: "large_pipe",
-            dry_run: true,
-            patches: [{ op: "set", target: "stage:CI/group:Tests/step:integration_tests", field: "timeout", value: "20m" }]
-          });
-          return { status: preview.status, changes: preview.changes, docLoadedInSandboxBytes: raw.yamlPipeline.length };
-        `,
-      );
-      expect(codeModeEdit.ok).toBe(true);
-
-      //    (c) Option A Server-Side Scoped Inspect + Preview (`select` + `dry_run` patches)
+      //    (b) Server-side scoped inspect + preview (`select` + `dry_run` patches)
       const serverInspect = await session.callJson("harness_get", {
         resource_type: "pipeline",
         resource_id: "large_pipe",
@@ -913,9 +815,8 @@ describe("Resource-as-Code Option A (harness_get + harness_update) & Code Mode",
       const serverScopedBytes =
         Buffer.byteLength(serverInspect.rawText, "utf8") + Buffer.byteLength(serverPreview.rawText, "utf8");
 
-      // Both Code Mode and Server-Side Option A keep model-visible context >90% smaller than Full-YAML baseline!
+      // Scoped inspection and preview keep model-visible context >90% smaller than full YAML.
       expect(baselineContextBytes).toBeGreaterThan(30_000);
-      expect(codeModeEdit.metrics.modelVisibleBytes).toBeLessThan(1_000);
       expect(serverScopedBytes).toBeLessThan(2_500);
     } finally {
       await session.close();

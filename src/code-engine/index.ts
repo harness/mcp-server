@@ -12,7 +12,7 @@ import * as z from "zod/v4";
 import type { AuditContext } from "../audit/types.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Registry } from "../registry/index.js";
-import type { ResourceDefinition } from "../registry/types.js";
+import type { ResourceDefinition, ResourceScope } from "../registry/types.js";
 import type { HarnessYamlScope } from "../tools/entity-schema/types.js";
 import { asRecord, asString } from "../utils/type-guards.js";
 import { resolveEffectiveCodeSpec } from "./auto-spec.js";
@@ -203,6 +203,14 @@ function readDotted(obj: unknown, dottedPath: string): unknown {
     cur = rec[part];
   }
   return cur;
+}
+
+/** Normalize omitted and explicit scope to the same update-effective value for preview binding. */
+export function resolveCodeResourceScope(
+  def: ResourceDefinition,
+  input: Record<string, unknown>,
+): ResourceScope {
+  return (asString(input.resource_scope) as ResourceScope | undefined) ?? def.operations.update?.scope ?? def.scope;
 }
 
 function extractSourceAndRevision(
@@ -500,9 +508,7 @@ export async function preparePatchCandidate(params: {
   }
 
   // Run synced JSON Schema validation on candidate YAML / JSON
-  const effectiveScope =
-    (asString(input.resource_scope) as HarnessYamlScope | undefined) ??
-    (def.scope as HarnessYamlScope);
+  const effectiveScope = resolveCodeResourceScope(def, input) as HarnessYamlScope;
   const candidateForSchema =
     codeSpec.format === "yaml" && patchResult.patchedText !== undefined
       ? YAML.parse(patchResult.patchedText)
@@ -623,7 +629,7 @@ export async function previewResourcePatch(params: {
   const accountId = registry.getAccountId() || client.account;
   const orgId = asString(input.org_id) ?? registry.orgId;
   const projectId = asString(input.project_id) ?? registry.projectId;
-  const resourceScope = asString(input.resource_scope);
+  const resourceScope = resolveCodeResourceScope(def, input);
 
   const issued = issuePreviewToken(
     {
@@ -663,7 +669,7 @@ export async function commitPreparedPatch(params: {
   auditContext: AuditContext;
   idempotencyKey?: string;
   previewFingerprint: string;
-  scopeContext: { accountId: string; orgId?: string; projectId?: string };
+  scopeContext: { accountId: string; orgId?: string; projectId?: string; resourceScope?: string };
 }): Promise<ApplyEditResponse> {
   const {
     registry,

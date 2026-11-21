@@ -152,11 +152,12 @@ export function verifyPreviewToken(
     parsed.resourceType !== expectedContext.resourceType ||
     parsed.resourceId !== expectedContext.resourceId ||
     (parsed.orgId ?? "") !== (expectedContext.orgId ?? "") ||
-    (parsed.projectId ?? "") !== (expectedContext.projectId ?? "")
+    (parsed.projectId ?? "") !== (expectedContext.projectId ?? "") ||
+    (parsed.resourceScope ?? "") !== (expectedContext.resourceScope ?? "")
   ) {
     throw new CodeEngineError(
       "PREVIEW_MISMATCH",
-      `preview_token is bound to ${parsed.resourceType}/${parsed.resourceId} (${parsed.accountId}/${parsed.orgId ?? "-"}/${parsed.projectId ?? "-"}), which does not match this request.`,
+      `preview_token is bound to ${parsed.resourceType}/${parsed.resourceId} (${parsed.accountId}/${parsed.orgId ?? "-"}/${parsed.projectId ?? "-"}, scope ${parsed.resourceScope ?? "default"}), which does not match this request.`,
     );
   }
 
@@ -179,6 +180,7 @@ function scopeIdempotencyKey(params: {
   accountId: string;
   orgId?: string;
   projectId?: string;
+  resourceScope?: string;
   resourceType: string;
   resourceId: string;
   idempotencyKey: string;
@@ -187,6 +189,7 @@ function scopeIdempotencyKey(params: {
     params.accountId,
     params.orgId ?? "",
     params.projectId ?? "",
+    params.resourceScope ?? "",
     params.resourceType,
     params.resourceId,
     params.idempotencyKey,
@@ -197,6 +200,7 @@ export function checkIdempotencyReceipt(params: {
   accountId: string;
   orgId?: string;
   projectId?: string;
+  resourceScope?: string;
   resourceType: string;
   resourceId: string;
   idempotencyKey: string;
@@ -228,6 +232,7 @@ export function recordIdempotencyReceipt(params: {
   accountId: string;
   orgId?: string;
   projectId?: string;
+  resourceScope?: string;
   resourceType: string;
   resourceId: string;
   idempotencyKey: string;

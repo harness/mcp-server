@@ -8,8 +8,6 @@ import { RemoteSearchProvider } from "./remote-provider.js";
 import { createLogger } from "../utils/logger.js";
 import "../data/examples/load-all.js";
 import { getAllExamples } from "../data/examples/index.js";
-import { SCHEMAS } from "../data/schemas/index.js";
-import { ENTITY_BUNDLED_SCHEMAS } from "../data/schemas/entities/index.js";
 import { buildResourceIndexContent } from "./embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "./entity-index.js";
 
@@ -167,6 +165,10 @@ export class SearchManager {
       "overlayInputSet_v1": "input_set",
       "agent-pipeline": "pipeline,pipeline_v1",
     };
+    const [{ SCHEMAS }, { ENTITY_BUNDLED_SCHEMAS }] = await Promise.all([
+      import("../data/schemas/index.js"),
+      import("../data/schemas/entities/index.js"),
+    ]);
     const schemaEntries = Object.entries(SCHEMAS);
     await Promise.all(schemaEntries.map(([name, schema]) => {
       const resourceType = SCHEMA_RESOURCE_TYPES[name] ?? name;

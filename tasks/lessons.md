@@ -228,3 +228,18 @@
 - **Fix**: `ResourceDefinition.deepLinkParamResolver` runs once per dispatch just before `buildDeepLink`. `resolveCodeRepoLinkParams` leaves slugs alone (no extra request), and for a numeric ref reads the repository record (the response itself for `repository`, otherwise one `GET /code/api/v1/repos/<id>`) to get the identifier and the org/project from `path`. A failed lookup omits the link instead of emitting a broken one. `resolvePullRequestLinkParams` also supplies `pr_number` when the response has no `number` (merge).
 - **Rule**: When an API is more lenient than the UI route, a deep link built from caller input is only as good as that input. Resolve the canonical identifier, prefer omitting a link to emitting a known-broken one, and keep the extra lookup off the common path. Registry path encoding must use `encodePathSegment` (path-security test enforces it).
 - **Note**: Code list operations return bare arrays, so the registry attaches no per-item `openInHarness` for them (a property on the array is dropped when serialized). The resolver skips array results to avoid a pointless lookup.
+
+## Resource-as-Code Previews Must Bind Effective Scope End-to-End
+- **Issue**: Preview-token verification accepted `resourceScope` but did not compare it, and scope was absent from idempotency keys. Normalizing only one side would also make an omitted default scope differ from an explicit equivalent scope.
+- **Fix**: Resolve the update-effective scope before issuing or verifying a preview, include it in token verification and both receipt lookup/recording, and test cross-scope rejection plus default/explicit-scope replay through `harness_update`.
+- **Rule**: Every field described as binding a signed preview must participate in verification and idempotency. Test the public write path and assert a scope mismatch performs zero writes.
+
+## Optional Execution Engines Must Stay Out of Tool Registration
+- **Issue**: Static imports from ordinary tool modules into the Resource-as-Code orchestrator pulled codecs and generated schemas into unrelated schema-registration tests, exceeding the default timeout.
+- **Fix**: Import lightweight error/token modules directly and dynamically import the orchestrator only on inspect, patch, preview, and detailed-describe paths. Add an import-boundary standards test.
+- **Rule**: Tool registration and startup must not depend on optional execution engines. Do not mask module-graph regressions by only increasing test timeouts.
+
+## Registry and Alias Composition Must Fail Before Dispatch
+- **Issue**: A structural test could report current duplicates, but `Registry` still used last-write-wins map insertion and object spreads for aliases, allowing future definitions or alias sources to redirect calls silently.
+- **Fix**: Reject duplicate enabled canonical names, conflicting alias composition/inversion, alias shadowing, and dangling targets during construction. Keep disabled-toolset duplicates isolated from the active configuration.
+- **Rule**: Structural catalog tests supplement runtime guards; they do not replace them. Every name that can change dispatch routing needs fail-fast collision validation and a public construction-path regression.

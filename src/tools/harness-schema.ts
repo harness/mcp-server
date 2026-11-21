@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { SCHEMAS } from "../data/schemas/index.js";
+import { VALID_SCHEMAS, type SchemaName } from "../data/schemas/catalog.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 import { createLogger } from "../utils/logger.js";
@@ -361,21 +361,17 @@ export function registerSchemaTool(
 ): void {
   if (additionalSchemas) {
     for (const key of Object.keys(additionalSchemas)) {
-      if (key in SCHEMAS) {
+      if ((VALID_SCHEMAS as string[]).includes(key)) {
         throw new Error(`additionalSchemas key '${key}' conflicts with a built-in schema name`);
       }
     }
   }
 
-  const allSchemas: Record<string, Record<string, unknown>> = additionalSchemas
-    ? {
-        ...SCHEMAS,
-        ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])),
-      }
-    : { ...SCHEMAS };
-
   const liveFetcher = client ? createLiveSchemaFetcher(client) : undefined;
-  const availableSchemas = listAvailableSchemaNames(Object.keys(allSchemas), liveFetcher);
+  const availableSchemas = listAvailableSchemaNames(
+    [...VALID_SCHEMAS, ...Object.keys(additionalSchemas ?? {})],
+    liveFetcher,
+  );
   const hasLiveEntities = liveFetcher !== undefined;
 
   server.registerTool(
@@ -539,7 +535,8 @@ export function registerSchemaTool(
           });
         }
 
-        const schema = allSchemas[args.resource_type];
+        const schema = additionalSchemas?.[args.resource_type]?.schema
+          ?? (await import("../data/schemas/index.js")).SCHEMAS[args.resource_type as SchemaName];
         if (!schema) {
           return errorResult(`Unknown schema: ${args.resource_type}`);
         }

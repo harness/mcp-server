@@ -406,24 +406,60 @@ export const PREFERRED_RESOURCE_TYPE_NAMES: Readonly<Record<string, string>> = {
   chaos_image_registry: "resilience_image_registry",
 };
 
+/** Invert legacy → preferred names without silently dropping a duplicate preferred name. */
+export function invertResourceTypeAliases(
+  preferredNames: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const inverted: Record<string, string> = {};
+  for (const [legacy, preferred] of Object.entries(preferredNames)) {
+    const existing = inverted[preferred];
+    if (existing && existing !== legacy) {
+      throw new Error(`Resource alias "${preferred}" maps to both "${existing}" and "${legacy}".`);
+    }
+    inverted[preferred] = legacy;
+  }
+  return inverted;
+}
+
+/** Compose alias maps without allowing a later spread to redirect an existing alias silently. */
+export function mergeResourceTypeAliases(
+  sources: readonly (readonly [string, Readonly<Record<string, string>>])[],
+): Record<string, string> {
+  const merged: Record<string, string> = {};
+  for (const [sourceName, aliases] of sources) {
+    for (const [alias, target] of Object.entries(aliases)) {
+      const existing = merged[alias];
+      if (existing && existing !== target) {
+        throw new Error(
+          `Resource alias "${alias}" from ${sourceName} targets "${target}", but it already targets "${existing}".`,
+        );
+      }
+      merged[alias] = target;
+    }
+  }
+  return merged;
+}
+
 /** Reverse map: clean `harness-nav-config.yaml` domain name → registered resourceType. */
-export const NAV_DOMAIN_RESOURCE_ALIASES: Readonly<Record<string, string>> = Object.fromEntries(
-  Object.entries(PREFERRED_RESOURCE_TYPE_NAMES).map(([legacy, preferred]) => [preferred, legacy]),
+export const NAV_DOMAIN_RESOURCE_ALIASES: Readonly<Record<string, string>> = invertResourceTypeAliases(
+  PREFERRED_RESOURCE_TYPE_NAMES,
 );
 
 /** Common abbreviations, nav-aligned domain names, and deprecated aliases. */
-const RESOURCE_TYPE_ALIASES: Record<string, string> = {
-  repo: "repository",
-  git_repo: "repository",
-  pr: "pull_request",
-  exec: "execution",
-  pipeline_execution: "execution",
-  env: "environment",
-  svc: "service",
-  inputset: "input_set",
-  ...DEPRECATED_RESOURCE_TYPE_ALIASES,
-  ...NAV_DOMAIN_RESOURCE_ALIASES,
-};
+const RESOURCE_TYPE_ALIASES: Record<string, string> = mergeResourceTypeAliases([
+  ["common aliases", {
+    repo: "repository",
+    git_repo: "repository",
+    pr: "pull_request",
+    exec: "execution",
+    pipeline_execution: "execution",
+    env: "environment",
+    svc: "service",
+    inputset: "input_set",
+  }],
+  ["deprecated aliases", DEPRECATED_RESOURCE_TYPE_ALIASES],
+  ["preferred domain aliases", NAV_DOMAIN_RESOURCE_ALIASES],
+]);
 
 const warnedDeprecatedAliases = new Set<string>();
 
@@ -436,6 +472,48 @@ export const LEGACY_EXECUTE_REDIRECTS: Readonly<Record<string, { resourceType: s
   work_item_approve: { resourceType: "work_item", action: "approve" },
   budget_grant: { resourceType: "budget", action: "grant" },
 };
+
+function validateResourceAliases(
+  enabledResources: ReadonlyMap<string, ResourceDefinition>,
+  allToolsets: readonly ToolsetDefinition[],
+): void {
+  const allResources = new Map<string, ResourceDefinition>();
+  for (const toolset of allToolsets) {
+    for (const resource of toolset.resources) {
+      if (!allResources.has(resource.resourceType)) allResources.set(resource.resourceType, resource);
+    }
+  }
+
+  for (const [alias, target] of Object.entries(RESOURCE_TYPE_ALIASES)) {
+    if (!allResources.has(target)) {
+      throw new Error(`Resource alias "${alias}" targets unknown resource_type "${target}".`);
+    }
+    const canonical = enabledResources.get(alias);
+    if (canonical) {
+      throw new Error(
+        `Resource alias "${alias}" conflicts with an enabled canonical resource from toolset "${canonical.toolset}"; the alias targets "${target}".`,
+      );
+    }
+  }
+
+  for (const [legacy, redirect] of Object.entries(LEGACY_EXECUTE_REDIRECTS)) {
+    const target = allResources.get(redirect.resourceType);
+    if (!target) {
+      throw new Error(`Legacy execute alias "${legacy}" targets unknown resource_type "${redirect.resourceType}".`);
+    }
+    if (!target.executeActions?.[redirect.action]) {
+      throw new Error(
+        `Legacy execute alias "${legacy}" targets missing action "${redirect.resourceType}.${redirect.action}".`,
+      );
+    }
+    const canonical = enabledResources.get(legacy);
+    if (canonical) {
+      throw new Error(
+        `Legacy execute alias "${legacy}" conflicts with an enabled canonical resource from toolset "${canonical.toolset}".`,
+      );
+    }
+  }
+}
 
 export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
@@ -454,9 +532,16 @@ export class Registry {
 
     for (const toolset of this.toolsets) {
       for (const resource of toolset.resources) {
+        const existing = this.resourceMap.get(resource.resourceType);
+        if (existing) {
+          throw new Error(
+            `Duplicate resource_type "${resource.resourceType}" registered by toolsets "${existing.toolset}" and "${toolset.name}". Resource types must be unique across enabled toolsets.`,
+          );
+        }
         this.resourceMap.set(resource.resourceType, resource);
       }
     }
+    validateResourceAliases(this.resourceMap, allToolsets);
 
     log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`, {
       defaultPipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
