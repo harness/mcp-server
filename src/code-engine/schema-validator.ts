@@ -12,8 +12,7 @@
  *    never flood model context.
  */
 
-import { SCHEMAS, type SchemaName } from "../data/schemas/index.js";
-import { getBundledEntitySchema } from "../tools/entity-schema/bundled.js";
+import type { SchemaName } from "../data/schemas/catalog.js";
 import type { HarnessYamlScope } from "../tools/entity-schema/types.js";
 import { containsDeferredExpression } from "./provenance.js";
 import type { CodeDiagnostic, ResourceCodeSpec } from "./types.js";
@@ -49,19 +48,21 @@ function deref(rootSchema: SchemaNode, node: SchemaNode, seen = new Set<string>(
 /**
  * Resolve the JSON Schema object for a resource's `codeSpec` when bundled locally.
  */
-export function resolveBundledJsonSchema(
+export async function resolveBundledJsonSchema(
   codeSpec: ResourceCodeSpec,
   scope: HarnessYamlScope = "project",
-): SchemaNode | undefined {
+): Promise<SchemaNode | undefined> {
   const ref = codeSpec.schemaRef;
   if (!ref) return undefined;
   if (ref.kind === "bundled") {
+    const { SCHEMAS } = await import("../data/schemas/index.js");
     if (ref.key in SCHEMAS) {
       return SCHEMAS[ref.key as SchemaName] as SchemaNode;
     }
     return undefined;
   }
   if (ref.kind === "live_bundled") {
+    const { getBundledEntitySchema } = await import("../tools/entity-schema/bundled.js");
     return (
       getBundledEntitySchema(ref.key, scope) ??
       getBundledEntitySchema(ref.key, "project") ??
@@ -80,13 +81,13 @@ export function resolveBundledJsonSchema(
  *    branch matching a discriminator (`type` / `kind`) when available so error messages
  *    pinpoint the exact violated field rather than dumping 30 union branch errors.
  */
-export function validateCandidateAgainstSchema(params: {
+export async function validateCandidateAgainstSchema(params: {
   candidate: unknown;
   codeSpec: ResourceCodeSpec;
   scope?: HarnessYamlScope;
-}): CodeDiagnostic[] {
+}): Promise<CodeDiagnostic[]> {
   const { candidate, codeSpec, scope = "project" } = params;
-  const rootSchema = resolveBundledJsonSchema(codeSpec, scope);
+  const rootSchema = await resolveBundledJsonSchema(codeSpec, scope);
   if (!rootSchema) return [];
 
   const diagnostics: CodeDiagnostic[] = [];

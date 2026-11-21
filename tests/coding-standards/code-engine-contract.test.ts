@@ -19,7 +19,12 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CODEC_REGISTRY, resolveEffectiveCodeSpec } from "../../src/code-engine/index.js";
+import {
+  CODEC_REGISTRY,
+  resolveCodeResourceScope,
+  resolveEffectiveCodeSpec,
+} from "../../src/code-engine/index.js";
+import { CODEC_CAPABILITIES } from "../../src/code-engine/capabilities.js";
 import { SCHEMAS } from "../../src/data/schemas/index.js";
 import { ALL_TOOLSET_NAMES, Registry } from "../../src/registry/index.js";
 import { LIVE_ENTITY_SCHEMAS } from "../../src/tools/entity-schema/live.js";
@@ -82,8 +87,11 @@ describe("Coding standards — Resource-as-Code maintainability contracts", () =
       const effective = resolveEffectiveCodeSpec(def);
       assertPureJsonValue(effective, `${rt}.effectiveCodeSpec`, violations);
 
-      if (!CODEC_REGISTRY.has(effective.format)) {
+      const codec = CODEC_REGISTRY.get(effective.format);
+      if (!codec) {
         violations.push(`${rt}: format "${effective.format}" has no registered CodeCodec`);
+      } else if (CODEC_CAPABILITIES[effective.format].supportsWrite !== codec.supportsWrite) {
+        violations.push(`${rt}: lightweight capabilities disagree with the registered ${effective.format} codec`);
       }
     }
 
@@ -208,11 +216,22 @@ describe("Coding standards — Resource-as-Code maintainability contracts", () =
     expect(violations, violations.join("\n")).toEqual([]);
   });
 
-  it("schema tools, resources, and search lazy-load bundled schema bodies", () => {
+  it("normalizes blank Resource-as-Code scope input to the update default", () => {
+    const def = registry.getResource("pipeline");
+    const defaultScope = def.operations.update?.scope ?? def.scope;
+    expect(resolveCodeResourceScope(def, { resource_scope: "" })).toBe(defaultScope);
+    expect(resolveCodeResourceScope(def, { resource_scope: "   " })).toBe(defaultScope);
+    expect(resolveCodeResourceScope(def, { resource_scope: " project " })).toBe("project");
+  });
+
+  it("schema tools, resources, and the code engine lazy-load bundled schema bodies", () => {
     const files = [
       "src/tools/harness-schema.ts",
       "src/resources/harness-schema.ts",
       "src/search/manager.ts",
+      "src/code-engine/auto-spec.ts",
+      "src/code-engine/index.ts",
+      "src/code-engine/schema-validator.ts",
     ];
     const staticSchemaImport = /^import\s+(?!type\b).*from\s+["'][^"']*data\/schemas\/(?:entities\/)?index\.js["'];/gm;
     const violations: string[] = [];
@@ -225,9 +244,11 @@ describe("Coding standards — Resource-as-Code maintainability contracts", () =
       staticSchemaImport.lastIndex = 0;
     }
 
-    const liveSchemaSource = readFileSync(join(REPO_ROOT, "src/tools/entity-schema/live.ts"), "utf8");
-    if (/^import\s+(?!type\b).*from\s+["']\.\/bundled\.js["'];/m.test(liveSchemaSource)) {
-      violations.push("src/tools/entity-schema/live.ts: load bundled entity snapshots only on the generic NG fetch path");
+    for (const relPath of ["src/tools/entity-schema/live.ts", "src/code-engine/schema-validator.ts"]) {
+      const src = readFileSync(join(REPO_ROOT, relPath), "utf8");
+      if (/^import\s+(?!type\b).*from\s+["'][^"']*bundled\.js["'];/m.test(src)) {
+        violations.push(`${relPath}: load bundled entity snapshots only on the schema-fetch/validation path`);
+      }
     }
 
     expect(violations, violations.join("\n")).toEqual([]);

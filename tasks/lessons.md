@@ -243,3 +243,8 @@
 - **Issue**: A structural test could report current duplicates, but `Registry` still used last-write-wins map insertion and object spreads for aliases, allowing future definitions or alias sources to redirect calls silently.
 - **Fix**: Reject duplicate enabled canonical names, conflicting alias composition/inversion, alias shadowing, and dangling targets during construction. Keep disabled-toolset duplicates isolated from the active configuration.
 - **Rule**: Structural catalog tests supplement runtime guards; they do not replace them. Every name that can change dispatch routing needs fail-fast collision validation and a public construction-path regression.
+
+## Lazy Loading Must Cover Transitive Imports
+- **Issue**: Moving the code-engine import into `harness_describe` moved schema compilation into a five-second test body, but the engine still statically imported schema barrels through `auto-spec` and `schema-validator`; Node 20 CI timed out. The first import guard missed those engine-internal paths.
+- **Fix**: Use the lightweight catalog for auto-inference and codec capabilities for describe, dynamically load schema bodies only during actual validation, scan engine files with the same import guard, and remove the orphaned entity-schema preloader. Normalize blank `resource_scope` to the same default used by Registry.
+- **Rule**: A lazy boundary is incomplete until transitive imports are inspected and the exact public handler test passes with its original timeout on the slowest supported Node runtime. Do not merely relocate an eager import into a request/test body.

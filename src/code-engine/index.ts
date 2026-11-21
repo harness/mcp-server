@@ -210,7 +210,8 @@ export function resolveCodeResourceScope(
   def: ResourceDefinition,
   input: Record<string, unknown>,
 ): ResourceScope {
-  return (asString(input.resource_scope) as ResourceScope | undefined) ?? def.operations.update?.scope ?? def.scope;
+  const rawScope = asString(input.resource_scope)?.trim();
+  return (rawScope ? rawScope as ResourceScope : undefined) ?? def.operations.update?.scope ?? def.scope;
 }
 
 function extractSourceAndRevision(
@@ -515,7 +516,7 @@ export async function preparePatchCandidate(params: {
       : patchResult.patchedObject;
 
   if (candidateForSchema !== undefined) {
-    const schemaDiags = validateCandidateAgainstSchema({
+    const schemaDiags = await validateCandidateAgainstSchema({
       candidate: candidateForSchema,
       codeSpec,
       scope: effectiveScope,

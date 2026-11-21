@@ -11,7 +11,7 @@
  *    with domain collections, DSL formats (`rego`, `antlr4`), or tree grammars.
  */
 
-import { SCHEMAS } from "../data/schemas/index.js";
+import { VALID_SCHEMAS } from "../data/schemas/catalog.js";
 import type { ResourceDefinition } from "../registry/types.js";
 import { LIVE_ENTITY_SCHEMAS } from "../tools/entity-schema/live.js";
 import type { ResourceCodeSpec, YamlTreeGrammarSpec } from "./types.js";
@@ -208,7 +208,7 @@ export function resolveEffectiveCodeSpec(def: ResourceDefinition): ResourceCodeS
   }
 
   // 2. Bundled YAML schemas (template, template_v1, trigger, etc.)
-  if (rt in SCHEMAS) {
+  if (VALID_SCHEMAS.some((schemaName) => schemaName === rt)) {
     return {
       format: "yaml",
       sourcePaths: ["yaml", "template.yaml", "yamlPipeline", "pipeline_yaml"],
