@@ -45,6 +45,26 @@ const COPY = {
     full: "Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path.",
     compact: "Extra parameters, e.g. store_type='REMOTE' with connector_ref, repo_name, branch, file_path for remote Git pipelines. See harness_describe.",
   },
+  "get.select": {
+    full: "Scoped Resource-as-Code inspection without loading the full YAML/Rego/grammar into context. Pass 'outline' for the structural selector tree + revision, or pass node selector(s) (e.g. 'stage:CI/step:integration_tests', 'rule:deny', 'rule:joinClause', 'policy:block_log4j', comma-separated) to read only matching nodes and value provenance.",
+    compact: "'outline' for structural tree + revision, or selector(s) (e.g. 'stage:CI/step:test', 'rule:deny') for scoped read.",
+  },
+  "update.body": {
+    full: "The updated resource definition body (full replacement). Omit when using patches or preview_token. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object).",
+    compact: "Full resource body replacement (omit when using patches or preview_token).",
+  },
+  "update.patches": {
+    full: "Scoped Resource-as-Code patch operations (alternative to body). Preserves YAML comments/order, guards <+input> and ${{ }} unless replace_dynamic=true, enforces template ownership, and validates against schema. Items: { op: 'set'|'unset'|'upsert_item'|'remove_item'|'replace_block', target?: '<selector>'|{node_ref}, field?: '<path>', value?: unknown, key_field?: string, key_value?: string, edit_scope?: 'local'|'template_input', replace_dynamic?: boolean }. Pass expected_revision or idempotency_key via params.",
+    compact: "Scoped AST patches [{op:'set'|'unset'|'upsert_item'|'remove_item'|'replace_block', target, field, value, replace_dynamic?, edit_scope?}].",
+  },
+  "update.dry_run": {
+    full: "When true with patches, validates the candidate and returns a compact field-level diff, diagnostics, base_revision, and a signed preview_token without writing.",
+    compact: "With patches: validate and return diff + preview_token without writing.",
+  },
+  "update.preview_token": {
+    full: "Signed preview token returned by dry_run=true. Commits the reviewed candidate with compare-and-set verification against base_revision (optional idempotency_key in params).",
+    compact: "Apply a dry_run preview token with revision conflict check.",
+  },
 } as const;
 
 export type FieldCopyKey = keyof typeof COPY;

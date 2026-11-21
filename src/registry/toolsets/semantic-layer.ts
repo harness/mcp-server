@@ -115,6 +115,17 @@ export const semanticLayerToolset: ToolsetDefinition = {
       toolset: "semantic-layer",
       scope: "account",
       identifierFields: ["type_id"],
+      codeSpec: {
+        format: "json",
+        collections: [
+          {
+            segment: "field",
+            path: "fields",
+            keyFields: ["name", "id"],
+            typeField: "dataType",
+          },
+        ],
+      },
       listFilterFields: KG_TYPE_FILTERS,
       operations: {
         list: {

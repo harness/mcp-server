@@ -881,6 +881,17 @@ export const ccmToolset: ToolsetDefinition = {
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
+      codeSpec: {
+        format: "json",
+        writeShape: "root_object",
+        collections: [
+          {
+            segment: "data_source",
+            path: "dataSources",
+            keyFields: ["dataSourceType", "name", "id"],
+          },
+        ],
+      },
       reviewCard: {
         version: 1,
         label: "View",

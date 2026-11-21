@@ -23,6 +23,7 @@ import { registerAllResources } from "./resources/index.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation, confirmationRequestStateVerifier } from "./utils/elicitation.js";
+import { configurePreviewSigningKey } from "./code-engine/index.js";
 import { resolveCorsAllowOrigin, resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createMcpHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import {
@@ -165,6 +166,7 @@ export function createHarnessServer(
     autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk,
     requestStateKey: config.HARNESS_MCP_REQUEST_STATE_KEY,
   });
+  configurePreviewSigningKey(config.HARNESS_MCP_REQUEST_STATE_KEY);
   // Initialize search provider only if we created it (shared instances are pre-initialized)
   if (!sharedSearchManager) {
     searchManager.initialize().then(async () => {

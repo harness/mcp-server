@@ -541,6 +541,13 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
+      codeSpec: {
+        format: "yaml",
+        sourcePaths: ["yamlPipeline", "yaml"],
+        writeShape: "raw_string",
+        schemaRef: { kind: "bundled", key: "pipeline" },
+        dynamicExpressions: ["harness_jexl"],
+      },
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
       executeHint: "Before run, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex template inputs, use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}). To abort a running execution, use resource_type='execution', action='interrupt'.",
       listFilterFields: [
@@ -812,6 +819,16 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       headerBasedScoping: true,
       identifierFields: ["pipeline_id"],
+      codeSpec: {
+        format: "yaml",
+        sourcePaths: ["pipeline_yaml", "yaml"],
+        writeShape: {
+          field: "pipeline_yaml",
+          carryFields: ["identifier", "name", "version", "description", "tags"],
+        },
+        schemaRef: { kind: "bundled", key: "pipeline_v1" },
+        dynamicExpressions: ["v1_expr"],
+      },
       searchAliases: ["v1 pipeline", "agent pipeline", "v1"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures. V1 pipelines use the same execution engine as v0.",
       executeHint: "Before executing, fetch harness_get(resource_type='runtime_input_template_v1', resource_id='PIPELINE_ID'). Pass only the named ${{ inputs.* }} values through the top-level inputs argument; the server wraps them under an inputs: YAML root.",
