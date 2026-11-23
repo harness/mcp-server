@@ -32,7 +32,7 @@ describe("release metadata", () => {
     const rootManifest = readJson("manifest.json");
     const directoryManifest = readJson("mcp-directory/manifest.json");
 
-    expect(packageJson.version).toBe("3.2.41");
+    expect(packageJson.version).toBe("3.2.42");
     expect(rootManifest.version).toBe(packageJson.version);
     expect(directoryManifest.version).toBe(packageJson.version);
   });
@@ -52,9 +52,9 @@ describe("release metadata", () => {
     legacyManifest.server.entry_point = "build/index.js";
     legacyManifest.server.mcp_config.args[0] = "${__dirname}/build/index.js";
 
-    expect(assetNameForVersion("3.2.41")).toBe("harness-mcp-server-3.2.41.mcpb");
+    expect(assetNameForVersion("3.2.42")).toBe("harness-mcp-server-3.2.42.mcpb");
     expect(MCPB_CLI_PACKAGE).toBe("@anthropic-ai/mcpb@2.1.2");
-    expect(normalizeBundleManifest(legacyManifest, "3.2.41").server).toMatchObject({
+    expect(normalizeBundleManifest(legacyManifest, "3.2.42").server).toMatchObject({
       entry_point: "server/index.js",
       mcp_config: { args: ["${__dirname}/server/index.js", "stdio"] },
     });
@@ -157,6 +157,18 @@ describe("release metadata", () => {
         default: "off",
         required: false,
         sensitive: false,
+      });
+    }
+  });
+
+  it("exposes the confirmation state key in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.HARNESS_MCP_REQUEST_STATE_KEY).toBe(
+        "${user_config.HARNESS_MCP_REQUEST_STATE_KEY}",
+      );
+      expect(manifest.user_config.HARNESS_MCP_REQUEST_STATE_KEY).toMatchObject({
+        required: false,
+        sensitive: true,
       });
     }
   });

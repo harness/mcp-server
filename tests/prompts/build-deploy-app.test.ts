@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client } from "@modelcontextprotocol/client";
+import { McpServer, InMemoryTransport } from "@modelcontextprotocol/server";
 import { registerBuildDeployAppPrompt } from "../../src/prompts/build-deploy-app.js";
 
 async function createTestClient(): Promise<Client> {

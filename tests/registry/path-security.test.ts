@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import type { Config } from "../../src/config.js";
 import { HarnessClient } from "../../src/client/harness-client.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { registerGetTool } from "../../src/tools/harness-get.js";
 import type { EndpointSpec } from "../../src/registry/types.js";

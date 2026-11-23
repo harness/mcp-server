@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
+import { inputShape, toolHandlerContext } from "../helpers/request-context.js";
 import {
   describeScopeHint,
   orgIdDescription,
@@ -48,12 +49,15 @@ function makeMcpServer() {
     schema(name: string): { inputSchema: InputSchema; description?: string } {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      return tool.schema;
+      return {
+        description: tool.schema.description,
+        inputSchema: inputShape(tool.schema as { inputSchema: InputSchema | { shape: InputSchema } }),
+      };
     },
     async call(name: string, args: Record<string, unknown>) {
       const tool = tools.get(name);
       if (!tool?.handler) throw new Error(`Tool "${name}" not registered`);
-      const extra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const extra = toolHandlerContext();
       return tool.handler(args, extra);
     },
   };

@@ -4,6 +4,7 @@
  * (`account_identifier`, `org_identifier`, `project_identifier`),
  * distinct from the v1 toolset's path-based space refs.
  */
+import { toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { registriesV3Toolset } from "../../src/registry/toolsets/registries-v3.js";
@@ -510,7 +511,7 @@ describe("harness_list artifact_scan_v3 with default compaction", () => {
 
     const res = (await handlers.get("harness_list")!(
       { resource_type: "artifact_scan_v3", filters: { scan_status: "BLOCKED" } },
-      { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} },
+      toolHandlerContext(),
     )) as { content: { type: string; text: string }[]; structuredContent?: { items: Record<string, unknown>[] } };
     const body = res.structuredContent ?? JSON.parse(res.content.find((c) => c.type === "text")!.text);
     const item = body.items[0];
@@ -541,7 +542,7 @@ describe("harness_list artifact_scan_v3 with default compaction", () => {
 
     const res = (await handlers.get("harness_execute")!(
       { resource_type: "artifact_scan_v3", action: "evaluate", resource_id: "scan-9", confirm: true },
-      { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} },
+      toolHandlerContext(),
     )) as { isError?: boolean; content: { type: string; text: string }[] };
 
     expect(res.isError, res.content?.[0]?.text).toBeFalsy();

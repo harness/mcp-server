@@ -1,5 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ResourceTemplate } from "@modelcontextprotocol/server";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { createLogger } from "../utils/logger.js";
 import { SCHEMAS, VALID_SCHEMAS, type SchemaName } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";

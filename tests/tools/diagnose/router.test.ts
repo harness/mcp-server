@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { registerDiagnoseTool } from "../../../src/tools/harness-diagnose.js";
 import { makeConfig, makeClient, makeRegistry, makeExtra } from "./helpers.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../../../src/registry/index.js";
 import type { HarnessClient } from "../../../src/client/harness-client.js";
 import type { Config } from "../../../src/config.js";
