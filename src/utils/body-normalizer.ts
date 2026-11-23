@@ -109,10 +109,10 @@ export function buildIdListBody(opts: IdListBodyOptions): (input: Record<string,
     const ids = [...new Set(
       [...(single == null ? [] : [single]), ...listed]
         .map((v) => {
-          if (typeof v !== "string" && typeof v !== "number") {
+          if (typeof v !== "string") {
             throw new Error(`${opts.listKey} must contain string ids, got ${v === null ? "null" : typeof v}.`);
           }
-          return String(v).trim();
+          return v.trim();
         })
         .filter((v) => v.length > 0),
     )];
