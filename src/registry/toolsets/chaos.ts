@@ -6599,7 +6599,7 @@ export const chaosToolset: ToolsetDefinition = {
               source: descRiskScanSource,
             });
             const detectionMethod = b.detectionMethod ?? b.detection_method
-              ?? (b.scanType === "CodeRepository" ? "External" : undefined);
+              ?? (b.scanType === "CodeRepository" || b.scanType === "CIRiskScan" ? "External" : undefined);
             return {
               identity: b.identity,
               name: b.name,
