@@ -3,10 +3,13 @@
  * actions on their parent resources (registry, package, package_version).
  */
 import { describe, it, expect, vi } from "vitest";
+import * as z from "zod/v4";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { buildIdListBody } from "../../src/utils/body-normalizer.js";
+import type { ToolResult } from "../../src/utils/response-formatter.js";
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -62,8 +65,9 @@ describe("buildIdListBody", () => {
     expect(() => build({ package_ids: ["a", null] })).toThrow(/got null/);
   });
 
-  it("accepts numeric ids as strings", () => {
-    expect(build({ package_ids: [1, 2] })).toEqual({ packageIds: ["1", "2"] });
+  it("rejects numeric ids, since stats ids are UUID strings", () => {
+    expect(() => build({ package_ids: [1, 2] })).toThrow(/must contain string ids, got number/);
+    expect(() => build({ package_id: 123 })).toThrow(/got number/);
   });
 
   it("only mentions resource_id when a single-id key is configured", () => {
@@ -121,6 +125,91 @@ describe("stats execute actions", () => {
     const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`).join(",");
     await expect(registry.dispatchExecute(client, "package", "stats", { package_ids: ids })).rejects.toThrow(/at most 100/);
     expect(client.request).not.toHaveBeenCalled();
+  });
+});
+
+describe("stats through harness_execute", () => {
+  async function setup(overrides: Partial<Config> = {}) {
+    const tools = new Map<string, { schema: { inputSchema: z.ZodType }; handler: (...a: unknown[]) => Promise<ToolResult> }>();
+    const server = {
+      server: { getClientCapabilities: () => ({}) },
+      registerTool: vi.fn((name: string, schema: { inputSchema: z.ZodType }, handler: (...a: unknown[]) => Promise<ToolResult>) => {
+        tools.set(name, { schema, handler });
+      }),
+    };
+    const config = makeConfig(overrides);
+    const client = mockClient({ items: [] });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server as never, new Registry(config), client, config);
+    return { tool: tools.get("harness_execute")!, client };
+  }
+
+  async function callExecute(args: Record<string, unknown>, overrides: Partial<Config> = {}) {
+    const { tool, client } = await setup(overrides);
+    const result = await tool.handler(args, toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION));
+    return { result, client };
+  }
+
+  it("advertises resource_scope on the registered harness_execute schema", async () => {
+    const { tool } = await setup();
+    const props = (z.toJSONSchema(tool.schema.inputSchema) as { properties: Record<string, { enum?: string[] }> }).properties;
+    expect(props.resource_scope?.enum).toEqual(expect.arrayContaining(["account", "org", "project"]));
+    expect(props.resource_id).toBeDefined();
+  });
+
+  it.each([
+    ["account", undefined, undefined],
+    ["org", "PROD", undefined],
+  ])("package.stats honours explicit resource_scope=%s", async (scope, org, project) => {
+    const { result, client } = await callExecute({ resource_type: "package", action: "stats", resource_id: "p-uuid-1", resource_scope: scope });
+    expect(result.isError).toBeUndefined();
+    const { params } = lastCall(client);
+    expect(params.account_identifier).toBe("acct123");
+    expect(params.org_identifier).toBe(org);
+    expect(params.project_identifier).toBe(project);
+  });
+
+  it("package.stats takes org and project from a Harness URL over the configured defaults", async () => {
+    const { client } = await callExecute({
+      url: "https://app.harness.io/ng/account/acct123/module/har/orgs/urlOrg/projects/urlProject/registries",
+      resource_type: "package",
+      action: "stats",
+      params: { package_ids: "p-uuid-1" },
+    });
+    const { params, body } = lastCall(client);
+    expect(params.org_identifier).toBe("urlOrg");
+    expect(params.project_identifier).toBe("urlProject");
+    expect(body).toEqual({ packageIds: ["p-uuid-1"] });
+  });
+
+  it("package.stats runs in read-only mode through harness_execute", async () => {
+    const { result, client } = await callExecute(
+      { resource_type: "package", action: "stats", resource_id: "p-uuid-1" },
+      { HARNESS_READ_ONLY: true },
+    );
+    expect(result.isError).toBeUndefined();
+    expect(client.request).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["package", "/har/api/v3/packages/stats", { packageIds: ["p-uuid-1"] }],
+    ["package_version", "/har/api/v3/versions/stats", { versionIds: ["v-uuid-1"] }],
+  ])("%s.stats maps resource_id to the single id", async (resourceType, path, body) => {
+    const id = Object.values(body)[0]![0];
+    const { result, client } = await callExecute({ resource_type: resourceType, action: "stats", resource_id: id });
+    expect(result.isError).toBeUndefined();
+    expect(lastCall(client).path).toBe(path);
+    expect(lastCall(client).body).toEqual(body);
+  });
+
+  it("package.stats merges resource_id with params.package_ids", async () => {
+    const { client } = await callExecute({
+      resource_type: "package",
+      action: "stats",
+      resource_id: "p-uuid-1",
+      params: { package_ids: "p-uuid-2,p-uuid-1" },
+    });
+    expect(lastCall(client).body).toEqual({ packageIds: ["p-uuid-1", "p-uuid-2"] });
   });
 });
 
