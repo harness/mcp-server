@@ -3,6 +3,7 @@
  *
  * Fixtures are trimmed from live qa0 responses (repo aicr-runs-fixtures, PR 7/8).
  */
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { applyHeaderPagination } from "../../src/registry/pagination.js";
@@ -443,7 +444,7 @@ describe("aicr_finding dismiss / undo_dismiss", () => {
       resource_type: "aicr_finding", action: "dismiss", org_id: "code", project_id: "DeepSourceAICR",
       params: { repo_id: "aicr-runs-fixtures", pr_number: "7" }, resource_id: KEY,
       body: { reason: "accepted_risk", note: "Test fixture" },
-    }, { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} });
+    }, toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION));
 
     expect(result.isError).toBeFalsy();
     expect(request).toHaveBeenCalledTimes(1);

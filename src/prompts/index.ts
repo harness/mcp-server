@@ -1,5 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-
+import type { McpServer } from "@modelcontextprotocol/server";
 import { registerDebugPipelinePrompt } from "./debug-pipeline.js";
 import { registerCreatePipelinePrompt } from "./create-pipeline.js";
 import { registerCreateAgentPrompt } from "./create-agent.js";

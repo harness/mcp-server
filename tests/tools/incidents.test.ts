@@ -5,6 +5,7 @@
  * required-field validation on create, and the close execute action — all
  * with a mocked client.request so no real API is hit.
  */
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -47,7 +48,7 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
     async call(name: string, args: Record<string, unknown>, extra?: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const defaultExtra = toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION);
       return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
     },
   } as any;
@@ -894,15 +895,15 @@ describe("incident — harness_execute (root-cause theory status actions)", () =
     expect(callArgs.body).toEqual({ reason: "superseded" });
   });
 
-  it("remove_root_cause_theory is blocked without confirmation", async () => {
+  it("remove_root_cause_theory asks for confirmation before calling the API", async () => {
     const result = await server.call("harness_execute", {
       resource_type: "incident",
       action: "remove_root_cause_theory",
       resource_id: "INC-42",
       params: { theory_id: "theory-1" },
       body: { reason: "superseded" },
-    });
-    expect(result.isError).toBe(true);
+    }, toolHandlerContext() as Record<string, unknown>);
+    expect(result).toMatchObject({ resultType: "input_required" });
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
