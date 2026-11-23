@@ -987,9 +987,9 @@ System rules (isSystem=true) are synced from the ChaosHub and cannot be modified
 Custom rule identities must match ^code-[a-z0-9-]{3,60}$ and name a generic failure mode (e.g. code-outbound-call-without-timeout), never a repo, file or service. A project can hold at most 30 custom SourceCode rules.
 Supports list and get for every rule. Use the rule identity as riskRuleId when filtering scanned_risk findings.`;
 
-export const descChaosRiskScan = `A chaos risk scan: an analysis run that inspects services (from a pipeline execution, a service-discovery agent, or a source code repository) and produces risk findings (scanned_risk).
-Supports full CRUD (create, get, list, update, delete) plus execute actions: 'retry' (re-run an errored scan), 'abort' (stop a running scan), 'report' (full findings report), 'report_download' (signed PDF URL), 'heatmap' (services vs risk-rules matrix), and 'submit_findings' (submit externally analysed CodeRepository findings).
-scanType is one of PipelineExecution, DiscoveryAgent or CodeRepository; the matching source (pipeline, discoveryAgent or codeRepository) must be supplied on create. CodeRepository scans use detectionMethod External and complete when their findings are submitted.`;
+export const descChaosRiskScan = `A chaos risk scan: an analysis run that inspects services (from a pipeline execution, a service-discovery agent, a source code repository, or a CI risk scan) and produces risk findings (scanned_risk).
+Supports full CRUD (create, get, list, update, delete) plus execute actions: 'retry' (re-run an errored scan), 'abort' (stop a running scan), 'report' (full findings report), 'report_download' (signed PDF URL), 'heatmap' (services vs risk-rules matrix), and 'submit_findings' (submit externally analysed CodeRepository or CIRiskScan findings).
+scanType is PipelineExecution, DiscoveryAgent, CodeRepository, or CIRiskScan. The matching source must be supplied on create. DiscoveryAgent is an infrastructure scan. PipelineExecution is a pipeline scan. A service-onboarding scan is chaos_onboarding trigger_risk_scan, not this create. CodeRepository and CIRiskScan scans use detectionMethod External and complete when their findings are submitted.`;
 
 // Scanned Risk operation descriptions
 export const descListScannedRisks = `List risk findings detected by chaos risk scans. Supports filtering by severity, risk rule, validation type, target service, environment/agent, tags, time range, and free-text search.`;
@@ -1017,14 +1017,19 @@ export const descRiskRuleSpec = `Rule spec: { dataSource: ["SourceCode"], faults
 export const descRiskRuleCustomOnly = `When true, return only custom (project-authored) risk rules.`;
 
 // Risk Scan operation descriptions
-export const descListRiskScans = `List chaos risk scans. Supports filtering by scan type, status, pipeline/agent/environment identity, tags, time range, and free-text search.`;
+export const descListRiskScans = `List chaos risk scans. Supports filtering by scan type, status, pipeline/agent/environment identity, repoURL (CodeRepository and CIRiskScan), tags, time range, and free-text search. For a CIRiskScan baseline, pass scan_type CIRiskScan and repoURL. Skip and baseline are per source.codeRepository.scope (branch, commit, pullRequest). A commit or pullRequest scan is never the baseline for a branch scan. A pullRequest skip matches PR number, head SHA, and base SHA.`;
 export const descGetRiskScan = `Get a single chaos risk scan by its identity.`;
-export const descCreateRiskScan = `Create a chaos risk scan. Requires identity, name, scanType (PipelineExecution, DiscoveryAgent or CodeRepository), and the matching source object. CodeRepository scans are created with detectionMethod External and wait for submit_findings.`;
-export const descSubmitRiskScanFindings = `Submit externally analysed findings for a CodeRepository risk scan and complete it. Each finding references a SourceCode risk rule; severity, category and rule name are taken from the rule. At most 100 findings per scan.`;
-export const descBodySubmitRiskScanFindings = `Findings payload: { findings: [{ riskRuleId, riskName, description, impact, module, evidence: [..], remediation: [..], resilienceTestingRec: [.. must name a fault from the rule ..], codeLocations: [{ file, startLine, endLine, snippet }] (1-5) }] }.`;
-export const descRiskScanFindings = `Array of findings. Each needs riskRuleId, riskName, evidence, remediation, resilienceTestingRec and 1-5 codeLocations with a verbatim snippet at the scanned commit. module is the repository-relative module path ('.' for the root).`;
-export const descRiskScanDetectionMethod = `Detection method. AI (default) for PipelineExecution and DiscoveryAgent scans; External for CodeRepository scans (default when scanType is CodeRepository).`;
-export const descUpdateRiskScan = `Update a chaos risk scan's name, description, or tags.`;
+export const descCreateRiskScan = `Create a chaos risk scan. Requires identity, name, scanType, and source.
+scanType DiscoveryAgent with source.discoveryAgent { agentIdentity, environmentIdentity } is an infrastructure scan. It moves chaos_onboarding stats.infrastructureScans.
+scanType PipelineExecution with source.pipeline { pipelineIdentity, pipelineExecutionID } is a pipeline scan. Onboarding a pipeline so it can be scanned is chaos_pipeline_onboarding, not this call.
+scanType CodeRepository uses source.codeRepository { repoURL, commitSHA, branch, provider, linkedServices }. Those scans are created with detectionMethod External and wait for submit_findings.
+scanType CIRiskScan uses the same source.codeRepository shape (commitSHA may be omitted on create and supplied with submit_findings). Add scope (branch|commit|pullRequest), and for pullRequest: pullRequestNumber, targetBranch, baseSHA. It is the Build Scans / CI Risk Scan product path, also External.
+This does not advance a chaos_onboarding service step. That scan is trigger_risk_scan.`;
+export const descSubmitRiskScanFindings = `Submit externally analysed findings for a CodeRepository or CIRiskScan and complete it. Each finding references a SourceCode risk rule; severity, category and rule name are taken from the rule. At most 100 findings per scan. commitSHA is required when the scan was created without one (CIRiskScan). Pass an empty findings array with commitSHA to complete a skip or empty diff.`;
+export const descBodySubmitRiskScanFindings = `Findings payload: { findings: [{ riskRuleId, riskName, description, impact, module, evidence: [..], remediation: [..], resilienceTestingRec: [.. must name a fault from the rule ..], codeLocations: [{ file, startLine, endLine, snippet }] (1-5), tags?: ["ciRange:commit"|"ciRange:pullRequest"] }], commitSHA?: "<40-char sha>" }.`;
+export const descRiskScanFindings = `Array of findings. Each needs riskRuleId, riskName, evidence, remediation, resilienceTestingRec and 1-5 codeLocations with a verbatim snippet at the scanned commit. module is the repository-relative module path ('.' for the root). Optional tags ciRange:commit or ciRange:pullRequest mark which part of a PR scan produced the finding.`;
+export const descRiskScanDetectionMethod = `Detection method. AI (default) for PipelineExecution and DiscoveryAgent scans; External for CodeRepository and CIRiskScan scans (default for those types).`;
+export const descUpdateRiskScan = `Update a chaos risk scan's name, description, or tags. On an ANALYSING External CodeRepository or CIRiskScan, source.pipeline (pipelineIdentity, pipelineExecutionID) and source.codeRepository fields (commitSHA, scope, pullRequestNumber, targetBranch, baseSHA, branch) may also be patched in place. Do not replace source.codeRepository with a second source object. Prefer putting pipelineExecutionID on create when the pipeline creates the scan.`;
 export const descDeleteRiskScan = `Delete a chaos risk scan by its identity.`;
 export const descRetryRiskScan = `Retry an errored chaos risk scan by its identity.`;
 export const descAbortRiskScan = `Abort a running chaos risk scan by its identity.`;
@@ -1034,13 +1039,13 @@ export const descGetRiskScanHeatmap = `Get the risk-detection heatmap for a scan
 
 // Risk Scan create body descriptions
 export const descBodyRiskScanCreate = `Risk scan creation payload. Provide identity, name, scanType, and the source object matching the scanType.`;
-export const descBodyRiskScanUpdate = `Risk scan update payload. All fields optional; only provided fields are changed.`;
+export const descBodyRiskScanUpdate = `Risk scan update payload. All fields optional; only provided fields are changed. On an ANALYSING External CodeRepository or CIRiskScan, source may patch pipelineIdentity / pipelineExecutionID and codeRepository fields (commitSHA, scope, pullRequestNumber, targetBranch, baseSHA, branch) in place — do not replace codeRepository with a second source object.`;
 export const descRiskScanIdentity = `Unique identifier (slug) for the risk scan.`;
 export const descRiskScanName = `Human-readable name of the risk scan.`;
 export const descRiskScanDescription = `Optional description of the risk scan.`;
 export const descRiskScanTags = `Optional list of tags for the risk scan.`;
-export const descRiskScanType = `Origin of the scan. One of: PipelineExecution, DiscoveryAgent, CodeRepository.`;
-export const descRiskScanSource = `Source object identifying what triggered the scan. Use { pipeline: { pipelineIdentity, pipelineExecutionID } } for PipelineExecution, { discoveryAgent: { agentIdentity, environmentIdentity } } for DiscoveryAgent, or { codeRepository: { repoURL (host/org/repo), commitSHA, branch, provider, linkedServices: [{ module, chaosServiceIdentity }] } } for CodeRepository. A code scan stores both branch and commitSHA. The next scan of that repo and branch diffs from that commit instead of reading the whole tree.`;
+export const descRiskScanType = `Origin of the scan. One of: PipelineExecution, DiscoveryAgent, CodeRepository, CIRiskScan.`;
+export const descRiskScanSource = `Source object identifying what triggered the scan. Use { pipeline: { pipelineIdentity, pipelineExecutionID } } for PipelineExecution, { discoveryAgent: { agentIdentity, environmentIdentity } } for DiscoveryAgent, or { codeRepository: { repoURL (host/org/repo), commitSHA, branch, provider, scope, pullRequestNumber, targetBranch, baseSHA, linkedServices: [{ module, chaosServiceIdentity }] } } for CodeRepository and CIRiskScan. CIRiskScan may omit commitSHA until submit_findings. Pipeline and codeRepository may both be set; do not replace codeRepository with a second source object. Skip and branch baseline are per scope.`;
 
 // Scanned Risk / Risk Scan filter field descriptions
 export const descScannedRiskSeverity = `Filter by severity. Comma-separated. Values: Critical, High, Medium, Low.`;
@@ -1051,6 +1056,7 @@ export const descScannedRiskScanType = `Filter by scan type of the detecting sca
 export const descRiskEnvironmentIdentity = `Filter by environment identity.`;
 export const descRiskAgentIdentity = `Filter by service-discovery agent identity.`;
 export const descRiskPipelineIdentity = `Filter by pipeline identity.`;
+export const descRiskRepoURL = `Filter CodeRepository and CIRiskScan by normalised repository URL (host/org/repo, no scheme).`;
 export const descRiskScanStatus = `Filter by scan status. Values: PENDING, COLLECTING, ANALYSING, REPORTING, COMPLETED, ERRORED, ABORTED.`;
 export const descRiskSearch = `Free-text search by name.`;
 export const descRiskSortField = `Field to sort by.`;
