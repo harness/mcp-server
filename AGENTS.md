@@ -140,6 +140,10 @@ Run this before pushing a new or changed resource, auth path, or public contract
 
 ---
 
+## Protocol eras
+
+The server speaks both MCP eras. Stdio uses `serveStdio`, which serves 2026-07-28 requests and the 2025 `initialize` handshake on one pipe. HTTP routes `POST /mcp` with `isLegacyRequest`: session `initialize`, `mcp-session-id`, `GET` SSE, and `DELETE` stay on the session map; requests carrying the 2026-07-28 `_meta` envelope go to `createMcpHandler` with `legacy: "reject"`. Write confirmations are written once as `inputRequired`. The SDK shim turns that into `elicitation/create` for 2025 clients.
+
 ## Key Environment Variables
 
 See `.env.example` for the full list. Non-obvious ones:
@@ -154,6 +158,7 @@ See `.env.example` for the full list. Non-obvious ones:
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | Set `true` for local HTTP dev without auth token |
 | `HARNESS_MCP_ALLOWED_HOSTS` | Comma-separated allowed hostnames for HTTP Host-header validation |
 | `HARNESS_MCP_TRUST_PROXY` | Number of proxy hops to trust for client IP (`trust proxy`); set behind an LB so rate limiting keys on the real client (default `0`) |
+| `HARNESS_MCP_REQUEST_STATE_KEY` | HMAC key (≥32 bytes) for write-confirmation `requestState`. Required on multi-replica HTTP so a confirmation started on one process verifies on another. Unset uses a random per-process key |
 | `HARNESS_ALLOW_HTTP` | Allow non-HTTPS base URL (default `false`) |
 
 Deprecated aliases (still work, emit deprecation warning to stderr):

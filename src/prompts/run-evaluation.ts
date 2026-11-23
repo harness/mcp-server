@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerRunEvaluationPrompt(server: McpServer): void {
   server.registerPrompt(
@@ -7,11 +7,11 @@ export function registerRunEvaluationPrompt(server: McpServer): void {
     {
       description:
         "Safely discover or create a managed offline AI evaluation, validate its real resources, then run it",
-      argsSchema: {
-        goal: z.string().describe("What the user wants to evaluate (e.g. prompt quality on a JSONL dataset)"),
-        org_id: z.string().describe("Harness org identifier").optional(),
-        project_id: z.string().describe("Harness project identifier").optional(),
-      },
+      argsSchema: z.object({
+              goal: z.string().describe("What the user wants to evaluate (e.g. prompt quality on a JSONL dataset)"),
+              org_id: z.string().describe("Harness org identifier").optional(),
+              project_id: z.string().describe("Harness project identifier").optional(),
+            }),
     },
     async ({ goal, org_id, project_id }) => ({
       messages: [

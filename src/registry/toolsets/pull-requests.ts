@@ -1,17 +1,21 @@
 import { encodePathSegment } from "../../utils/path.js";
 import type { HarnessClientInterface, ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
+import { resolvePullRequestLinkParams } from "../code-repo-link.js";
 import { isRecord } from "../../utils/type-guards.js";
+
+const REPO_ID_DESCRIPTION =
+  "Repository identifier/slug (e.g. \"my-repo\"), not the numeric repository id. Use repo_id, not repo_identifier.";
 
 const REPO_PARAMS: ParamsSchema = {
   fields: [
-    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\"). Use repo_id, not repo_identifier." },
+    { name: "repo_id", required: true, description: REPO_ID_DESCRIPTION },
   ],
 };
 
 const REPO_PR_PARAMS: ParamsSchema = {
   fields: [
-    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\"). Use repo_id, not repo_identifier." },
+    { name: "repo_id", required: true, description: REPO_ID_DESCRIPTION },
     { name: "pr_number", required: true, description: "Pull request number" },
   ],
 };
@@ -340,9 +344,11 @@ export const pullRequestsToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "state", description: "Pull request state filter", enum: ["open", "closed", "merged"] },
         { name: "query", description: "Search pull requests by keyword" },
+        { name: "source_branch", description: "Only pull requests from this source branch (exact name)" },
       ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/pulls/{number}",
+      deepLinkParamResolver: resolvePullRequestLinkParams,
       operations: {
         list: {
           method: "GET",
@@ -354,6 +360,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             state: "state",
             query: "query",
             search_term: "query",
+            source_branch: "source_branch",
             page: "page",
             limit: "limit",
             size: "limit",

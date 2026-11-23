@@ -55,6 +55,7 @@ import { observabilityEvaluationsToolset } from "./toolsets/observability-evalua
 import { iacmToolset } from "./toolsets/iacm.js";
 import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
 import { unifiedSearchToolset } from "./toolsets/unified-search.js";
+import { aicrToolset } from "./toolsets/aicr.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
@@ -225,6 +226,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   knowledgeGraphToolset,
   semanticLayerToolset,
   unifiedSearchToolset,
+  aicrToolset,
   ansibleToolset,
   incidentsToolset,
   alertsToolset,
@@ -950,7 +952,8 @@ export class Registry {
     // Pass registry-resolved accountId so hooks do not depend on client.account,
     // which is the process placeholder in multi-tenant chat MCP.
     if (spec.preflight) {
-      await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
+      const answered = await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
+      if (answered) return answered.result;
     }
 
     if (spec.inputNormalizer) {
@@ -1170,6 +1173,7 @@ export class Registry {
     const requestOpts = {
       method: resolvedMethod,
       path,
+      errorPath: path,
       params,
       body,
       ...(baseUrl ? { baseUrl } : {}),
@@ -1335,13 +1339,43 @@ export class Registry {
         }
       }
 
+      // Let the resource correct link params the API accepted but the UI route cannot
+      // use (e.g. a numeric Code repo ID where the route needs the repo identifier).
+      // Resolved once per dispatch; `null` or a throw omits every link rather than
+      // emitting one known to be broken. Bare-array results are skipped: no link built
+      // for them survives serialization, so a lookup would only add latency.
+      let pinnedLinkParams: Record<string, string> = {};
+      let linkSuppressed = false;
+      if (def.deepLinkParamResolver && !Array.isArray(result)) {
+        try {
+          const resolved = await def.deepLinkParamResolver({
+            client,
+            input,
+            result: resultRecord,
+            linkParams: baseLinkParams,
+            signal,
+          });
+          if (resolved === null) {
+            linkSuppressed = true;
+          } else if (resolved) {
+            pinnedLinkParams = resolved;
+            Object.assign(baseLinkParams, resolved);
+          }
+        } catch (err) {
+          linkSuppressed = true;
+          log.debug(`Deep link param resolution failed for ${def.resourceType}; omitting openInHarness`, {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
       // Only attach top-level openInHarness for single-item results (get/create/update),
       // not for list results where there's no single entity to link to.
       const r = result as Record<string, unknown>;
       const isList = LIST_ARRAY_KEYS.some(
         (key) => Array.isArray(r[key])
       );
-      if (!isList) {
+      if (!isList && !linkSuppressed) {
         // For single-item results, apply config defaults for {org}/{project} if still unset
         if (!baseLinkParams.org && this.config.HARNESS_ORG) {
           baseLinkParams.org = this.config.HARNESS_ORG;
@@ -1374,7 +1408,7 @@ export class Registry {
           break;
         }
       }
-      if (listArray) {
+      if (listArray && !linkSuppressed) {
         for (const item of listArray) {
           if (typeof item !== "object" || item === null) continue;
           try {
@@ -1446,6 +1480,10 @@ export class Registry {
             if (itemOrg && typeof itemOrg === "string") itemLinkParams.org = itemOrg;
             const itemProj = itemRecord.projectIdentifier ?? itemRecord.project ?? itemRecord.identifier;
             if (itemProj && typeof itemProj === "string") itemLinkParams.project = itemProj;
+
+            // Resolver output reflects the real location of the parent resource, so it wins
+            // over anything inferred from item fields (e.g. a branch item's `name`).
+            Object.assign(itemLinkParams, pinnedLinkParams);
 
             let itemLink = buildDeepLink(
               this.config.HARNESS_BASE_URL,
