@@ -1,6 +1,12 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Registry } from "../registry/index.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import {
+  DEPRECATED_RESOURCE_TYPE_ALIASES,
+  PREFERRED_RESOURCE_TYPE_NAMES,
+  TOOLSET_ALIASES,
+  TOOLSET_GROUP_ALIASES,
+  type Registry,
+} from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
@@ -9,18 +15,29 @@ import { describeScopeHint, resourceTypeSchema } from "./input-schemas.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
-  const allToolsets = registry.getAllToolsets().map(t => t.name) as [string, ...string[]];
+  const enabledToolsetNames = new Set(registry.getAllToolsets().map((t) => t.name));
+  const allToolsets = Array.from(
+    new Set([
+      ...enabledToolsetNames,
+      ...Object.entries(TOOLSET_ALIASES)
+        .filter(([, target]) => enabledToolsetNames.has(target))
+        .map(([alias]) => alias),
+      ...Object.entries(TOOLSET_GROUP_ALIASES)
+        .filter(([, targets]) => targets.some((t) => enabledToolsetNames.has(t)))
+        .map(([alias]) => alias),
+    ]),
+  ) as [string, ...string[]];
 
   server.registerTool(
     "harness_describe",
     {
       description: "Describe available Harness resource types, their supported operations, and fields. No API call — returns local metadata only. Use this to discover what resource_types you can use with other harness_ tools. Pass operation to return only types that support list, get, create, update, delete, or execute.",
-      inputSchema: {
-        resource_type: resourceTypeSchema(allTypes, registry.compactSchemas).optional().describe("Get details for a specific resource type"),
-        operation: z.enum(["list", "get", "create", "update", "delete", "execute"]).optional().describe("Return only resource types that support this operation. execute includes each type's action names. Combine with search_term or toolset. Omit for the full catalog."),
-        toolset: (registry.compactSchemas ? z.string() : z.enum(allToolsets)).optional().describe("Filter to a specific toolset"),
-        search_term: z.string().optional().describe("Search for resource types by keyword (matches type name, display name, toolset, description)"),
-      },
+      inputSchema: z.object({
+              resource_type: resourceTypeSchema(allTypes, registry.compactSchemas).optional().describe("Get details for a specific resource type"),
+              operation: z.enum(["list", "get", "create", "update", "delete", "execute"]).optional().describe("Return only resource types that support this operation. execute includes each type's action names. Combine with search_term or toolset. Omit for the full catalog."),
+              toolset: (registry.compactSchemas ? z.string() : z.enum(allToolsets)).optional().describe("Filter to a specific toolset"),
+              search_term: z.string().optional().describe("Search for resource types by keyword (matches type name, display name, toolset, description)"),
+            }),
       outputSchema: compactOutputSchema(describeOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Describe Harness Resources",
@@ -36,8 +53,26 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
           const def = registry.getResource(args.resource_type);
           const resourceScopes = registry.getSupportedScopes(args.resource_type);
           const supportedScopes = resourceScopes.length > 1 ? resourceScopes : undefined;
+          const preferredName = PREFERRED_RESOURCE_TYPE_NAMES[def.resourceType];
+          const requestedNorm = args.resource_type.trim().toLowerCase().replace(/[\s-]+/g, "_");
+          const deprecatedV3Target = DEPRECATED_RESOURCE_TYPE_ALIASES[requestedNorm];
           return jsonResult({
             resource_type: def.resourceType,
+            ...(preferredName
+              ? {
+                  preferred_alias: preferredName,
+                  deprecation_note:
+                    requestedNorm === def.resourceType
+                      ? `Module-prefixed resource_type '${def.resourceType}' is deprecated and will become an alias in v4.0.0; prefer '${preferredName}' (supported now).`
+                      : undefined,
+                }
+              : {}),
+            ...(deprecatedV3Target
+              ? {
+                  deprecated_alias: requestedNorm,
+                  deprecation_note: `Resource type '${requestedNorm}' is deprecated and will be removed in v4.0.0; use '${deprecatedV3Target}' instead.`,
+                }
+              : {}),
             displayName: def.displayName,
             description: def.description,
             toolset: def.toolset,
@@ -74,6 +109,8 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             diagnosticHint: def.diagnosticHint ?? undefined,
             relatedResources: def.relatedResources ?? undefined,
             executeHint: def.executeHint ?? undefined,
+            // Only resources that opt in declare this; consumed by the chat approval card.
+            ...(def.reviewCard ? { reviewCard: def.reviewCard } : {}),
             ...(() => {
               const examples = getExamplesForResource(def.resourceType);
               return examples.length > 0
@@ -115,18 +152,9 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
         });
       }
 
-      // Filter by toolset if specified — use full detail
+      // Filter by toolset if specified
       if (args.toolset) {
-        const describe = registry.describe();
-        const toolsets = describe.toolsets as Record<string, unknown>;
-        const filtered = toolsets[args.toolset];
-        if (!filtered) {
-          return jsonResult({
-            error: `Unknown toolset "${args.toolset}". Available: ${Object.keys(toolsets).join(", ")}`,
-            available_toolsets: Object.keys(toolsets),
-          });
-        }
-        return jsonResult({ toolset: args.toolset, ...filtered as object });
+        return jsonResult(registry.describeToolset(args.toolset, registry.compactSchemas));
       }
 
       // No-args: return compact summary (~30 tokens per resource type)

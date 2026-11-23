@@ -1777,6 +1777,110 @@ describe("Registry", () => {
     });
   });
 
+  describe("registry list — account/org/project scope", () => {
+    let registriesRegistry: Registry;
+    beforeEach(() => {
+      registriesRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+    });
+
+    function mockListResponse() {
+      return vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { registries: [], itemCount: 0, pageIndex: 0, pageSize: 20, pageCount: 0 },
+      });
+    }
+
+    it("defaults to project scope and ignores HARNESS_ORG/HARNESS_PROJECT overrides from account-scope omission", async () => {
+      const mockRequest = mockListResponse();
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "list", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/spaces/test-account/default/test-project/+/registries");
+    });
+
+    it("resource_scope=account omits org/project segments even though HARNESS_ORG/HARNESS_PROJECT are configured", async () => {
+      const mockRequest = mockListResponse();
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "list", {
+        resource_scope: "account",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/spaces/test-account/+/registries");
+    });
+
+    it("resource_scope=org omits the project segment even though HARNESS_PROJECT is configured", async () => {
+      const mockRequest = mockListResponse();
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "list", {
+        resource_scope: "org",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/spaces/test-account/default/+/registries");
+    });
+
+    it("resource_scope=org with an explicit org_id uses that org, not HARNESS_ORG", async () => {
+      const mockRequest = mockListResponse();
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "list", {
+        resource_scope: "org",
+        org_id: "other-org",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/spaces/test-account/other-org/+/registries");
+    });
+
+    it("resource_scope=project with explicit org_id/project_id overrides configured defaults", async () => {
+      const mockRequest = mockListResponse();
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "list", {
+        resource_scope: "project",
+        org_id: "custom-org",
+        project_id: "custom-proj",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/spaces/test-account/custom-org/custom-proj/+/registries");
+    });
+
+    it("passes the scope (ancestors/descendants) filter through as a query param", async () => {
+      const mockRequest = mockListResponse();
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "list", {
+        resource_scope: "account",
+        scope: "descendants",
+        search_term: "my-npm-registry",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/spaces/test-account/+/registries");
+      expect(call.params.scope).toBe("descendants");
+      expect(call.params.search_term).toBe("my-npm-registry");
+    });
+
+    it("get/create/update ignore resource_scope and stay pinned to project scope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "r1" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "get", {
+        resource_scope: "account",
+        registry_id: "r1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/r1/+");
+    });
+  });
+
   describe("quarantine update (PUT)", () => {
     let reg: Registry;
     beforeEach(() => {
@@ -1859,7 +1963,7 @@ describe("Registry", () => {
   describe("firewall_exception_v3 create", () => {
     let reg: Registry;
     beforeEach(() => {
-      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3,registries-firewall" }));
     });
 
     it("exact path is POST /har/api/v3/scans/exceptions", async () => {
@@ -1926,7 +2030,7 @@ describe("Registry", () => {
   describe("firewall_exception_v3 list scope", () => {
     let reg: Registry;
     beforeEach(() => {
-      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3,registries-firewall" }));
     });
 
     it("list does not leak org/project when neither is passed", async () => {
@@ -1956,7 +2060,7 @@ describe("Registry", () => {
   describe("firewall_exception_v3 update/delete/approve/reject", () => {
     let reg: Registry;
     beforeEach(() => {
-      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3,registries-firewall" }));
     });
 
     it("update sends PUT to /har/api/v3/scans/exceptions/{id}", async () => {

@@ -14,13 +14,14 @@ FROM toolchain AS build
 
 # Install dependencies (layer cache: only re-run when lockfile changes)
 COPY package.json pnpm-lock.yaml ./
-# package.json postinstall imports both files, so they must exist before install.
-COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/
+# Copy the postinstall entrypoint and all its local imports before install.
+COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/ip-address-security-lib.mjs scripts/
 RUN pnpm install --frozen-lockfile
 
 # Copy source and compile
 COPY tsconfig.json ./
 COPY src/ src/
+COPY apps/ apps/
 COPY scripts/preload-hf-model.mjs scripts/
 RUN pnpm build
 
@@ -32,7 +33,7 @@ RUN node scripts/preload-hf-model.mjs /app/.cache/hf
 FROM toolchain AS production-dependencies
 
 COPY package.json pnpm-lock.yaml ./
-COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/
+COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/ip-address-security-lib.mjs scripts/
 RUN pnpm install --frozen-lockfile --prod
 
 # Stage 3 — production runtime
@@ -44,11 +45,13 @@ WORKDIR /app
 
 # The GHA build cache replays this layer until a referenced ARG changes, so a
 # Debian security update never lands. Bump the date when a new apt CVE appears.
-ARG DEBIAN_SECURITY_REFRESH=2026-10-26
+ARG DEBIAN_SECURITY_REFRESH=2026-11-05
 RUN echo "debian-security-refresh=${DEBIAN_SECURITY_REFRESH}" \
   && apt-get update \
   && apt-get upgrade -y --no-install-recommends \
   && apt-get install -y --no-install-recommends ca-certificates libgomp1 libstdc++6 libpcre2-8-0 libssl3 openssl \
+  && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' apt)" ge 2.6.2 \
+  && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libapt-pkg6.0)" ge 2.6.2 \
   && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libssl3)" ge 3.0.22-1~deb12u2 \
   && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' openssl)" ge 3.0.22-1~deb12u2 \
   && rm -rf /var/lib/apt/lists/* \

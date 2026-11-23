@@ -5,6 +5,7 @@
  * required-field validation on create, and the close execute action — all
  * with a mocked client.request so no real API is hit.
  */
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -47,7 +48,7 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
     async call(name: string, args: Record<string, unknown>, extra?: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const defaultExtra = toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION);
       return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
     },
   } as any;
@@ -822,6 +823,109 @@ describe("incident — harness_execute (root-cause theory status actions)", () =
     expect(callArgs.path).toBe(`/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories/theory-1/${suffix}`);
     expect(callArgs.body).toEqual({ expectedOldRcaSha: "sha-1" });
     expect((parseResult(result) as Record<string, unknown>).rootCauseTheoriesSha).toBe("sha-2");
+  });
+
+  it("update_root_cause_theory patches citation changes and projects the changed theory", async () => {
+    mockRequest.mockResolvedValueOnce({
+      theory: {
+        id: "theory-1",
+        message: "db",
+        status: "INVESTIGATING",
+        confidence: 80,
+        aiGenerated: true,
+        relatedActivities: [{ type: "DEPLOY", id: "DEP-9", displayId: "DEP-9", url: "", internal: "x" }],
+      },
+      notLinked: [],
+      unverified: [],
+      notRemoved: [{ reference: { type: "PR", id: "checkout-service#7" }, reason: "The theory doesn't cite this item." }],
+    });
+    const body = {
+      addRelatedActivities: [{ type: "DEPLOY", id: "DEP-9" }],
+      removeRelatedActivities: [{ type: "DEPLOY", id: "DEP-7" }, { type: "PR", id: "checkout-service#7" }],
+      reason: "DEP-9 is the deploy that broke it",
+    };
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "update_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body,
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("PATCH");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories/theory-1");
+    expect(callArgs.body).toEqual(body);
+    expect(parseResult(result)).toEqual({
+      theory: {
+        id: "theory-1",
+        message: "db",
+        status: "INVESTIGATING",
+        confidence: 80,
+        aiGenerated: true,
+        relatedActivities: [{ type: "DEPLOY", id: "DEP-9", displayId: "DEP-9", url: "" }],
+      },
+      notRemoved: [{ reference: { type: "PR", id: "checkout-service#7" }, reason: "The theory doesn't cite this item." }],
+    });
+  });
+
+  it("update_root_cause_theory documents citation deltas and no status", () => {
+    const spec = new Registry(makeConfig()).getResource("incident").executeActions?.update_root_cause_theory;
+    const names = spec?.bodySchema?.fields.map((f) => f.name);
+    expect(names).toEqual(
+      expect.arrayContaining(["addRelatedActivities", "removeRelatedActivities", "clearRelatedActivities"]),
+    );
+    expect(names).not.toContain("status");
+    expect(names).not.toContain("relatedActivities");
+  });
+
+  it("remove_root_cause_theory posts the reason to the theory's remove path", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "remove_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: { reason: "superseded" },
+      confirm: true,
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories/theory-1/remove");
+    expect(callArgs.body).toEqual({ reason: "superseded" });
+  });
+
+  it("remove_root_cause_theory asks for confirmation before calling the API", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "remove_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: { reason: "superseded" },
+    }, toolHandlerContext() as Record<string, unknown>);
+    expect(result).toMatchObject({ resultType: "input_required" });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("remove_root_cause_theory requires a reason before calling the API", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "remove_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: {},
+    });
+    expect(result.isError).toBe(true);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["update_root_cause_theory", "low_write"],
+    ["remove_root_cause_theory", "destructive"],
+  ])("%s requires theory_id and is a non-retried %s", (action, risk) => {
+    const spec = new Registry(makeConfig()).getResource("incident").executeActions?.[action];
+    expect(spec?.operationPolicy).toEqual({ risk, retryPolicy: "do_not_retry" });
+    expect(spec?.paramsSchema?.fields.find((f) => f.name === "theory_id")?.required).toBe(true);
   });
 
   it.each(["confirm_root_cause_theory", "rule_out_root_cause_theory", "undo_root_cause_theory_status"])(

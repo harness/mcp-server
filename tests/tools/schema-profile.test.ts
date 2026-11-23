@@ -8,7 +8,7 @@ import { registerAllTools } from "../../src/tools/index.js";
 
 // Pinned hash of the full-mode tool schemas (descriptions, input and output schemas as advertised by tools/list). Full mode must stay byte-identical when compact-mode
 // copy changes; update this only for an intentional full-mode contract change.
-const FULL_MODE_SCHEMA_SHA256 = "9ceb8f318fce53e8291990f862b9f6733fe3111f130970a6d8ca6a15aaa07820";
+const FULL_MODE_SCHEMA_SHA256 = "ad7c5b0a3ab61396fbb68e4a90f2decbd0fc8e5c45605528c3c7debe9e5adb2b";
 
 // Measured: tool descriptions + input and output schemas in compact mode. Measured 21372 B total, 3585 B largest tool; headroom is deliberately small (~5%).
 const COMPACT_TOTAL_BUDGET_BYTES = 22500;
@@ -28,6 +28,13 @@ function makeConfig(mode: "full" | "compact"): Config {
   } as Config;
 }
 
+function jsonInputSchema(schema: z.ZodRawShape | z.ZodType): z.ZodType {
+  if (schema && typeof schema === "object" && "~standard" in schema) {
+    return schema as z.ZodType;
+  }
+  return z.object(schema as z.ZodRawShape);
+}
+
 function collectTools(mode: "full" | "compact") {
   const config = makeConfig(mode);
   const tools = new Map<string, { description?: string; schema: unknown; output?: unknown }>();
@@ -35,7 +42,7 @@ function collectTools(mode: "full" | "compact") {
     registerTool: vi.fn((name: string, def: { description?: string; inputSchema: z.ZodRawShape; outputSchema?: z.ZodType }) => {
       tools.set(name, {
         description: def.description,
-        schema: z.toJSONSchema(z.object(def.inputSchema)),
+        schema: z.toJSONSchema(jsonInputSchema(def.inputSchema)),
         output: def.outputSchema ? z.toJSONSchema(def.outputSchema) : undefined,
       });
     }),
@@ -52,6 +59,24 @@ describe("HARNESS_SCHEMA_MODE", () => {
   it("full mode tool schemas are unchanged", () => {
     const hash = createHash("sha256").update(serialize(collectTools("full"))).digest("hex");
     expect(hash).toBe(FULL_MODE_SCHEMA_SHA256);
+  });
+
+  it("full mode enums include preferred domain aliases, deprecated _v3 aliases, and nav toolset aliases", () => {
+    const tools = collectTools("full");
+    const listSchema = tools.get("harness_list")!.schema as {
+      properties: Record<string, { enum?: string[] }>;
+    };
+    expect(listSchema.properties.resource_type?.enum).toContain("workspace");
+    expect(listSchema.properties.resource_type?.enum).toContain("feature_flag");
+    expect(listSchema.properties.resource_type?.enum).toContain("artifact_scan_v3");
+
+    const describeSchema = tools.get("harness_describe")!.schema as {
+      properties: Record<string, { enum?: string[] }>;
+    };
+    expect(describeSchema.properties.resource_type?.enum).toContain("workspace");
+    expect(describeSchema.properties.toolset?.enum).toContain("flags");
+    expect(describeSchema.properties.toolset?.enum).toContain("infra-deploys");
+    expect(describeSchema.properties.toolset?.enum).toContain("artifacts");
   });
 
   it("compact mode is meaningfully smaller than full", () => {

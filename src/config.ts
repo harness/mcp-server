@@ -204,6 +204,8 @@ const RawConfigSchema = z.object({
   HARNESS_READ_ONLY: booleanFromEnv.default(false),
   // compact (default): resource_type is a plain string in tool schemas (discover via harness_describe) — far smaller tools/list payload. Set "full" to inline every resource type.
   HARNESS_SCHEMA_MODE: z.preprocess(emptyStringAsUndefined, z.enum(["full", "compact"]).default("compact")),
+  // MCP Apps (interactive views rendered in the chat). off (default): text-only results. auto: advertise ui://harness/app and attach view data only for hosts that declare io.modelcontextprotocol/ui.
+  HARNESS_MCP_APPS: z.preprocess(emptyStringAsUndefined, z.enum(["auto", "off"]).default("off")),
   HARNESS_SKIP_ELICITATION: booleanFromEnv.default(false),
   HARNESS_AUTO_APPROVE_RISK: z.preprocess(
     emptyStringAsUndefined,
@@ -219,6 +221,12 @@ const RawConfigSchema = z.object({
   // proxy socket peer (which would bucket every user together). Default 0
   // (trust nothing) preserves prior behaviour for direct binds.
   HARNESS_MCP_TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // HMAC key for confirmation requestState. Required for multi-replica HTTP so a
+  // confirmation minted on one process verifies on another. At least 32 bytes.
+  HARNESS_MCP_REQUEST_STATE_KEY: optionalStringFromEnv.refine(
+    (value) => value === undefined || new TextEncoder().encode(value).byteLength >= 32,
+    "HARNESS_MCP_REQUEST_STATE_KEY must be at least 32 bytes",
+  ),
   HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_APPSEC_API_KEY: optionalStringFromEnv,

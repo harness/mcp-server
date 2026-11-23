@@ -24,8 +24,8 @@ type ResourceReadResult = {
 
 const resourceTemplates = vi.hoisted((): FakeResourceTemplateInstance[] => []);
 
-vi.mock("@modelcontextprotocol/sdk/server/mcp.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@modelcontextprotocol/sdk/server/mcp.js")>();
+vi.mock("@modelcontextprotocol/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@modelcontextprotocol/server")>();
 
   class FakeResourceTemplate {
     uriTemplate: string;

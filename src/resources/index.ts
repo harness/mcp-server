@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
@@ -7,6 +7,7 @@ import { registerPipelineYamlResource } from "./pipeline-yaml.js";
 import { registerExecutionSummaryResource } from "./execution-summary.js";
 import { registerHarnessSchemaResource } from "./harness-schema.js";
 import { registerAgentLegacyFormatResource } from "./agent-legacy-format.js";
+import { registerMcpAppResource } from "./mcp-app.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 
 export function registerAllResources(server: McpServer, registry: Registry, client: HarnessClient, config: Config, additionalSchemas?: Record<string, SchemaEntry>): void {
@@ -14,4 +15,5 @@ export function registerAllResources(server: McpServer, registry: Registry, clie
   registerExecutionSummaryResource(server, registry, client, config);
   registerHarnessSchemaResource(server, additionalSchemas);
   registerAgentLegacyFormatResource(server);
+  registerMcpAppResource(server, config);
 }

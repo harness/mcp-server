@@ -12,6 +12,7 @@ import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { listOutputSchema } from "../../src/tools/output-schemas.js";
+import { ACCEPTED_CONFIRMATION, inputShape, toolHandlerContext } from "../helpers/request-context.js";
 
 // Top-level mocks for execution_log tests — must be before any imports that pull these in
 vi.mock("../../src/utils/log-resolver.js", () => ({
@@ -51,7 +52,7 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 }
 
 /** Minimal McpServer stub that captures registered tools. */
-function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept") {
+function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" | "none" = "accept") {
   const tools = new Map<string, { schema: unknown; handler: (...args: unknown[]) => Promise<ToolResult> }>();
   return {
     server: {
@@ -68,13 +69,22 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
     async call(name: string, args: Record<string, unknown>, extra?: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
+      const confirmation = elicitAction === "none"
+        ? undefined
+        : elicitAction === "accept"
+          ? ACCEPTED_CONFIRMATION
+          : { action: elicitAction };
+      const defaultExtra = toolHandlerContext(new AbortController().signal, confirmation);
       return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
     },
     /** Return the registration schema for assertions about agent-facing metadata. */
     schema(name: string): unknown {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
+      const registered = tool.schema as { inputSchema?: Record<string, unknown> | { shape: Record<string, unknown> } };
+      if (registered?.inputSchema) {
+        return { ...registered, inputSchema: inputShape(registered as { inputSchema: Record<string, unknown> }) };
+      }
       return tool.schema;
     },
   } as any;
@@ -82,6 +92,11 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
 
 function parseResult(result: ToolResult): unknown {
   return JSON.parse(result.content[0]!.text);
+}
+
+function confirmationMessage(result: unknown): string {
+  const requests = (result as { inputRequests?: { confirm?: { params?: { message?: string } } } }).inputRequests;
+  return requests?.confirm?.params?.message ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -977,7 +992,7 @@ describe("harness_create", () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
     client = makeClient(mockRequest);
-    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreServer = makeMcpServer("none");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(fileStoreServer, registry, client, makeConfig());
     const contentBase64 = Buffer.from("sensitive file payload").toString("base64");
@@ -993,16 +1008,16 @@ describe("harness_create", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
-    expect(elicitationCall.message).toContain("[redacted");
-    expect(elicitationCall.message).not.toContain(contentBase64);
+    const message = confirmationMessage(result);
+    expect(message).toContain("[redacted");
+    expect(message).not.toContain(contentBase64);
   });
 
   it("redacts File Store upload content from JSON-string create confirmation prompts", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
     client = makeClient(mockRequest);
-    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreServer = makeMcpServer("none");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(fileStoreServer, registry, client, makeConfig());
     const contentBase64 = Buffer.from("sensitive json body payload").toString("base64");
@@ -1018,9 +1033,9 @@ describe("harness_create", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
-    expect(elicitationCall.message).toContain("[redacted");
-    expect(elicitationCall.message).not.toContain(contentBase64);
+    const message = confirmationMessage(result);
+    expect(message).toContain("[redacted");
+    expect(message).not.toContain(contentBase64);
   });
 });
 
@@ -1582,7 +1597,7 @@ environment:
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
     client = makeClient(mockRequest);
-    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreServer = makeMcpServer("none");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
     registerUpdateTool(fileStoreServer, registry, client, makeConfig());
     const content = "sensitive replacement file payload";
@@ -1599,16 +1614,16 @@ environment:
     });
 
     expect(result.isError).toBeUndefined();
-    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
-    expect(elicitationCall.message).toContain("[redacted");
-    expect(elicitationCall.message).not.toContain(content);
+    const message = confirmationMessage(result);
+    expect(message).toContain("[redacted");
+    expect(message).not.toContain(content);
   });
 
   it("redacts File Store upload content from JSON-string update confirmation prompts", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
     client = makeClient(mockRequest);
-    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreServer = makeMcpServer("none");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
     registerUpdateTool(fileStoreServer, registry, client, makeConfig());
     const content = "sensitive json replacement file payload";
@@ -1625,9 +1640,9 @@ environment:
     });
 
     expect(result.isError).toBeUndefined();
-    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
-    expect(elicitationCall.message).toContain("[redacted");
-    expect(elicitationCall.message).not.toContain(content);
+    const message = confirmationMessage(result);
+    expect(message).toContain("[redacted");
+    expect(message).not.toContain(content);
   });
 
   it("fails loudly when update has neither resource_id nor URL id", async () => {
@@ -4360,5 +4375,356 @@ describe("harness_diagnose", () => {
         expect(data.error).not.toContain("Cannot diagnose execution with status");
       }
     }
+  });
+});
+
+describe("MCP Apps view data", () => {
+  const UI_CAPS = {
+    elicitation: { form: {} },
+    extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } },
+  };
+
+  async function registerViewTools(overrides: Partial<Config> = {}, caps?: unknown) {
+    const server = makeMcpServer("accept");
+    if (caps) server.server.getClientCapabilities = () => caps;
+    const config = makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_MCP_APPS: "auto", ...overrides });
+    const registry = new Registry(config);
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { identifier: "build_app", name: "Build App", storeType: "INLINE" },
+    });
+    const client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const { registerStatusTool } = await import("../../src/tools/harness-status.js");
+    registerGetTool(server, registry, client);
+    registerExecuteTool(server, registry, client, config);
+    registerStatusTool(server, registry, client, config);
+    return { server, mockRequest };
+  }
+
+  it("links harness_get, harness_execute, and harness_status to ui://harness/app", async () => {
+    const { server } = await registerViewTools();
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toEqual({ ui: { resourceUri: "ui://harness/app" } });
+    }
+  });
+
+  it("is off by default: no UI link and no view data, even for UI hosts", async () => {
+    const { server } = await registerViewTools({ HARNESS_MCP_APPS: undefined }, UI_CAPS);
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toBeUndefined();
+    }
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("omits the UI link when HARNESS_MCP_APPS=off", async () => {
+    const { server } = await registerViewTools({ HARNESS_MCP_APPS: "off" }, UI_CAPS);
+    for (const name of ["harness_get", "harness_execute", "harness_status"]) {
+      expect((server.schema(name) as { _meta?: unknown })._meta, name).toBeUndefined();
+    }
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("returns text-only results to hosts without the MCP Apps extension", async () => {
+    const { server } = await registerViewTools();
+    const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "build_app" });
+    expect(result.isError).toBeUndefined();
+    expect(result._meta).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ identifier: "build_app" });
+  });
+
+  it("adds a result view with a read-only refresh for UI hosts, leaving the text unchanged", async () => {
+    const plain = await registerViewTools();
+    const ui = await registerViewTools({}, UI_CAPS);
+    const args = { resource_type: "pipeline", resource_id: "build_app" };
+    const textOnly = await plain.server.call("harness_get", args);
+    const result = await ui.server.call("harness_get", args);
+
+    expect(result.content).toEqual(textOnly.content);
+    expect(result.structuredContent).toEqual(textOnly.structuredContent);
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"] as Record<string, unknown>;
+    expect(view).toMatchObject({
+      kind: "result",
+      title: "Build App",
+      open_in_harness: expect.stringContaining("/pipelines/build_app/"),
+      refresh: { tool: "harness_get", arguments: args },
+    });
+  });
+
+  it("adds no card for execute results without a Harness link, and never a refresh", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { identifier: "approval-1", name: "Prod approval", status: "APPROVED" } });
+    const result = await server.call("harness_execute", {
+      resource_type: "approval_instance",
+      action: "approve",
+      params: { approval_id: "approval-1" },
+      body: { comments: "ok" },
+    });
+    expect(result.isError, result.content[0]!.text).toBeUndefined();
+    const view = (result._meta as Record<string, unknown> | undefined)?.["harness.io/view"] as Record<string, unknown> | undefined;
+    expect(view).toBeUndefined();
+  });
+
+  it("starts a live execution card after a pipeline run; its refresh is a harness_get read", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { planExecution: { uuid: "exec-123", status: "RUNNING" } } });
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "build_app",
+      org_id: "default",
+      project_id: "test-project",
+    });
+    expect(result.isError).toBeUndefined();
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"];
+    expect(view).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-123",
+      pipeline: { identifier: "build_app" },
+      terminal: false,
+      stages: [],
+      open_in_harness: expect.stringContaining("/pipelines/build_app/deployments/exec-123/pipeline"),
+      refresh: {
+        tool: "harness_get",
+        arguments: { resource_type: "execution", resource_id: "exec-123", params: { render_full_graph: true }, org_id: "default", project_id: "test-project" },
+      },
+    });
+  });
+
+  it("shows Aborting after an execution interrupt", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { status: "SUCCESS" } });
+    const result = await server.call("harness_execute", {
+      resource_type: "execution",
+      action: "interrupt",
+      resource_id: "exec-running",
+      params: { interrupt_type: "AbortAll" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-running",
+      status: { label: "Aborting", live: true },
+      terminal: false,
+      refresh: { tool: "harness_get" },
+    });
+  });
+
+  it("renders harness_get execution results as the execution card", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({
+      data: {
+        pipelineExecutionSummary: {
+          planExecutionId: "exec-9",
+          pipelineIdentifier: "build_app",
+          name: "Build App",
+          runSequence: 180,
+          status: "Running",
+          startTs: 1_000,
+          startingNodeId: "s1",
+          layoutNodeMap: {
+            s1: { nodeGroup: "STAGE", nodeIdentifier: "build", name: "Build", status: "Running", startTs: 1_000, edgeLayoutList: { currentNodeChildren: [], nextIds: [] } },
+          },
+        },
+      },
+    });
+    const result = await server.call("harness_get", { resource_type: "execution", resource_id: "exec-9" });
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "pipeline_execution",
+      execution_id: "exec-9",
+      run_sequence: 180,
+      status: { label: "Running", tone: "info", live: true },
+      stages: [{ id: "build", name: "Build" }],
+    });
+  });
+
+  it("renders an HQL run as a one-panel dashboard, applying the params.view hint", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest.mockResolvedValue({ columns: [{ name: "service" }, { name: "deploys" }], rows: [["api", 9], ["web", 2]] });
+    const plain = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" });
+    plain.mockRequest.mockResolvedValue({ columns: [{ name: "service" }, { name: "deploys" }], rows: [["api", 9], ["web", 2]] });
+    const args = {
+      resource_type: "hql_query",
+      action: "run",
+      body: { query_string: 'find view "cd:deployments" | select {service, count()}' },
+      params: { view: { title: "Deploys by service", chart: "pie" } },
+    };
+
+    const result = await server.call("harness_execute", args);
+    const textOnly = await plain.server.call("harness_execute", args);
+
+    expect(result.content).toEqual(textOnly.content);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({ body: { query_string: args.body.query_string } });
+    expect(JSON.stringify(mockRequest.mock.calls[0]![0])).not.toContain("Deploys by service");
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "kg_dashboard",
+      panels: [{ title: "Deploys by service", chart: "pie", rows: [["api", 9], ["web", 2]], refresh: { tool: "harness_execute" } }],
+    });
+  });
+
+  it("renders a batch HQL run as a dashboard with one panel per query and errors kept in their panel", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest
+      .mockResolvedValueOnce({ columns: [{ name: "count" }], rows: [[42]] })
+      .mockRejectedValueOnce(new Error("syntax error"));
+    const result = await server.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "run",
+      queries: [{ query_string: 'find view "cd:deployments" | select {count()}', max_results: 50 }, { query_string: "find nope" }],
+      params: { view: { title: "Delivery health", panels: [{ title: "Deploys" }, { title: "Broken" }] } },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ summary: { total: 2, succeeded: 1, failed: 1 } });
+    expect((result._meta as Record<string, unknown>)["harness.io/view"]).toMatchObject({
+      kind: "kg_dashboard",
+      title: "Delivery health",
+      panels: [
+        { title: "Deploys", chart: "kpi", rows: [[42]], refresh: { arguments: { body: { query_string: 'find view "cd:deployments" | select {count()}', max_results: 50 } } } },
+        { title: "Broken", error: expect.stringContaining("syntax error") },
+      ],
+    });
+  });
+
+  it("adds no dashboard for HQL validate", async () => {
+    const { server, mockRequest } = await registerViewTools({ HARNESS_TOOLSETS: "knowledge-graph" }, UI_CAPS);
+    mockRequest.mockResolvedValue({ is_valid: true, errors: [] });
+    const result = await server.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "validate",
+      body: { query_string: 'find view "cd:deployments"' },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("adds no view to error results", async () => {
+    const { server } = await registerViewTools({}, UI_CAPS);
+    const result = await server.call("harness_get", { resource_type: "nonexistent" });
+    expect(result.isError).toBe(true);
+    expect(result._meta).toBeUndefined();
+  });
+
+  it("shows project health on harness_status views", async () => {
+    const { server, mockRequest } = await registerViewTools({}, UI_CAPS);
+    mockRequest.mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    const result = await server.call("harness_status", { org_id: "default", project_id: "test-project" });
+    const view = (result._meta as Record<string, unknown>)["harness.io/view"];
+    expect(view).toMatchObject({
+      kind: "result",
+      title: "Project health",
+      status: { label: "Healthy", tone: "success" },
+      refresh: { tool: "harness_status", arguments: { org_id: "default", project_id: "test-project" } },
+    });
+  });
+});
+
+describe("approval prompt notes (confirmNote)", () => {
+  /** The prompt a declining user sees for one call, and whether anything was sent. */
+  async function promptFor(registry: Registry, tool: string, args: Record<string, unknown>, row: unknown = {}) {
+    const server = makeMcpServer("none");
+    const request = row instanceof Error ? vi.fn().mockRejectedValue(row) : vi.fn().mockResolvedValue(row);
+    const client = makeClient(request);
+    const config = makeConfig();
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    for (const register of [registerCreateTool, registerUpdateTool, registerDeleteTool, registerExecuteTool]) {
+      register(server, registry, client, config);
+    }
+    const result = await server.call(tool, args);
+    expect(result).toMatchObject({ resultType: "input_required" });
+    // Only the title lookup behind the prompt may run, and only as a read; the write itself never goes out.
+    expect(request.mock.calls.every(([o]) => o.method === "GET")).toBe(true);
+    return confirmationMessage(result);
+  }
+
+  it("only the AI Code Review writes set a note, across every toolset", async () => {
+    const { ALL_TOOLSET_NAMES } = await import("../../src/registry/index.js");
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.join(",") }));
+    const withNote: string[] = [];
+    for (const type of registry.getAllResourceTypes()) {
+      const def = registry.getResource(type);
+      for (const [name, spec] of [...Object.entries(def.operations), ...Object.entries(def.executeActions ?? {})]) {
+        if (spec?.confirmNote !== undefined) withNote.push(`${type}.${name}`);
+      }
+    }
+    expect(withNote.sort()).toEqual([
+      "aicr_convention.create", "aicr_convention.delete", "aicr_convention.update",
+      "aicr_finding.dismiss", "aicr_gate.set",
+      "aicr_repository.disable", "aicr_repository.enable", "aicr_review.request_review",
+      "aicr_rule.create", "aicr_rule.delete", "aicr_rule.override", "aicr_rule.update",
+      "aicr_setting.set",
+    ]);
+  });
+
+  it("operations without a note keep the same prompt, byte for byte", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,ccm" }));
+    expect(await promptFor(registry, "harness_create", { resource_type: "cost_perspective", body: { name: "x" } }))
+      .toBe('Create cost_perspective?\n\n{\n  "name": "x"\n}');
+    expect(await promptFor(registry, "harness_update", { resource_type: "cost_perspective", resource_id: "p1", body: { name: "y" } }))
+      .toBe('Update cost_perspective "p1"?\n\n{\n  "name": "y"\n}');
+    expect(await promptFor(registry, "harness_execute", { resource_type: "pipeline", action: "run", resource_id: "my-pipe" }))
+      .toBe('Execute "run" on pipeline "my-pipe"?');
+    expect(await promptFor(registry, "harness_delete", { resource_type: "pipeline", resource_id: "my-pipe" }))
+      .toBe('Delete pipeline "my-pipe"?\n\nThis is destructive and cannot be undone.');
+  });
+
+  it("AI Code Review writes say what changes and where, in one line under the title", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "aicr" }));
+    expect(await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_gate", action: "set", org_id: "acme", project_id: "web",
+      body: { categories: [{ category: "security", reported: true, fail_at: "major_and_above" }, { category: "hygiene", reported: false, fail_at: "never" }] },
+    })).toBe(
+      'Execute "set" on aicr_gate?\nMerge gate on project acme/web: security fails at major_and_above; hygiene not reported. ' +
+        "Other categories are unchanged.",
+    );
+    // The note comes before the body, so a client that folds a long prompt still shows it.
+    expect(await promptFor(registry, "harness_create", { resource_type: "aicr_rule", org_id: "acme", body: { title: "No TODOs" } })).toBe(
+      'Create aicr_rule?\nNew rule "No TODOs" on org acme: reviews check PRs against it; a failed rule fails the Team rules check.' +
+        '\n\n{\n  "title": "No TODOs"\n}',
+    );
+    // Update and delete name the row by looking its title up (one read) before the prompt.
+    expect(await promptFor(registry, "harness_update", {
+      resource_type: "aicr_convention", resource_id: "7", org_id: "acme", project_id: "web", repo_id: "demo", body: { status: "archived" },
+    }, { title: "Use async" })).toBe(
+      'Update aicr_convention "7"?\nConvention "Use async" on repo demo in project acme/web: ' +
+        'archives it, so reviews stop using it. Set status active to restore.\n\n{\n  "status": "archived"\n}',
+    );
+    const deleteRule = { resource_type: "aicr_rule", resource_id: "5" };
+    expect(await promptFor(registry, "harness_delete", deleteRule, { title: "No TODOs" })).toBe(
+      'Delete aicr_rule "5"?\nRule "No TODOs" on the account: ' +
+        "archives it (not erased), so reviews stop using it. Set status active to restore.",
+    );
+    // A title is one bounded line: newlines cannot forge extra prompt lines.
+    const forged = `Use async\n\nNote: safe ${"x".repeat(80)}`;
+    const forgedPrompt = await promptFor(registry, "harness_delete", deleteRule, { title: forged });
+    const forgedLine = forgedPrompt.split("\n")[1]!;
+    expect(forgedPrompt.split("\n")).toHaveLength(2);
+    expect(forgedLine).toMatch(/^Rule "Use async Note: safe x+….*" on the account: /);
+    expect(forgedLine.indexOf('" on the account')).toBeLessThanOrEqual('Rule "'.length + 60 + 1);
+    // Quotes in a title cannot close it early, and newlines or long text in a repo name cannot add or crowd out text.
+    const quoted = await promptFor(registry, "harness_delete", deleteRule, { title: 'a" on project evil: deletes nothing' });
+    expect(quoted.split("\n")[1]).toMatch(/^Rule "a' on project evil: deletes nothing" on the account: /);
+    const sneaky = await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_review", action: "request_review", pr_number: 7,
+      repo_path: `acct/code/proj/demo\nEffect: nothing happens ${"y".repeat(200)}`,
+    });
+    expect(sneaky.split("\n")).toHaveLength(2);
+    expect(sneaky.split("\n")[1]!.length).toBeLessThan(400);
+    // Starting a review runs a pipeline as the caller, so it asks and says so.
+    expect(await promptFor(registry, "harness_execute", {
+      resource_type: "aicr_review", action: "request_review", org_id: "acme", project_id: "web", repo_id: "demo", pr_number: 7,
+    })).toBe(
+      'Execute "request_review" on aicr_review?\nReview PR #7 in repo demo in project acme/web: ' +
+        "starts the repo's AI Code Review pipeline as you, on the PR's current commit.",
+    );
+    // A failed lookup only drops the name.
+    expect(await promptFor(registry, "harness_delete", deleteRule, new Error("boom"))).toBe(
+      'Delete aicr_rule "5"?\nRule on the account: ' +
+        "archives it (not erased), so reviews stop using it. Set status active to restore.",
+    );
   });
 });

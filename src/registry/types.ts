@@ -120,6 +120,22 @@ export interface PreflightContext {
   accountId?: string;
 }
 
+/**
+ * Context passed to ResourceDefinition.deepLinkParamResolver. Same structural
+ * client interface as PreflightContext so this module stays free of
+ * HarnessClient/Registry imports.
+ */
+export interface DeepLinkParamResolverContext {
+  client: HarnessClientInterface;
+  /** Dispatch input (snake_case tool fields such as `repo_id`). */
+  input: Record<string, unknown>;
+  /** Parsed API response (list envelope for list operations). */
+  result: Record<string, unknown>;
+  /** Deep-link placeholder values resolved so far, keyed by template placeholder. */
+  linkParams: Readonly<Record<string, string>>;
+  signal?: AbortSignal;
+}
+
 export type ToolsetName =
   | "pipelines"
   | "agents"
@@ -134,6 +150,7 @@ export type ToolsetName =
   | "repositories"
   | "registries"
   | "registries-v3"
+  | "registries-firewall"
   | "templates"
   | "dashboards"
   | "idp"
@@ -169,7 +186,9 @@ export type ToolsetName =
   | "vibe"
   | "appsec"
   | "knowledge-graph"
-  | "semantic-layer";
+  | "semantic-layer"
+  | "unified-search"
+  | "aicr";
 
 export type ProductName = "harness" | "fme" | "appsec";
 
@@ -261,6 +280,8 @@ export type PathBuilderConfig = {
   HARNESS_PROJECT?: string;
   HARNESS_APPSEC_BASE_URL?: string;
   HARNESS_APPSEC_UI_URL?: string;
+  /** Harness UI/API base URL, for path builders that compose deep links. */
+  HARNESS_BASE_URL?: string;
 };
 
 /**
@@ -324,8 +345,21 @@ export interface EndpointSpec {
    * resources whose NG endpoints require `orgIdentifier` on the query string (e.g. POST /ng/api/projects).
    */
   injectOrgQueryFallback?: boolean;
+  /**
+   * Optional per-operation scope override when an endpoint's scope differs from
+   * the resource default (e.g. a project-scoped `list` paired with an
+   * account-scoped `get`-by-UUID on the same `resourceType`).
+   */
+  scope?: ResourceScope;
   /** Override default scope query param names (e.g. for APIs using snake_case) */
   scopeParams?: { account?: string; org?: string; project?: string };
+  /**
+   * Optional pre-resolution input normalizer. Use when an endpoint needs to
+   * normalize or hoist fields on `input` before path/query parameters are built
+   * (e.g. auto-detecting UUID vs slug on `GET` endpoints). Never use `bodyBuilder`
+   * on `GET` requests for input side effects.
+   */
+  inputNormalizer?: (input: Record<string, unknown>, config: PathBuilderConfig) => void;
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => unknown;
   /**
@@ -373,6 +407,20 @@ export interface EndpointSpec {
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**
+   * Extra line in this operation's approval prompt, saying what the call changes and where.
+   * On delete it replaces the default "cannot be undone" warning (e.g. a delete that archives);
+   * on create, update and execute it is added after the question. A function gets a copy of
+   * the call's input (named args, params and body; before preflight); returning undefined, or
+   * throwing, means no note. Operations without it keep their prompt unchanged.
+   */
+  confirmNote?: string | ((input: Record<string, unknown>) => string | undefined);
+  /**
+   * Runs before the approval prompt, on a copy of the input, so `confirmNote` can name what the call
+   * touches (e.g. look up a title by id). Writes what it finds into that copy. A throw or a wait over
+   * a few seconds is ignored: the prompt just goes without it. Never changes the call itself.
+   */
+  confirmPrefetch?: (ctx: PreflightContext) => Promise<void>;
+  /**
    * Declarative input expansion rules. When present, matching shorthand keys
    * in user input are expanded into full nested structures before resolution.
    */
@@ -398,12 +446,13 @@ export interface EndpointSpec {
    * Optional preflight hook that runs before the request is sent.
    * Use for server-side invariants (e.g. duplicate-check before creating a
    * resource). Throw from the hook to block the operation — the error message
-   * is surfaced directly to the agent.
+   * is surfaced directly to the agent. Return `{ result }` when the hook already
+   * knows the answer; the request is then not sent and the extractor does not run.
    *
    * Typed loosely to avoid a circular import back into the registry/dispatcher.
    * The runtime shape is `{ client: HarnessClient, input, registry: Registry, signal? }`.
    */
-  preflight?: (ctx: PreflightContext) => Promise<void>;
+  preflight?: (ctx: PreflightContext) => Promise<void | { result: unknown }>;
   /**
    * When true, the MCP layer controls ELK→Mongo fallback for this endpoint:
    *  1. First request sent with `enforce_elasticsearch=true` (ELK path).
@@ -439,6 +488,29 @@ export interface EndpointSpec {
 /**
  * Declarative definition of a Harness resource type and how it maps to CRUD endpoints.
  */
+/** One detail row on an approval card. */
+export interface ReviewCardField {
+  /** Row label; must be unique within the card. */
+  label: string;
+  /** Dotted path into the create/update input body. */
+  path: string;
+  /** Enum value -> display text. */
+  labels?: Record<string, string>;
+  /** Template for object values, e.g. "{identifierName}: {fieldName}". */
+  template?: string;
+  /** Shown when the path is missing or empty. */
+  default?: string;
+  /** Read-only id -> display-name lookup via harness_list. */
+  lookup?: { resourceType: string; match: string; display: string };
+}
+
+export interface ReviewCardSpec {
+  version: 1;
+  /** Noun used in the card title (e.g. "View"); defaults to the resource displayName. */
+  label?: string;
+  fields: ReviewCardField[];
+}
+
 export interface ResourceDefinition {
   /** Unique key: "pipeline", "service", "connector", etc. */
   resourceType: string;
@@ -485,6 +557,19 @@ export interface ResourceDefinition {
   compactItem?: (item: Record<string, unknown>) => Record<string, unknown>;
   /** Harness UI deep-link URL template */
   deepLinkTemplate?: string;
+  /**
+   * Optional hook that corrects deep-link placeholder values just before
+   * `deepLinkTemplate` is substituted. Use when the value the caller passed is
+   * accepted by the API but is not what the UI route needs (e.g. a numeric
+   * Harness Code repo ID where the route expects the repo identifier).
+   *
+   * Return `undefined` to leave the link params unchanged, `null` to suppress
+   * `openInHarness` (a missing link beats a known-broken one), or a record of
+   * placeholder overrides. Overrides are applied to the top-level link and
+   * re-applied to every list item, so a list pays for at most one lookup.
+   * Throwing is treated like returning `null`.
+   */
+  deepLinkParamResolver?: (ctx: DeepLinkParamResolverContext) => Promise<Record<string, string> | null | undefined>;
   /** Troubleshooting guidance for LLMs. Describes how to diagnose issues with this resource type. */
   diagnosticHint?: string;
   /**
@@ -504,6 +589,12 @@ export interface ResourceDefinition {
     relationship: string;
     description: string;
   }>;
+  /**
+   * Optional approval-card layout for create/update review. Absent = the chat
+   * shows its generic confirm card. Pure JSON data (no functions): it is
+   * consumed outside this process via `harness_describe(resource_type=...)`.
+   */
+  reviewCard?: ReviewCardSpec;
   /** Execution guidance for LLMs. Describes how to discover and provide runtime inputs. */
   executeHint?: string;
   /** CRUD endpoint mappings */

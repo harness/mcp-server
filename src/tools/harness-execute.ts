@@ -1,12 +1,13 @@
 import * as z from "zod/v4";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Registry } from "../registry/index.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { LEGACY_EXECUTE_REDIRECTS, type Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
+import { confirmationArgsHash, confirmViaElicitation, describeElicitationFailure, describeBlockedAudit, isConfirmationPrompt } from "../utils/elicitation.js";
+import { resolveConfirmNoteAsync, withConfirmNote } from "../utils/confirm-note.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
@@ -20,6 +21,10 @@ import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema, compactOutputSchema } from "./output-schemas.js";
 import { canonicalizeResourceTypes } from "../utils/canonical-resource-type.js";
+import { buildResultView, createAppViewContext } from "../apps/mcp-apps.js";
+import { buildPendingExecutionView } from "../apps/pipeline-execution.js";
+import { buildBatchDashboard, buildSingleQueryDashboard } from "../apps/kg-dashboard.js";
+import type { HarnessView } from "../apps/view-types.js";
 
 const log = createLogger("execute");
 
@@ -137,46 +142,48 @@ function extractExecutionId(result: unknown, resourceType: string): string | und
 
 export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const executableTypes = registry.getTypesWithExecuteActions();
+  const appView = createAppViewContext(server, registry.mcpAppsEnabled);
 
   server.registerTool(
     "harness_execute",
     {
       description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers. Pass `wait: true` for pipeline run/retry to block until the execution reaches a terminal status — single tool call instead of an LLM polling loop. For HQL batch operations pass `queries` with resource_type='hql_query' and action='validate' or 'run'.",
-      inputSchema: {
-        // .describe() must be the LAST call in every chain — Zod 4's
-        // .optional() / .default() / .min() / .max() each return a fresh
-        // wrapper schema whose `.description` getter does NOT walk into the
-        // inner schema (verified on @modelcontextprotocol/sdk via
-        // getSchemaDescription). A description set before any of those
-        // would be invisible to MCP clients listing this tool.
-        resource_type: resourceTypeSchema(executableTypes, registry.compactSchemas).optional().describe("Resource type with executable actions. Auto-detected from url."),
-        url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
-        action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
-        resource_id: z.string().optional().describe("Primary resource identifier"),
-        org_id: orgIdField(registry.orgId, registry.compactSchemas),
-        project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        resource_scope: resourceScopeField(registry.compactSchemas),
-        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe(
-          registry.compactSchemas
-            ? "Pipeline runtime inputs (key-value pairs or overlay YAML). Check runtime_input_template (v0) or runtime_input_template_v1 first."
-            : "Pipeline runtime inputs. For v0 pipeline, check runtime_input_template and pass key-value pairs or full overlay YAML. For pipeline_v1, check runtime_input_template_v1 and pass named values; the server sends them as an inputs: YAML document.",
-        ),
-        input_set_ids: z.array(z.string()).optional().describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})."),
-        body: z.record(z.string(), z.unknown()).optional().describe("Additional body payload for the action"),
-        params: z.record(z.string(), z.unknown()).optional().describe("Action-specific parameters. Call harness_describe for available fields per resource_type."),
-        confirm: z.boolean().optional().describe(fieldCopy("confirm.execute", registry.schemaProfile)),
-        wait: z.boolean().optional().describe(fieldCopy("execute.wait", registry.schemaProfile)),
-        wait_timeout_seconds: z.number().min(10).max(7200).optional().describe(fieldCopy("execute.wait_timeout_seconds", registry.schemaProfile)),
-        wait_poll_interval_seconds: z.number().min(2).max(60).optional().describe(fieldCopy("execute.wait_poll_interval_seconds", registry.schemaProfile)),
-        queries: z.array(
-          z.object({
-            query_string: z.string().describe("HQL query string"),
-            timeout_ms: z.number().optional().describe("Per-query timeout in milliseconds"),
-            max_results: z.number().optional().describe("Maximum rows to return"),
-          })
-        ).max(20).optional().describe(fieldCopy("execute.queries", registry.schemaProfile)),
-      },
+      inputSchema: z.object({
+              // .describe() must be the LAST call in every chain — Zod 4's
+              // .optional() / .default() / .min() / .max() each return a fresh
+              // wrapper schema whose `.description` getter does NOT walk into the
+              // inner schema (verified on @modelcontextprotocol/sdk via
+              // getSchemaDescription). A description set before any of those
+              // would be invisible to MCP clients listing this tool.
+              resource_type: resourceTypeSchema(executableTypes, registry.compactSchemas).optional().describe("Resource type with executable actions. Auto-detected from url."),
+              url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
+              action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
+              resource_id: z.string().optional().describe("Primary resource identifier"),
+              org_id: orgIdField(registry.orgId, registry.compactSchemas),
+              project_id: projectIdField(registry.projectId, registry.compactSchemas),
+              resource_scope: resourceScopeField(registry.compactSchemas),
+              inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe(
+                registry.compactSchemas
+                  ? "Pipeline runtime inputs (key-value pairs or overlay YAML). Check runtime_input_template (v0) or runtime_input_template_v1 first."
+                  : "Pipeline runtime inputs. For v0 pipeline, check runtime_input_template and pass key-value pairs or full overlay YAML. For pipeline_v1, check runtime_input_template_v1 and pass named values; the server sends them as an inputs: YAML document.",
+              ),
+              input_set_ids: z.array(z.string()).optional().describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})."),
+              body: z.record(z.string(), z.unknown()).optional().describe("Additional body payload for the action"),
+              params: z.record(z.string(), z.unknown()).optional().describe("Action-specific parameters. Call harness_describe for available fields per resource_type."),
+              confirm: z.boolean().optional().describe(fieldCopy("confirm.execute", registry.schemaProfile)),
+              wait: z.boolean().optional().describe(fieldCopy("execute.wait", registry.schemaProfile)),
+              wait_timeout_seconds: z.number().min(10).max(7200).optional().describe(fieldCopy("execute.wait_timeout_seconds", registry.schemaProfile)),
+              wait_poll_interval_seconds: z.number().min(2).max(60).optional().describe(fieldCopy("execute.wait_poll_interval_seconds", registry.schemaProfile)),
+              queries: z.array(
+                z.object({
+                  query_string: z.string().describe("HQL query string"),
+                  timeout_ms: z.number().optional().describe("Per-query timeout in milliseconds"),
+                  max_results: z.number().optional().describe("Maximum rows to return"),
+                })
+              ).max(20).optional().describe(fieldCopy("execute.queries", registry.schemaProfile)),
+            }),
       outputSchema: compactOutputSchema(executeOutputSchema, registry.compactSchemas),
+      ...appView.toolMeta,
       annotations: {
         title: "Execute Harness Action",
         readOnlyHint: false,
@@ -185,7 +192,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         openWorldHint: true,
       },
     },
-    async (rawArgs, extra) => {
+    async (rawArgs, ctx) => {
       const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
         const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, confirm: _confirm, queries: batchQueries, ...rest } = args;
@@ -205,6 +212,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         if (resourceType === "pipeline" && args.action === "interrupt") {
           resourceType = "execution";
           input.resource_type = "execution";
+        }
+        const legacyRedirect = LEGACY_EXECUTE_REDIRECTS[resourceType];
+        if (legacyRedirect) {
+          resourceType = legacyRedirect.resourceType;
+          args.action = legacyRedirect.action;
+          input.resource_type = legacyRedirect.resourceType;
+          input.action = legacyRedirect.action;
         }
         const resourceId = asString(input.resource_id);
         if (resourceType === "pipeline" && args.action === "retry" && !asString(input.execution_id) && resourceId) {
@@ -261,12 +275,18 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
         const elicit = await confirmViaElicitation({
           server,
+          ctx,
           toolName: "harness_execute",
-          message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
+          message: withConfirmNote(
+            `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
+            await resolveConfirmNoteAsync(actionSpec, input, { client, registry, accountId: registry.getAccountId() }),
+          ),
           risk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
+          argsHash: confirmationArgsHash(rawArgs),
         });
+        if (isConfirmationPrompt(elicit)) return elicit.needsInput;
         if (!elicit.proceed) {
           registry.auditBlockedAttempt(
             resourceType,
@@ -296,7 +316,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           try {
             const allResults = await Promise.allSettled(
               batchQueries.map((q) =>
-                registry.dispatchExecute(client, "hql_query", args.action, { body: { query_string: q.query_string, ...(q.timeout_ms != null ? { timeout_ms: q.timeout_ms } : {}), ...(q.max_results != null ? { max_results: q.max_results } : {}) } }, auditCtxBatch, extra.signal),
+                registry.dispatchExecute(client, "hql_query", args.action, { body: { query_string: q.query_string, ...(q.timeout_ms != null ? { timeout_ms: q.timeout_ms } : {}), ...(q.max_results != null ? { max_results: q.max_results } : {}) } }, auditCtxBatch, ctx.mcpReq.signal),
               ),
             );
 
@@ -306,7 +326,21 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               return { query_string, success: false, error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
             });
             const succeeded = results.filter((r) => r.success).length;
-            return jsonResult({ results, summary: { total: results.length, succeeded, failed: results.length - succeeded } });
+            return appView.attach(
+              jsonResult({ results, summary: { total: results.length, succeeded, failed: results.length - succeeded } }),
+              () => (
+                args.action === "run"
+                  ? buildBatchDashboard(
+                      allResults.map((r, i) => ({
+                        query_string: batchQueries[i]!.query_string,
+                        options: { timeout_ms: batchQueries[i]!.timeout_ms, max_results: batchQueries[i]!.max_results },
+                        ...(r.status === "fulfilled" ? { result: r.value } : { error: results[i]!.error as string }),
+                      })),
+                      input.view,
+                    )
+                  : undefined
+              ),
+            ctx);
           } catch (err) {
             if (isUserError(err) || isUserFixableApiError(err)) return errorResult((err as Error).message);
             throw toMcpError(err);
@@ -540,10 +574,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
                 timeoutMs,
                 initialIntervalMs,
                 maxIntervalMs: MAX_WAIT_INTERVAL_MS,
-                signal: extra.signal,
+                signal: ctx.mcpReq.signal,
                 onPoll: async (status, elapsedMs, pollCount) => {
                   await sendProgress(
-                    extra,
+                    ctx,
                     elapsedMs,
                     timeoutMs,
                     `Polling execution (${status}, poll #${pollCount})`,
@@ -584,10 +618,18 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           }
         }
 
-        if (Object.keys(envelope).length === 0) {
-          return jsonResult(result);
-        }
-        return jsonResult({ ...(asRecord(result) ?? {}), ...envelope });
+        const payload = Object.keys(envelope).length === 0 ? result : { ...(asRecord(result) ?? {}), ...envelope };
+        const view = executionView(registry, resourceType, args.action, input, result, envelope)
+          ?? (resourceType === "hql_query" && args.action === "run"
+            ? buildSingleQueryDashboard(hqlQueryString(input), result, input.view, hqlQueryOptions(input))
+            : undefined)
+          ?? buildResultView(payload, {
+            displayName: def.displayName,
+            action: args.action,
+            resourceId,
+            status: asString(envelope.execution_status),
+          });
+        return appView.attach(jsonResult(payload), () => view, ctx);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);
@@ -595,6 +637,50 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       }
     },
   );
+}
+
+function hqlQueryString(input: Record<string, unknown>): string {
+  const body = asRecord(input.body);
+  return asString(body?.query_string) ?? asString(body?.queryString) ?? asString(body?.query) ?? "";
+}
+
+function hqlQueryOptions(input: Record<string, unknown>): { timeout_ms?: number; max_results?: number } {
+  const body = asRecord(input.body);
+  const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? undefined : Number(v));
+  return { timeout_ms: num(body?.timeout_ms ?? body?.timeoutMs), max_results: num(body?.max_results ?? body?.maxResults) };
+}
+
+const INTERRUPT_LABELS: Record<string, string> = { AbortAll: "Aborting", UserMarkedFailure: "Marking failed" };
+
+/** Execution card for pipeline run/retry and execution interrupt; undefined for every other action. */
+function executionView(
+  registry: Registry,
+  resourceType: string,
+  action: string,
+  input: Record<string, unknown>,
+  result: unknown,
+  envelope: Record<string, unknown>,
+): HarnessView | undefined {
+  const isPipeline = resourceType === "pipeline" || resourceType === "pipeline_v1";
+  const isRun = isPipeline && (action === "run" || action === "retry");
+  const isInterrupt = resourceType === "execution" && action === "interrupt";
+  if (!isRun && !isInterrupt) return undefined;
+
+  const executionId = isRun
+    ? asString(envelope.execution_id) ?? extractExecutionId(result, resourceType)
+    : asString(input.execution_id) ?? asString(input.resource_id);
+  if (!executionId) return undefined;
+
+  const planStatus = asString(asRecord(asRecord(result)?.planExecution)?.status);
+  const interruptType = asString(input.interrupt_type);
+  return buildPendingExecutionView(executionId, {
+    orgId: asString(input.org_id) || registry.orgId,
+    projectId: asString(input.project_id) || registry.projectId,
+    deepLink: (template, params) => registry.deepLink(template, params),
+    pipelineId: asString(input.pipeline_id) ?? (isRun ? asString(input.resource_id) : undefined),
+    status: isRun ? asString(envelope.execution_status) ?? planStatus ?? "Queued" : undefined,
+    label: isInterrupt ? INTERRUPT_LABELS[interruptType ?? ""] ?? "Updating" : undefined,
+  });
 }
 
 function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void {

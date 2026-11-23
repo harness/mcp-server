@@ -26,6 +26,8 @@ import {
   lwPaginatedExtract,
   aiBudgetConsumptionExtract,
   aiBudgetOverrideRequestListExtract,
+  ccmPerspectiveFilterValuesExtract,
+  extractCostCategoryFilterPanel,
 } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
@@ -549,101 +551,6 @@ const aiBudgetReviewBodySchema: BodySchema = {
   ],
 };
 
-/**
- * Normalizes REST cost_category responses into the same {values} shape
- * that perspectiveFilters returns, so callers get a uniform interface.
- *
- * - No value_sub_type → list endpoint → extract category names from the list
- * - With value_sub_type → get endpoint → extract costTarget bucket names
- */
-function extractBusinessMappingValues(raw: unknown, valueSubType?: string): unknown {
-  // Unwrap NG envelope: response may be { data: ... } or { resource: ... }
-  const envelope = raw as { data?: unknown; resource?: unknown } | undefined;
-  const unwrapped = envelope?.data ?? envelope?.resource ?? raw;
-
-  if (valueSubType) {
-    // Single category GET: unwrapped is { costTargets: [{ name }], ... }
-    const entity = unwrapped as Record<string, unknown>;
-    const targets = entity.costTargets as Array<{ name?: string }> | undefined;
-    if (!Array.isArray(targets)) {
-      return { values: [], _error: "No costTargets found in response" };
-    }
-    return {
-      values: targets.map(t => t.name).filter(Boolean),
-    };
-  }
-  // List all categories: unwrapped is { businessMappings: [{ uuid, name }] }
-  const data = unwrapped as Record<string, unknown>;
-  const mappings = data.businessMappings as Array<{ uuid?: string; name?: string }> | undefined;
-  if (Array.isArray(mappings)) {
-    return {
-      values: mappings.map(m => m.name).filter(Boolean),
-    };
-  }
-  // Fallback: if unwrapped is already an array
-  if (Array.isArray(unwrapped)) {
-    return {
-      values: (unwrapped as Array<{ name?: string }>).map(m => m.name).filter(Boolean),
-    };
-  }
-  return { values: [], _error: "Unexpected response shape — no businessMappings or array found" };
-}
-
-/**
- * Normalizes /ccm/api/business-mapping/filter-panel responses into `{ values }`
- * so harness_get/list satisfy MCP structured output (objects only — raw arrays fail
- * outputSchema validation in strict clients like MCP Inspector).
- *
- * API shape (list and get are identical — only `data` meaning differs):
- *   { "status": "SUCCESS", "data": ["..."], "metaData": null, "correlationId": "..." }
- * - list (no costCategory): `data` = cost category names
- * - get (costCategory query param): `data` = bucket names within that category
- */
-function extractCostCategoryFilterPanel(raw: unknown): { values: string[] } {
-  const envelope = raw as { data?: unknown; resource?: unknown } | undefined;
-  const unwrapped = envelope?.data ?? envelope?.resource ?? raw;
-
-  if (Array.isArray(unwrapped)) {
-    const values = unwrapped
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object") {
-          const obj = item as { name?: string; costCategory?: string; costBucket?: string };
-          return obj.name ?? obj.costCategory ?? obj.costBucket;
-        }
-        return undefined;
-      })
-      .filter((v): v is string => typeof v === "string" && v.length > 0);
-    return { values };
-  }
-
-  if (unwrapped !== null && typeof unwrapped === "object") {
-    const obj = unwrapped as Record<string, unknown>;
-    if (Array.isArray(obj.costBuckets)) {
-      return { values: obj.costBuckets.filter((v): v is string => typeof v === "string") };
-    }
-    if (Array.isArray(obj.costTargets)) {
-      return {
-        values: (obj.costTargets as Array<{ name?: string }>)
-          .map((t) => t.name)
-          .filter((v): v is string => typeof v === "string" && v.length > 0),
-      };
-    }
-    if (Array.isArray(obj.businessMappings)) {
-      return {
-        values: (obj.businessMappings as Array<{ name?: string }>)
-          .map((m) => m.name)
-          .filter((v): v is string => typeof v === "string" && v.length > 0),
-      };
-    }
-    if (Array.isArray(obj.costCategories)) {
-      return { values: obj.costCategories.filter((v): v is string => typeof v === "string") };
-    }
-  }
-
-  return { values: [] };
-}
-
 // ---------------------------------------------------------------------------
 // Perspective preferences preflight — mirrors Go server's
 // GetPerspectivePreferenceDefaults + overlay pattern
@@ -778,6 +685,71 @@ async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> 
   }
 }
 
+const PERSPECTIVE_UPDATE_CARRY_KEYS = [
+  "name",
+  "viewVersion",
+  "viewType",
+  "viewState",
+  "folderId",
+  "viewRules",
+  "viewVisualization",
+  "viewTimeRange",
+  "viewPreferences",
+  "dataSources",
+  "unitMetricInfo",
+] as const;
+
+/**
+ * Preflight hook for cost_perspective.update. The API takes @Valid CEView
+ * (viewVersion is @NotBlank) and the DAO rewrites the whole record, so a
+ * partial body fails validation or wipes fields. Fill every field the caller
+ * did not send from the existing perspective (caller values always win, so an
+ * explicit empty unitMetricInfo still clears it). If the lookup fails, the update
+ * is aborted rather than sending a partial body that would erase configuration.
+ */
+async function perspectiveUpdatePreflight(ctx: PreflightContext): Promise<void> {
+  const input = ctx.input as { body?: Record<string, unknown> };
+  if (!input.body) input.body = {};
+  const body = input.body;
+
+  // An explicit blank viewVersion is API-invalid (@NotBlank); fail loudly rather
+  // than silently rewriting it (which would downgrade a non-v1 perspective).
+  if (typeof body.viewVersion === "string" && body.viewVersion.trim() === "") {
+    throw new Error("cost_perspective update: viewVersion must not be blank. Omit it to keep the existing version.");
+  }
+  if (body.viewVersion === null) delete body.viewVersion;
+
+  const uuid = typeof body.uuid === "string" ? body.uuid : undefined;
+  if (uuid) {
+    let existing: unknown;
+    try {
+      existing = await ctx.registry.dispatch(
+        ctx.client,
+        "cost_perspective",
+        "get",
+        { perspective_id: uuid },
+        ctx.signal,
+      );
+    } catch (err) {
+      // Never send a partial PUT: the API rewrites the whole record.
+      throw new Error(
+        `Cannot update cost_perspective ${uuid}: failed to fetch the existing perspective to preserve omitted fields (${err instanceof Error ? err.message : String(err)}). Retry, or send the full perspective object.`,
+        { cause: err },
+      );
+    }
+    if (existing && typeof existing === "object" && !Array.isArray(existing)) {
+      const current = existing as Record<string, unknown>;
+      for (const key of PERSPECTIVE_UPDATE_CARRY_KEYS) {
+        if (body[key] === undefined && current[key] !== undefined && current[key] !== null) {
+          body[key] = current[key];
+        }
+      }
+    }
+  }
+
+  if (body.viewVersion === undefined) body.viewVersion = "v1";
+}
+
 function splitCsv(value: unknown): string[] {
   if (typeof value !== "string") {
     return [];
@@ -909,6 +881,39 @@ export const ccmToolset: ToolsetDefinition = {
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
+      reviewCard: {
+        version: 1,
+        label: "View",
+        fields: [
+          {
+            label: "Folder",
+            path: "folderId",
+            default: "Default",
+            lookup: { resourceType: "cost_perspective_folder", match: "uuid", display: "name" },
+          },
+          {
+            label: "Time Frame",
+            path: "viewTimeRange.viewTimeRangeType",
+            default: "Last 30 days",
+            labels: {
+              LAST_7: "Last 7 days",
+              LAST_30: "Last 30 days",
+              LAST_MONTH: "Last month",
+              CURRENT_MONTH: "Current month",
+              LAST_QUARTER: "Last quarter",
+              CURRENT_QUARTER: "Current quarter",
+              LAST_3_MONTH: "Last 3 months",
+              CUSTOM: "Custom range",
+            },
+          },
+          {
+            label: "Group By",
+            path: "viewVisualization.groupBy",
+            template: "{identifierName}: {fieldName}",
+            default: "None",
+          },
+        ],
+      },
       listFilterFields: [
         { name: "search_term", description: "Filter perspectives by name" },
         { name: "sort_type", description: "Sort field (default: TIME)", enum: ["TIME", "COST", "CLUSTER_COST", "NAME"] },
@@ -977,10 +982,11 @@ export const ccmToolset: ToolsetDefinition = {
         update: {
           method: "PUT",
           path: "/ccm/api/perspective",
+          preflight: perspectiveUpdatePreflight,
           operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
+            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. Any field you omit (including viewVersion) is filled from the existing perspective before the update is sent; fields you provide override.",
             fields: [
               { name: "uuid", type: "string", required: true, description: "Perspective UUID (from get)" },
               { name: "name", type: "string", required: true, description: "Perspective name (1-80 chars)" },
@@ -1135,6 +1141,7 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
       scope: "account",
       identifierFields: ["perspective_id"],
       listFilterFields: [
+        { name: "perspective_id", description: "Cost perspective identifier (from cost_perspective list)", required: true },
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, environment, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
         { name: "start_time", description: "Custom window start. Accepts a UTC date \"YYYY-MM-DD\" (e.g. \"2026-09-28\"), an ISO 8601 datetime, or epoch milliseconds. Must be paired with end_time; overrides time_filter. Use for specific days or historical ranges the relative enum can't express. Invalid values return an error.", type: "string" },
@@ -1195,6 +1202,7 @@ Each item has 'time' (epoch ms) and 'date' (UTC "YYYY-MM-DD") — use 'date' for
       identifierFields: ["perspective_id"],
       compactItem: compactTimeseriesStat,
       listFilterFields: [
+        { name: "perspective_id", description: "Cost perspective identifier (from cost_perspective list)", required: true },
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
         { name: "start_time", description: "Custom window start. Accepts a UTC date \"YYYY-MM-DD\" (e.g. \"2026-09-28\"), an ISO 8601 datetime, or epoch milliseconds. Must be paired with end_time; overrides time_filter. Use for specific days or historical ranges the relative enum can't express. Invalid values return an error.", type: "string" },
@@ -1683,6 +1691,22 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["category_id"],
+      reviewCard: {
+        version: 1,
+        label: "Cost Category",
+        fields: [
+          {
+            label: "Unallocated costs",
+            path: "unallocatedCost.strategy",
+            default: "Not specified",
+            labels: {
+              HIDE: "Hidden",
+              DISPLAY_NAME: "Shown as a separate bucket",
+              SHARE: "Shared across buckets",
+            },
+          },
+        ],
+      },
       listFilterFields: [
         { name: "search", description: "Filter cost categories by name" },
         { name: "sort_type", description: "Sort field", enum: ["NAME", "LAST_EDIT"] },
@@ -2317,13 +2341,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
               },
             };
           },
-          responseExtractor: (raw: unknown, input?: Record<string, unknown>): unknown => {
-            const valueType = input?.value_type as string | undefined;
-            if (valueType === "business_mapping") {
-              return extractBusinessMappingValues(raw, input?.value_sub_type as string | undefined);
-            }
-            return gqlExtract("perspectiveFilters")(raw);
-          },
+          responseExtractor: ccmPerspectiveFilterValuesExtract,
           description: "Fetch perspective filter values. Examples: value_type='label_v2_key' returns all label keys; value_type='label_v2' with value_sub_type='env' returns all values for 'env' label; value_type='region' returns all regions; value_type='business_mapping' returns cost category names; value_type='business_mapping' with value_sub_type='<category_id>' returns bucket names.",
         },
       },
@@ -2778,13 +2796,14 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
           pathBuilder: aiBudgetPath("/me/budgets/override/request"),
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
+          // bodyBuilder renames budget_id -> policy_id, so validate required fields on the caller's body.
+          validateInputBody: true,
           bodyBuilder: (input) => {
             const body = (input.body as Record<string, unknown> | undefined) ?? {};
-            const budgetId = input.budget_id ?? body.budget_id ?? body.policy_id;
             return {
-              policy_id: budgetId,
-              amount: input.amount ?? body.amount,
-              reason: input.reason ?? body.reason,
+              policy_id: body.budget_id,
+              amount: body.amount,
+              reason: body.reason,
             };
           },
           bodySchema: {

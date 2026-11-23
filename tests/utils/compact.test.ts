@@ -149,4 +149,37 @@ describe("compactItems", () => {
     expect(result[0].name).toBe("[Incident 1](https://app.harness.io/inc/1)");
     expect(result[0]).not.toHaveProperty("openInHarness");
   });
+
+  it("promotes whitelisted identity/type fields from nested NG entity wrappers (environment, service, connector, secret, infrastructure)", () => {
+    const items = [
+      {
+        environment: {
+          accountId: "acc1",
+          orgIdentifier: "PROD",
+          projectIdentifier: "Data_Platform",
+          identifier: "IEProd",
+          name: "IEProd",
+          type: "Production",
+          yaml: "environment:\n  name: IEProd\n",
+          storeType: "INLINE",
+        },
+        createdAt: 1764811501320,
+        lastModifiedAt: 1764811501320,
+        openInHarness: "https://harness0.harness.io/ng/environments/IEProd",
+      },
+    ];
+    const [slim] = compactItems(items) as Record<string, unknown>[];
+    expect(slim).toEqual({
+      accountId: "acc1",
+      orgIdentifier: "PROD",
+      projectIdentifier: "Data_Platform",
+      identifier: "IEProd",
+      name: "[IEProd](https://harness0.harness.io/ng/environments/IEProd)",
+      type: "Production",
+      createdAt: 1764811501320,
+      lastModifiedAt: 1764811501320,
+    });
+    expect(slim).not.toHaveProperty("yaml");
+    expect(slim).not.toHaveProperty("environment");
+  });
 });

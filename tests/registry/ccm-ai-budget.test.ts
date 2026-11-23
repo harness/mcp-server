@@ -112,6 +112,29 @@ describe("ai_budget_override_request", () => {
     expect(body).toEqual({ policy_id: "p1", amount: 125, reason: "spike" });
   });
 
+  it("create via dispatch sends policy_id when budget_id is in body", async () => {
+    const registry = new Registry(makeConfig(), { accountIdResolver: () => "acct-1" });
+    const mockClient = {
+      request: vi.fn().mockResolvedValue({ success: true, response: { id: "r1" } }),
+    } as unknown as HarnessClient;
+
+    await registry.dispatch(mockClient, "ai_budget_override_request", "create", {
+      body: { budget_id: "p1", amount: 125, reason: "spike" },
+    });
+
+    const callArgs = (mockClient.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArgs.body).toEqual({ policy_id: "p1", amount: 125, reason: "spike" });
+  });
+
+  it("create via dispatch reports missing required fields", async () => {
+    const registry = new Registry(makeConfig(), { accountIdResolver: () => "acct-1" });
+    const mockClient = { request: vi.fn() } as unknown as HarnessClient;
+    await expect(
+      registry.dispatch(mockClient, "ai_budget_override_request", "create", { body: { amount: 1 } }),
+    ).rejects.toThrow(/budget_id, reason/);
+    expect(mockClient.request).not.toHaveBeenCalled();
+  });
+
   it("get path includes request id", () => {
     const path = aiOverride!.operations.get!.pathBuilder!(
       { budget_id: "p1", override_request_id: "req-1" },

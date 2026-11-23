@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
@@ -107,16 +107,16 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
     "harness_search",
     {
       description: "Search across multiple Harness resource types. Returns results ranked by relevance. Accepts a Harness URL for scope.",
-      inputSchema: {
-        query: z.string().describe("Search term"),
-        resource_types: z.array(resourceTypeSchema(listableTypes, registry.compactSchemas)).optional().describe("Types to search (defaults to all listable)"),
-        url: z.string().optional().describe("Harness UI URL — auto-extracts org and project"),
-        resource_scope: resourceScopeField(registry.compactSchemas),
-        org_id: orgIdField(registry.orgId, registry.compactSchemas),
-        project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        max_per_type: z.number().default(5).optional().describe("Max results per type"),
-        compact: z.boolean().default(true).optional().describe("Strip verbose metadata (default true)"),
-      },
+      inputSchema: z.object({
+              query: z.string().describe("Search term"),
+              resource_types: z.array(resourceTypeSchema(listableTypes, registry.compactSchemas)).optional().describe("Types to search (defaults to all listable)"),
+              url: z.string().optional().describe("Harness UI URL — auto-extracts org and project"),
+              resource_scope: resourceScopeField(registry.compactSchemas),
+              org_id: orgIdField(registry.orgId, registry.compactSchemas),
+              project_id: projectIdField(registry.projectId, registry.compactSchemas),
+              max_per_type: z.number().default(5).optional().describe("Max results per type"),
+              compact: z.boolean().default(true).optional().describe("Strip verbose metadata (default true)"),
+            }),
       outputSchema: compactOutputSchema(searchOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Search Harness Resources",
@@ -125,10 +125,10 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         openWorldHint: true,
       },
     },
-    async (rawArgs, extra) => {
+    async (rawArgs, ctx) => {
       const args = canonicalizeResourceTypes(registry, rawArgs);
       try {
-        const signal = extra.signal;
+        const signal = ctx.mcpReq.signal;
         const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url, { includeResourceScope: true });
         const requestedScope = asResourceScope(mergedArgs.resource_scope);
         const hasExplicitResourceTypes = (args.resource_types?.length ?? 0) > 0;
@@ -202,7 +202,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         for (let i = 0; i < targetTypes.length; i += MAX_CONCURRENCY) {
           signal.throwIfAborted();
           const batch = targetTypes.slice(i, i + MAX_CONCURRENCY);
-          await sendProgress(extra, searched, targetTypes.length, `Searching batch ${Math.floor(i / MAX_CONCURRENCY) + 1} of ${Math.ceil(targetTypes.length / MAX_CONCURRENCY)}${semanticRouted ? " (semantic-routed)" : ""}...`);
+          await sendProgress(ctx, searched, targetTypes.length, `Searching batch ${Math.floor(i / MAX_CONCURRENCY) + 1} of ${Math.ceil(targetTypes.length / MAX_CONCURRENCY)}${semanticRouted ? " (semantic-routed)" : ""}...`);
           const batchResults = await Promise.all(
             batch.map(async (rt) => {
               try {
@@ -227,7 +227,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           searched += batch.length;
         }
 
-        await sendProgress(extra, targetTypes.length, targetTypes.length, "Processing results...");
+        await sendProgress(ctx, targetTypes.length, targetTypes.length, "Processing results...");
         let totalMatches = 0;
 
         for (const { rt, result, error } of settled) {
