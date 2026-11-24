@@ -345,12 +345,10 @@ function aicrNamedRepoPreflight(validate: (input: Record<string, unknown>) => un
 }
 
 /**
- * Soft disable keeps the repository's AI Code Review config, and the backend only checks that the config
- * exists, so a review would start on a repository whose AI review is off. Read the setting from Code and
- * refuse only on an explicit false: a missing field, a non-boolean or a 404 (no Code repository, as for a
- * GitHub App repo) is left for the backend to answer.
+ * The repository's AI review setting in Code, or undefined when Code has no such repository (a 404, as for
+ * a GitHub App repo) or the field is missing or not a boolean. Any other error is raised.
  */
-async function aicrCheckReviewEnabled(ctx: PreflightContext, repoPath: string): Promise<void> {
+async function aicrReviewEnabled(ctx: PreflightContext, repoPath: string): Promise<boolean | undefined> {
   const { spacePath, repoIdentifier } = splitAicrRepoPath(repoPath);
   const [, org, project] = spacePath.split("/");
   let settings: unknown;
@@ -360,14 +358,63 @@ async function aicrCheckReviewEnabled(ctx: PreflightContext, repoPath: string): 
       ...(project ? { projectIdentifier: project } : {}),
     });
   } catch (err) {
-    if (err instanceof HarnessApiError && err.statusCode === 404) return;
+    if (err instanceof HarnessApiError && err.statusCode === 404) return undefined;
     throw err;
   }
-  if (typeof settings === "object" && settings !== null && (settings as Record<string, unknown>).ai_pullreq_review_enabled === false) {
+  const value = typeof settings === "object" && settings !== null
+    ? (settings as Record<string, unknown>).ai_pullreq_review_enabled
+    : undefined;
+  return typeof value === "boolean" ? value : undefined;
+}
+
+/**
+ * Soft disable keeps the repository's AI Code Review config, and the backend only checks that the config
+ * exists, so a review would start on a repository whose AI review is off. Refuse only on an explicit false;
+ * an unknown setting is left for the backend to answer.
+ */
+async function aicrCheckReviewEnabled(ctx: PreflightContext, repoPath: string): Promise<void> {
+  if ((await aicrReviewEnabled(ctx, repoPath)) === false) {
     throw new Error(
       'AI Code Review is turned off for this repository; run harness_execute(resource_type="aicr_repository", action="enable") first.',
     );
   }
+}
+
+/**
+ * The AICR repository list has every repository with a config, including disabled ones, and no enabled flag:
+ * the setting lives in Code. Add each row's `review_enabled` from Code, a few rows at a time. A row with no
+ * Code repository (a 404) is left without the field. Any other read failure leaves the row without it too, but
+ * is reported in `review_enabled_error` so it does not read as "no Code repository".
+ */
+async function aicrRepositoryListEnrich(result: unknown, ctx: PreflightContext): Promise<unknown> {
+  if (typeof result !== "object" || result === null) return result;
+  const out = result as { items?: unknown; review_enabled_error?: string };
+  if (!Array.isArray(out.items)) return result;
+  const failed: string[] = [];
+  let firstError = "";
+  const BATCH = 8;
+  for (let i = 0; i < out.items.length; i += BATCH) {
+    await Promise.all(out.items.slice(i, i + BATCH).map(async (item: Record<string, unknown>) => {
+      if (typeof item.repo_path !== "string") return;
+      try {
+        const enabled = await aicrReviewEnabled(ctx, item.repo_path);
+        if (enabled !== undefined) item.review_enabled = enabled;
+      } catch (err) {
+        failed.push(item.repo_path);
+        if (!firstError) {
+          firstError = err instanceof HarnessApiError
+            ? `HTTP ${err.statusCode}: ${err.message}`
+            : err instanceof Error ? err.message : String(err);
+        }
+      }
+    }));
+  }
+  if (failed.length > 0) {
+    out.review_enabled_error =
+      `Could not read the AI review setting for ${failed.length} repositories (${failed.join(", ")}); ` +
+      `review_enabled is missing on those rows. First error: ${firstError}`;
+  }
+  return result;
 }
 
 async function aicrRequestReviewPreflight(ctx: PreflightContext): Promise<void> {
@@ -1709,7 +1756,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       displayName: "AI Code Review Repository",
       description:
         "Repositories with an AI Code Review config under an account, org, or project. " +
-        "A disabled repository is still listed; the list does not show whether review is on. " +
+        "A disabled repository is still listed; review_enabled says whether review is on (absent when unknown). " +
         "Execute enable or disable to turn it on or off for one Harness Code repository.",
       toolset: "aicr",
       scope: "account",
@@ -1734,8 +1781,11 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           headerPagination: true,
           queryParams: SPACE_LIST_QUERY,
           responseExtractor: aicrRepositoryListExtract,
+          enrichResult: aicrRepositoryListEnrich,
           description:
-            "List repositories with an AI Code Review config (a disabled one is still listed; the list does not show whether review is on) with repo_path and SCM source (Harness Code or linked provider).",
+            "List repositories with an AI Code Review config, disabled ones included, with repo_path, SCM source " +
+            "(Harness Code or linked provider) and review_enabled (the repository's AI review setting; absent when there is no Code repository, or when " +
+            "the read failed, which review_enabled_error reports).",
           paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
       },

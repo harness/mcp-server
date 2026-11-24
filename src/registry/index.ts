@@ -1227,6 +1227,10 @@ export class Registry {
       result = applyHeaderPagination(result, responseHeaders);
     }
 
+    if (spec.enrichResult) {
+      result = await spec.enrichResult(result, { client, input, registry: this, signal, accountId: resolvedAccountId });
+    }
+
     // Tag ELK/Mongo data source on the response when fallback is active
     if (dataSource && result && typeof result === "object" && !Array.isArray(result)) {
       result = Object.assign({}, result, { _data_source: dataSource });
