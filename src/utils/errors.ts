@@ -6,7 +6,8 @@ import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
  *   return errorResult(msg)  — for user-fixable problems the LLM can act on:
  *     bad resource_type, unsupported operation, missing required fields,
  *     validation errors (plain Errors from registry/toolset layer), AND
- *     Harness API 400/404 responses (bad identifier, wrong project, etc.).
+ *     Harness API 400/404/409 responses (bad identifier, wrong project,
+ *     already exists or already done).
  *     The LLM sees the message and can retry/adjust.
  *
  *   throw toMcpError(err)    — for infrastructure failures the LLM cannot fix:
@@ -14,7 +15,7 @@ import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
  *     HarnessApiErrors thrown by the HTTP client. Thrown as JSON-RPC errors so
  *     MCP clients surface them as system-level failures.
  *
- * Quick test: plain Error or HarnessApiError 400/404 → return errorResult.
+ * Quick test: plain Error or HarnessApiError 400/404/409 → return errorResult.
  *             HarnessApiError 401/403/429/5xx → throw toMcpError.
  */
 
