@@ -1023,6 +1023,14 @@ describe("aicr_review request_review / review_status", () => {
     expect(result).toMatchObject({ status: "failure", run: { status: "error", error_message: run.error_message } });
     expect(result.note).toMatch(/error_message/);
   });
+
+  it("reports a cancelled run as cancelled and points to request_review", async () => {
+    const run = { ...RUNNING, status: "cancelled" };
+    const { client } = makeClient(exists({ pr_number: 7, status: "cancelled", run }));
+    const result = await registry().dispatchExecute(client, "aicr_review", "review_status", { ...SCOPE, pr_number: 7 }) as Record<string, unknown>;
+    expect(result).toMatchObject({ status: "cancelled", run: { status: "cancelled" } });
+    expect(result.note).toMatch(/request_review/);
+  });
 });
 
 describe("aicr_review.get", () => {

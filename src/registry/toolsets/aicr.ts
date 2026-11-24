@@ -1487,7 +1487,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             "Start an AI Code Review of the pull request's current commit, run by the repo's AI Code Review pipeline as you. " +
             "Works only for an open PR in a project repository with AI Code Review enabled. " +
             "If a review of that commit is already running, that one is returned and no new one starts. " +
-            "Fails with a conflict while a review of an older commit of the PR is still running. " +
+            "A running review of an older commit of the PR is cancelled and replaced. " +
+            "It fails with a conflict only while a review is saving its result, which takes seconds; request again then. " +
             "Requesting a review of an already reviewed commit starts a new review of the whole pull request. " +
             "Returns status running with the run; follow it with review_status.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
@@ -1504,10 +1505,10 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrReviewStatusExtract,
           actionDescription:
-            "Status of the pull request's latest review run: running, success, failure, or none. " +
+            "Status of the pull request's latest review run: running, success, failure, cancelled, or none. " +
             "Read-only, takes a Harness PR URL. run.head_sha is the commit reviewed; if the PR has newer commits, request_review again. " +
             "A running review whose pipeline has ended is marked failed here, when you can edit reviews. " +
-            "A cancelled run (superseded, or nothing to review) also reports status failure; check run.status to tell cancelled from error.",
+            "cancelled means the run was superseded by a newer commit or had nothing to review.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
           bodySchema: { description: "No body", fields: [] },
         },
