@@ -1710,7 +1710,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       displayName: "AI Code Review Repository",
       description:
         "Repositories with an AI Code Review config under an account, org, or project. " +
-        "A disabled repository is still listed; the list does not show whether review is on. " +
+        "A disabled repository is still listed. enabled says whether review is on for a Harness Code repository; " +
+        "it is left out for a provider repository or when it could not be read. " +
         "Execute enable or disable to turn it on or off for one Harness Code repository.",
       toolset: "aicr",
       scope: "account",
@@ -1736,7 +1737,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: SPACE_LIST_QUERY,
           responseExtractor: aicrRepositoryListExtract,
           description:
-            "List repositories with an AI Code Review config (a disabled one is still listed; the list does not show whether review is on) with repo_path and SCM source (Harness Code or linked provider).",
+            "List repositories with an AI Code Review config (a disabled one is still listed) with repo_path and SCM source (Harness Code or linked provider). " +
+            "For Harness Code repositories, enabled says whether review is on; it is omitted when the setting is unavailable.",
           paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
       },
