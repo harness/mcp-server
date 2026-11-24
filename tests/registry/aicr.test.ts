@@ -1241,7 +1241,7 @@ describe("space-level lists (aicr_review, aicr_repository)", () => {
     for (const leaked of ["system_prompt", "mcp_servers", "criteria", "secret"]) expect(text).not.toContain(leaked);
   });
 
-  it("adds review_enabled from each repository's Code setting, leaving it out when unreadable", async () => {
+  it("adds review_enabled from each repository's Code setting, reporting reads that failed", async () => {
     const off = `${ACCOUNT}/code/off-repo`;
     const gone = `${ACCOUNT}/code/DeepSourceAICR/gone`;
     const broken = `${ACCOUNT}/broken`;
@@ -1258,10 +1258,23 @@ describe("space-level lists (aicr_review, aicr_repository)", () => {
 
     const rows = result.items as Array<Record<string, unknown>>;
     expect(rows.map((r) => r.review_enabled)).toEqual([true, false, undefined, undefined]);
+    expect(result.review_enabled_error).toBe(
+      `Could not read the AI review setting for 1 repositories (${broken}); review_enabled is missing on those rows. First error: HTTP 500: boom`,
+    );
     const settingsCall = request.mock.calls.find(([o]) => o.path.endsWith("/off-repo/settings/general"))![0];
     expect(settingsCall.params).toEqual({ orgIdentifier: "code" });
     const fixturesCall = request.mock.calls.find(([o]) => o.path.endsWith("/aicr-runs-fixtures/settings/general"))![0];
     expect(fixturesCall.params).toEqual({ orgIdentifier: "code", projectIdentifier: "DeepSourceAICR" });
+  });
+
+  it("leaves review_enabled_error out when every setting read works or 404s", async () => {
+    const { client } = makeClient((opts) => {
+      if (opts.path === "/gateway/aicr/api/v1/repos") return [REPO_SETTING, { ...REPO_SETTING, repo_path: `${ACCOUNT}/code/gone` }];
+      if (opts.path.endsWith("/gone/settings/general")) throw new HarnessApiError("Not Found", 404);
+      return { ai_pullreq_review_enabled: true };
+    });
+    const result = await registry().dispatch(client, "aicr_repository", "list", { org_id: "code" }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("review_enabled_error");
   });
 
   it("compacts repositories to repo_path, source, review_enabled, and update time", () => {

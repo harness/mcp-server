@@ -47,7 +47,7 @@ They must NOT:
 
 - Import `HarnessClient`, `McpServer`, or `Registry`
 - Import or call `createLogger` (logging belongs in tool handlers and infrastructure modules, not toolsets)
-- Make HTTP calls directly (use `preflight` hooks with structural client interfaces from `PreflightContext` when needed)
+- Make HTTP calls directly (use `preflight` hooks, or `enrichResult` for follow-up reads on an extracted result, with structural client interfaces from `PreflightContext` when needed)
 - Contain business logic beyond field mapping
 - Use `console.log()` (or any stdout writes)
 

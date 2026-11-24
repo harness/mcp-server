@@ -382,19 +382,37 @@ async function aicrCheckReviewEnabled(ctx: PreflightContext, repoPath: string): 
 
 /**
  * The AICR repository list has every repository with a config, including disabled ones, and no enabled flag:
- * the setting lives in Code. Add each row's `review_enabled` from Code, a few rows at a time. A row whose
- * setting cannot be read (no Code repository, or an error) is left without the field rather than failing the list.
+ * the setting lives in Code. Add each row's `review_enabled` from Code, a few rows at a time. A row with no
+ * Code repository (a 404) is left without the field. Any other read failure leaves the row without it too, but
+ * is reported in `review_enabled_error` so it does not read as "no Code repository".
  */
 async function aicrRepositoryListEnrich(result: unknown, ctx: PreflightContext): Promise<unknown> {
-  const items = (result as { items?: unknown } | null)?.items;
-  if (!Array.isArray(items)) return result;
+  if (typeof result !== "object" || result === null) return result;
+  const out = result as { items?: unknown; review_enabled_error?: string };
+  if (!Array.isArray(out.items)) return result;
+  const failed: string[] = [];
+  let firstError = "";
   const BATCH = 8;
-  for (let i = 0; i < items.length; i += BATCH) {
-    await Promise.all(items.slice(i, i + BATCH).map(async (item: Record<string, unknown>) => {
+  for (let i = 0; i < out.items.length; i += BATCH) {
+    await Promise.all(out.items.slice(i, i + BATCH).map(async (item: Record<string, unknown>) => {
       if (typeof item.repo_path !== "string") return;
-      const enabled = await aicrReviewEnabled(ctx, item.repo_path).catch(() => undefined);
-      if (enabled !== undefined) item.review_enabled = enabled;
+      try {
+        const enabled = await aicrReviewEnabled(ctx, item.repo_path);
+        if (enabled !== undefined) item.review_enabled = enabled;
+      } catch (err) {
+        failed.push(item.repo_path);
+        if (!firstError) {
+          firstError = err instanceof HarnessApiError
+            ? `HTTP ${err.statusCode}: ${err.message}`
+            : err instanceof Error ? err.message : String(err);
+        }
+      }
     }));
+  }
+  if (failed.length > 0) {
+    out.review_enabled_error =
+      `Could not read the AI review setting for ${failed.length} repositories (${failed.join(", ")}); ` +
+      `review_enabled is missing on those rows. First error: ${firstError}`;
   }
   return result;
 }
@@ -1766,7 +1784,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           enrichResult: aicrRepositoryListEnrich,
           description:
             "List repositories with an AI Code Review config, disabled ones included, with repo_path, SCM source " +
-            "(Harness Code or linked provider) and review_enabled (the repository's AI review setting; absent when it could not be read).",
+            "(Harness Code or linked provider) and review_enabled (the repository's AI review setting; absent when there is no Code repository, or when " +
+            "the read failed, which review_enabled_error reports).",
           paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
       },
