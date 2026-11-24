@@ -2690,12 +2690,13 @@ export {
 // ---------------------------------------------------------------------------
 
 /**
- * A PR with no completed review returns an empty 200 (`run_id: ""`), which
- * looks like "no issues". Say so explicitly.
+ * The backend returns the same empty 200 (`run_id: ""`) for a PR with no completed review
+ * and for a repo or PR that does not exist, which looks like "no issues". Say so explicitly.
  */
 export const AICR_NO_REVIEW_NOTE =
-  "No completed AI Code Review for this pull request yet, so an empty result does not mean there are no issues. " +
-  "Check harness_list(resource_type=\"aicr_run\") for a pending, running, or failed run.";
+  "No completed AI Code Review found for this pull request, so an empty result does not mean there are no issues. " +
+  "The same result comes back for a repository or pull request that does not exist: check repo_id, org_id, " +
+  "project_id and pr_number. Check harness_list(resource_type=\"aicr_run\") for a pending, running, or failed run.";
 
 /** Input keys the aicr toolset uses to pass data from request building to the extractors. */
 export const AICR_LINK_KEY = "_aicr_pr_url";

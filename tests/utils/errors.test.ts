@@ -18,6 +18,11 @@ describe("isUserFixableApiError", () => {
     expect(isUserFixableApiError(err)).toBe(true);
   });
 
+  it("returns true for HarnessApiError with status 409", () => {
+    const err = new HarnessApiError('finding "abc" is already dismissed', 409);
+    expect(isUserFixableApiError(err)).toBe(true);
+  });
+
   it("returns false for HarnessApiError with status 401", () => {
     const err = new HarnessApiError("Unauthorized", 401);
     expect(isUserFixableApiError(err)).toBe(false);

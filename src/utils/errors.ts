@@ -44,11 +44,12 @@ export function isUserError(err: unknown): err is Error {
 
 /**
  * Returns true for Harness API errors that the LLM can act on (400 bad request,
- * 404 not found). These indicate wrong identifiers, missing resources, or bad
- * input — problems the LLM can fix by retrying with different parameters.
+ * 404 not found, 409 conflict). These indicate wrong identifiers, missing resources,
+ * bad input, or a state conflict (already exists, already done) — problems the LLM
+ * can fix with different parameters or a different call.
  */
 export function isUserFixableApiError(err: unknown): err is HarnessApiError {
-  return err instanceof HarnessApiError && (err.statusCode === 400 || err.statusCode === 404);
+  return err instanceof HarnessApiError && (err.statusCode === 400 || err.statusCode === 404 || err.statusCode === 409);
 }
 
 /**
