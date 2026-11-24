@@ -1241,9 +1241,34 @@ describe("space-level lists (aicr_review, aicr_repository)", () => {
     for (const leaked of ["system_prompt", "mcp_servers", "criteria", "secret"]) expect(text).not.toContain(leaked);
   });
 
-  it("compacts repositories to repo_path, source, and update time", () => {
+  it("adds review_enabled from each repository's Code setting, leaving it out when unreadable", async () => {
+    const off = `${ACCOUNT}/code/off-repo`;
+    const gone = `${ACCOUNT}/code/DeepSourceAICR/gone`;
+    const broken = `${ACCOUNT}/broken`;
+    const { client, request } = makeClient((opts) => {
+      if (opts.path === "/gateway/aicr/api/v1/repos") {
+        return [REPO_SETTING, { ...REPO_SETTING, repo_path: off }, { ...REPO_SETTING, repo_path: gone }, { ...REPO_SETTING, repo_path: broken }];
+      }
+      if (opts.path.endsWith("/off-repo/settings/general")) return { ai_pullreq_review_enabled: false };
+      if (opts.path.endsWith("/gone/settings/general")) throw new HarnessApiError("Not Found", 404);
+      if (opts.path.endsWith("/broken/settings/general")) throw new HarnessApiError("boom", 500);
+      return { ai_pullreq_review_enabled: true };
+    });
+    const result = await registry().dispatch(client, "aicr_repository", "list", { org_id: "code" }) as Record<string, unknown>;
+
+    const rows = result.items as Array<Record<string, unknown>>;
+    expect(rows.map((r) => r.review_enabled)).toEqual([true, false, undefined, undefined]);
+    const settingsCall = request.mock.calls.find(([o]) => o.path.endsWith("/off-repo/settings/general"))![0];
+    expect(settingsCall.params).toEqual({ orgIdentifier: "code" });
+    const fixturesCall = request.mock.calls.find(([o]) => o.path.endsWith("/aicr-runs-fixtures/settings/general"))![0];
+    expect(fixturesCall.params).toEqual({ orgIdentifier: "code", projectIdentifier: "DeepSourceAICR" });
+  });
+
+  it("compacts repositories to repo_path, source, review_enabled, and update time", () => {
     const [compact] = compactItems([REPO_SETTING], aicrRepositoryCompact) as Array<Record<string, unknown>>;
     expect(compact).toEqual({ repo_path: REPO_PATH, source: "assigned", updated: REPO_SETTING.updated });
+    const [off] = compactItems([{ ...REPO_SETTING, review_enabled: false }], aicrRepositoryCompact) as Array<Record<string, unknown>>;
+    expect(off.review_enabled).toBe(false);
   });
 });
 

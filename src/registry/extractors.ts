@@ -2879,7 +2879,7 @@ export function aicrPullRequestCompact(item: Record<string, unknown>): Record<st
 }
 
 export function aicrRepositoryCompact(item: Record<string, unknown>): Record<string, unknown> {
-  return pickPresent(item, ["repo_path", "source", "provider_repo", "updated"]);
+  return pickPresent(item, ["repo_path", "source", "provider_repo", "review_enabled", "updated"]);
 }
 
 type AicrSideCall = { ok: true; value: unknown } | { ok: false; error: string };
