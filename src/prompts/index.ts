@@ -22,6 +22,8 @@ import { registerCommitmentUtilizationPrompt } from "./commitment-utilization.js
 import { registerCostAnomalyPrompt } from "./cost-anomaly.js";
 import { registerRightsizingPrompt } from "./rightsizing.js";
 import { registerBusinessValueReviewPrompt } from "./business-value-review.js";
+import { registerGovernanceSavingsReviewPrompt } from "./governance-savings-review.js";
+import { registerGovernanceRuleAuthoringPrompt } from "./governance-rule-authoring.js";
 
 // DevSecOps prompts
 import { registerVulnerabilityTriagePrompt } from "./vulnerability-triage.js";
@@ -76,6 +78,8 @@ export function registerAllPrompts(server: McpServer): void {
   registerCostAnomalyPrompt(server);
   registerRightsizingPrompt(server);
   registerBusinessValueReviewPrompt(server);
+  registerGovernanceSavingsReviewPrompt(server);
+  registerGovernanceRuleAuthoringPrompt(server);
 
   // DevSecOps
   registerVulnerabilityTriagePrompt(server);
