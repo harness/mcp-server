@@ -1245,6 +1245,18 @@ describe("space-level lists (aicr_review, aicr_repository)", () => {
     const [compact] = compactItems([REPO_SETTING], aicrRepositoryCompact) as Array<Record<string, unknown>>;
     expect(compact).toEqual({ repo_path: REPO_PATH, source: "assigned", updated: REPO_SETTING.updated });
   });
+
+  it("keeps enabled, including false, in full and compact rows, and leaves it out when the server did", async () => {
+    const off = { ...REPO_SETTING, enabled: false };
+    const { client } = makeClient(() => [off, { ...REPO_SETTING, repo_path: "acct/gh/repo" }]);
+    const result = await registry().dispatch(client, "aicr_repository", "list", { org_id: "code" }) as Record<string, unknown>;
+    const [first, second] = result.items as Array<Record<string, unknown>>;
+    expect(first.enabled).toBe(false);
+    expect(second).not.toHaveProperty("enabled");
+
+    const [compact] = compactItems([off], aicrRepositoryCompact) as Array<Record<string, unknown>>;
+    expect(compact.enabled).toBe(false);
+  });
 });
 
 describe("applyHeaderPagination with gitness-style headers", () => {

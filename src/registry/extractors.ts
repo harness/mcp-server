@@ -2853,7 +2853,7 @@ const AICR_PR_FIELDS = [
 
 /** `GET /repos` rows are full repo settings; prompt, MCP servers, and criteria are config, not repo identity. */
 const AICR_REPOSITORY_FIELDS = [
-  "repo_path", "source", "connector_ref", "provider_repo", "has_linked_repo", "created", "updated",
+  "repo_path", "source", "connector_ref", "provider_repo", "has_linked_repo", "enabled", "created", "updated",
 ] as const;
 
 /** Bare array → `{items, total}`; `headerPagination` replaces `total` with the server's count. */
@@ -2880,7 +2880,7 @@ export function aicrPullRequestCompact(item: Record<string, unknown>): Record<st
 }
 
 export function aicrRepositoryCompact(item: Record<string, unknown>): Record<string, unknown> {
-  return pickPresent(item, ["repo_path", "source", "provider_repo", "updated"]);
+  return pickPresent(item, ["repo_path", "source", "provider_repo", "enabled", "updated"]);
 }
 
 type AicrSideCall = { ok: true; value: unknown } | { ok: false; error: string };
