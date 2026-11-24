@@ -454,11 +454,6 @@ export interface EndpointSpec {
    */
   preflight?: (ctx: PreflightContext) => Promise<void | { result: unknown }>;
   /**
-   * Optional async step on the extracted result (after header pagination), for data the
-   * response itself lacks and that needs further requests. Returns the result to use.
-   */
-  enrichResult?: (result: unknown, ctx: PreflightContext) => Promise<unknown>;
-  /**
    * When true, the MCP layer controls ELK→Mongo fallback for this endpoint:
    *  1. First request sent with `enforce_elasticsearch=true` (ELK path).
    *  2. On failure (4xx except 401/403, 5xx, or timeout), retried with
