@@ -509,6 +509,13 @@ describe("aicr_repository enable / disable", () => {
     expect(result).toEqual({ repo_path: REPO_PATH, enabled: false });
   });
 
+  it("reports an unknown result, not off, when the disable response has no AI review setting", async () => {
+    const { client } = makeClient(() => ({ git_lfs_enabled: true }));
+    const result = await registry().dispatchExecute(client, "aicr_repository", "disable", { ...SCOPE }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("enabled");
+    expect(result.warning).toMatch(/unknown/);
+  });
+
   it("disable on a repo with no Harness Code repository gives a clear error and sends no PATCH", async () => {
     const { client, request } = makeClient(() => { throw new HarnessApiError("Not Found", 404); });
     await expect(registry().dispatchExecute(client, "aicr_repository", "disable", { ...SCOPE })).rejects.toThrow(/No repository/);

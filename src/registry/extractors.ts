@@ -2977,11 +2977,17 @@ export function aicrEnableExtract(raw: unknown, input?: Record<string, unknown>)
 
 /**
  * Code's general repository settings come back after the PATCH; `ai_pullreq_review_enabled` is the
- * repository's AI review setting. Anything but a boolean is reported as off, which is what was asked.
+ * repository's AI review setting. A response without it confirms nothing, so `enabled` is left out
+ * and the caller is told to read the setting again rather than shown the state it asked for.
  */
 export function aicrDisableExtract(raw: unknown, input?: Record<string, unknown>): unknown {
   const flag = asRecord(raw)?.ai_pullreq_review_enabled;
-  return { repo_path: input?.repo_path, enabled: typeof flag === "boolean" ? flag : false };
+  if (typeof flag === "boolean") return { repo_path: input?.repo_path, enabled: flag };
+  return {
+    repo_path: input?.repo_path,
+    warning: "The response did not include the AI review setting, so the result is unknown. " +
+      "Read the repository's settings to check whether AI review is off.",
+  };
 }
 
 /** Gates: the per-category thresholds only; config ids and SCM connector fields are internal. */
