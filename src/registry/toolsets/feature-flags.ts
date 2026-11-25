@@ -465,7 +465,7 @@ const fmeMetricUpdateSchema: BodySchema = {
     { name: "filterEventType", type: "object", required: false, description: "Replacement filter event, or null to clear it. propertyFilters defaults to [] when omitted." },
     { name: "triggerEventType", type: "object", required: false, description: "Replacement trigger event (HAS_DONE_BEFORE), or null to clear it. Shape: {eventTypeId}." },
     { name: "tags", type: "array", required: false, description: "Replacement tag list; null or [] clears all tags", itemType: "object" },
-    { name: "categories", type: "array", required: false, description: "Replacement category list (full replacement); null or [] removes the metric from all categories. Metric categories by name. Each entry is {name: string}; bare strings are accepted and auto-wrapped. Names match case-insensitively. Valid names are \"Guardrail metrics\" and any category that exists in the project; any other name is rejected with 400 listing the valid ones. Adding a metric to Guardrail metrics beyond the guardrail limit for its traffic type is rejected with 400.", itemType: "object" },
+    { name: "categories", type: "array", required: false, description: "Replacement category list (full replacement); null or [] removes the metric from all categories. Entries are {name} or bare strings; same name rules and 400s as create", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Replacement cap configuration, or null to clear it" },
   ],
