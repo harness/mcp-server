@@ -61,7 +61,7 @@ const ALLOWED_SINGLE_OP_COUNTS_BY_TOOLSET: Readonly<Record<string, number>> = {
   pipelines: 6,
   connectors: 2,
   logs: 1,
-  ci: 1,
+  ti: 1,
   registries: 3,
   "registries-v3": 8,
   "registries-firewall": 2,

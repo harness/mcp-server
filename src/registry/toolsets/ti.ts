@@ -5,10 +5,10 @@ import { MC_SCOPE } from "./scopes.js";
 // Source of truth: harness-ti `GET /api/v1/test-cases` (ti-service/openapi.yaml, operationId
 // listPublicTestCases; handler/public_test_cases.go). Only these query params are honored;
 // the server silently ignores all others and pins report=junit.
-export const ciToolset: ToolsetDefinition = {
-  name: "ci",
-  displayName: "CI",
-  description: "Harness CI: test results (test cases) reported by test steps of pipeline executions",
+export const tiToolset: ToolsetDefinition = {
+  name: "ti",
+  displayName: "Test Intelligence",
+  description: "Harness Test Intelligence: test results (test cases) reported by test steps of pipeline executions",
   optIn: true,
   resources: [
     {
@@ -19,7 +19,7 @@ export const ciToolset: ToolsetDefinition = {
         "flags) for ONE pipeline execution, e.g. which tests failed or how many ran. " +
         "Requires pipeline_id and build_id (execution run number); stage_id/step_id narrow it. Returns one page " +
         "(size 1-100, default 20). Does not return logs, execution status or coverage.",
-      toolset: "ci",
+      toolset: "ti",
       scope: "project",
       scopeParams: MC_SCOPE,
       identifierFields: [],

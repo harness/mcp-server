@@ -66,7 +66,7 @@ import { runbooksToolset } from "./toolsets/runbooks.js";
 import { releaseManagementToolset } from "./toolsets/release-management.js";
 import { vibeToolset } from "./toolsets/vibe.js";
 import { appsecToolset } from "./toolsets/appsec.js";
-import { ciToolset } from "./toolsets/ci.js";
+import { tiToolset } from "./toolsets/ti.js";
 
 const log = createLogger("registry");
 
@@ -237,7 +237,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   releaseManagementToolset,
   vibeToolset,
   appsecToolset,
-  ciToolset,
+  tiToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */

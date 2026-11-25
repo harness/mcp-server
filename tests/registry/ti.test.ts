@@ -23,7 +23,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_SKIP_ELICITATION: false,
     HARNESS_ALLOW_HTTP: false,
     HARNESS_FME_BASE_URL: "https://api.split.io",
-    HARNESS_TOOLSETS: "ci",
+    HARNESS_TOOLSETS: "ti",
     ...overrides,
   } as Config;
 }
@@ -79,15 +79,15 @@ describe("testCaseListExtract", () => {
   });
 });
 
-describe("ci toolset", () => {
+describe("ti toolset", () => {
   it("is opt-in and not loaded by default", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
     expect(() => registry.getResource("test_case")).toThrow();
   });
 
-  it("is loaded with +ci", () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ci" }));
-    expect(registry.getResource("test_case").toolset).toBe("ci");
+  it("is loaded with +ti", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ti" }));
+    expect(registry.getResource("test_case").toolset).toBe("ti");
   });
 
   it("maps list params to the public API's camelCase query params and scope", async () => {
