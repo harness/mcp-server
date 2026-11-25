@@ -1,9 +1,11 @@
 import type { ToolsetDefinition } from "../types.js";
 import { harV3ListExtract, harV3DataArrayUnwrap, harV3DataObjectUnwrap } from "../extractors.js";
 import { buildIdListBody } from "../../utils/body-normalizer.js";
-import { V3_SCOPE_PARAMS, V3_STATS_MAX_IDS, statsBodySchema } from "./har-common.js";
+import {
+  V3_SCOPE_PARAMS, V3_STATS_MAX_IDS, V3_PACKAGE_TYPES, V3_SORT_DESC, V3_PACKAGE_TYPES_DESC, statsBodySchema,
+} from "./har-common.js";
 
-export { V3_SCOPE_PARAMS };
+export { V3_SCOPE_PARAMS, V3_PACKAGE_TYPES, V3_SORT_DESC, V3_PACKAGE_TYPES_DESC };
 
 // Projects a raw v3 package list item down to the fields agents actually need.
 // The default `compactItems()` whitelist keeps `id`/`name`/timestamps but drops
@@ -74,18 +76,7 @@ const compactFileV3 = (item: Record<string, unknown>): Record<string, unknown> =
  * `x-internal: true` operations are excluded on purpose.
  */
 
-// Known values from api.yaml PackageTypeV3. Extensible — the API may add more
-// (e.g. GITLFS) so treat this as guidance for agents, not a hard whitelist.
-export const V3_PACKAGE_TYPES = [
-  "DOCKER", "MAVEN", "PYTHON", "GENERIC", "HELM", "HELM_HTTP", "NUGET", "NPM",
-  "RPM", "CARGO", "COMPOSER", "GO", "HUGGINGFACE", "CONDA", "DART", "SWIFT",
-  "PUPPET", "RUBY", "RAW", "DEBIAN", "CONAN", "TERRAFORM", "CRAN", "WOLFI",
-  "ALPINE",
-];
 const V3_PACKAGE_KINDS = ["model", "dataset", "module", "provider"];
-export const V3_SORT_DESC = "Sort spec `sort_field:sort_order`, e.g. `name:asc` or `modifiedAt:desc`.";
-export const V3_PACKAGE_TYPES_DESC =
-  "Package type. Known values include DOCKER, MAVEN, PYTHON, NPM, HELM, HELM_HTTP, etc. The API is extensible; unknown values may appear.";
 
 export const registriesV3Toolset: ToolsetDefinition = {
   name: "registries-v3",

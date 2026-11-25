@@ -3,7 +3,7 @@ import {
   passthrough, harV3ListExtract, harV3DataObjectUnwrap, harV3ScanEvaluationExtract, firewallExceptionListExtract,
   bulkScanEvaluationExtract,
 } from "../extractors.js";
-import { V3_SCOPE_PARAMS, V3_PACKAGE_TYPES, V3_SORT_DESC, V3_PACKAGE_TYPES_DESC } from "./registries-v3.js";
+import { V3_SCOPE_PARAMS, V3_PACKAGE_TYPES, V3_SORT_DESC, V3_PACKAGE_TYPES_DESC } from "./har-common.js";
 
 // The scan list only accepts these two; the backend rejects ALLOWED/UNKNOWN with a 400.
 const V3_SCAN_LIST_STATUSES = ["BLOCKED", "WARN"];

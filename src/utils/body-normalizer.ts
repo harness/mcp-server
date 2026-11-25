@@ -85,6 +85,14 @@ function assertObjectBody(body: unknown): void {
   }
 }
 
+/** The ids in a list value: an array, a comma-separated string, or nothing. Anything else is an error. */
+function idList(raw: unknown, name: string): unknown[] {
+  if (raw === undefined || raw === null) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") return raw.split(",");
+  throw new Error(`${name} must be a comma-separated string or array of string ids, got ${typeof raw}.`);
+}
+
 export interface IdListBodyOptions {
   /** Input key holding a single id; set only when it is the resource's identifier field, so resource_id fills it. */
   singleKey?: string;
@@ -103,11 +111,15 @@ export interface IdListBodyOptions {
  */
 export function buildIdListBody(opts: IdListBodyOptions): (input: Record<string, unknown>) => Record<string, string[]> {
   return (input: Record<string, unknown>) => {
-    const raw = input[opts.listKey];
-    const listed = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",") : [];
+    const listed = idList(input[opts.listKey], opts.listKey);
+    // harness_execute keeps args.body nested under input.body, so read the advertised body key there too.
+    const body = input.body;
+    const fromBody = body !== null && typeof body === "object" && !Array.isArray(body)
+      ? idList((body as Record<string, unknown>)[opts.bodyKey], `body.${opts.bodyKey}`)
+      : [];
     const single = opts.singleKey ? input[opts.singleKey] : undefined;
     const ids = [...new Set(
-      [...(single == null ? [] : [single]), ...listed]
+      [...(single == null ? [] : [single]), ...listed, ...fromBody]
         .map((v) => {
           if (typeof v !== "string") {
             throw new Error(`${opts.listKey} must contain string ids, got ${v === null ? "null" : typeof v}.`);

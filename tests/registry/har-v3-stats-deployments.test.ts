@@ -70,6 +70,17 @@ describe("buildIdListBody", () => {
     expect(() => build({ package_id: 123 })).toThrow(/got number/);
   });
 
+  it("reads the advertised body key from input.body, merged with params and resource_id", () => {
+    expect(build({ body: { packageIds: ["b", "a"] } })).toEqual({ packageIds: ["b", "a"] });
+    expect(build({ package_id: "a", package_ids: "b", body: { packageIds: "c,a" } })).toEqual({ packageIds: ["a", "b", "c"] });
+  });
+
+  it("rejects a list value that is neither a string nor an array, even with resource_id set", () => {
+    expect(() => build({ package_ids: 123 })).toThrow("package_ids must be a comma-separated string or array of string ids, got number.");
+    expect(() => build({ package_id: "a", package_ids: true })).toThrow(/package_ids must be .* got boolean/);
+    expect(() => build({ package_id: "a", body: { packageIds: { id: "b" } } })).toThrow(/body\.packageIds must be .* got object/);
+  });
+
   it("only mentions resource_id when a single-id key is configured", () => {
     const listOnly = buildIdListBody({ listKey: "registry_uuids", bodyKey: "registryIds", max: 3 });
     expect(() => listOnly({ registry_uuids: "" })).toThrow("Pass registry_uuids (comma-separated, up to 3).");
@@ -210,6 +221,32 @@ describe("stats through harness_execute", () => {
       params: { package_ids: "p-uuid-2,p-uuid-1" },
     });
     expect(lastCall(client).body).toEqual({ packageIds: ["p-uuid-1", "p-uuid-2"] });
+  });
+
+  it("registry.stats accepts the ids in body, as its bodySchema advertises", async () => {
+    const { result, client } = await callExecute({
+      resource_type: "registry",
+      action: "stats",
+      body: { registryIds: ["r-uuid-1"] },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(lastCall(client).path).toBe("/har/api/v3/registries/stats");
+    expect(lastCall(client).body).toEqual({ registryIds: ["r-uuid-1"] });
+  });
+
+  it("package_version.deployments maps resource_id to version_id and is account-scoped", async () => {
+    const { result, client } = await callExecute({
+      resource_type: "package_version",
+      action: "deployments",
+      resource_id: "ver-1",
+    });
+    expect(result.isError).toBeUndefined();
+    const call = lastCall(client);
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/har/api/v3/versions/ver-1/deployments");
+    expect(call.params.account_identifier).toBe("acct123");
+    expect(call.params.org_identifier).toBeUndefined();
+    expect(call.params.project_identifier).toBeUndefined();
   });
 });
 

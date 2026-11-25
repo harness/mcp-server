@@ -1,6 +1,6 @@
 import type { ToolsetDefinition, BodySchema, FilterFieldSpec } from "../types.js";
 import { passthrough, harV3ListExtract } from "../extractors.js";
-import { V3_SCOPE_PARAMS, V3_PACKAGE_TYPES, V3_SORT_DESC, V3_PACKAGE_TYPES_DESC } from "./registries-v3.js";
+import { V3_SCOPE_PARAMS, V3_PACKAGE_TYPES, V3_SORT_DESC, V3_PACKAGE_TYPES_DESC } from "./har-common.js";
 
 const LIFECYCLE_SCOPES = ["account", "org", "project"] as const;
 const LIFECYCLE_ACTIONS = ["DELETE", "PROTECT"];
