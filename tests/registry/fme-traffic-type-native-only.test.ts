@@ -4,6 +4,10 @@ import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { RequestOptions } from "../../src/client/types.js";
 import { Registry } from "../../src/registry/index.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
+import type { ToolResult } from "../../src/utils/response-formatter.js";
+import { registerCreateTool } from "../../src/tools/harness-create.js";
+import { registerDeleteTool } from "../../src/tools/harness-delete.js";
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -134,5 +138,78 @@ describe("fme_traffic_type native-only create/delete", () => {
   it("risk levels: create low_write, delete destructive, neither retried", () => {
     expect(findOperation("create")?.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "do_not_retry" });
     expect(findOperation("delete")?.operationPolicy).toEqual({ risk: "destructive", retryPolicy: "do_not_retry" });
+  });
+});
+
+function makeMcpServer(elicitAction: "accept" | "decline" = "accept") {
+  const tools = new Map<string, { schema: { inputSchema: { safeParse: (v: unknown) => { success: boolean } } }; handler: (...args: unknown[]) => Promise<ToolResult> }>();
+  return {
+    server: {
+      getClientCapabilities: () => ({ elicitation: { form: {} } }),
+      elicitInput: vi.fn().mockResolvedValue({ action: elicitAction }),
+    },
+    registerTool: vi.fn((name: string, schema: never, handler: (...args: unknown[]) => Promise<ToolResult>) => {
+      tools.set(name, { schema, handler });
+    }),
+    tool(name: string) {
+      const tool = tools.get(name);
+      if (!tool) throw new Error(`Tool "${name}" not registered`);
+      return tool;
+    },
+    async call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+      const confirmation = elicitAction === "accept" ? ACCEPTED_CONFIRMATION : { action: elicitAction };
+      return this.tool(name).handler(args, toolHandlerContext(new AbortController().signal, confirmation));
+    },
+  } as any;
+}
+
+function resultText(result: ToolResult): string {
+  const item = result.content[0]!;
+  return item.type === "text" ? item.text : "";
+}
+
+describe("fme_traffic_type via harness_create / harness_delete", () => {
+  it("harness_create: schema rejects a call without body", () => {
+    const server = makeMcpServer();
+    registerCreateTool(server, new Registry(makeConfig()), makeClient(), makeConfig());
+    const parsed = server.tool("harness_create").schema.inputSchema.safeParse({ resource_type: "fme_traffic_type", ...nativeScope });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("harness_create: empty body fails required-field validation without sending a request", async () => {
+    const server = makeMcpServer();
+    const mockRequest = vi.fn().mockResolvedValue({});
+    registerCreateTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
+
+    const result = await server.call("harness_create", { resource_type: "fme_traffic_type", ...nativeScope, body: {} });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/Missing required fields for fme_traffic_type: name/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("harness_delete: maps resource_id to traffic_type_id once confirmed", async () => {
+    const server = makeMcpServer("accept");
+    const mockRequest = vi.fn().mockResolvedValue({ governance: { status: "NONE", details: [] } });
+    registerDeleteTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
+
+    const result = await server.call("harness_delete", { resource_type: "fme_traffic_type", resource_id: TT_ID, ...nativeScope });
+
+    expect(result.isError).toBeUndefined();
+    const request = firstRequest(mockRequest);
+    expect(request.method).toBe("DELETE");
+    expect(request.path).toBe(`/fme/api/v4/traffic-types/${TT_ID}`);
+  });
+
+  it("harness_delete: sends no request when the user declines", async () => {
+    const server = makeMcpServer("decline");
+    const mockRequest = vi.fn().mockResolvedValue({});
+    registerDeleteTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
+
+    const result = await server.call("harness_delete", { resource_type: "fme_traffic_type", resource_id: TT_ID, ...nativeScope });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/declined/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
