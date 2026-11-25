@@ -1,14 +1,14 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerExemptionReviewPrompt(server: McpServer): void {
   server.registerPrompt(
     "security-exemption-review",
     {
       description: "Review pending security exemptions and make batch approval or rejection decisions",
-      argsSchema: {
-        projectId: z.string().describe("Project identifier").optional(),
-      },
+      argsSchema: z.object({
+              projectId: z.string().describe("Project identifier").optional(),
+            }),
     },
     async ({ projectId }) => {
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";

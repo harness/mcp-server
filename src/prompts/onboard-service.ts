@@ -1,15 +1,15 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerOnboardServicePrompt(server: McpServer): void {
   server.registerPrompt(
     "onboard-service",
     {
       description: "Walk through onboarding a new service into Harness with environments and a deployment pipeline",
-      argsSchema: {
-        serviceName: z.string().describe("Name of the service to onboard"),
-        projectId: z.string().describe("Target project identifier").optional(),
-      },
+      argsSchema: z.object({
+              serviceName: z.string().describe("Name of the service to onboard"),
+              projectId: z.string().describe("Target project identifier").optional(),
+            }),
     },
     async ({ serviceName, projectId }) => ({
       messages: [{

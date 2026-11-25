@@ -1,17 +1,17 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerCreateAgentPrompt(server: McpServer): void {
   server.registerPrompt(
     "create-agent",
     {
       description: "Create and update Harness AI agent instances - standalone templates used as building blocks in pipelines. New agents instantiate the shared harnessAI@1.0.0 base template via agent.uses/agent.with, requiring a connector (LLM access) and optional mcp connectors (GitHub, Slack, Harness platform). Updating an existing agent detects and preserves its current spec format (current agent.uses format, or legacy agent.step.group.steps format) rather than migrating it. Supports runtime inputs and task/rules-based instruction.",
-      argsSchema: {
-        agent_name: z.string().describe("Name for the custom agent"),
-        task_description: z.string().describe("What the agent should do"),
-        org_id: z.string().describe("Organization identifier").optional(),
-        project_id: z.string().describe("Project identifier").optional(),
-      },
+      argsSchema: z.object({
+              agent_name: z.string().describe("Name for the custom agent"),
+              task_description: z.string().describe("What the agent should do"),
+              org_id: z.string().describe("Organization identifier").optional(),
+              project_id: z.string().describe("Project identifier").optional(),
+            }),
     },
     async ({ agent_name, task_description, org_id, project_id }) => ({
       messages: [{

@@ -67,9 +67,18 @@ export function makeRegistry(
 }
 
 export function makeExtra(): Extra {
+  const controller = new AbortController();
   return {
-    _meta: {},
-    sendNotification: vi.fn().mockResolvedValue(undefined),
+    mcpReq: {
+      id: 1,
+      method: "tools/call",
+      _meta: {},
+      signal: controller.signal,
+      notify: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn().mockResolvedValue({}),
+      log: vi.fn().mockResolvedValue(undefined),
+      requestState: () => undefined,
+    },
   } as unknown as Extra;
 }
 
@@ -86,5 +95,5 @@ export function makeContext(overrides: Partial<DiagnoseContext> & {
   const input = overrides.input ?? {};
   const args = overrides.args ?? {};
 
-  return { client, registry, config, input, args, extra };
+  return { client, registry, config, input, args, extra, signal: extra.mcpReq.signal };
 }

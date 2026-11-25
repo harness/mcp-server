@@ -8,7 +8,7 @@ import { registerAllTools } from "../../src/tools/index.js";
 
 // Pinned hash of the full-mode tool schemas (descriptions, input and output schemas as advertised by tools/list). Full mode must stay byte-identical when compact-mode
 // copy changes; update this only for an intentional full-mode contract change.
-const FULL_MODE_SCHEMA_SHA256 = "36ebd50e86bfc046364cb7ec17886efcff3b8532acdab94f18fe16061bfc8d74";
+const FULL_MODE_SCHEMA_SHA256 = "2d78c362b567006ce6dd3b8e320c78d84d8c0f20279cdde828e4cd242cbffe23";
 
 // Measured: tool descriptions + input and output schemas in compact mode. Measured 21372 B total, 3585 B largest tool; headroom is deliberately small (~5%).
 const COMPACT_TOTAL_BUDGET_BYTES = 22500;
@@ -28,6 +28,13 @@ function makeConfig(mode: "full" | "compact"): Config {
   } as Config;
 }
 
+function jsonInputSchema(schema: z.ZodRawShape | z.ZodType): z.ZodType {
+  if (schema && typeof schema === "object" && "~standard" in schema) {
+    return schema as z.ZodType;
+  }
+  return z.object(schema as z.ZodRawShape);
+}
+
 function collectTools(mode: "full" | "compact") {
   const config = makeConfig(mode);
   const tools = new Map<string, { description?: string; schema: unknown; output?: unknown }>();
@@ -35,7 +42,7 @@ function collectTools(mode: "full" | "compact") {
     registerTool: vi.fn((name: string, def: { description?: string; inputSchema: z.ZodRawShape; outputSchema?: z.ZodType }) => {
       tools.set(name, {
         description: def.description,
-        schema: z.toJSONSchema(z.object(def.inputSchema)),
+        schema: z.toJSONSchema(jsonInputSchema(def.inputSchema)),
         output: def.outputSchema ? z.toJSONSchema(def.outputSchema) : undefined,
       });
     }),

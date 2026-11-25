@@ -191,7 +191,7 @@ Prompt templates live in `src/prompts/`. Each file exports a `register*Prompt(se
 ```typescript
 // src/prompts/my-prompt.ts
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerMyPrompt(server: McpServer): void {
   server.registerPrompt(

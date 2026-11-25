@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import {
   HarnessApiError,
   isUserError,
@@ -44,7 +44,7 @@ describe("isUserFixableApiError", () => {
   });
 
   it("returns false for McpError", () => {
-    const err = new McpError(ErrorCode.InternalError, "mcp error");
+    const err = new ProtocolError(ProtocolErrorCode.InternalError, "mcp error");
     expect(isUserFixableApiError(err)).toBe(false);
   });
 
@@ -65,7 +65,7 @@ describe("isUserError", () => {
   });
 
   it("returns false for McpError", () => {
-    expect(isUserError(new McpError(ErrorCode.InternalError, "mcp"))).toBe(false);
+    expect(isUserError(new ProtocolError(ProtocolErrorCode.InternalError, "mcp"))).toBe(false);
   });
 });
 
@@ -111,14 +111,14 @@ describe("toMcpError — cause chain", () => {
 
 describe("toMcpError", () => {
   it("passes through McpError unchanged", () => {
-    const err = new McpError(ErrorCode.InvalidParams, "bad");
+    const err = new ProtocolError(ProtocolErrorCode.InvalidParams, "bad");
     expect(toMcpError(err)).toBe(err);
   });
 
   it("maps HarnessApiError 401 to InvalidRequest", () => {
     const result = toMcpError(new HarnessApiError("Unauthorized", 401));
-    expect(result).toBeInstanceOf(McpError);
-    expect(result.code).toBe(ErrorCode.InvalidRequest);
+    expect(result).toBeInstanceOf(ProtocolError);
+    expect(result.code).toBe(ProtocolErrorCode.InvalidRequest);
   });
 
   it("includes correlationId in message", () => {
@@ -128,13 +128,13 @@ describe("toMcpError", () => {
 
   it("wraps plain Error as InternalError", () => {
     const result = toMcpError(new Error("oops"));
-    expect(result).toBeInstanceOf(McpError);
-    expect(result.code).toBe(ErrorCode.InternalError);
+    expect(result).toBeInstanceOf(ProtocolError);
+    expect(result.code).toBe(ProtocolErrorCode.InternalError);
   });
 
   it("wraps string as InternalError", () => {
     const result = toMcpError("raw string");
-    expect(result).toBeInstanceOf(McpError);
+    expect(result).toBeInstanceOf(ProtocolError);
     expect(result.message).toContain("raw string");
   });
 

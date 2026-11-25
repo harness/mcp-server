@@ -1142,6 +1142,7 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
       scope: "account",
       identifierFields: ["perspective_id"],
       listFilterFields: [
+        { name: "perspective_id", description: "Cost perspective identifier (from cost_perspective list)", required: true },
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, environment, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
         { name: "start_time", description: "Custom window start. Accepts a UTC date \"YYYY-MM-DD\" (e.g. \"2026-09-28\"), an ISO 8601 datetime, or epoch milliseconds. Must be paired with end_time; overrides time_filter. Use for specific days or historical ranges the relative enum can't express. Invalid values return an error.", type: "string" },
@@ -1202,6 +1203,7 @@ Each item has 'time' (epoch ms) and 'date' (UTC "YYYY-MM-DD") — use 'date' for
       identifierFields: ["perspective_id"],
       compactItem: compactTimeseriesStat,
       listFilterFields: [
+        { name: "perspective_id", description: "Cost perspective identifier (from cost_perspective list)", required: true },
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
         { name: "start_time", description: "Custom window start. Accepts a UTC date \"YYYY-MM-DD\" (e.g. \"2026-09-28\"), an ISO 8601 datetime, or epoch milliseconds. Must be paired with end_time; overrides time_filter. Use for specific days or historical ranges the relative enum can't express. Invalid values return an error.", type: "string" },

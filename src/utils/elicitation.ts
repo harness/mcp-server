@@ -1,5 +1,13 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { createHash, randomBytes } from "node:crypto";
+import {
+  createRequestStateCodec,
+  inputRequired,
+  inputResponse,
+  type InputRequiredResult,
+  type McpServer,
+  type Server,
+  type ServerContext,
+} from "@modelcontextprotocol/server";
 import { createLogger } from "./logger.js";
 import { type RiskLevel, type AutoApproveRisk, shouldAutoApprove, requiresConfirmation } from "../registry/types.js";
 
@@ -25,6 +33,38 @@ export interface ElicitationResult {
   reason?: "declined" | "cancelled";
   /** How the confirmation was resolved — maps directly to ConfirmationMethod for audit. */
   method: "elicited" | "caller_confirmed" | "auto_approved" | "not_required" | "blocked";
+  needsInput?: undefined;
+}
+
+/** The handler must return this result so the client can collect confirmation and retry. */
+export interface ConfirmationPrompt {
+  proceed: false;
+  needsInput: InputRequiredResult;
+}
+
+export type ConfirmationDecision = ElicitationResult | ConfirmationPrompt;
+
+export function isConfirmationPrompt(result: ConfirmationDecision): result is ConfirmationPrompt {
+  return result.needsInput !== undefined;
+}
+
+interface ConfirmationState {
+  tool: string;
+  argsHash: string;
+}
+
+/** Stable hash of the tool arguments a confirmation is bound to. */
+export function confirmationArgsHash(args: unknown): string {
+  return createHash("sha256").update(stableStringify(args)).digest("hex");
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
 }
 
 /**
@@ -70,19 +110,47 @@ export function describeBlockedAudit(result: ElicitationResult): string {
 
 /** Module-level auto-approve threshold (set via HARNESS_AUTO_APPROVE_RISK). */
 let _autoApproveRisk: AutoApproveRisk = "none";
+let _requestStateCodec = createRequestStateCodec<ConfirmationState>({
+  key: randomBytes(32),
+  ttlSeconds: 600,
+  bind: (ctx) => ctx.mcpReq.method,
+});
 
 /**
  * Configure the elicitation module. Call once at startup.
+ * A key shorter than 32 bytes is ignored and the process-random key is kept.
  */
-export function configureElicitation(opts: { autoApproveRisk?: AutoApproveRisk }): void {
+export function configureElicitation(opts: { autoApproveRisk?: AutoApproveRisk; requestStateKey?: string }): void {
   if (opts.autoApproveRisk !== undefined) _autoApproveRisk = opts.autoApproveRisk;
+  if (opts.requestStateKey && new TextEncoder().encode(opts.requestStateKey).byteLength >= 32) {
+    _requestStateCodec = createRequestStateCodec<ConfirmationState>({
+      key: opts.requestStateKey,
+      ttlSeconds: 600,
+      bind: (ctx) => ctx.mcpReq.method,
+    });
+  }
+}
+
+/** Verify hook for `ServerOptions.requestState`. */
+export function confirmationRequestStateVerifier(): { verify: typeof _requestStateCodec.verify } {
+  return { verify: (state, ctx) => _requestStateCodec.verify(state, ctx) };
+}
+
+/**
+ * Client capabilities for this request. 2026-07-28 carries them on the
+ * request envelope; 2025-era connections negotiated them at initialize.
+ */
+export function requestClientCapabilities(ctx: ServerContext | undefined, server: Server): unknown {
+  // The SDK hides envelope keys from the public type; they are present at runtime.
+  const envelope = ctx?.mcpReq.envelope as { clientCapabilities?: unknown } | undefined;
+  return envelope?.clientCapabilities ?? server.getClientCapabilities();
 }
 
 /**
  * Check whether the connected client advertises form elicitation support.
  */
-export function clientSupportsElicitation(server: Server): boolean {
-  const caps = server.getClientCapabilities();
+export function clientSupportsElicitation(server: Server, ctx?: ServerContext): boolean {
+  const caps = requestClientCapabilities(ctx, server) as { elicitation?: unknown } | undefined;
   return !!caps?.elicitation;
 }
 
@@ -119,13 +187,17 @@ export function clientSupportsElicitation(server: Server): boolean {
  */
 export async function confirmViaElicitation({
   server,
+  ctx,
   toolName,
   message,
   risk,
   autoApproveRisk,
   callerConfirmed,
+  argsHash,
 }: {
   server: McpServer;
+  /** Request context. Absent in unit tests that only exercise the decision table. */
+  ctx?: ServerContext;
   toolName: string;
   message: string;
   /** The risk level of the operation (from operationPolicy). */
@@ -138,7 +210,9 @@ export async function confirmViaElicitation({
    *  `method: "caller_confirmed"` (distinct from `elicited`) so audit sinks
    *  can tell automation overrides apart from genuine human consents. */
   callerConfirmed?: boolean;
-}): Promise<ElicitationResult> {
+  /** Hash of the tool arguments this confirmation is bound to. */
+  argsHash?: string;
+}): Promise<ConfirmationDecision> {
   const threshold = autoApproveRisk ?? _autoApproveRisk;
   if (shouldAutoApprove(risk, threshold)) {
     log.debug("Auto-approved (risk within autonomous threshold)", { toolName, risk, threshold });
@@ -155,7 +229,7 @@ export async function confirmViaElicitation({
     return { proceed: true, method: "not_required" };
   }
 
-  if (!clientSupportsElicitation(server.server)) {
+  if (!clientSupportsElicitation(server.server, ctx)) {
     if (callerConfirmed) {
       log.info("Client lacks elicitation, proceeding via explicit confirm param", { toolName, risk });
       return { proceed: true, method: "caller_confirmed" };
@@ -168,61 +242,65 @@ export async function confirmViaElicitation({
     return { proceed: false, reason: "cancelled", method: "blocked" };
   }
 
-  try {
-    const result = await server.server.elicitInput({
-      mode: "form",
-      message,
-      requestedSchema: confirmationSchema,
-    });
-
-    log.info("Elicitation response", { toolName, action: result.action });
-
-    if (result.action === "accept") {
-      const content = result.content;
-      const isContentObject = typeof content === "object" && content !== null;
-      const hasConfirmField = isContentObject && "confirm" in content;
-      const confirmValue = hasConfirmField ? (content as Record<string, unknown>).confirm : undefined;
-      if (confirmValue === true) {
-        return { proceed: true, method: "elicited" };
-      }
-      // `confirm: false` is an explicit user choice (they unchecked the
-      // confirmation box) — authoritative, not bypassable by callerConfirmed.
-      if (hasConfirmField && confirmValue === false) {
-        log.info("Elicitation accept with confirm=false (user unchecked the box)", { toolName, risk });
-        return { proceed: false, reason: "declined", method: "elicited" };
-      }
-      // From here: `accept` arrived without the confirm field — a degenerate
-      // shape from a non-interactive client that did not actually surface a
-      // usable prompt. callerConfirmed is the explicit opt-in.
-      if (callerConfirmed) {
-        log.info("Elicitation accept missing confirm field; proceeding via explicit confirm param", { toolName, risk });
-        return { proceed: true, method: "caller_confirmed" };
-      }
-      log.warn("Elicitation accept missing confirm field; treating as blocked (no usable prompt surfaced)", { toolName, risk });
+  const answer = inputResponse(ctx?.mcpReq.inputResponses, "confirm");
+  if (answer.kind === "missing") {
+    const prior = ctx?.mcpReq.requestState<ConfirmationState>();
+    if (prior && argsHash && prior.argsHash !== argsHash) {
+      log.warn("Confirmation retry changed the operation arguments", { toolName });
       return { proceed: false, reason: "cancelled", method: "blocked" };
     }
-    // An explicit decline / cancel from a client that completed the
-    // elicitation handshake is authoritative — `callerConfirmed` does NOT
-    // override it, even if the caller passed `confirm: true`. The override
-    // is reserved for clients that cannot or did not surface the prompt
-    // (no capability, transport error, accept missing confirm=true).
-    if (result.action === "decline") {
-      return { proceed: false, reason: "declined", method: "elicited" };
-    }
-    return { proceed: false, reason: "cancelled", method: "elicited" };
-  } catch (err) {
-    // We only reach this branch for confirmation-requiring risks (low-risk
-    // ops short-circuited above), so the elicitation failure is a real block
-    // unless the caller explicitly opted in.
-    if (callerConfirmed) {
-      log.info("Elicitation failed but proceeding via explicit confirm param", { toolName, risk, error: String(err) });
-      return { proceed: true, method: "caller_confirmed" };
-    }
-    log.warn("Elicitation failed, blocking operation", {
-      toolName,
-      risk,
-      error: String(err),
-    });
+    const requestState = ctx
+      ? await _requestStateCodec.mint({ tool: toolName, argsHash: argsHash ?? "" }, ctx)
+      : undefined;
+    log.info("Confirmation required", { toolName, risk });
+    return {
+      proceed: false,
+      needsInput: inputRequired({
+        inputRequests: {
+          confirm: inputRequired.elicit({
+            message,
+            requestedSchema: confirmationSchema,
+          }),
+        },
+        ...(requestState ? { requestState } : {}),
+      }),
+    };
+  }
+
+  if (answer.kind !== "elicit") {
+    log.warn("Confirmation response was not an elicitation result", { toolName, kind: answer.kind });
     return { proceed: false, reason: "cancelled", method: "blocked" };
   }
+
+  const bound = ctx?.mcpReq.requestState<ConfirmationState>();
+  if (bound && argsHash && (bound.tool !== toolName || bound.argsHash !== argsHash)) {
+    log.warn("Confirmation was bound to a different operation", { toolName, boundTool: bound.tool });
+    return { proceed: false, reason: "cancelled", method: "blocked" };
+  }
+
+  log.info("Elicitation response", { toolName, action: answer.action });
+
+  if (answer.action === "accept") {
+    const content = answer.content;
+    const isContentObject = typeof content === "object" && content !== null;
+    const hasConfirmField = isContentObject && "confirm" in content;
+    const confirmValue = hasConfirmField ? content.confirm : undefined;
+    if (confirmValue === true) {
+      return { proceed: true, method: "elicited" };
+    }
+    if (hasConfirmField && confirmValue === false) {
+      log.info("Elicitation accept with confirm=false (user unchecked the box)", { toolName, risk });
+      return { proceed: false, reason: "declined", method: "elicited" };
+    }
+    if (callerConfirmed) {
+      log.info("Elicitation accept missing confirm field; proceeding via explicit confirm param", { toolName, risk });
+      return { proceed: true, method: "caller_confirmed" };
+    }
+    log.warn("Elicitation accept missing confirm field; treating as blocked (no usable prompt surfaced)", { toolName, risk });
+    return { proceed: false, reason: "cancelled", method: "blocked" };
+  }
+  if (answer.action === "decline") {
+    return { proceed: false, reason: "declined", method: "elicited" };
+  }
+  return { proceed: false, reason: "cancelled", method: "elicited" };
 }

@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
@@ -392,50 +392,50 @@ export function registerSchemaTool(
         "Use with example_search to find examples by keyword. " +
         "Precedence: example > example_search > path > summary. " +
         `Available schemas: ${availableSchemas.join(", ")}.`,
-      inputSchema: {
-        resource_type: z
-          .enum(availableSchemas as [string, ...string[]])
-          .optional()
-          .describe(
-            _registry?.compactSchemas
-              ? "Schema to fetch. Required for schema/path lookups, optional for example_search. Valid values are listed in the tool description."
-              : `Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`,
-          ),
-        path: z
-          .string()
-          .optional()
-          .describe(
-            "Dot-separated path to drill into a specific definition section. " +
-              "Omit for a top-level summary showing all available sections.",
-          ),
-        example: z
-          .string()
-          .optional()
-          .describe("Fetch a specific example by name (e.g. 'minimal-ci'). Returns the full YAML snippet and description."),
-        example_search: z
-          .string()
-          .optional()
-          .describe(
-            "Search examples by keyword. Returns matching example names and descriptions. Optionally combine with resource_type to filter.",
-          ),
-        scope: scopeSchema,
-        org_id: z
-          .string()
-          .optional()
-          .describe("Organization identifier — required when scope is org or project (live entity schemas)."),
-        project_id: z
-          .string()
-          .optional()
-          .describe("Project identifier — required when scope is project (live entity schemas)."),
-        identifier: z
-          .string()
-          .optional()
-          .describe(
-            "Optional entity identifier for NG yaml-schema. Use when updating an existing entity " +
-              "to fetch an entity-specific schema. Omit for generic create-time schemas — a placeholder " +
-              "identifier is sent automatically for all live entity types at any scope.",
-          ),
-      },
+      inputSchema: z.object({
+              resource_type: z
+                .enum(availableSchemas as [string, ...string[]])
+                .optional()
+                .describe(
+                  _registry?.compactSchemas
+                    ? "Schema to fetch. Required for schema/path lookups, optional for example_search. Valid values are listed in the tool description."
+                    : `Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`,
+                ),
+              path: z
+                .string()
+                .optional()
+                .describe(
+                  "Dot-separated path to drill into a specific definition section. " +
+                    "Omit for a top-level summary showing all available sections.",
+                ),
+              example: z
+                .string()
+                .optional()
+                .describe("Fetch a specific example by name (e.g. 'minimal-ci'). Returns the full YAML snippet and description."),
+              example_search: z
+                .string()
+                .optional()
+                .describe(
+                  "Search examples by keyword. Returns matching example names and descriptions. Optionally combine with resource_type to filter.",
+                ),
+              scope: scopeSchema,
+              org_id: z
+                .string()
+                .optional()
+                .describe("Organization identifier — required when scope is org or project (live entity schemas)."),
+              project_id: z
+                .string()
+                .optional()
+                .describe("Project identifier — required when scope is project (live entity schemas)."),
+              identifier: z
+                .string()
+                .optional()
+                .describe(
+                  "Optional entity identifier for NG yaml-schema. Use when updating an existing entity " +
+                    "to fetch an entity-specific schema. Omit for generic create-time schemas — a placeholder " +
+                    "identifier is sent automatically for all live entity types at any scope.",
+                ),
+            }),
       outputSchema: compactOutputSchema(schemaOutputSchema, _registry?.compactSchemas),
       annotations: {
         title: "Harness YAML Schema",

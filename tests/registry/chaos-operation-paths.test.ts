@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
 import { Registry } from "../../src/registry/index.js";
 import { registerGetTool } from "../../src/tools/harness-get.js";
 import { registerExecuteTool } from "../../src/tools/harness-execute.js";
@@ -45,11 +46,7 @@ function makeMcpServer() {
     async call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
       const tool = tools.get(name);
       if (!tool) throw new Error(`Tool "${name}" not registered`);
-      return tool.handler(args, {
-        signal: new AbortController().signal,
-        sendNotification: vi.fn(),
-        _meta: {},
-      });
+      return tool.handler(args, toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION));
     },
   } as any;
 }

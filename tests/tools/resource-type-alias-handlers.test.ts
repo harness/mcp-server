@@ -1,3 +1,4 @@
+import { toolHandlerContext } from "../helpers/request-context.js";
 import { describe, it, expect, vi } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -30,7 +31,7 @@ function setup() {
   const client = { request: vi.fn().mockResolvedValue({}), account: "test-account" } as unknown as HarnessClient;
   registerAllTools(server as never, registry, client, config);
   const call = (name: string, args: Record<string, unknown>) =>
-    handlers.get(name)!(args, { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} });
+    handlers.get(name)!(args, toolHandlerContext());
   return { call, dispatch, dispatchExecute, registry };
 }
 
