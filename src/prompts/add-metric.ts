@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerAddMetricPrompt(server: McpServer): void {
   server.registerPrompt(
@@ -7,15 +7,15 @@ export function registerAddMetricPrompt(server: McpServer): void {
     {
       description:
         "Step-by-step: add a new metric to the open-source harness-evals SDK and optionally register it in the ai-evals control plane",
-      argsSchema: {
-        metric_name: z.string().describe("Snake_case metric kind name (e.g. my_overlap_score)"),
-        category: z
-          .string()
-          .describe(
-            "Category folder under harness_evals/metrics/: deterministic, structural, operational, reliability, llm_judge, rag, safety, agent, conversation, mcp, similarity, composite",
-          ),
-        description: z.string().describe("What the metric measures and how scoring works"),
-      },
+      argsSchema: z.object({
+              metric_name: z.string().describe("Snake_case metric kind name (e.g. my_overlap_score)"),
+              category: z
+                .string()
+                .describe(
+                  "Category folder under harness_evals/metrics/: deterministic, structural, operational, reliability, llm_judge, rag, safety, agent, conversation, mcp, similarity, composite",
+                ),
+              description: z.string().describe("What the metric measures and how scoring works"),
+            }),
     },
     async ({ metric_name, category, description }) => ({
       messages: [

@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerBusinessValueReviewPrompt(server: McpServer): void {
   server.registerPrompt(
@@ -10,11 +10,11 @@ export function registerBusinessValueReviewPrompt(server: McpServer): void {
         "Gathers cost, allocation, commitment, recommendation, and anomaly data across the account, scores FinOps maturity " +
         "(Crawl/Walk/Run across 7 dimensions), and authors a structured markdown report with an executive summary, " +
         "per-module deep dives, cross-cutting insights, and a prioritized recommendations matrix.",
-      argsSchema: {
-        customer: z.string().optional().describe("Customer / account name shown on the report cover (e.g. \"Acme Corp\")"),
-        quarter: z.string().optional().describe("Review period label for the subtitle (e.g. \"Q2 FY27\")"),
-        diagrams: z.string().optional().describe("Diagram mode: \"mermaid\" (default, full Mermaid incl. radar — best for Cursor/Windsurf/Antigravity), \"auto\" (broadly-compatible Mermaid only, no radar — for GitHub/older renderers), or \"tables\" (no diagrams, tables only — if the client cannot render Mermaid)"),
-      },
+      argsSchema: z.object({
+              customer: z.string().optional().describe("Customer / account name shown on the report cover (e.g. \"Acme Corp\")"),
+              quarter: z.string().optional().describe("Review period label for the subtitle (e.g. \"Q2 FY27\")"),
+              diagrams: z.string().optional().describe("Diagram mode: \"mermaid\" (default, full Mermaid incl. radar — best for Cursor/Windsurf/Antigravity), \"auto\" (broadly-compatible Mermaid only, no radar — for GitHub/older renderers), or \"tables\" (no diagrams, tables only — if the client cannot render Mermaid)"),
+            }),
     },
     async ({ customer, quarter, diagrams }) => {
       const customerName = customer || "<customer>";

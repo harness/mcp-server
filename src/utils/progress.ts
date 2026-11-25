@@ -1,14 +1,13 @@
 /**
  * Helpers for sending MCP progress and logging notifications from tool handlers.
  *
- * Usage: call `sendProgress(extra, ...)` or `sendLog(extra, ...)` from any tool
- * handler that accepts the `extra` (second) parameter.
+ * Usage: call `sendProgress(ctx, ...)` or `sendLog(ctx, ...)` from any tool
+ * handler that accepts the request context (second) parameter.
  */
 
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import type { ServerRequest, ServerNotification } from "@modelcontextprotocol/sdk/types.js";
+import type { ServerContext } from "@modelcontextprotocol/server";
 
-type Extra = RequestHandlerExtra<ServerRequest, ServerNotification>;
+type Extra = ServerContext;
 
 /**
  * Send a progress notification tied to the current request.
@@ -20,10 +19,10 @@ export async function sendProgress(
   total: number | undefined,
   message?: string,
 ): Promise<void> {
-  const token = extra._meta?.progressToken;
+  const token = extra.mcpReq?._meta?.progressToken;
   if (token === undefined) return;
   try {
-    await extra.sendNotification({
+    await extra.mcpReq.notify({
       method: "notifications/progress",
       params: { progressToken: token, progress, total, message },
     });
@@ -43,10 +42,8 @@ export async function sendLog(
   data: string,
 ): Promise<void> {
   try {
-    await extra.sendNotification({
-      method: "notifications/message",
-      params: { level, logger, data },
-    });
+    if (!extra.mcpReq?.log) return;
+    await extra.mcpReq.log(level, data, logger);
   } catch {
     // Non-critical — client may not support logging
   }

@@ -1,6 +1,7 @@
 import { encodePathSegment } from "../../utils/path.js";
 import type { ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
 import { fileContentGetExtract, fileContentListExtract, passthrough } from "../extractors.js";
+import { resolveCodeRepoLinkParams } from "../code-repo-link.js";
 import { assertValidBase64 } from "../../utils/base64.js";
 import { isRecord } from "../../utils/type-guards.js";
 
@@ -188,7 +189,11 @@ export async function branchPreflight({ input }: PreflightContext): Promise<void
 
 const REPO_ID_PARAMS: ParamsSchema = {
   fields: [
-    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+    {
+      name: "repo_id",
+      required: true,
+      description: "Repository identifier/slug (e.g. \"my-repo\"), not the numeric repository id.",
+    },
   ],
 };
 
@@ -309,6 +314,7 @@ export const repositoriesToolset: ToolsetDefinition = {
       ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}",
+      deepLinkParamResolver: resolveCodeRepoLinkParams,
       operations: {
         list: {
           method: "GET",
@@ -391,6 +397,7 @@ export const repositoriesToolset: ToolsetDefinition = {
       ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/files/{branchName}",
+      deepLinkParamResolver: resolveCodeRepoLinkParams,
       operations: {
         list: {
           method: "GET",
@@ -601,6 +608,7 @@ export const repositoriesToolset: ToolsetDefinition = {
       ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/files/{git_ref}/~/{filePath}",
+      deepLinkParamResolver: resolveCodeRepoLinkParams,
       searchAliases: ["file", "blob", "blame", "repo file", "source file", "file content"],
       relatedResources: [
         { resourceType: "repository", relationship: "parent", description: "Repository that contains this file" },

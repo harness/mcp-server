@@ -221,6 +221,12 @@ const RawConfigSchema = z.object({
   // proxy socket peer (which would bucket every user together). Default 0
   // (trust nothing) preserves prior behaviour for direct binds.
   HARNESS_MCP_TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // HMAC key for confirmation requestState. Required for multi-replica HTTP so a
+  // confirmation minted on one process verifies on another. At least 32 bytes.
+  HARNESS_MCP_REQUEST_STATE_KEY: optionalStringFromEnv.refine(
+    (value) => value === undefined || new TextEncoder().encode(value).byteLength >= 32,
+    "HARNESS_MCP_REQUEST_STATE_KEY must be at least 32 bytes",
+  ),
   HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_APPSEC_API_KEY: optionalStringFromEnv,

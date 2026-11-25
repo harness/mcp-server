@@ -55,6 +55,7 @@
         "HARNESS_BASE_URL": "${user_config.HARNESS_BASE_URL}",
         "HARNESS_SCHEMA_MODE": "${user_config.HARNESS_SCHEMA_MODE}",
         "HARNESS_MCP_APPS": "${user_config.HARNESS_MCP_APPS}",
+        "HARNESS_MCP_REQUEST_STATE_KEY": "${user_config.HARNESS_MCP_REQUEST_STATE_KEY}",
         "MCP_SESSION_TTL_MS": "${user_config.MCP_SESSION_TTL_MS}"
       }
     }
@@ -173,6 +174,13 @@
       "default": "https://app.harness.io",
       "required": false,
       "sensitive": false
+    },
+    "HARNESS_MCP_REQUEST_STATE_KEY": {
+      "type": "string",
+      "title": "Confirmation State Key",
+      "description": "Optional HMAC key of at least 32 bytes for 2026-07-28 write confirmations. Leave unset for a single local process. Set the same value on every replica when the HTTP server runs more than one process.",
+      "required": false,
+      "sensitive": true
     },
     "MCP_SESSION_TTL_MS": {
       "type": "string",

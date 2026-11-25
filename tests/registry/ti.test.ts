@@ -29,9 +29,9 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
 }
 
 function makeListServer(request: ReturnType<typeof vi.fn>) {
-  const tools = new Map<string, { schema: { inputSchema: Record<string, ZodType> }; handler: (...args: unknown[]) => Promise<ToolResult> }>();
+  const tools = new Map<string, { schema: { inputSchema: ZodType }; handler: (...args: unknown[]) => Promise<ToolResult> }>();
   const server = {
-    registerTool: vi.fn((name: string, schema: { inputSchema: Record<string, ZodType> }, handler: (...args: unknown[]) => Promise<ToolResult>) => {
+    registerTool: vi.fn((name: string, schema: { inputSchema: ZodType }, handler: (...args: unknown[]) => Promise<ToolResult>) => {
       tools.set(name, { schema, handler });
     }),
   };
@@ -176,8 +176,8 @@ describe("test_case — harness_list entry path", () => {
 
   it("caps size at 100 in the public input schema", () => {
     const { inputSchema } = makeListServer(vi.fn());
-    expect(inputSchema.size!.safeParse(100).success).toBe(true);
-    expect(inputSchema.size!.safeParse(101).success).toBe(false);
+    expect(inputSchema.safeParse({ size: 100 }).success).toBe(true);
+    expect(inputSchema.safeParse({ size: 101 }).success).toBe(false);
   });
 
   it("keeps the advertised fields in compact mode and drops stdout/stderr", async () => {

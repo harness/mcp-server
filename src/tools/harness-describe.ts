@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import {
   DEPRECATED_RESOURCE_TYPE_ALIASES,
   PREFERRED_RESOURCE_TYPE_NAMES,
@@ -32,12 +32,12 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
     "harness_describe",
     {
       description: "Describe available Harness resource types, their supported operations, and fields. No API call — returns local metadata only. Use this to discover what resource_types you can use with other harness_ tools. Pass operation to return only types that support list, get, create, update, delete, or execute.",
-      inputSchema: {
-        resource_type: resourceTypeSchema(allTypes, registry.compactSchemas).optional().describe("Get details for a specific resource type"),
-        operation: z.enum(["list", "get", "create", "update", "delete", "execute"]).optional().describe("Return only resource types that support this operation. execute includes each type's action names. Combine with search_term or toolset. Omit for the full catalog."),
-        toolset: (registry.compactSchemas ? z.string() : z.enum(allToolsets)).optional().describe("Filter to a specific toolset"),
-        search_term: z.string().optional().describe("Search for resource types by keyword (matches type name, display name, toolset, description)"),
-      },
+      inputSchema: z.object({
+              resource_type: resourceTypeSchema(allTypes, registry.compactSchemas).optional().describe("Get details for a specific resource type"),
+              operation: z.enum(["list", "get", "create", "update", "delete", "execute"]).optional().describe("Return only resource types that support this operation. execute includes each type's action names. Combine with search_term or toolset. Omit for the full catalog."),
+              toolset: (registry.compactSchemas ? z.string() : z.enum(allToolsets)).optional().describe("Filter to a specific toolset"),
+              search_term: z.string().optional().describe("Search for resource types by keyword (matches type name, display name, toolset, description)"),
+            }),
       outputSchema: compactOutputSchema(describeOutputSchema, registry.compactSchemas),
       annotations: {
         title: "Describe Harness Resources",

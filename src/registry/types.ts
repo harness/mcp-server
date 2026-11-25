@@ -120,6 +120,22 @@ export interface PreflightContext {
   accountId?: string;
 }
 
+/**
+ * Context passed to ResourceDefinition.deepLinkParamResolver. Same structural
+ * client interface as PreflightContext so this module stays free of
+ * HarnessClient/Registry imports.
+ */
+export interface DeepLinkParamResolverContext {
+  client: HarnessClientInterface;
+  /** Dispatch input (snake_case tool fields such as `repo_id`). */
+  input: Record<string, unknown>;
+  /** Parsed API response (list envelope for list operations). */
+  result: Record<string, unknown>;
+  /** Deep-link placeholder values resolved so far, keyed by template placeholder. */
+  linkParams: Readonly<Record<string, string>>;
+  signal?: AbortSignal;
+}
+
 export type ToolsetName =
   | "pipelines"
   | "agents"
@@ -135,6 +151,7 @@ export type ToolsetName =
   | "registries"
   | "registries-v3"
   | "registries-firewall"
+  | "registries-lifecycle"
   | "templates"
   | "dashboards"
   | "idp"
@@ -542,6 +559,19 @@ export interface ResourceDefinition {
   compactItem?: (item: Record<string, unknown>) => Record<string, unknown>;
   /** Harness UI deep-link URL template */
   deepLinkTemplate?: string;
+  /**
+   * Optional hook that corrects deep-link placeholder values just before
+   * `deepLinkTemplate` is substituted. Use when the value the caller passed is
+   * accepted by the API but is not what the UI route needs (e.g. a numeric
+   * Harness Code repo ID where the route expects the repo identifier).
+   *
+   * Return `undefined` to leave the link params unchanged, `null` to suppress
+   * `openInHarness` (a missing link beats a known-broken one), or a record of
+   * placeholder overrides. Overrides are applied to the top-level link and
+   * re-applied to every list item, so a list pays for at most one lookup.
+   * Throwing is treated like returning `null`.
+   */
+  deepLinkParamResolver?: (ctx: DeepLinkParamResolverContext) => Promise<Record<string, string> | null | undefined>;
   /** Troubleshooting guidance for LLMs. Describes how to diagnose issues with this resource type. */
   diagnosticHint?: string;
   /**

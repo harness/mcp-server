@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { clientSupportsElicitation, confirmViaElicitation, configureElicitation, describeElicitationFailure, describeBlockedAudit } from "../../src/utils/elicitation.js";
+import { clientSupportsElicitation, confirmViaElicitation, configureElicitation, describeElicitationFailure, describeBlockedAudit, isConfirmationPrompt } from "../../src/utils/elicitation.js";
 import { isBlockingRisk, requiresConfirmation, shouldAutoApprove } from "../../src/registry/types.js";
 import type { RiskLevel, AutoApproveRisk } from "../../src/registry/types.js";
+
+const scriptedResponses = new WeakMap<object, unknown>();
 
 /** Minimal stub of the Server class (only the methods we use). */
 function makeServerStub(capabilities: unknown, elicitResult?: unknown) {
@@ -9,7 +11,22 @@ function makeServerStub(capabilities: unknown, elicitResult?: unknown) {
     getClientCapabilities: vi.fn().mockReturnValue(capabilities),
     elicitInput: vi.fn().mockResolvedValue(elicitResult),
   };
-  return { server } as any;
+  const mcp = { server };
+  if (elicitResult !== undefined) scriptedResponses.set(mcp, elicitResult);
+  return mcp as any;
+}
+
+/** Feed a scripted elicitation answer in as the retried request's inputResponses. */
+function confirm(args: Parameters<typeof confirmViaElicitation>[0]) {
+  const scripted = scriptedResponses.get(args.server);
+  const ctx = scripted === undefined ? args.ctx : {
+    mcpReq: {
+      method: "tools/call",
+      inputResponses: { confirm: scripted },
+      requestState: () => undefined,
+    },
+  };
+  return confirmViaElicitation({ ...args, ctx: ctx as never });
 }
 
 describe("isBlockingRisk (deprecated)", () => {
@@ -88,7 +105,7 @@ describe("confirmViaElicitation", () => {
 
   it("proceeds when client does not support elicitation (low_write)", async () => {
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create pipeline?",
@@ -104,7 +121,7 @@ describe("confirmViaElicitation", () => {
     // method:"blocked" is the load-bearing signal; reason stays consistent
     // across every blocked branch.
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -116,7 +133,7 @@ describe("confirmViaElicitation", () => {
 
   it("blocks when client does not support elicitation (medium_write)", async () => {
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create repo rule?",
@@ -130,14 +147,14 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "accept", content: { confirm: true } },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete service?",
       risk: "destructive",
     });
     expect(result).toEqual({ proceed: true, method: "elicited" });
-    expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
   it("does not call elicitInput for low_write even when client supports it", async () => {
@@ -147,7 +164,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "accept", content: { confirm: true } },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create service?",
@@ -162,7 +179,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "decline" },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete connector?",
@@ -176,7 +193,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "cancel" },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_execute",
       message: "Run pipeline?",
@@ -190,7 +207,7 @@ describe("confirmViaElicitation", () => {
     // mocked failure should never be reached.
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
     mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create service?",
@@ -200,56 +217,42 @@ describe("confirmViaElicitation", () => {
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
-  it("blocks when elicitInput throws (destructive)", async () => {
+  it("asks for confirmation when the client supports elicitation and no answer has arrived", async () => {
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
-    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete service?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
+    expect(isConfirmationPrompt(result)).toBe(true);
   });
 
-  it("blocks when elicitInput throws (medium_write)", async () => {
+  it("asks for confirmation for medium_write when no answer has arrived", async () => {
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
-    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create repo rule?",
       risk: "medium_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
+    expect(isConfirmationPrompt(result)).toBe(true);
   });
 
-  it("passes message to elicitInput with an explicit confirmation schema", async () => {
-    const mcpServer = makeServerStub(
-      { elicitation: { form: {} } },
-      { action: "accept", content: { confirm: true } },
-    );
-    await confirmViaElicitation({
+  it("returns an in-band confirmation request with the message and schema", async () => {
+    const mcpServer = makeServerStub({ elicitation: { form: {} } });
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline 'my-pipe'?",
       risk: "destructive",
     });
-    const call = mcpServer.server.elicitInput.mock.calls[0][0];
-    expect(call.mode).toBe("form");
-    expect(call.message).toBe("Delete pipeline 'my-pipe'?");
-    expect(call.requestedSchema).toEqual({
-      type: "object",
-      properties: {
-        confirm: {
-          type: "boolean",
-          title: "Confirm operation",
-          description: "Set to true to approve this Harness operation.",
-          default: true,
-        },
-      },
-      required: ["confirm"],
-    });
+    expect(isConfirmationPrompt(result)).toBe(true);
+    if (!isConfirmationPrompt(result)) return;
+    const request = result.needsInput.inputRequests?.confirm as { params: { mode: string; message: string; requestedSchema: { required?: string[] } } };
+    expect(request.params.mode).toBe("form");
+    expect(request.params.message).toBe("Delete pipeline 'my-pipe'?");
+    expect(request.params.requestedSchema.required).toEqual(["confirm"]);
   });
 
   it("blocks when elicitation accept includes confirm=false (user unchecked the box)", async () => {
@@ -260,7 +263,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "accept", content: { confirm: false } },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -276,7 +279,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "accept", content: { confirm: false } },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -295,7 +298,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "accept", content: {} },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -310,7 +313,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "decline" },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -323,7 +326,7 @@ describe("confirmViaElicitation", () => {
   it("uses explicit autoApproveRisk before the module default", async () => {
     configureElicitation({ autoApproveRisk: "none" });
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -337,7 +340,7 @@ describe("confirmViaElicitation", () => {
   it("auto-approves low_write when threshold is low_write", async () => {
     configureElicitation({ autoApproveRisk: "low_write" });
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create service?",
@@ -349,7 +352,7 @@ describe("confirmViaElicitation", () => {
   it("does not auto-approve high_write when threshold is low_write", async () => {
     configureElicitation({ autoApproveRisk: "low_write" });
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_execute",
       message: "Run pipeline?",
@@ -361,7 +364,7 @@ describe("confirmViaElicitation", () => {
   it("skips elicitation for non-destructive ops when auto-approve is 'all'", async () => {
     configureElicitation({ autoApproveRisk: "all" });
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create service?",
@@ -373,7 +376,7 @@ describe("confirmViaElicitation", () => {
 
   it("proceeds with callerConfirmed when client lacks elicitation (destructive)", async () => {
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -386,7 +389,7 @@ describe("confirmViaElicitation", () => {
 
   it("proceeds with callerConfirmed when client lacks elicitation (medium_write)", async () => {
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create repo rule?",
@@ -396,22 +399,21 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
   });
 
-  it("proceeds with callerConfirmed when elicitInput throws (destructive)", async () => {
+  it("still asks when callerConfirmed is set and no answer has arrived", async () => {
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
-    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete service?",
       risk: "destructive",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
+    expect(isConfirmationPrompt(result)).toBe(true);
   });
 
   it("still blocks without callerConfirmed when client lacks elicitation (destructive)", async () => {
     const mcpServer = makeServerStub(undefined);
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -428,7 +430,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "decline" },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete connector?",
@@ -436,7 +438,7 @@ describe("confirmViaElicitation", () => {
       callerConfirmed: true,
     });
     expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
-    expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
   it("does NOT override an explicit cancel even with callerConfirmed=true (high_write)", async () => {
@@ -444,7 +446,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "cancel" },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_execute",
       message: "Run pipeline?",
@@ -462,7 +464,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "accept", content: {} },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -477,7 +479,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "decline" },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete connector?",
@@ -492,7 +494,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "cancel" },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_execute",
       message: "Run pipeline?",
@@ -507,7 +509,7 @@ describe("confirmViaElicitation", () => {
       { elicitation: { form: {} } },
       { action: "accept", content: {} },
     );
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete pipeline?",
@@ -517,30 +519,48 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
-  it("still blocks without callerConfirmed when elicitInput throws (destructive)", async () => {
+  it("still asks without callerConfirmed when no answer has arrived", async () => {
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
-    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_delete",
       message: "Delete service?",
       risk: "destructive",
       callerConfirmed: false,
     });
+    expect(isConfirmationPrompt(result)).toBe(true);
+  });
+
+  it("blocks a confirmation whose bound arguments no longer match", async () => {
+    const mcpServer = makeServerStub({ elicitation: { form: {} } });
+    const ctx = {
+      mcpReq: {
+        method: "tools/call",
+        inputResponses: { confirm: { action: "accept", content: { confirm: true } } },
+        requestState: () => ({ tool: "harness_delete", argsHash: "original" }),
+      },
+    } as Parameters<typeof confirmViaElicitation>[0]["ctx"];
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete service?",
+      risk: "destructive",
+      ctx,
+      argsHash: "changed",
+    });
     expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
-  it("proceeds with callerConfirmed when elicitInput throws (medium_write)", async () => {
+  it("still asks for medium_write when callerConfirmed is set and no answer has arrived", async () => {
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
-    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
-    const result = await confirmViaElicitation({
+    const result = await confirm({
       server: mcpServer,
       toolName: "harness_create",
       message: "Create repo rule?",
       risk: "medium_write",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
+    expect(isConfirmationPrompt(result)).toBe(true);
   });
 });
 

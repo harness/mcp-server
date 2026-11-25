@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 /**
  * Legacy custom-agent spec format reference (agent.step.group.steps / PLUGIN_TASK).

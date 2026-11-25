@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
@@ -80,12 +80,12 @@ export function registerStatusTool(
     "harness_status",
     {
       description: "Get a live project health overview: recent failed executions, currently running executions, and recent deployment activity. You can pass a Harness URL to auto-extract org and project. Ideal first question: 'what's happening in my project right now?'",
-      inputSchema: {
-        org_id: orgIdField(registry.orgId, registry.compactSchemas),
-        project_id: projectIdField(registry.projectId, registry.compactSchemas),
-        url: z.string().optional().describe("A Harness UI URL — org and project are extracted automatically"),
-        limit: z.number().default(5).optional().describe("Max items per section (default 5, max 20)"),
-      },
+      inputSchema: z.object({
+              org_id: orgIdField(registry.orgId, registry.compactSchemas),
+              project_id: projectIdField(registry.projectId, registry.compactSchemas),
+              url: z.string().optional().describe("A Harness UI URL — org and project are extracted automatically"),
+              limit: z.number().default(5).optional().describe("Max items per section (default 5, max 20)"),
+            }),
       outputSchema: compactOutputSchema(statusOutputSchema, registry.compactSchemas),
       ...appView.toolMeta,
       annotations: {
@@ -95,9 +95,9 @@ export function registerStatusTool(
         openWorldHint: true,
       },
     },
-    async (args, extra) => {
+    async (args, ctx) => {
       try {
-        const signal = extra.signal;
+        const signal = ctx.mcpReq.signal;
         const merged = applyUrlDefaults(args as Record<string, unknown>, args.url);
         const orgId = asString(merged.org_id) ?? config.HARNESS_ORG;
         const projectId = asString(merged.project_id) ?? config.HARNESS_PROJECT;
@@ -118,7 +118,7 @@ export function registerStatusTool(
         };
 
         log.info("Fetching project status", { orgId, projectId, limit });
-        await sendProgress(extra, 0, 2, "Fetching failed, running, and recent executions...");
+        await sendProgress(ctx, 0, 2, "Fetching failed, running, and recent executions...");
 
         // 3 parallel dispatches: failed, running, recent activity
         const [failedResult, runningResult, recentResult] = await Promise.allSettled([
@@ -157,7 +157,7 @@ export function registerStatusTool(
           log.warn("Failed to fetch recent executions", { error: String(recentResult.reason) });
         }
 
-        await sendProgress(extra, 1, 2, "Building status summary...");
+        await sendProgress(ctx, 1, 2, "Building status summary...");
 
         const accountId = registry.getAccountId();
         const failedItems = (failed?.items ?? []).map((e) =>
@@ -203,7 +203,7 @@ export function registerStatusTool(
         if (runningResult.status === "rejected") errors.running = String(runningResult.reason);
         if (recentResult.status === "rejected") errors.recent = String(recentResult.reason);
 
-        await sendProgress(extra, 2, 2, "Status complete");
+        await sendProgress(ctx, 2, 2, "Status complete");
 
         const status: Record<string, unknown> = {
           project: {
@@ -234,7 +234,7 @@ export function registerStatusTool(
           status: { label: HEALTH_LABELS[health], tone: HEALTH_TONES[health] },
           ...(deploymentsLink ? { open_in_harness: deploymentsLink } : {}),
           refresh: { tool: "harness_status", arguments: args as Record<string, unknown> },
-        }));
+        }), ctx);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);

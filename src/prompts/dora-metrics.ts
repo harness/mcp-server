@@ -1,16 +1,16 @@
 import * as z from "zod/v4";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 export function registerDoraMetricsPrompt(server: McpServer): void {
   server.registerPrompt(
     "dora-metrics-review",
     {
       description: "Review DORA metrics (deployment frequency, change failure rate, MTTR, lead time) and suggest improvements",
-      argsSchema: {
-        teamRefId: z.string().describe("SEI team reference ID to analyze").optional(),
-        dateStart: z.string().describe("Start date for analysis (YYYY-MM-DD)").optional(),
-        dateEnd: z.string().describe("End date for analysis (YYYY-MM-DD)").optional(),
-      },
+      argsSchema: z.object({
+              teamRefId: z.string().describe("SEI team reference ID to analyze").optional(),
+              dateStart: z.string().describe("Start date for analysis (YYYY-MM-DD)").optional(),
+              dateEnd: z.string().describe("End date for analysis (YYYY-MM-DD)").optional(),
+            }),
     },
     async ({ teamRefId, dateStart, dateEnd }) => {
       const teamFilter = teamRefId ? `, team_ref_id="${teamRefId}"` : "";
