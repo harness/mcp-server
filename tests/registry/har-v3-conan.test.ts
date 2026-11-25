@@ -99,12 +99,37 @@ describe("HAR v3 conan_revision", () => {
     ["list", { recipe_revision_id }, /version_id/],
     ["list", IDS, /package_revision_id is not a list level/],
     ["list", { version_id, conan_package_id }, /requires recipe_revision_id/],
-    ["get", { version_id }, /requires recipe_revision_id/],
+    ["get", { version_id }, /Missing required param\(s\) for conan_revision.get: recipe_revision_id/],
     ["get", { version_id, recipe_revision_id, package_revision_id }, /requires conan_package_id/],
   ] as const)("%s with %o fails before any API call", async (op, input, error) => {
     const client = mockClient({ items: [] });
     await expect(registry.dispatch(client, "conan_revision", op, { ...input })).rejects.toThrow(error);
     expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("accepts numeric ids such as revision 0", async () => {
+    const client = mockClient({ data: {} });
+    await registry.dispatch(client, "conan_revision", "get", { version_id, recipe_revision_id: 0 });
+    expect(lastCall(client).path).toBe(`${BASE}/0/details`);
+  });
+
+  it.each([
+    [{ version_id: {}, recipe_revision_id }, /version_id must be a string or number, got object/],
+    [{ version_id, recipe_revision_id: ["rrev-1"] }, /recipe_revision_id must be a string or number, got array/],
+    [{ version_id: "   ", recipe_revision_id }, /requires version_id/],
+    [{ version_id, recipe_revision_id: "  " }, /requires recipe_revision_id/],
+  ] as const)("rejects %o instead of building a bad path", async (input, error) => {
+    const client = mockClient({ data: {} });
+    await expect(registry.dispatch(client, "conan_revision", "get", { ...input })).rejects.toThrow(error);
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("advertises every get level, including package_revision_id, through paramsSchema", () => {
+    const get = registry.getResource("conan_revision").operations.get!;
+    expect(get.paramsSchema?.fields.map((f) => f.name)).toEqual(["version_id", "recipe_revision_id", "conan_package_id", "package_revision_id"]);
+    expect(get.paramsSchema?.fields.find((f) => f.name === "version_id")?.required).toBe(true);
+    expect(get.description).toMatch(/conan_package_id/);
+    expect(get.description).toMatch(/package_revision_id/);
   });
 
   it("replaces the per-level Conan types and stays behind the registries-v3 opt-in", () => {
@@ -134,6 +159,26 @@ describe("harness_get conan_revision", () => {
 
   it("maps resource_id to recipe_revision_id with version_id in params", async () => {
     const { result, request } = await callGet({ resource_type: "conan_revision", resource_id: "rrev-1", params: { version_id: "ver-1" } });
+    expect(result.isError).toBeUndefined();
+    expect(request.mock.calls[0][0].path).toBe(`${BASE}/rrev-1/details`);
+  });
+
+  it.each([
+    [{ version_id: "ver-1", recipe_revision_id: "rrev-1" }, "pkg-1"],
+    [{ version_id: "ver-1", recipe_revision_id: "rrev-1", conan_package_id: "pkg-1" }, "prev-1"],
+  ])("fails instead of returning the parent when resource_id is not consumed (%o, resource_id %s)", async (params, resourceId) => {
+    const { result, request } = await callGet({ resource_type: "conan_revision", resource_id: resourceId, params });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toMatch(/conflicts with recipe_revision_id/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("allows resource_id that matches params.recipe_revision_id", async () => {
+    const { result, request } = await callGet({
+      resource_type: "conan_revision",
+      resource_id: "rrev-1",
+      params: { version_id: "ver-1", recipe_revision_id: "rrev-1" },
+    });
     expect(result.isError).toBeUndefined();
     expect(request.mock.calls[0][0].path).toBe(`${BASE}/rrev-1/details`);
   });

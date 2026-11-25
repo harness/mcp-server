@@ -79,10 +79,16 @@ const compactFileV3 = (item: Record<string, unknown>): Record<string, unknown> =
 
 const V3_PACKAGE_KINDS = ["model", "dataset", "module", "provider"];
 
+// Conan revision ids are strings, or numbers such as "0"; anything else would
+// reach the path as "[object Object]", and blank ids would pass as present.
 const conanIdSegment = (input: Record<string, unknown>, field: string): string | undefined => {
   const value = input[field];
-  if (value === undefined || value === null || value === "") return undefined;
-  return encodePathSegment(String(value));
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" && typeof value !== "number") {
+    throw new Error(`${field} must be a string or number, got ${Array.isArray(value) ? "array" : typeof value}.`);
+  }
+  const id = String(value).trim();
+  return id === "" ? undefined : encodePathSegment(id);
 };
 
 // Each id narrows one level: version → recipe revision (RREV) → package (PKGID)
@@ -104,6 +110,15 @@ const conanRevisionPath = (mode: "list" | "get") => (input: Record<string, unkno
     return `${base}/${rrev}/packages/${pkg}/package-revisions`;
   }
   if (!rrev) throw new Error("conan_revision get requires recipe_revision_id (plus conan_package_id / package_revision_id to go deeper).");
+  // harness_get maps resource_id onto recipe_revision_id only when that param is unset. A
+  // different resource_id was not consumed, and ignoring it would return the parent level.
+  const resourceId = input.resource_id == null ? "" : String(input.resource_id).trim();
+  if (resourceId !== "" && resourceId !== String(input.recipe_revision_id).trim()) {
+    throw new Error(
+      `resource_id "${resourceId}" conflicts with recipe_revision_id "${String(input.recipe_revision_id).trim()}": ` +
+        "resource_id fills recipe_revision_id only. Pass a package or package revision as params.conan_package_id / params.package_revision_id.",
+    );
+  }
   if (!pkg) return `${base}/${rrev}/details`;
   if (!prev) return `${base}/${rrev}/packages/${pkg}/details`;
   return `${base}/${rrev}/packages/${pkg}/package-revisions/${prev}/details`;
@@ -479,7 +494,16 @@ export const registriesV3Toolset: ToolsetDefinition = {
           pathBuilder: conanRevisionPath("get"),
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: harV3DataObjectUnwrap,
-          description: "Get a Conan recipe revision, package or package revision. Requires version_id and recipe_revision_id.",
+          description:
+            "Get a Conan recipe revision, package or package revision. Requires version_id and recipe_revision_id; add conan_package_id for a package, and package_revision_id as well for a package revision.",
+          paramsSchema: {
+            fields: [
+              { name: "version_id", required: true, description: "Version UUID of a CONAN package version" },
+              { name: "recipe_revision_id", required: true, description: "Recipe revision (RREV); resource_id fills it when omitted" },
+              { name: "conan_package_id", required: false, description: "Conan package ID (PKGID) to get a package. Requires recipe_revision_id" },
+              { name: "package_revision_id", required: false, description: "Package revision (PREV) to get one. Requires conan_package_id" },
+            ],
+          },
         },
       },
     },
