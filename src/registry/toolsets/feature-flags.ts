@@ -14,9 +14,9 @@ const FME_HARNESS_NATIVE_SCOPE_PARAMS = {
   project: "project_identifier",
 };
 
-// Harness-native v4 create bodies (CreateFeatureFlagRequest/CreateSegmentRequest,
-// confirmed against Harness_Split/Main) accept tags as [{name: string}]; callers
-// commonly pass bare strings instead, so normalize the same way update already does.
+// Harness-native v4 create bodies accept tags (and fme_metric categories) as
+// [{name: string}]; callers commonly pass bare strings instead, so normalize the same
+// way update already does.
 function normalizeFmeTags(tags: unknown): unknown {
   return Array.isArray(tags) ? tags.map((t) => (typeof t === "string" ? { name: t } : t)) : tags;
 }
@@ -446,6 +446,7 @@ const fmeMetricCreateSchema: BodySchema = {
     { name: "filterEventType", type: "object", required: false, description: "Optional filter event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted. Dual purpose: (1) 'has done' filtering for COUNT/TOTAL/AVERAGE/RATE metrics, or (2) the denominator event of a ratio metric — set aggregation: 'COUNT', baseEventTypes to the numerator event, and filterEventType to {eventTypeId: <denominator>, filterAggregation: 'COUNT'} to build the webconsole's 'Ratio of two events per <traffic type>' type." },
     { name: "triggerEventType", type: "object", required: false, description: "Optional trigger event (HAS_DONE_BEFORE): the unit must have done this event before the base event to be counted. Shape: {eventTypeId}." },
     { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
+    { name: "categories", type: "array", required: false, description: "Metric categories by name. Each entry is {name: string}; bare strings are accepted and auto-wrapped. Names match case-insensitively. Valid names are \"Guardrail metrics\" and any category that exists in the project; any other name is rejected with 400 listing the valid ones. Adding a metric to Guardrail metrics beyond the guardrail limit for its traffic type is rejected with 400.", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. For now the backend rejects an empty or missing list with 400 \"Owners cannot be empty\" (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one until it ships.", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Optional outlier/cap configuration: baseEventCountCap/baseEventSumCap/baseEventValueCap/filterEventCountCap/filterEventSumCap/filterEventValueCap/metricValueCap (all default 0 = no cap), plus granularity (MINUTES|HOURS|DAYS|WEEKS, default DAYS)" },
   ],
@@ -453,7 +454,7 @@ const fmeMetricCreateSchema: BodySchema = {
 
 const fmeMetricUpdateSchema: BodySchema = {
   description:
-    "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name and trafficType are immutable and not accepted here. format/aggregation/isPositive/spread cannot be cleared with null (rejected with 400). baseEventTypes/filterEventType/triggerEventType/tags/owners/cap are full replacements when provided; null (or [] for arrays) clears filterEventType/triggerEventType/tags/owners/cap.",
+    "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name and trafficType are immutable and not accepted here. format/aggregation/isPositive/spread cannot be cleared with null (rejected with 400). baseEventTypes/filterEventType/triggerEventType/tags/categories/owners/cap are full replacements when provided; null (or [] for arrays) clears filterEventType/triggerEventType/tags/categories/owners/cap.",
   fields: [
     { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
     { name: "format", type: "string", required: false, description: "Updated format (NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES); cannot be cleared with null" },
@@ -464,6 +465,7 @@ const fmeMetricUpdateSchema: BodySchema = {
     { name: "filterEventType", type: "object", required: false, description: "Replacement filter event, or null to clear it. propertyFilters defaults to [] when omitted." },
     { name: "triggerEventType", type: "object", required: false, description: "Replacement trigger event (HAS_DONE_BEFORE), or null to clear it. Shape: {eventTypeId}." },
     { name: "tags", type: "array", required: false, description: "Replacement tag list; null or [] clears all tags", itemType: "object" },
+    { name: "categories", type: "array", required: false, description: "Replacement category list (full replacement); null or [] removes the metric from all categories. Metric categories by name. Each entry is {name: string}; bare strings are accepted and auto-wrapped. Names match case-insensitively. Valid names are \"Guardrail metrics\" and any category that exists in the project; any other name is rejected with 400 listing the valid ones. Adding a metric to Guardrail metrics beyond the guardrail limit for its traffic type is rejected with 400.", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Replacement cap configuration, or null to clear it" },
   ],
@@ -2004,6 +2006,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         { name: "event_type_ids", description: "Filter by base event type IDs" },
         { name: "tags", description: "Filter by tag names" },
         { name: "ids", description: "Filter to specific metric IDs" },
+        { name: "categories", description: "Filter by category names (case-insensitive); a metric in any of the given categories matches. Unknown or blank names are rejected with 400" },
         { name: "sort_order", description: "Sort direction by name", enum: ["ASCENDING", "DESCENDING"] },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
@@ -2023,6 +2026,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             event_type_ids: "event_type_ids",
             tags: "tags",
             ids: "ids",
+            categories: "categories",
             sort_order: "sort_order",
             offset: "offset",
             size: "limit",
@@ -2068,6 +2072,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
               ...(body?.filterEventType !== undefined ? { filterEventType: normalizeFmeFilterEventType(body.filterEventType) } : {}),
               ...(body?.triggerEventType !== undefined ? { triggerEventType: body.triggerEventType } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
+              ...(body?.categories !== undefined ? { categories: normalizeFmeTags(body.categories) } : {}),
               ...(body?.cap !== undefined ? { cap: body.cap } : {}),
             };
           },
@@ -2100,12 +2105,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
                 "filterEventType",
                 "triggerEventType",
                 "tags",
+                "categories",
                 "owners",
                 "cap",
               ],
               (field, value) => {
                 switch (field) {
                   case "tags":
+                  case "categories":
                     return normalizeFmeTags(value);
                   case "baseEventTypes":
                     return value === null ? null : normalizeFmeBaseEventTypes(value);
@@ -2120,7 +2127,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeMetricUpdateSchema,
           description:
-            "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; format/aggregation/isPositive/spread cannot be cleared with null. baseEventTypes/filterEventType/triggerEventType/tags/owners/cap are full replacements when provided. name and trafficType are immutable and not accepted here.",
+            "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; format/aggregation/isPositive/spread cannot be cleared with null. baseEventTypes/filterEventType/triggerEventType/tags/categories/owners/cap are full replacements when provided. name and trafficType are immutable and not accepted here.",
         },
         delete: {
           method: "DELETE",
