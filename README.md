@@ -13,7 +13,7 @@ This server is built differently:
 - **11 tools, 282 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 44 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
-- **37 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
+- **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
 - **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT and SAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
@@ -2029,8 +2029,6 @@ Security exemption execute workflow:
 | `commitment-utilization-review` | Analyze reserved instance and savings plan utilization to find waste and optimize commitments            | `projectId` (optional)                             |
 | `cost-anomaly-investigation`    | Investigate cost anomalies — determine root cause, impacted resources, and remediation                   | `projectId` (optional)                             |
 | `rightsizing-recommendations`   | Review and prioritize rightsizing recommendations, optionally create Jira or ServiceNow tickets          | `projectId` (optional), `minSavings` (optional)    |
-| `governance-savings-review`     | Read-only review of cloud asset governance: realised savings, enforcements, failed evaluations, pending recommendations | `timeFilter` (optional), `cloudProvider` (optional) |
-| `governance-rule-authoring`     | Author a Cloud Custodian governance rule safely: validate, dry-run on one account, inspect, then optionally schedule | `goal`, `cloudProvider`                            |
 
 
 ### DevSecOps

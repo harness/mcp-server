@@ -98,11 +98,31 @@ function omitKeys(obj: Body, keys: readonly string[]): Body {
   return Object.fromEntries(Object.entries(obj).filter(([k]) => !keys.includes(k)));
 }
 
-/** `limit`/`size` (default 20, max 100) and `offset` (or `page` × limit). */
+/**
+ * `limit`/`size` (default 20, max 100) and `offset` (or `page` × limit). Out-of-range values fail loudly
+ * rather than being clamped, so a caller never receives fewer rows than it asked for without knowing.
+ */
 function paging(input: Input): { limit: number; offset: number } {
-  const limit = Math.min(Math.max(toInt(input.limit ?? input.size) ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
-  const offset = Math.max(toInt(input.offset) ?? (toInt(input.page) ?? 0) * limit, 0);
+  const limit = toInt(input.limit ?? input.size) ?? DEFAULT_PAGE_SIZE;
+  if (limit < 1 || limit > MAX_PAGE_SIZE) {
+    throw new Error(`limit must be between 1 and ${MAX_PAGE_SIZE} (got ${limit}). Use offset or page to read further rows.`);
+  }
+  const offset = toInt(input.offset) ?? (toInt(input.page) ?? 0) * limit;
+  if (offset < 0) throw new Error(`offset must be 0 or greater (got ${offset}).`);
   return { limit, offset };
+}
+
+/**
+ * 0-based page number for endpoints that page by `pageNumber` + `pageSize` rather than offset.
+ * An offset that does not fall on a page boundary cannot be expressed, so it is rejected instead of rounded.
+ */
+function pageNumberFor(limit: number, offset: number): number {
+  if (offset % limit !== 0) {
+    throw new Error(
+      `offset (${offset}) must be a multiple of limit (${limit}) for this list; use page=<n> (0-based) or an aligned offset.`,
+    );
+  }
+  return offset / limit;
 }
 
 /** Time window as the `List<CCMTimeFilter>` the backend expects. Explicit start/end win over `time_filter`. */
@@ -212,13 +232,26 @@ const ADHOC_BODY_SCHEMA: BodySchema = {
 
 const PAGE_FILTERS: FilterFieldSpec[] = [
   { name: "limit", description: `Page size (default ${DEFAULT_PAGE_SIZE}, max ${MAX_PAGE_SIZE})`, type: "number" },
-  { name: "offset", description: "Rows to skip (default 0); or use page", type: "number" },
+  { name: "offset", description: "Rows to skip (default 0); or use page. Must be a multiple of limit for enforcement and enforcement_recommendation lists", type: "number" },
 ];
 
 const CLOUD_PROVIDER_FILTER: FilterFieldSpec = { name: "cloud_provider", description: "Cloud provider", enum: CLOUD_PROVIDERS };
 
 const CLOUD_PROVIDER_PARAM: ParamsSchema = {
   fields: [{ name: "cloud_provider", required: true, description: "AWS, AZURE or GCP" }],
+};
+
+/** Window over unpaged policy output (the backend returns every entry at once). */
+const POLICY_OUTPUT_PARAMS: ParamsSchema["fields"] = [
+  { name: "offset", required: false, description: "First entry to return (default 0); continue from the result's nextOffset" },
+  { name: "limit", required: false, description: "Entries per call (default 25, max 50)" },
+  { name: "response_offset", required: false, description: "Character offset into each entry's response text (default 0); continue from responseNextOffset. Use with limit=1 to read one long entry" },
+];
+
+const EXECUTION_TYPE_PARAM: ParamsSchema["fields"][number] = {
+  name: "execution_type",
+  required: false,
+  description: "EXTERNAL (default: ad hoc and scheduled runs), INTERNAL (recommendation runs) or INVENTORY_INTERNAL",
 };
 
 /** For actions parameterised only by resource_id / params. */
@@ -300,6 +333,17 @@ const OVERVIEW_SERIES_METRICS: Readonly<Record<string, OverviewMetric>> = {
   daily_evaluations: { path: "overview/dayWiseTotalEvaluations", method: "POST" },
 };
 
+/** Metrics served by a GET endpoint take no time window (they are all-time / current); only POST metrics are windowed. */
+function rejectWindowForUnwindowed(metricName: string, input: Input): void {
+  const supplied = ["time_filter", "start_time", "end_time"].filter((k) => toText(input[k]) !== undefined);
+  if (supplied.length > 0) {
+    throw new Error(
+      `${metricName} is not time-windowed (it reports all-time or current values), so ${supplied.join(", ")} cannot be applied. ` +
+        "Remove it, or use a windowed metric (total_realised_savings, savings_time_series, top_cloud_accounts, daily_evaluations).",
+    );
+  }
+}
+
 function resolveMetric(table: Readonly<Record<string, OverviewMetric>>, input: Input): OverviewMetric {
   const name = toText(input.metric ?? input.resource_id);
   const metric = name ? table[name] : undefined;
@@ -312,7 +356,7 @@ function resolveMetric(table: Readonly<Record<string, OverviewMetric>>, input: I
 const OVERVIEW_PARAMS_SCHEMA: ParamsSchema = {
   fields: [
     { name: "cloud_provider", required: false, description: "AWS, AZURE, GCP (comma-separated for several); default all" },
-    { name: "time_filter", required: false, description: "LAST_7_DAYS | LAST_30_DAYS (default) | LAST_90_DAYS — savings and time-series metrics only" },
+    { name: "time_filter", required: false, description: "LAST_7_DAYS | LAST_30_DAYS (default) | LAST_90_DAYS — windowed metrics only (total_realised_savings, savings_time_series, top_cloud_accounts, daily_evaluations); rejected for the all-time/current metrics" },
     { name: "start_time", required: false, description: "Custom window start (YYYY-MM-DD, ISO 8601 or epoch ms); pair with end_time" },
     { name: "end_time", required: false, description: "Custom window end; pair with start_time" },
   ],
@@ -326,7 +370,13 @@ function overviewSpec(table: Readonly<Record<string, OverviewMetric>>) {
     methodBuilder: (input: Input) => resolveMetric(table, input).method,
     inputNormalizer: normalizeCloudProviders,
     queryParams: { cloud_provider: "cloudProvider" },
-    bodyBuilder: (input: Input) => (resolveMetric(table, input).method === "POST" ? timeFilters(input) : undefined),
+    // GET metrics have no request body and no window: fail loudly rather than silently dropping a window the caller asked for.
+    bodyBuilder: (input: Input) => {
+      const metric = resolveMetric(table, input);
+      if (metric.method === "POST") return timeFilters(input);
+      rejectWindowForUnwindowed(toText(input.metric ?? input.resource_id) ?? "this metric", input);
+      return undefined;
+    },
     paramsSchema: OVERVIEW_PARAMS_SCHEMA,
     operationPolicy: { risk: "read" as const, retryPolicy: "safe" as const },
   };
@@ -746,7 +796,7 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
             isDryRun: toBool(input.is_dry_run),
             sortType: toText(input.sort_by)?.toUpperCase(),
             sortOrder: toText(input.sort_order)?.toUpperCase(),
-            pageNumber: Math.floor(offset / limit),
+            pageNumber: pageNumberFor(limit, offset),
             pageSize: limit,
           });
         },
@@ -888,7 +938,7 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
             searchKey: toText(input.search_term ?? input.search),
             ruleIds: toList(input.rule_ids),
             targetAccounts: toList(input.target_accounts),
-            pageNumber: Math.floor(offset / limit),
+            pageNumber: pageNumberFor(limit, offset),
             pageSize: limit,
           });
         },
@@ -1086,10 +1136,14 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
         queryParams: { execution_type: "executionType" },
         operationPolicy: { risk: "read", retryPolicy: "safe" },
         paramsSchema: {
-          fields: [{ name: "execution_type", required: false, description: "EXTERNAL (default: ad hoc and scheduled runs), INTERNAL (recommendation runs) or INVENTORY_INTERNAL" }],
+          fields: [
+            EXECUTION_TYPE_PARAM,
+            { name: "offset", required: false, description: "First per-resource / sub-rule row to return (default 0); continue from nextOffset" },
+            { name: "limit", required: false, description: "Rows per array per call (default 25, max 50)" },
+          ],
         },
         responseExtractor: ccmGovernanceEvaluationGetExtract,
-        description: "One evaluation: status, counts, cost/savings (currency), error. Per-resource and sub-rule arrays are capped (see *Total).",
+        description: "One evaluation: status, counts, cost/savings (currency), error. Per-resource and sub-rule arrays are paged: see *Total and nextOffset, then pass offset/limit.",
       },
     },
     executeActions: {
@@ -1099,8 +1153,9 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
         pathParams: { evaluation_id: "evaluationId" },
         queryParams: { execution_type: "executionType" },
         operationPolicy: { risk: "read", retryPolicy: "safe" },
+        paramsSchema: { fields: [EXECUTION_TYPE_PARAM, ...POLICY_OUTPUT_PARAMS] },
         responseExtractor: ccmGovernanceExecutionDetailsExtract,
-        actionDescription: "Resources the rule matched, per policy (resource_id = evaluation id). Output is capped per policy; truncated=true means more exists.",
+        actionDescription: "Resources the rule matched, per policy (resource_id = evaluation id). Output is windowed: truncated=true means more exists, so continue with offset=nextOffset and/or response_offset=responseNextOffset.",
       },
       logs: {
         method: "GET",
@@ -1108,16 +1163,18 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
         pathParams: { evaluation_id: "evaluationId" },
         queryParams: { execution_type: "executionType" },
         operationPolicy: { risk: "read", retryPolicy: "safe" },
+        paramsSchema: { fields: [EXECUTION_TYPE_PARAM, ...POLICY_OUTPUT_PARAMS] },
         responseExtractor: ccmGovernanceExecutionDetailsExtract,
-        actionDescription: "Cloud Custodian logs per policy for an evaluation. Capped; use for FAILED runs.",
+        actionDescription: "Cloud Custodian logs per policy for an evaluation; use for FAILED runs. Windowed (offset/limit/response_offset) — see truncated, nextOffset, responseNextOffset.",
       },
       actioned_resources: {
         method: "GET",
         path: `${GOV}/actionedResources/{evaluationId}`,
         pathParams: { evaluation_id: "evaluationId" },
         operationPolicy: { risk: "read", retryPolicy: "safe" },
+        paramsSchema: { fields: [...POLICY_OUTPUT_PARAMS] },
         responseExtractor: ccmGovernanceExecutionDetailsExtract,
-        actionDescription: "Resources a LIVE run actually acted on (empty for dry runs). Capped per policy.",
+        actionDescription: "Resources a LIVE run actually acted on (empty for dry runs). Windowed (offset/limit/response_offset): check truncated and continue from nextOffset / responseNextOffset so no acted-on resource is missed.",
       },
       rule_yaml: {
         method: "GET",
@@ -1125,6 +1182,7 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
         pathParams: { evaluation_id: "evaluationId" },
         queryParams: { execution_type: "executionType" },
         operationPolicy: { risk: "read", retryPolicy: "safe" },
+        paramsSchema: { fields: [EXECUTION_TYPE_PARAM, ...POLICY_OUTPUT_PARAMS] },
         responseExtractor: ccmGovernanceExecutionDetailsExtract,
         actionDescription: "The rule YAML as it was when this evaluation ran (the rule may have changed since).",
       },
@@ -1240,7 +1298,7 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
     resourceType: "cost_governance_overview",
     displayName: "Cost Governance Overview",
     description:
-      "Read-only governance dashboard metrics. get (resource_id = metric): total_evaluations, total_active_enforcements, total_new_enforcement_recommendations, total_realised_savings. list (filters.metric): savings_grouped, savings_time_series, top_cloud_accounts, daily_evaluations. Needs the governance overview view permission.",
+      "Read-only governance dashboard metrics. get (resource_id = metric): total_evaluations, total_active_enforcements, total_new_enforcement_recommendations, total_realised_savings. list (filters.metric): savings_grouped (all-time), savings_time_series, top_cloud_accounts, daily_evaluations. total_realised_savings and the windowed series accept time_filter or start_time+end_time; the counts and savings_grouped are all-time/current and reject a window. Needs the governance overview view permission.",
     toolset: "ccm",
     scope: "account",
     identifierFields: ["metric"],
@@ -1248,9 +1306,9 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
     listFilterFields: [
       { name: "metric", description: "Breakdown to return", enum: Object.keys(OVERVIEW_SERIES_METRICS), required: true },
       { name: "cloud_provider", description: "AWS, AZURE, GCP (comma-separated for several); default all" },
-      { name: "time_filter", description: "LAST_7_DAYS | LAST_30_DAYS (default) | LAST_90_DAYS", enum: Object.keys(TIME_FILTER_DAYS) },
-      { name: "start_time", description: "Custom window start; pair with end_time" },
-      { name: "end_time", description: "Custom window end; pair with start_time" },
+      { name: "time_filter", description: "LAST_7_DAYS | LAST_30_DAYS (default) | LAST_90_DAYS. Not valid for savings_grouped, which is all-time", enum: Object.keys(TIME_FILTER_DAYS) },
+      { name: "start_time", description: "Custom window start; pair with end_time. Not valid for savings_grouped" },
+      { name: "end_time", description: "Custom window end; pair with start_time. Not valid for savings_grouped" },
     ],
     operations: {
       get: {

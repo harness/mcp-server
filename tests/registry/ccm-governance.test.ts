@@ -162,8 +162,14 @@ describe("rule: list / get / write bodies", () => {
     const { client, request } = makeClient({ status: "SUCCESS", data: { totalItems: 0, rules: [] } });
     await registry.dispatch(client, "cost_governance_rule", "list", {});
     expect(request.mock.calls[0][0].body).toEqual({ query: { limit: 20, offset: 0 } });
-    await registry.dispatch(client, "cost_governance_rule", "list", { limit: 9999 });
-    expect(request.mock.calls[1][0].body.query.limit).toBe(100);
+  });
+
+  it("rejects an out-of-range limit or negative offset instead of clamping", async () => {
+    const { client, request } = makeClient({ status: "SUCCESS", data: { totalItems: 0, rules: [] } });
+    await expect(registry.dispatch(client, "cost_governance_rule", "list", { limit: 9999 })).rejects.toThrow(/limit must be between 1 and 100/);
+    await expect(registry.dispatch(client, "cost_governance_rule", "list", { limit: 0 })).rejects.toThrow(/limit must be between 1 and 100/);
+    await expect(registry.dispatch(client, "cost_governance_rule", "list", { offset: -5 })).rejects.toThrow(/offset must be 0 or greater/);
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("get returns the full rule including YAML", async () => {
@@ -465,6 +471,15 @@ describe("enforcement", () => {
     });
     expect(request.mock.calls[0][0]).toMatchObject({ method: "PUT", path: `${GOV}/enforcement` });
     expect(request.mock.calls[0][0].body).toEqual({ ruleEnforcement: { ...definition, uuid: "e1", isDryRun: false } });
+  });
+
+  it("list rejects an offset that is not on a page boundary instead of returning overlapping rows", async () => {
+    const { client, request } = makeClient({ status: "SUCCESS", data: { totalItems: 0, ruleEnforcements: [] } });
+    await expect(
+      registry.dispatch(client, "cost_governance_enforcement", "list", { limit: 10, offset: 15 }),
+    ).rejects.toThrow(/offset \(15\) must be a multiple of limit \(10\)/);
+    await registry.dispatch(client, "cost_governance_enforcement", "list", { limit: 10, offset: 20 });
+    expect(request.mock.calls[0][0].body).toMatchObject({ pageNumber: 2, pageSize: 10 });
   });
 
   it("list posts a bare filter with 0-based pageNumber and keeps update-ready fields", async () => {
@@ -784,6 +799,17 @@ describe("overview", () => {
     expect(result).toEqual({ metric: "total_realised_savings", value: 1234.5 });
   });
 
+  it("rejects a time window on all-time metrics instead of silently dropping it", async () => {
+    const { client, request } = makeClient();
+    await expect(
+      registry.dispatch(client, "cost_governance_overview", "list", { metric: "savings_grouped", time_filter: "LAST_7_DAYS" }),
+    ).rejects.toThrow(/savings_grouped is not time-windowed/);
+    await expect(
+      registry.dispatch(client, "cost_governance_overview", "get", { metric: "total_evaluations", start_time: "2026-11-01", end_time: "2026-11-02" }),
+    ).rejects.toThrow(/total_evaluations is not time-windowed/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("an unknown or missing metric fails locally and lists the valid ones", async () => {
     const { client, request } = makeClient();
     await expect(registry.dispatch(client, "cost_governance_overview", "get", { metric: "nope" })).rejects.toThrow(/total_evaluations/);
@@ -820,26 +846,69 @@ describe("governance extractors", () => {
     expect(items[0]).toMatchObject({ id: "e", resourceCount: 0, cost: 0, isDryRun: false });
   });
 
-  it("execution details: caps entries and long responses and says so", () => {
+  it("execution details: windows entries and long responses, and says where to continue", () => {
     const long = "x".repeat(10_000);
-    const result = ccmGovernanceExecutionDetailsExtract({
-      data: Array.from({ length: 30 }, (_, i) => ({ policyName: `p${i}`, status: "SUCCESS", response: i === 0 ? long : "[]" })),
-    });
-    expect(result.total).toBe(30);
+    const data = Array.from({ length: 30 }, (_, i) => ({ policyName: `p${i}`, status: "SUCCESS", response: i === 0 ? long : "[]" }));
+    const result = ccmGovernanceExecutionDetailsExtract({ data });
+    expect(result).toMatchObject({ total: 30, offset: 0, limit: 25, truncated: true, nextOffset: 25 });
     expect(result.items).toHaveLength(25);
-    expect(result.truncated).toBe(true);
-    const first = result.items[0] as { response: string; responseTruncated: boolean; responseChars: number };
-    expect(first.response.length).toBeLessThan(7_000);
-    expect(first).toMatchObject({ responseTruncated: true, responseChars: 10_000 });
+    const first = result.items[0] as { response: string; responseTruncated: boolean; responseChars: number; responseNextOffset: number };
+    expect(first.response).toHaveLength(6_000);
+    expect(first).toMatchObject({ responseTruncated: true, responseChars: 10_000, responseNextOffset: 6_000 });
+
+    // Everything stays reachable: the next entry window ...
+    const rest = ccmGovernanceExecutionDetailsExtract({ data }, { offset: 25 });
+    expect(rest.items.map((e) => (e as { policyName: string }).policyName)).toEqual(["p25", "p26", "p27", "p28", "p29"]);
+    expect(rest.truncated).toBe(false);
+    expect(rest).not.toHaveProperty("nextOffset");
+
+    // ... and the rest of a long response.
+    const tail = ccmGovernanceExecutionDetailsExtract({ data }, { limit: 1, response_offset: 6_000 });
+    const entry = tail.items[0] as { response: string; responseTruncated: boolean; responseOffset: number };
+    expect(entry.response).toHaveLength(4_000);
+    expect(entry).toMatchObject({ responseTruncated: false, responseOffset: 6_000 });
+    expect(entry).not.toHaveProperty("responseNextOffset");
+  });
+
+  it("execution details: rejects an out-of-range window instead of clamping", () => {
+    expect(() => ccmGovernanceExecutionDetailsExtract({ data: [] }, { limit: 500 })).toThrow(/limit must be between 1 and 50/);
+    expect(() => ccmGovernanceExecutionDetailsExtract({ data: [] }, { offset: -1 })).toThrow(/offset must be 0 or greater/);
   });
 
   it("execution details: small payloads are not marked truncated; non-lists are empty", () => {
     expect(ccmGovernanceExecutionDetailsExtract({ data: [{ policyName: "p", response: "ok" }] })).toEqual({
       items: [{ policyName: "p", response: "ok" }],
       total: 1,
+      offset: 0,
+      limit: 25,
       truncated: false,
     });
-    expect(ccmGovernanceExecutionDetailsExtract({ data: null })).toEqual({ items: [], total: 0, truncated: false });
+    expect(ccmGovernanceExecutionDetailsExtract({ data: null })).toMatchObject({ items: [], total: 0, truncated: false });
+  });
+
+  it("actioned_resources dispatch honours offset / limit passed as params", async () => {
+    const data = Array.from({ length: 4 }, (_, i) => ({ policyName: `p${i}`, response: "[]" }));
+    const { client } = makeClient({ status: "SUCCESS", data });
+    const registry = new Registry(makeConfig());
+    const result = (await registry.dispatchExecute(client, "cost_governance_evaluation", "actioned_resources", {
+      evaluation_id: "e1",
+      offset: 1,
+      limit: 2,
+    })) as { items: { policyName: string }[]; nextOffset?: number };
+    expect(result.items.map((i) => i.policyName)).toEqual(["p1", "p2"]);
+    expect(result.nextOffset).toBe(3);
+  });
+
+  it("evaluation get: pages the per-resource arrays and reports where to continue", () => {
+    const rows = Array.from({ length: 60 }, (_, i) => ({ id: i }));
+    const raw = { data: { uuid: "e1", resourceBreakdownList: rows, subRuleExecutionDetails: rows.slice(0, 3) } };
+    const first = ccmGovernanceEvaluationGetExtract(raw) as Record<string, unknown>;
+    expect(first.resourceBreakdownList).toHaveLength(25);
+    expect(first).toMatchObject({ resourceBreakdownTotal: 60, resourceBreakdownListTruncated: true, nextOffset: 25, subRuleExecutionTotal: 3 });
+    expect(first).not.toHaveProperty("subRuleExecutionDetailsTruncated");
+    const last = ccmGovernanceEvaluationGetExtract(raw, { offset: 50, limit: 50 }) as Record<string, unknown>;
+    expect((last.resourceBreakdownList as unknown[]).map((r) => (r as { id: number }).id)).toEqual([50, 51, 52, 53, 54, 55, 56, 57, 58, 59]);
+    expect(last).not.toHaveProperty("nextOffset");
   });
 
   it("evaluation get: passes non-objects through", () => {

@@ -8,7 +8,8 @@
  *  - List rows keep what an agent needs to pick an entity or build an update, and drop the heavy
  *    parts (rule YAML, per-resource breakdowns, sub-rule details).
  *  - Output of policy runs (`status` / `logs` / `actioned_resources`) can be very large, so it is
- *    capped per entry and in entry count, and the result says so (`truncated: true`).
+ *    windowed per call (entries via `offset`/`limit`, long `response` text via `response_offset`), and the
+ *    result says so (`truncated: true` plus `nextOffset` / `responseNextOffset`), so nothing is unreachable.
  *  - Write endpoints return a bare boolean/string/list; the write tools need an object, so
  *    those are wrapped.
  */
@@ -17,12 +18,14 @@ import { asRecord, isRecord } from "../../utils/type-guards.js";
 
 type Row = Record<string, unknown>;
 
-/** Max rows of policy output returned from one status/logs/actioned_resources call. */
-const MAX_POLICY_ENTRIES = 25;
-/** Max characters of one policy `response` string (resource JSON or log text). */
+/** Default / max rows of policy output returned from one status/logs/actioned_resources call; page with `offset`/`limit`. */
+const DEFAULT_POLICY_ENTRIES = 25;
+const MAX_POLICY_ENTRIES = 50;
+/** Max characters of one policy `response` string per call (resource JSON or log text); read on with `response_offset`. */
 const MAX_POLICY_RESPONSE_CHARS = 6_000;
-/** Max sub-rule / per-resource rows kept on an evaluation detail. */
-const MAX_EVALUATION_SUBROWS = 25;
+/** Default / max sub-rule / per-resource rows kept on an evaluation detail; page with `offset`/`limit`. */
+const DEFAULT_EVALUATION_SUBROWS = 25;
+const MAX_EVALUATION_SUBROWS = 50;
 const MAX_DESCRIPTION_CHARS = 300;
 const MAX_ERROR_CHARS = 500;
 
@@ -37,6 +40,23 @@ function compactRow(entries: Record<string, unknown>): Row {
 
 function truncateText(value: unknown, max: number): unknown {
   return typeof value === "string" && value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function pageWindowNumber(v: unknown): number | undefined {
+  const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
+  return typeof n === "number" && Number.isFinite(n) ? Math.trunc(n) : undefined;
+}
+
+/** Caller-controlled window over an already fetched array (these endpoints return everything at once). */
+function pageWindow(input: Row | undefined, defaultLimit: number, maxLimit: number): { offset: number; limit: number } {
+  const num = pageWindowNumber;
+  const limit = num(input?.limit) ?? defaultLimit;
+  if (limit < 1 || limit > maxLimit) {
+    throw new Error(`limit must be between 1 and ${maxLimit} (got ${limit}). Use offset to read further entries.`);
+  }
+  const offset = num(input?.offset) ?? 0;
+  if (offset < 0) throw new Error(`offset must be 0 or greater (got ${offset}).`);
+  return { offset, limit };
 }
 
 /** `{ <listKey>: [...], totalItems }` (or a bare array) → `{ items, total }`. */
@@ -254,54 +274,70 @@ export const ccmGovernanceAlertGetExtract = (raw: unknown, input?: Row): unknown
 };
 
 /**
- * `GET execution/{id}` → one evaluation. Keeps the summary fields in full and caps the
- * per-resource / per-sub-rule arrays, which can run to thousands of rows.
+ * `GET execution/{id}` → one evaluation. Keeps the summary fields in full and pages the
+ * per-resource / per-sub-rule arrays, which can run to thousands of rows: pass `offset` / `limit`
+ * to read on (`*Total` gives the full size, `nextOffset` is set while rows remain).
  */
-export const ccmGovernanceEvaluationGetExtract = (raw: unknown): unknown => {
+export const ccmGovernanceEvaluationGetExtract = (raw: unknown, input?: Row): unknown => {
   const data = dataOf(raw);
   if (!isRecord(data)) return data;
+  const { offset, limit } = pageWindow(input, DEFAULT_EVALUATION_SUBROWS, MAX_EVALUATION_SUBROWS);
   const out: Row = { ...projectEvaluation(data) };
+  let nextOffset: number | undefined;
   for (const [key, totalKey] of [
     ["subRuleExecutionDetails", "subRuleExecutionTotal"],
     ["resourceBreakdownList", "resourceBreakdownTotal"],
   ] as const) {
     const list = data[key];
     if (Array.isArray(list) && list.length > 0) {
-      out[key] = list.slice(0, MAX_EVALUATION_SUBROWS);
+      out[key] = list.slice(offset, offset + limit);
       out[totalKey] = list.length;
-      if (list.length > MAX_EVALUATION_SUBROWS) out[`${key}Truncated`] = true;
+      if (offset + limit < list.length) {
+        out[`${key}Truncated`] = true;
+        nextOffset = Math.min(nextOffset ?? Infinity, offset + limit);
+      }
     }
   }
+  if (nextOffset !== undefined) out.nextOffset = nextOffset;
   if (data.executionLogPath !== undefined) out.executionLogPath = data.executionLogPath;
   return out;
 };
 
 /**
  * `GET status|logs|actionedResources|ruleYaml/{id}` → `List<PolicyResponseDetails>`.
- * Each entry's `response` is the raw policy output; cap it and the entry count so one call
- * cannot flood the context.
+ * Each entry's `response` is the raw policy output. One call returns a window of entries
+ * (`offset` / `limit`) and at most MAX_POLICY_RESPONSE_CHARS of each `response` (`response_offset`
+ * to read on), so nothing is unreachable: `nextOffset` / `responseNextOffset` say where to continue.
  */
 export const ccmGovernanceExecutionDetailsExtract = (
   raw: unknown,
-): { items: unknown[]; total: number; truncated: boolean } => {
+  input?: Row,
+): { items: unknown[]; total: number; offset: number; limit: number; truncated: boolean; nextOffset?: number } => {
   const data = dataOf(raw);
   const all = Array.isArray(data) ? data : [];
-  let truncated = all.length > MAX_POLICY_ENTRIES;
-  const items = all.slice(0, MAX_POLICY_ENTRIES).map((entry) => {
+  const { offset, limit } = pageWindow(input, DEFAULT_POLICY_ENTRIES, MAX_POLICY_ENTRIES);
+  const responseOffset = Math.max(pageWindowNumber(input?.response_offset) ?? 0, 0);
+  const end = offset + limit;
+  let truncated = end < all.length;
+  const items = all.slice(offset, end).map((entry) => {
     if (!isRecord(entry)) return entry;
     const response = entry.response;
-    if (typeof response === "string" && response.length > MAX_POLICY_RESPONSE_CHARS) {
-      truncated = true;
+    if (typeof response === "string" && (response.length > MAX_POLICY_RESPONSE_CHARS || responseOffset > 0)) {
+      const stop = responseOffset + MAX_POLICY_RESPONSE_CHARS;
+      const more = stop < response.length;
+      if (more) truncated = true;
       return {
         ...entry,
-        response: `${response.slice(0, MAX_POLICY_RESPONSE_CHARS)}…`,
-        responseTruncated: true,
+        response: response.slice(responseOffset, stop),
+        responseTruncated: more,
         responseChars: response.length,
+        ...(responseOffset > 0 ? { responseOffset } : {}),
+        ...(more ? { responseNextOffset: stop } : {}),
       };
     }
     return entry;
   });
-  return { items, total: all.length, truncated };
+  return { items, total: all.length, offset, limit, truncated, ...(end < all.length ? { nextOffset: end } : {}) };
 };
 
 // ── Actions and writes ───────────────────────────────────────────────────────
