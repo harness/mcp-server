@@ -1087,6 +1087,20 @@ describe("HarnessClient", () => {
         expect(err.message).toBe("Governance error");
       });
 
+      it.each([
+        [403, "forbidden", "Only a listed approver can approve change request cr1"],
+        [404, "notFound", "Change request cr1 not found"],
+        [409, "invalidState", "Change request cr1 is PUBLISHED; only a REQUESTED change request can be approved"],
+      ])("change request %i keeps the API's errorType and detail", async (status, errorType, detail) => {
+        const err = await reject(
+          { title: "t", status, errorType, detail },
+          status,
+          { path: "/fme/api/v4/change-requests/cr1/approve" },
+        );
+        expect(err.statusCode).toBe(status);
+        expect(err.message).toBe(`HTTP ${status} ${errorType}: ${detail}`);
+      });
+
       it("falls back to title when detail is missing", async () => {
         const err = await reject({ title: "Governance Policy Violation", status: 422 });
         expect(err.message).toBe("Governance Policy Violation");

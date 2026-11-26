@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ERROR_PARSERS,
+  fmeChangeRequestErrorParser,
   fmeUnprocessableEntityParser,
   MAX_FME_MESSAGE_CHARS,
   runErrorParsers,
@@ -92,6 +93,39 @@ describe("fmeUnprocessableEntityParser.parse", () => {
     const detail = parse({ detail: "d", errors: [{ title: "P", detail: "y".repeat(5000) }] })?.detail ?? "";
     expect(detail.length).toBe(2001);
     expect(detail.endsWith("…")).toBe(true);
+  });
+});
+
+describe("fmeChangeRequestErrorParser", () => {
+  const path = "/fme/api/v4/change-requests/cr1/reject";
+
+  it.each([400, 403, 404, 409])("matches %i on change request paths", (status) => {
+    expect(fmeChangeRequestErrorParser.match({ path, status })).toBe(true);
+  });
+  it.each([401, 422, 429, 500])("does not match status %i", (status) => {
+    expect(fmeChangeRequestErrorParser.match({ path, status })).toBe(false);
+  });
+  it("does not match other FME paths", () => {
+    expect(fmeChangeRequestErrorParser.match({ path: "/fme/api/v4/feature-flags", status: 403 })).toBe(false);
+  });
+
+  it("prefixes status and errorType to the detail", () => {
+    expect(
+      fmeChangeRequestErrorParser.parse(
+        { title: "Invalid State", errorType: "invalidState", detail: "not REQUESTED" },
+        { path, status: 409 },
+      ),
+    ).toEqual({ message: "HTTP 409 invalidState: not REQUESTED" });
+  });
+
+  it("omits errorType when absent and falls back to title", () => {
+    expect(fmeChangeRequestErrorParser.parse({ title: "Forbidden" }, { path, status: 403 })).toEqual({
+      message: "HTTP 403: Forbidden",
+    });
+  });
+
+  it("returns undefined when the body has no detail, title or errors", () => {
+    expect(fmeChangeRequestErrorParser.parse({}, { path, status: 404 })).toBeUndefined();
   });
 });
 

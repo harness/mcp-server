@@ -1,5 +1,5 @@
 import { encodePathSegment } from "../../utils/path.js";
-import type { ToolsetDefinition, BodySchema } from "../types.js";
+import type { ToolsetDefinition, BodySchema, PathBuilderConfig } from "../types.js";
 import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract, fmeExperimentResultExtract, fmeActionExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
 
@@ -169,6 +169,63 @@ function compactFmeExperiment(item: Record<string, unknown>): Record<string, unk
     if (item[key] !== undefined) slim[key] = item[key];
   }
   return slim;
+}
+
+const FME_CHANGE_REQUEST_STATUSES = ["REQUESTED", "SCHEDULED", "PROCESSING", "PUBLISHED", "REJECTED", "WITHDRAWN", "FAILED"] as const;
+const FME_CHANGE_REQUEST_FILTERS = ["ALL", "APPROVALS", "SUBMISSIONS"] as const;
+const FME_CHANGE_REQUEST_RESOURCE_TYPES = ["FEATURE_FLAG", "SEGMENT"] as const;
+
+// status and environment_id are repeatable query params (status=A&status=B). Accept an array or a
+// comma-separated string and normalize to a string[] so each value becomes its own query param.
+function toFmeQueryList(raw: unknown): string[] | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const parts = (Array.isArray(raw) ? raw : String(raw).split(","))
+    .map((v) => (typeof v === "string" ? v.trim() : String(v)))
+    .filter((v) => v.length > 0);
+  return parts.length > 0 ? parts : undefined;
+}
+
+function resolveFmeChangeRequestRoute(input: Record<string, unknown>, config: PathBuilderConfig, suffix = ""): { path: string } {
+  requireHarnessNativeSegmentScope(
+    { ...input, org_id: input.org_id || config.HARNESS_ORG, project_id: input.project_id || config.HARNESS_PROJECT },
+    "fme_change_request",
+  );
+  const id = encodePathSegment(requireFmeIdentifier(input, "change_request_id", "fme_change_request"));
+  return { path: `/fme/api/v4/change-requests/${id}${suffix}` };
+}
+
+function fmeChangeRequestActionBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body = (input.body as Record<string, unknown> | undefined) ?? {};
+  return body.comment !== undefined ? { comment: body.comment } : {};
+}
+
+const fmeChangeRequestActionSchema: BodySchema = {
+  description: "Optional comment recorded with the action.",
+  fields: [
+    { name: "comment", type: "string", required: false, description: "Optional comment recorded with the action (max 480 chars)" },
+  ],
+};
+
+function applyFmeChangeRequestListQuery(input: Record<string, unknown>): void {
+  if (input.workspace_id) {
+    throw new Error("fme_change_request: Harness-native (org_id/project_id) only - pass org_id+project_id instead of workspace_id.");
+  }
+
+  const statuses = toFmeQueryList(input.status);
+  if (statuses) input.status = statuses;
+  else delete input.status;
+  const environmentIds = toFmeQueryList(input.environment_id);
+  if (environmentIds) input.environment_id = environmentIds;
+  else delete input.environment_id;
+
+  if (input.entity_type === "SEGMENT" && !input.segment_type) {
+    throw new Error(
+      `fme_change_request.list: segment_type is required when entity_type is SEGMENT (${FME_SEGMENT_KINDS.join(" | ")}).`,
+    );
+  }
+  if (input.segment_type && input.entity_type !== "SEGMENT") {
+    throw new Error("fme_change_request.list: segment_type is only allowed together with entity_type=SEGMENT.");
+  }
 }
 
 function resolveFmeCreateSegmentType(body: Record<string, unknown> | undefined): FmeSegmentKind {
@@ -2464,6 +2521,141 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "Get the experiment's overall summary: {sampleCounts: [{treatment, count, srmState}], calculatedAt}. Requires " +
             "org_id, project_id, experiment_id. srmState is null for the baseline. If the experiment has never been " +
             "calculated, returns 200 with zero counts, srmState INSUFFICIENT_DATA per comparison treatment, and calculatedAt null.",
+        },
+      },
+    },
+    // ── FME Change Request (Harness-native only) ──
+    {
+      resourceType: "fme_change_request",
+      displayName: "FME Change Request",
+      description:
+        "Change requests (approval workflow items) for feature flag and segment changes. Harness-native only. list is " +
+        "project-scoped by default; pass resource_scope='account' to list across the account. It defaults to pending " +
+        "(REQUESTED); filter=APPROVALS: the caller is an approver; SUBMISSIONS: the caller's own. get and the " +
+        "approve/reject/withdraw actions need org_id + project_id + change_request_id. The API checks the caller's " +
+        "permission (403) and that the status is REQUESTED (409).",
+      toolset: "feature-flags",
+      scope: "project",
+      supportedScopes: ["account", "project"],
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["change_request_id"],
+      searchAliases: ["approval", "approvals", "change proposal", "pending approval"],
+      listFilterFields: [
+        {
+          name: "status",
+          description:
+            "Filter by one or more lifecycle statuses (array or comma-separated). Defaults to [REQUESTED] (pending approval); explicit values replace the default.",
+          enum: [...FME_CHANGE_REQUEST_STATUSES],
+        },
+        {
+          name: "filter",
+          description:
+            "APPROVALS = change requests where the caller is an approver (excludes the caller's own submissions); SUBMISSIONS = submitted by the caller; ALL (default) = both.",
+          enum: [...FME_CHANGE_REQUEST_FILTERS],
+        },
+        {
+          name: "environment_id",
+          description:
+            "Filter to one or more environment IDs (array or comma-separated; get from fme_environment). Each must belong to the project.",
+        },
+        {
+          name: "entity_type",
+          description: "Filter to one changed-entity kind. SEGMENT requires segment_type.",
+          enum: [...FME_CHANGE_REQUEST_RESOURCE_TYPES],
+        },
+        {
+          name: "segment_type",
+          description: "Segment kind. Required when entity_type=SEGMENT; not allowed otherwise.",
+          enum: [...FME_SEGMENT_KINDS],
+        },
+        { name: "offset", description: "Pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Page size (1-100, default 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            applyFmeChangeRequestListQuery(input);
+            return { path: "/fme/api/v4/change-requests" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            status: "status",
+            filter: "filter",
+            environment_id: "environment_id",
+            entity_type: "resource_type",
+            segment_type: "segment_type",
+            offset: "offset",
+            size: "limit",
+            limit: "limit",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          // resourceName, resourceType, environment, createdBy and approvalConfig identify what a change
+          // request is about and who must act on it; the generic compact whitelist would drop all of them.
+          skipCompact: true,
+          description:
+            "List change requests (harness_list size maps to limit; pass offset directly via filters). Defaults to pending " +
+            "(REQUESTED) only. Each item has id, status, resourceType, resourceName, resourceId, segmentType (segments " +
+            "only), environment {id, name}, approvalConfig.approvers, title, comment, createdBy, createdAt, modifiedAt; " +
+            "null fields are omitted. Use environment_id values from fme_environment.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          scope: "project",
+          routeResolver: (input, config) => resolveFmeChangeRequestRoute(input, config),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get one change request by change_request_id (org_id + project_id required), including each approver's " +
+            "status in approvalConfig.approvers and publishedMetadata once applied. Use it to poll the final status " +
+            "after approve returns SCHEDULED or PROCESSING.",
+        },
+      },
+      executeActions: {
+        approve: {
+          method: "POST",
+          path: "",
+          scope: "project",
+          routeResolver: (input, config) => resolveFmeChangeRequestRoute(input, config, "/approve"),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: fmeChangeRequestActionBody,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Approve a REQUESTED change request; the change is then applied. Requires org_id, project_id, " +
+            "change_request_id. Optional body comment. Returns the change request (status PUBLISHED, or SCHEDULED/" +
+            "PROCESSING while the apply is pending; poll get). 403: the caller is not a listed approver or is the " +
+            "submitter. 409 invalidState: not REQUESTED; 409 staleDefinition/hasDependents or 422: the apply failed (FAILED).",
+          bodySchema: fmeChangeRequestActionSchema,
+        },
+        reject: {
+          method: "POST",
+          path: "",
+          scope: "project",
+          routeResolver: (input, config) => resolveFmeChangeRequestRoute(input, config, "/reject"),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: fmeChangeRequestActionBody,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Reject a REQUESTED change request (status REJECTED). Requires org_id, project_id, change_request_id. " +
+            "Optional body comment. 403: the caller is not a listed approver or is the submitter. 409 invalidState: " +
+            "the change request is not REQUESTED.",
+          bodySchema: fmeChangeRequestActionSchema,
+        },
+        withdraw: {
+          method: "POST",
+          path: "",
+          scope: "project",
+          routeResolver: (input, config) => resolveFmeChangeRequestRoute(input, config, "/withdraw"),
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: fmeChangeRequestActionBody,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Withdraw a REQUESTED change request (status WITHDRAWN). Requires org_id, project_id, change_request_id. " +
+            "Optional body comment. Allowed for the submitter and the environment's withdraw-allowed group (else 403). " +
+            "409 invalidState: the change request is not REQUESTED.",
+          bodySchema: fmeChangeRequestActionSchema,
         },
       },
     },

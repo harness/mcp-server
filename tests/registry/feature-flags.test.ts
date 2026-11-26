@@ -3,9 +3,27 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { RequestOptions } from "../../src/client/types.js";
 import { Registry } from "../../src/registry/index.js";
+import { HarnessApiError } from "../../src/utils/errors.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
 import { compactItems } from "../../src/utils/compact.js";
+import { ACCEPTED_CONFIRMATION, toolHandlerContext, type ConfirmationAnswer } from "../helpers/request-context.js";
+
+type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<{ content: { type: string; text?: string }[]; isError?: boolean }>;
+
+/** Registers one public tool against a stub MCP server and returns its handler. */
+function publicTool(
+  register: (server: never) => void,
+): (args: Record<string, unknown>, confirmation?: ConfirmationAnswer) => ReturnType<ToolHandler> {
+  let handler: ToolHandler | undefined;
+  const server = {
+    server: { getClientCapabilities: () => ({ elicitation: { form: {} } }) },
+    registerTool: (_name: string, _schema: unknown, fn: ToolHandler) => { handler = fn; },
+  };
+  register(server as never);
+  return (args, confirmation = ACCEPTED_CONFIRMATION) =>
+    handler!(args, toolHandlerContext(new AbortController().signal, confirmation));
+}
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -3536,6 +3554,426 @@ describe("fme_experiment_alerting", () => {
     expect(resource.operations.update?.bodySchema?.fields).toEqual([
       expect.objectContaining({ name: "isEnabled", type: "boolean", required: true }),
     ]);
+  });
+});
+
+describe("fme_change_request", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: routes to /fme/api/v4/change-requests with account_id/organization_identifier/project_identifier params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toEqual({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("list: resource_scope='account' omits organization_identifier/project_identifier (account-wide)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { resource_scope: "account" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.params).toEqual({ account_id: "test-account" });
+  });
+
+  it("list: falls back to HARNESS_ORG/HARNESS_PROJECT when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {});
+
+    expect(firstRequest(mockRequest).params).toEqual({
+      account_id: "test-account",
+      organization_identifier: "default",
+      project_identifier: "test-project",
+    });
+  });
+
+  it("list: throws when org_id/project_id are missing and not configured", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const unconfigured = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
+
+    await expect(unconfigured.dispatch(client, "fme_change_request", "list", {})).rejects.toThrow(
+      /fme_change_request: listing requires project scope/,
+    );
+    await expect(unconfigured.dispatch(client, "fme_change_request", "list", { org_id: "o1" })).rejects.toThrow(
+      /fme_change_request: listing requires project scope/,
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: rejects legacy workspace_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { workspace_id: "ws1", org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/Harness-native \(org_id\/project_id\) only/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: maps each documented filter to the correct query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 20, offset: 10, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: ["REQUESTED", "PUBLISHED"],
+      filter: "APPROVALS",
+      environment_id: ["env1", "env2"],
+      entity_type: "SEGMENT",
+      segment_type: "LARGE",
+      offset: 10,
+      limit: 20,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({
+      status: ["REQUESTED", "PUBLISHED"],
+      filter: "APPROVALS",
+      environment_id: ["env1", "env2"],
+      resource_type: "SEGMENT",
+      segment_type: "LARGE",
+      offset: 10,
+      limit: 20,
+    });
+  });
+
+  it("list: splits comma-separated status/environment_id into repeated params and canonicalizes case", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: "requested, scheduled",
+      environment_id: "env1,env2",
+      filter: "submissions",
+      entity_type: "feature_flag",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({
+      status: ["REQUESTED", "SCHEDULED"],
+      environment_id: ["env1", "env2"],
+      filter: "SUBMISSIONS",
+      resource_type: "FEATURE_FLAG",
+    });
+  });
+
+  it("list: harness_list size maps to limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 5, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1", size: 5 });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ limit: 5 });
+  });
+
+  it("list: passes values outside the documented enums through to the API", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: ["requested", "ARCHIVED"],
+      filter: "MINE",
+      entity_type: "EXPERIMENT",
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({
+      status: ["REQUESTED", "ARCHIVED"],
+      filter: "MINE",
+      resource_type: "EXPERIMENT",
+    });
+  });
+
+  it("list: harness_list entity_type filter keeps dispatching to fme_change_request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    const harnessList = publicTool((server) => registerListTool(server, registry, client));
+
+    const result = await harnessList({
+      resource_type: "fme_change_request",
+      org_id: "o1",
+      project_id: "p1",
+      filters: { entity_type: "SEGMENT", segment_type: "LARGE" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.params).toMatchObject({ resource_type: "SEGMENT", segment_type: "LARGE" });
+  });
+
+  it("list: requires segment_type iff entity_type=SEGMENT", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const scope = { org_id: "o1", project_id: "p1" };
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, entity_type: "SEGMENT" }),
+    ).rejects.toThrow(/segment_type is required when entity_type is SEGMENT/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, entity_type: "FEATURE_FLAG", segment_type: "STANDARD" }),
+    ).rejects.toThrow(/segment_type is only allowed together with entity_type=SEGMENT/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, segment_type: "STANDARD" }),
+    ).rejects.toThrow(/segment_type is only allowed together with entity_type=SEGMENT/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: extractor maps {data, totalCount} to a closed {items, total}", async () => {
+    const changeRequests = [
+      {
+        id: "cr1",
+        status: "REQUESTED",
+        resourceType: "FEATURE_FLAG",
+        resourceName: "checkout-flag",
+        environment: { id: "env1", name: "Production" },
+        approvalConfig: { approvers: [{ id: "g1", type: "GROUP", name: "platform-team" }] },
+        createdBy: { id: "u1", type: "USER", name: "Alice", email: "alice@example.com" },
+        organizationIdentifier: "o1",
+        projectIdentifier: "p1",
+        createdAt: "2026-09-01T10:00:00.000Z",
+      },
+    ];
+    const mockRequest = vi.fn().mockResolvedValue({ data: changeRequests, limit: 100, offset: 0, totalCount: 7 });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1" });
+
+    expect(result).toEqual({ items: changeRequests, total: 7 });
+  });
+
+  it("list: skips compaction so resourceName/environment/approvalConfig/createdBy survive", () => {
+    expect(getOperation("fme_change_request", "list").skipCompact).toBe(true);
+  });
+
+  it("exposes list, get and approve/reject/withdraw only, and supports project and account scope", () => {
+    const resource = findResource("fme_change_request");
+    expect(resource.operations.list).toBeDefined();
+    expect(resource.operations.get).toBeDefined();
+    expect(resource.operations.create).toBeUndefined();
+    expect(resource.operations.update).toBeUndefined();
+    expect(resource.operations.delete).toBeUndefined();
+    expect(Object.keys(resource.executeActions ?? {}).sort()).toEqual(["approve", "reject", "withdraw"]);
+    expect(resource.identifierFields).toEqual(["change_request_id"]);
+    expect(resource.scope).toBe("project");
+    expect(resource.supportedScopes).toEqual(["account", "project"]);
+  });
+
+  it("get: routes to /fme/api/v4/change-requests/{id} with project scope and URL-encodes the id", async () => {
+    const changeRequest = { id: "cr1", status: "PUBLISHED", approvalConfig: { approvers: [] } };
+    const mockRequest = vi.fn().mockResolvedValue(changeRequest);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_change_request", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      change_request_id: "cr 1/x",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/change-requests/cr%201%2Fx");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toEqual({ account_id: "test-account", organization_identifier: "o1", project_identifier: "p1" });
+    expect(result).toEqual(changeRequest);
+  });
+
+  it("get: throws without change_request_id or org_id/project_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/change_request_id/);
+    const unconfigured = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
+    await expect(
+      unconfigured.dispatch(client, "fme_change_request", "get", { change_request_id: "cr1", resource_scope: "account" }),
+    ).rejects.toThrow("fme_change_request: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get and actions: fall back to HARNESS_ORG/HARNESS_PROJECT when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+    const configured = { account_id: "test-account", organization_identifier: "default", project_identifier: "test-project" };
+
+    await registry.dispatch(client, "fme_change_request", "get", { change_request_id: "cr1" });
+    await registry.dispatchExecute(client, "fme_change_request", "withdraw", { change_request_id: "cr1" });
+
+    expect(mockRequest.mock.calls[0]![0].params).toEqual(configured);
+    expect(mockRequest.mock.calls[1]![0].params).toEqual(configured);
+  });
+
+  it.each([
+    { action: "approve", risk: "high_write" },
+    { action: "reject", risk: "high_write" },
+    { action: "withdraw", risk: "medium_write" },
+  ])("$action: POSTs to /fme/api/v4/change-requests/{id}/$action with only the comment", async ({ action, risk }) => {
+    const changeRequest = { id: "cr1", status: "REQUESTED" };
+    const mockRequest = vi.fn().mockResolvedValue(changeRequest);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "fme_change_request", action, {
+      org_id: "o1",
+      project_id: "p1",
+      change_request_id: "cr1",
+      body: { comment: "Looks good.", title: "ignored", status: "PUBLISHED" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe(`/fme/api/v4/change-requests/cr1/${action}`);
+    expect(req.product).toBeUndefined();
+    expect(req.params).toEqual({ account_id: "test-account", organization_identifier: "o1", project_identifier: "p1" });
+    expect(req.body).toEqual({ comment: "Looks good." });
+    expect(result).toEqual(changeRequest);
+
+    const spec = findResource("fme_change_request").executeActions?.[action];
+    expect(spec?.operationPolicy).toEqual({ risk, retryPolicy: "do_not_retry" });
+    expect(spec?.bodySchema?.fields.map((f) => f.name)).toEqual(["comment"]);
+  });
+
+  it("approve: sends an empty body when no comment is given and keeps an empty-string comment", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+    const input = { org_id: "o1", project_id: "p1", change_request_id: "cr1" };
+
+    await registry.dispatchExecute(client, "fme_change_request", "approve", input);
+    await registry.dispatchExecute(client, "fme_change_request", "approve", { ...input, body: { comment: "" } });
+
+    expect(mockRequest.mock.calls[0]![0].body).toEqual({});
+    expect(mockRequest.mock.calls[1]![0].body).toEqual({ comment: "" });
+  });
+
+  it("actions: keep project scope when resource_scope='account' is passed", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_change_request", "reject", {
+      org_id: "o1",
+      project_id: "p1",
+      change_request_id: "cr1",
+      resource_scope: "account",
+    });
+
+    expect(firstRequest(mockRequest).params).toEqual({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("actions: reject legacy workspace_id and a missing id or scope without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "fme_change_request", "approve", { workspace_id: "ws1", change_request_id: "cr1" }),
+    ).rejects.toThrow(/Harness-native \(org_id\/project_id\) only/);
+    const unconfigured = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
+    await expect(
+      unconfigured.dispatchExecute(client, "fme_change_request", "withdraw", { change_request_id: "cr1" }),
+    ).rejects.toThrow("fme_change_request: org_id and project_id are required (account is taken from config).");
+    await expect(
+      registry.dispatchExecute(client, "fme_change_request", "reject", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/change_request_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("harness_execute: maps resource_id to change_request_id and posts the action", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1", status: "PUBLISHED" });
+    const client = makeClient(mockRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const harnessExecute = publicTool((server) => registerExecuteTool(server, registry, client, makeConfig()));
+
+    const result = await harnessExecute({
+      resource_type: "fme_change_request",
+      action: "approve",
+      resource_id: "cr1",
+      org_id: "o1",
+      project_id: "p1",
+      body: { comment: "ok" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/change-requests/cr1/approve");
+    expect(req.body).toEqual({ comment: "ok" });
+  });
+
+  it("harness_execute: a declined confirmation sends no request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const harnessExecute = publicTool((server) => registerExecuteTool(server, registry, client, makeConfig()));
+
+    for (const action of ["approve", "reject", "withdraw"]) {
+      await harnessExecute(
+        { resource_type: "fme_change_request", action, resource_id: "cr1", org_id: "o1", project_id: "p1" },
+        { action: "decline" },
+      );
+    }
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("harness_execute: HARNESS_READ_ONLY blocks every action without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+    const readOnly = makeConfig({ HARNESS_READ_ONLY: true });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const harnessExecute = publicTool((server) => registerExecuteTool(server, new Registry(readOnly), client, readOnly));
+
+    for (const action of ["approve", "reject", "withdraw"]) {
+      const result = await harnessExecute({
+        resource_type: "fme_change_request",
+        action,
+        resource_id: "cr1",
+        org_id: "o1",
+        project_id: "p1",
+      });
+      expect(result.isError).toBe(true);
+    }
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("actions: propagate API errors such as 403 instead of swallowing them", async () => {
+    const mockRequest = vi.fn().mockRejectedValue(new HarnessApiError("HTTP 403 forbidden: not an approver", 403));
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "fme_change_request", "approve", {
+        org_id: "o1",
+        project_id: "p1",
+        change_request_id: "cr1",
+      }),
+    ).rejects.toMatchObject({ statusCode: 403, message: "HTTP 403 forbidden: not an approver" });
   });
 });
 
