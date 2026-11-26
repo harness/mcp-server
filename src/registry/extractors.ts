@@ -3224,3 +3224,22 @@ export {
   unifiedSearchSourcesExtract,
   workArtifactListExtract,
 } from "./extractors/domain.js";
+
+export {
+  ccmGovernanceAlertGetExtract,
+  ccmGovernanceAlertListExtract,
+  ccmGovernanceEnforcementListExtract,
+  ccmGovernanceEnforcementRecommendationListExtract,
+  ccmGovernanceEnqueueExtract,
+  ccmGovernanceEvaluationGetExtract,
+  ccmGovernanceExecutionDetailsExtract,
+  ccmGovernanceLastEvaluationExtract,
+  ccmGovernancePotentialRulesExtract,
+  ccmGovernanceRuleListExtract,
+  ccmGovernanceRuleSetFirstExtract,
+  ccmGovernanceRuleSetListExtract,
+  ccmGovernanceStringListExtract,
+  ccmGovernanceTargetListExtract,
+  ccmGovernanceValidateExtract,
+  ccmGovernanceWriteExtract,
+} from "./extractors/ccm-governance.js";

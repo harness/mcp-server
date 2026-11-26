@@ -7,6 +7,7 @@ import {
   COST_CATEGORY_RULES_ITEM_TYPE,
   normalizeCostCategoryBody,
 } from "./ccm-cost-category.js";
+import { ccmGovernanceResources } from "./ccm-governance.js";
 import {
   ngExtract,
   passthrough,
@@ -868,7 +869,7 @@ export const ccmToolset: ToolsetDefinition = {
   name: "ccm",
   displayName: "Cloud Cost Management",
   description:
-    "Cloud cost visibility, analysis, recommendations, anomaly detection, and AI/LLM spend budgets (ai_budget). Covers perspectives, cost breakdowns, time series, summaries, recommendations, anomalies, and Lightwing AI governance budgets.",
+    "Cloud cost visibility, analysis, recommendations, anomaly detection, AI/LLM spend budgets (ai_budget), and cloud asset governance (cost_governance_*: Cloud Custodian rules, dry runs, live runs, scheduled enforcements, alerts). Covers perspectives, cost breakdowns, time series, summaries, recommendations, anomalies, and Lightwing AI governance budgets.",
   resources: [
     // ------------------------------------------------------------------
     // 1. cost_perspective — REST CRUD for perspective management
@@ -2854,5 +2855,10 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
         },
       },
     },
+
+    // ------------------------------------------------------------------
+    // Cloud asset governance (Cloud Custodian) — cost_governance_* (see ccm-governance.ts)
+    // ------------------------------------------------------------------
+    ...ccmGovernanceResources,
   ],
 };

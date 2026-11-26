@@ -8,8 +8,8 @@ import { ccmToolset } from "../../src/registry/toolsets/ccm.js";
 const withCard = ccmToolset.resources.filter((r) => r.reviewCard);
 
 describe("reviewCard declarations", () => {
-  it("declares cards for cost_perspective and cost_category", () => {
-    expect(withCard.map((r) => r.resourceType).sort()).toEqual(["cost_category", "cost_perspective"]);
+  it("declares cards for cost_perspective, cost_category and cost_governance_enforcement", () => {
+    expect(withCard.map((r) => r.resourceType).sort()).toEqual(["cost_category", "cost_governance_enforcement", "cost_perspective"]);
   });
 
   for (const def of withCard) {

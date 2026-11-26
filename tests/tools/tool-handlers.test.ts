@@ -4641,7 +4641,7 @@ describe("approval prompt notes (confirmNote)", () => {
     return confirmationMessage(result);
   }
 
-  it("only the AI Code Review writes set a note, across every toolset", async () => {
+  it("only the AI Code Review and Cost Governance writes set a note, across every toolset", async () => {
     const { ALL_TOOLSET_NAMES } = await import("../../src/registry/index.js");
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.join(",") }));
     const withNote: string[] = [];
@@ -4657,6 +4657,8 @@ describe("approval prompt notes (confirmNote)", () => {
       "aicr_repository.disable", "aicr_repository.enable", "aicr_review.request_review",
       "aicr_rule.create", "aicr_rule.delete", "aicr_rule.override", "aicr_rule.update",
       "aicr_setting.set",
+      "cost_governance_enforcement.create", "cost_governance_enforcement.enable", "cost_governance_enforcement.update",
+      "cost_governance_enforcement_recommendation.accept", "cost_governance_rule.dry_run", "cost_governance_rule.run",
     ]);
   });
 
