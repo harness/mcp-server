@@ -186,6 +186,7 @@ export type ToolsetName =
   | "release-management"
   | "vibe"
   | "appsec"
+  | "ti"
   | "knowledge-graph"
   | "semantic-layer"
   | "unified-search"

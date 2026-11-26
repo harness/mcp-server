@@ -3246,3 +3246,34 @@ export {
   unifiedSearchSourcesExtract,
   workArtifactListExtract,
 } from "./extractors/domain.js";
+
+/**
+ * Extract the public CI test-cases response ({ data: { totalItems, ... }, content: [...] })
+ * into the standard { items, total } list shape. A 204 (no test cases found) arrives as an
+ * empty body and yields an empty list.
+ */
+export const testCaseListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = (raw ?? {}) as { content?: unknown[] | null; data?: { totalItems?: number } };
+  const items = Array.isArray(r.content) ? r.content : [];
+  return { items, total: r.data?.totalItems ?? items.length };
+};
+
+/**
+ * Compact a test case list item. The generic key whitelist would keep only `name`, dropping
+ * suite/class/file, the nested result and the flaky flags; stdout/stderr are bulky and only
+ * returned with compact=false.
+ */
+export function compactTestCase(item: Record<string, unknown>): Record<string, unknown> {
+  const result = (item.result ?? {}) as { status?: unknown; message?: unknown };
+  return {
+    name: item.name,
+    suite_name: item.suite_name,
+    class_name: item.class_name,
+    file_name: item.file_name,
+    result: { status: result.status, message: result.message },
+    duration_ms: item.duration_ms,
+    flaky: item.flaky,
+    quarantine: item.quarantine,
+    problematic: item.problematic,
+  };
+}
