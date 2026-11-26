@@ -1607,17 +1607,17 @@ Use `harness_execute(resource_type="pr_comment", action="resolve", ...)` to reso
 
 The opt-in `aicr` toolset (`HARNESS_TOOLSETS=+aicr`) reads results from the AI Code Review service for Harness Code pull requests. It needs the service to be reachable on your Harness environment. Pass `org_id` and `project_id` to work in a project, or neither for the account. Name a repository with `repo_id` (plus `org_id`/`project_id`) or with `repo_path` (`<account>/<org>/<project>/<repo>`).
 
-Start with `harness_list resource_type=aicr_review` to see the pull requests that have been reviewed, newest first. Pass an item's `repo_path` and its `number` (as `pr_number`) to `harness_get resource_type=aicr_review` for the review, then use `aicr_finding` for its findings and `aicr_run` for past runs. `aicr_repository` lists the repositories where review is enabled; `aicr_gate`, `aicr_rule`, `aicr_convention` and `aicr_setting` hold the merge gates, team rules, coding conventions and settings.
+Start with `harness_list resource_type=aicr_review` to see the pull requests that have been reviewed, newest first. Pass an item's `repo_path` and its `number` (as `pr_number`) to `harness_get resource_type=aicr_review` for the review, then use `aicr_finding` for its findings and `aicr_run` for past runs. `aicr_repository` lists the repositories that have an AI Code Review config (a disabled one is still listed; the list does not show whether review is on); `aicr_gate`, `aicr_rule`, `aicr_convention` and `aicr_setting` hold the merge gates, team rules, coding conventions and settings.
 
 Actions go through `harness_execute`:
 
 - `aicr_review`: `request_review` starts a review of a pull request, and `review_status` checks how it is going.
 - `aicr_finding`: `dismiss` and `undo_dismiss`.
-- `aicr_repository`: `enable` and `disable`.
+- `aicr_repository`: `enable` and `disable`. `disable` turns off the repository's AI review setting like the Harness UI: it removes the PR triggers and keeps the config, gates, rules, overrides, conventions and past reviews.
 - `aicr_gate` and `aicr_setting`: `set`.
 - `aicr_rule`: `override` turns an inherited rule that is marked overridable off or on for one repository. Rules and conventions are created and updated with `harness_create` and `harness_update`; `harness_delete` archives them instead of erasing them.
 
-Every write asks for approval first, and the prompt says what will change and where. Enabling review, setting gates or settings, and starting a review are high risk; disabling review is destructive. The service ignores some settings for now, and the review's grade, score and per-issue gate results are not exposed yet; the `set` fields and resource descriptions say which.
+Every write asks for approval first, and the prompt says what will change and where. Enabling or disabling review, setting gates or settings, and starting a review are high risk. The service ignores some settings for now. A review's `verdict` and each `aicr_review` list item have its grade, but the score and per-issue gate results are not exposed yet; the `set` fields and resource descriptions say which.
 
 ### Release Management
 

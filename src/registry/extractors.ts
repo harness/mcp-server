@@ -2690,12 +2690,13 @@ export {
 // ---------------------------------------------------------------------------
 
 /**
- * A PR with no completed review returns an empty 200 (`run_id: ""`), which
- * looks like "no issues". Say so explicitly.
+ * The backend returns the same empty 200 (`run_id: ""`) for a PR with no completed review
+ * and for a repo or PR that does not exist, which looks like "no issues". Say so explicitly.
  */
 export const AICR_NO_REVIEW_NOTE =
-  "No completed AI Code Review for this pull request yet, so an empty result does not mean there are no issues. " +
-  "Check harness_list(resource_type=\"aicr_run\") for a pending, running, or failed run.";
+  "No completed AI Code Review found for this pull request, so an empty result does not mean there are no issues. " +
+  "The same result comes back for a repository or pull request that does not exist: check repo_id, org_id, " +
+  "project_id and pr_number. Check harness_list(resource_type=\"aicr_run\") for a pending, running, or failed run.";
 
 /** Input keys the aicr toolset uses to pass data from request building to the extractors. */
 export const AICR_LINK_KEY = "_aicr_pr_url";
@@ -2711,6 +2712,11 @@ const AICR_FINDING_FIELDS = [
 const AICR_RUN_FIELDS = [
   "id", "status", "head_sha", "merge_base_sha", "diff_type", "from_run_id",
   "languages", "stats", "error_message", "started", "finished", "created", "updated",
+] as const;
+
+/** Gate result and grade of the pull request's latest successful review (`verdict` on `GET /review`). */
+const AICR_VERDICT_FIELDS = [
+  "run_id", "passed", "grade", "failing", "open", "new", "resolved", "rules_total", "rules_failed",
 ] as const;
 
 const AICR_OVERVIEW_FIELDS = ["status", "risk", "commit_sha", "content", "error_message", "updated"] as const;
@@ -2840,7 +2846,10 @@ export function aicrReviewStatusExtract(raw: unknown, input?: Record<string, unk
  * `GET /prs` rows. State, draft, and branch fields are always zero values
  * (the AICR store has no such columns), so they are dropped.
  */
-const AICR_PR_FIELDS = ["number", "title", "repo_path", "source_sha", "author", "risk", "created", "updated"] as const;
+const AICR_PR_FIELDS = [
+  "number", "title", "repo_path", "source_sha", "author", "risk", "status", "grade", "issues", "latest_run_id",
+  "created", "updated",
+] as const;
 
 /** `GET /repos` rows are full repo settings; prompt, MCP servers, and criteria are config, not repo identity. */
 const AICR_REPOSITORY_FIELDS = [
@@ -2865,7 +2874,7 @@ export function aicrPullRequestCompact(item: Record<string, unknown>): Record<st
   const author = asRecord(item.author);
   const name = author?.display_name || author?.uid;
   return {
-    ...pickPresent(item, ["number", "title", "repo_path", "risk", "updated"]),
+    ...pickPresent(item, ["number", "title", "repo_path", "risk", "status", "grade", "issues", "updated"]),
     ...(name ? { author: name } : {}),
   };
 }
@@ -2894,6 +2903,9 @@ export function aicrReviewExtract(raw: unknown, input?: Record<string, unknown>)
     ...(review.source_sha ? { source_sha: review.source_sha } : {}),
     checks: Array.isArray(review.criteria) ? review.criteria : [],
   };
+  // Absent until a review has finished and published, and on backends that predate it.
+  const verdict = asRecord(review.verdict);
+  if (verdict) result.verdict = pickPresent(verdict, AICR_VERDICT_FIELDS);
   const unavailable: Record<string, string> = {};
 
   const overview = aicrSideCall(input, AICR_OVERVIEW_KEY);
@@ -2963,9 +2975,19 @@ export function aicrEnableExtract(raw: unknown, input?: Record<string, unknown>)
   };
 }
 
-/** v2 offboard answers 204 with no body. */
-export function aicrDisableExtract(_raw: unknown, input?: Record<string, unknown>): unknown {
-  return { repo_path: input?.repo_path, enabled: false };
+/**
+ * Code's general repository settings come back after the PATCH; `ai_pullreq_review_enabled` is the
+ * repository's AI review setting. A response without it confirms nothing, so `enabled` is left out
+ * and the caller is told to read the setting again rather than shown the state it asked for.
+ */
+export function aicrDisableExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const flag = asRecord(raw)?.ai_pullreq_review_enabled;
+  if (typeof flag === "boolean") return { repo_path: input?.repo_path, enabled: flag };
+  return {
+    repo_path: input?.repo_path,
+    warning: "The response did not include the AI review setting, so the result is unknown. " +
+      "Read the repository's settings to check whether AI review is off.",
+  };
 }
 
 /** Gates: the per-category thresholds only; config ids and SCM connector fields are internal. */

@@ -345,6 +345,37 @@ function aicrNamedRepoPreflight(validate: (input: Record<string, unknown>) => un
 }
 
 /**
+ * Soft disable keeps the repository's AI Code Review config, and the backend only checks that the config
+ * exists, so a review would start on a repository whose AI review is off. Read the setting from Code and
+ * refuse only on an explicit false: a missing field, a non-boolean or a 404 (no Code repository, as for a
+ * GitHub App repo) is left for the backend to answer.
+ */
+async function aicrCheckReviewEnabled(ctx: PreflightContext, repoPath: string): Promise<void> {
+  const { spacePath, repoIdentifier } = splitAicrRepoPath(repoPath);
+  const [, org, project] = spacePath.split("/");
+  let settings: unknown;
+  try {
+    settings = await aicrGet(ctx, `/code/api/v1/repos/${encodePathSegment(repoIdentifier)}/settings/general`, {
+      ...(org ? { orgIdentifier: org } : {}),
+      ...(project ? { projectIdentifier: project } : {}),
+    });
+  } catch (err) {
+    if (err instanceof HarnessApiError && err.statusCode === 404) return;
+    throw err;
+  }
+  if (typeof settings === "object" && settings !== null && (settings as Record<string, unknown>).ai_pullreq_review_enabled === false) {
+    throw new Error(
+      'AI Code Review is turned off for this repository; run harness_execute(resource_type="aicr_repository", action="enable") first.',
+    );
+  }
+}
+
+async function aicrRequestReviewPreflight(ctx: PreflightContext): Promise<void> {
+  await aicrNamedRepoPreflight(aicrPrNumber)(ctx);
+  await aicrCheckReviewEnabled(ctx, resolveAicrRepoPath(ctx.input, ctx.accountId));
+}
+
+/**
  * Gates, rules and conventions are scoped by `space_path` or by the repo's config id, never both.
  * `repo_path` goes along with the id because auth reads the account from it (a 401 otherwise).
  * A repo without a config row is answered by `noRepoConfig`, the way reviews treat it.
@@ -825,6 +856,20 @@ async function aicrRepoActionPreflight(ctx: PreflightContext): Promise<void> {
   delete input.project_id;
 }
 
+/**
+ * Disable goes to Harness Code's repository settings, which scope by orgIdentifier/projectIdentifier
+ * (accountIdentifier comes from the client). Resolve repo_path, then hand the repo's own org and project
+ * to the registry's scope handling; an org- or account-level repo leaves the missing one off.
+ */
+async function aicrDisablePreflight(ctx: PreflightContext): Promise<void> {
+  await aicrRepoActionPreflight(ctx);
+  // Only a Harness Code repository has these settings; a GitHub App repo is recorded without one.
+  await aicrCheckRepoExists(ctx, String(ctx.input.repo_path));
+  const [, org, project] = String(ctx.input.space_path).split("/");
+  if (org) ctx.input.org_id = org;
+  if (project) ctx.input.project_id = project;
+}
+
 /** Findings of one run when `run_id` is given, else of the PR's latest successful run. */
 function aicrFindingsPath(input: Record<string, unknown>): string {
   const runId = str(input.run_id);
@@ -1051,7 +1096,7 @@ function aicrDisableNote(input: Record<string, unknown>): string | undefined {
   if (!t.repo) return undefined;
   return aicrNote(
     `Disable AI Code Review on ${t.where}`,
-    "removes its PR triggers, gates, rules, overrides and conventions. Enabling again does not bring them back.",
+    "removes its PR triggers; its gates, rules, overrides, conventions and past reviews are kept. enable turns it back on.",
   );
 }
 
@@ -1347,11 +1392,10 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       resourceType: "aicr_review",
       displayName: "AI Code Review",
       description:
-        "Latest AI Code Review of a pull request: criteria checks, overview (risk, status, summary), finding counts, and up to 100 open issues. " +
+        "Latest AI Code Review of a pull request: criteria checks, overview (risk, status, summary), verdict (gate result and grade), finding counts, and up to 100 open issues. " +
         "Pass repo_id + pr_number (with the repo's org_id/project_id) or a Harness PR URL. " +
-        "Execute request_review to review the PR's current commit now, and review_status to follow it. " +
-        "Grade, score, and per-issue gate results are not exposed by the API yet. " +
-        "List: reviewed PRs of an account, org or project, newest first; merged and closed stay listed.",
+        "Execute request_review to review the current commit, and review_status to follow it. " +
+        "List: reviewed PRs of an account, org or project with review status (e.g. blocked) and grade, newest first; merged and closed stay listed.",
       toolset: "aicr",
       scope: "account",
       scopeOptional: true,
@@ -1359,6 +1403,19 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       compactItem: aicrPullRequestCompact,
       listFilterFields: [
         { name: "query", description: "Search by pull request title" },
+        {
+          name: "status",
+          description: "Review status (one value): blocked = an open issue fails a gate",
+          enum: ["pending", "reviewing", "passed", "blocked", "failed"],
+        },
+        {
+          name: "sort",
+          description:
+            "Sort column (default updated). grade: asc puts A first and ungraded last, desc puts ungraded first, then F. " +
+            "issues: by critical, then major, then minor count",
+          enum: ["updated", "title", "repo", "author", "grade", "issues", "status"],
+        },
+        { name: "order", description: "Sort order (default desc)", enum: ["asc", "desc"] },
       ],
       diagnosticHint: DIAGNOSTIC_HINT,
       searchAliases: ["ai code review", "aicr"],
@@ -1383,11 +1440,13 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           preflight: aicrSpacePreflight,
           pageOneIndexed: true,
           headerPagination: true,
-          queryParams: SPACE_LIST_QUERY,
+          queryParams: { ...SPACE_LIST_QUERY, status: "status", sort: "sort", order: "order" },
           responseExtractor: aicrPullRequestListExtract,
           description:
-            "List reviewed pull requests under a space with number, title, repo_path, risk, and author. " +
-            "Pass an item's repo_path and number to get, aicr_finding, or aicr_run. Only query filters; PR state and branches are on pull_request.",
+            "List reviewed pull requests under a space with number, title, repo_path, risk, author, status, grade, and issue counts per severity. " +
+            "status: pending (no run), reviewing, passed, blocked (an open issue fails a gate), or failed (the run errored). " +
+            "grade and issues come from the latest successful review; grade is absent when the changed line count is unknown. " +
+            "Pass an item's repo_path and number to get, aicr_finding, or aicr_run. PR state and branches are on pull_request.",
           paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
         get: {
@@ -1401,7 +1460,11 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrReviewExtract,
           description:
-            "Get the latest AI Code Review. If the overview or findings fail to load, the error is reported under `unavailable` and the checks are still returned.",
+            "Get the latest AI Code Review. If the overview or findings fail to load, the error is reported under `unavailable` and the checks are still returned. " +
+            "verdict is from the latest successful review, saved when it finished: passed is false when an open issue fails a gate (failing counts them); " +
+            "new counts issues the previous review did not have, resolved counts the previous review's issues that are gone; " +
+            "failed team rules are counted in rules_failed but do not block. Dismissals and new commits show in it only after the next review. " +
+            "verdict is absent until a review has finished; its grade is absent when the changed line count is unknown.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
         },
       },
@@ -1415,7 +1478,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           // could start a second pipeline, so it is never retried. It runs a pipeline as the caller, so it
           // asks first, and auto-approving medium writes does not cover it (the same level as enable).
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
-          preflight: aicrNamedRepoPreflight(aicrPrNumber),
+          preflight: aicrRequestReviewPreflight,
           confirmNote: aicrReviewRequestNote,
           bodyBuilder: hoistAicrRepoPath,
           queryParams: { repo_path: "repo_path" },
@@ -1424,6 +1487,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             "Start an AI Code Review of the pull request's current commit, run by the repo's AI Code Review pipeline as you. " +
             "Works only for an open PR in a project repository with AI Code Review enabled. " +
             "If a review of that commit is already running, that one is returned and no new one starts. " +
+            "Fails with a conflict while a review of an older commit of the PR is still running. " +
+            "Requesting a review of an already reviewed commit starts a new review of the whole pull request. " +
             "Returns status running with the run; follow it with review_status.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
           bodySchema: { description: "No body", fields: [] },
@@ -1441,7 +1506,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           actionDescription:
             "Status of the pull request's latest review run: running, success, failure, or none. " +
             "Read-only, takes a Harness PR URL. run.head_sha is the commit reviewed; if the PR has newer commits, request_review again. " +
-            "A running review whose pipeline has ended is marked failed here, when you can edit reviews.",
+            "A running review whose pipeline has ended is marked failed here, when you can edit reviews. " +
+            "A cancelled run (superseded, or nothing to review) also reports status failure; check run.status to tell cancelled from error.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
           bodySchema: { description: "No body", fields: [] },
         },
@@ -1642,8 +1708,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       resourceType: "aicr_repository",
       displayName: "AI Code Review Repository",
       description:
-        "Repositories with AI Code Review enabled under an account, org, or project. " +
-        "A repository missing from this list does not have AI Code Review enabled. " +
+        "Repositories with an AI Code Review config under an account, org, or project. " +
+        "A disabled repository is still listed; the list does not show whether review is on. " +
         "Execute enable or disable to turn it on or off for one Harness Code repository.",
       toolset: "aicr",
       scope: "account",
@@ -1669,7 +1735,7 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: SPACE_LIST_QUERY,
           responseExtractor: aicrRepositoryListExtract,
           description:
-            "List AI Code Review-enabled repositories with repo_path and SCM source (Harness Code or linked provider).",
+            "List repositories with an AI Code Review config (a disabled one is still listed; the list does not show whether review is on) with repo_path and SCM source (Harness Code or linked provider).",
           paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
       },
@@ -1699,20 +1765,26 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           bodySchema: { description: "No body", fields: [] },
         },
         disable: {
-          method: "POST",
-          path: `${AICR_V2_BASE}/offboard`,
-          // Cascades to the repo's own gates, rules and conventions; enabling again does not bring them back.
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          preflight: aicrRepoActionPreflight,
-          bodyBuilder: () => undefined,
+          method: "PATCH",
+          path: "/code/api/v1/repos/{repo}/settings/general",
+          // The repository's AI review setting, as the Harness UI toggle sends it. Code turns off the PR
+          // triggers and keeps the config, gates, rules, overrides, conventions and past reviews.
+          pathBuilder: (input) => {
+            const { repoIdentifier } = splitAicrRepoPath(String(input.repo_path));
+            return `/code/api/v1/repos/${encodePathSegment(repoIdentifier)}/settings/general`;
+          },
+          // Removes the repository's PR triggers, so its new commits stop being reviewed.
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          preflight: aicrDisablePreflight,
+          bodyBuilder: () => ({ ai_pullreq_review_enabled: false }),
           skipScopeBodyInjection: true,
-          queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrDisableExtract,
           confirmNote: aicrDisableNote,
           actionDescription:
-            "Disable AI Code Review on a repository: deletes its pull request triggers, turns its AI review setting off, " +
-            "and deletes the repository's own AI Code Review config with the gates, rules, rule overrides and conventions set on it. " +
-            "Enabling it again does not restore them. Succeeds if it is already disabled.",
+            "Turn off AI Code Review for a repository, the same as the repository's AI review setting in Harness: " +
+            "removes its pull request triggers, so new commits are not reviewed automatically. " +
+            "Keeps the repository's AI Code Review config, gates, rules, overrides, conventions and past reviews; " +
+            "enable turns it back on. Succeeds if it is already disabled. Only for Harness Code repositories.",
           paramsSchema: { fields: REPO_PARAM_FIELDS },
           bodySchema: { description: "No body", fields: [] },
         },
