@@ -185,6 +185,26 @@ function toFmeQueryList(raw: unknown): string[] | undefined {
   return parts.length > 0 ? parts : undefined;
 }
 
+function resolveFmeChangeRequestRoute(input: Record<string, unknown>, suffix = ""): { path: string } {
+  if (input.workspace_id) {
+    throw new Error("fme_change_request: Harness-native (org_id/project_id) only - pass org_id+project_id instead of workspace_id.");
+  }
+  const id = encodePathSegment(requireFmeIdentifier(input, "change_request_id", "fme_change_request"));
+  return { path: `/fme/api/v4/change-requests/${id}${suffix}` };
+}
+
+function fmeChangeRequestActionBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body = (input.body as Record<string, unknown> | undefined) ?? {};
+  return body.comment !== undefined ? { comment: body.comment } : {};
+}
+
+const fmeChangeRequestActionSchema: BodySchema = {
+  description: "Optional comment recorded with the action.",
+  fields: [
+    { name: "comment", type: "string", required: false, description: "Optional comment recorded with the action (max 480 chars)" },
+  ],
+};
+
 function applyFmeChangeRequestListQuery(input: Record<string, unknown>): void {
   if (input.workspace_id) {
     throw new Error("fme_change_request: Harness-native (org_id/project_id) only - pass org_id+project_id instead of workspace_id.");
@@ -2503,20 +2523,21 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
       },
     },
-    // ── FME Change Request (Harness-native only; read-only list) ──
+    // ── FME Change Request (Harness-native only) ──
     {
       resourceType: "fme_change_request",
       displayName: "FME Change Request",
       description:
-        "Change requests (approval workflow items) for feature flag and segment changes. Harness-native only. List only. " +
-        "Project-scoped by default (org_id + project_id); pass resource_scope='account' to list across the account. " +
-        "Defaults to pending (REQUESTED); pass status for other states. filter=APPROVALS: the caller is an approver " +
-        "(excluding own submissions); SUBMISSIONS: the caller's own; ALL (default): both. Most recently modified first.",
+        "Change requests (approval workflow items) for feature flag and segment changes. Harness-native only. list is " +
+        "project-scoped by default; pass resource_scope='account' to list across the account. It defaults to pending " +
+        "(REQUESTED); filter=APPROVALS: the caller is an approver; SUBMISSIONS: the caller's own. get and the " +
+        "approve/reject/withdraw actions need org_id + project_id + change_request_id. The API checks the caller's " +
+        "permission (403) and that the status is REQUESTED (409).",
       toolset: "feature-flags",
       scope: "project",
       supportedScopes: ["account", "project"],
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
-      identifierFields: [],
+      identifierFields: ["change_request_id"],
       searchAliases: ["approval", "approvals", "change proposal", "pending approval"],
       listFilterFields: [
         {
@@ -2577,6 +2598,63 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "(REQUESTED) only. Each item has id, status, resourceType, resourceName, resourceId, segmentType (segments " +
             "only), environment {id, name}, approvalConfig.approvers, title, comment, createdBy, createdAt, modifiedAt; " +
             "null fields are omitted. Use environment_id values from fme_environment.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          scope: "project",
+          routeResolver: (input) => resolveFmeChangeRequestRoute(input),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get one change request by change_request_id (org_id + project_id required), including each approver's " +
+            "status in approvalConfig.approvers and publishedMetadata once applied. Use it to poll the final status " +
+            "after approve returns SCHEDULED or PROCESSING.",
+        },
+      },
+      executeActions: {
+        approve: {
+          method: "POST",
+          path: "",
+          scope: "project",
+          routeResolver: (input) => resolveFmeChangeRequestRoute(input, "/approve"),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: fmeChangeRequestActionBody,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Approve a REQUESTED change request; the change is then applied. Requires org_id, project_id, " +
+            "change_request_id. Optional body comment. Returns the change request (status PUBLISHED, or SCHEDULED/" +
+            "PROCESSING while the apply is pending; poll get). 403: the caller is not a listed approver or is the " +
+            "submitter. 409 invalidState: not REQUESTED; 409 staleDefinition/hasDependents or 422: the apply failed (FAILED).",
+          bodySchema: fmeChangeRequestActionSchema,
+        },
+        reject: {
+          method: "POST",
+          path: "",
+          scope: "project",
+          routeResolver: (input) => resolveFmeChangeRequestRoute(input, "/reject"),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: fmeChangeRequestActionBody,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Reject a REQUESTED change request (status REJECTED). Requires org_id, project_id, change_request_id. " +
+            "Optional body comment. 403: the caller is not a listed approver or is the submitter. 409 invalidState: " +
+            "the change request is not REQUESTED.",
+          bodySchema: fmeChangeRequestActionSchema,
+        },
+        withdraw: {
+          method: "POST",
+          path: "",
+          scope: "project",
+          routeResolver: (input) => resolveFmeChangeRequestRoute(input, "/withdraw"),
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: fmeChangeRequestActionBody,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Withdraw a REQUESTED change request (status WITHDRAWN). Requires org_id, project_id, change_request_id. " +
+            "Optional body comment. Allowed for the submitter and the environment's withdraw-allowed group (else 403). " +
+            "409 invalidState: the change request is not REQUESTED.",
+          bodySchema: fmeChangeRequestActionSchema,
         },
       },
     },

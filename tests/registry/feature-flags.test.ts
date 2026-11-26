@@ -3,6 +3,7 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { RequestOptions } from "../../src/client/types.js";
 import { Registry } from "../../src/registry/index.js";
+import { HarnessApiError } from "../../src/utils/errors.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
 import { compactItems } from "../../src/utils/compact.js";
@@ -3771,15 +3772,137 @@ describe("fme_change_request", () => {
     expect(getOperation("fme_change_request", "list").skipCompact).toBe(true);
   });
 
-  it("is list-only and supports project and account scope", () => {
+  it("exposes list, get and approve/reject/withdraw only, and supports project and account scope", () => {
     const resource = findResource("fme_change_request");
     expect(resource.operations.list).toBeDefined();
-    expect(resource.operations.get).toBeUndefined();
+    expect(resource.operations.get).toBeDefined();
     expect(resource.operations.create).toBeUndefined();
     expect(resource.operations.update).toBeUndefined();
     expect(resource.operations.delete).toBeUndefined();
+    expect(Object.keys(resource.executeActions ?? {}).sort()).toEqual(["approve", "reject", "withdraw"]);
+    expect(resource.identifierFields).toEqual(["change_request_id"]);
     expect(resource.scope).toBe("project");
     expect(resource.supportedScopes).toEqual(["account", "project"]);
+  });
+
+  it("get: routes to /fme/api/v4/change-requests/{id} with project scope and URL-encodes the id", async () => {
+    const changeRequest = { id: "cr1", status: "PUBLISHED", approvalConfig: { approvers: [] } };
+    const mockRequest = vi.fn().mockResolvedValue(changeRequest);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_change_request", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      change_request_id: "cr 1/x",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/change-requests/cr%201%2Fx");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toEqual({ account_id: "test-account", organization_identifier: "o1", project_identifier: "p1" });
+    expect(result).toEqual(changeRequest);
+  });
+
+  it("get: throws without change_request_id or org_id/project_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/change_request_id/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "get", { change_request_id: "cr1", resource_scope: "account" }),
+    ).rejects.toThrow("fme_change_request: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { action: "approve", risk: "high_write" },
+    { action: "reject", risk: "high_write" },
+    { action: "withdraw", risk: "medium_write" },
+  ])("$action: POSTs to /fme/api/v4/change-requests/{id}/$action with only the comment", async ({ action, risk }) => {
+    const changeRequest = { id: "cr1", status: "REQUESTED" };
+    const mockRequest = vi.fn().mockResolvedValue(changeRequest);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "fme_change_request", action, {
+      org_id: "o1",
+      project_id: "p1",
+      change_request_id: "cr1",
+      body: { comment: "Looks good.", title: "ignored", status: "PUBLISHED" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe(`/fme/api/v4/change-requests/cr1/${action}`);
+    expect(req.product).toBeUndefined();
+    expect(req.params).toEqual({ account_id: "test-account", organization_identifier: "o1", project_identifier: "p1" });
+    expect(req.body).toEqual({ comment: "Looks good." });
+    expect(result).toEqual(changeRequest);
+
+    const spec = findResource("fme_change_request").executeActions?.[action];
+    expect(spec?.operationPolicy).toEqual({ risk, retryPolicy: "do_not_retry" });
+    expect(spec?.bodySchema?.fields.map((f) => f.name)).toEqual(["comment"]);
+  });
+
+  it("approve: sends an empty body when no comment is given and keeps an empty-string comment", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+    const input = { org_id: "o1", project_id: "p1", change_request_id: "cr1" };
+
+    await registry.dispatchExecute(client, "fme_change_request", "approve", input);
+    await registry.dispatchExecute(client, "fme_change_request", "approve", { ...input, body: { comment: "" } });
+
+    expect(mockRequest.mock.calls[0]![0].body).toEqual({});
+    expect(mockRequest.mock.calls[1]![0].body).toEqual({ comment: "" });
+  });
+
+  it("actions: keep project scope when resource_scope='account' is passed", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_change_request", "reject", {
+      org_id: "o1",
+      project_id: "p1",
+      change_request_id: "cr1",
+      resource_scope: "account",
+    });
+
+    expect(firstRequest(mockRequest).params).toEqual({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("actions: reject legacy workspace_id and a missing id or scope without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "fme_change_request", "approve", { workspace_id: "ws1", change_request_id: "cr1" }),
+    ).rejects.toThrow(/Harness-native \(org_id\/project_id\) only/);
+    await expect(
+      registry.dispatchExecute(client, "fme_change_request", "withdraw", { change_request_id: "cr1" }),
+    ).rejects.toThrow(/org_id and project_id are required/);
+    await expect(
+      registry.dispatchExecute(client, "fme_change_request", "reject", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/change_request_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("actions: propagate API errors such as 403 instead of swallowing them", async () => {
+    const mockRequest = vi.fn().mockRejectedValue(new HarnessApiError("HTTP 403 forbidden: not an approver", 403));
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "fme_change_request", "approve", {
+        org_id: "o1",
+        project_id: "p1",
+        change_request_id: "cr1",
+      }),
+    ).rejects.toMatchObject({ statusCode: 403, message: "HTTP 403 forbidden: not an approver" });
   });
 });
 

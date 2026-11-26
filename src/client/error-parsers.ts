@@ -78,6 +78,25 @@ export const fmeUnprocessableEntityParser: ErrorParser = {
   },
 };
 
+const FME_CHANGE_REQUEST_ERROR_STATUSES = new Set([400, 403, 404, 409]);
+
+/**
+ * FME change request 400/403/404/409 responses are problem+json with `detail` and `errorType`
+ * but no `message`. Without this parser a 403 gets the generic RBAC hint, and the API's reason
+ * (not a listed approver, own change request, wrong status) is lost.
+ */
+export const fmeChangeRequestErrorParser: ErrorParser = {
+  name: "fme-change-request",
+  match: ({ path, status }) =>
+    path.startsWith("/fme/api/v4/change-requests") && FME_CHANGE_REQUEST_ERROR_STATUSES.has(status),
+  parse(body, ctx) {
+    const parsed = fmeUnprocessableEntityParser.parse(body, ctx);
+    if (!parsed?.message) return parsed;
+    const errorType = nonEmptyString(body.errorType);
+    return { ...parsed, message: `HTTP ${ctx.status}${errorType ? ` ${errorType}` : ""}: ${parsed.message}` };
+  },
+};
+
 const UNIFIED_SEARCH_HINTS: Record<number, { message: string; detail: string }> = {
   401: {
     message: "Unified search returned 401 Unauthorized",
@@ -126,7 +145,11 @@ export const unifiedSearchErrorParser: ErrorParser = {
 };
 
 /** Registered parsers, checked in order. Add new API-specific parsers here. */
-export const ERROR_PARSERS: readonly ErrorParser[] = [fmeUnprocessableEntityParser, unifiedSearchErrorParser];
+export const ERROR_PARSERS: readonly ErrorParser[] = [
+  fmeUnprocessableEntityParser,
+  fmeChangeRequestErrorParser,
+  unifiedSearchErrorParser,
+];
 
 /** Run the first matching parser that produces a result; undefined means "use generic parsing". */
 export function runErrorParsers(
