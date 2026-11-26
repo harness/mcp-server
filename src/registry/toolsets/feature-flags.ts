@@ -185,56 +185,25 @@ function toFmeQueryList(raw: unknown): string[] | undefined {
   return parts.length > 0 ? parts : undefined;
 }
 
-function canonicalizeFmeEnum<T extends string>(
-  raw: unknown,
-  allowed: readonly T[],
-  field: string,
-  operation: string,
-): T | undefined {
-  if (raw === undefined || raw === null || raw === "") return undefined;
-  const value = String(raw).trim();
-  const match = allowed.find((v) => v.toLowerCase() === value.toLowerCase());
-  if (match === undefined) {
-    throw new Error(`fme_change_request.${operation}: invalid ${field} '${value}'. Must be one of: ${allowed.join(", ")}.`);
-  }
-  return match;
-}
-
 function applyFmeChangeRequestListQuery(input: Record<string, unknown>): void {
   if (input.workspace_id) {
     throw new Error("fme_change_request: Harness-native (org_id/project_id) only - pass org_id+project_id instead of workspace_id.");
   }
-  if (input.resource_scope !== "account" && (!input.org_id || !input.project_id)) {
-    throw new Error(
-      "fme_change_request: org_id and project_id are required (account is taken from config). " +
-        "To list change requests across the whole account, pass resource_scope='account' instead.",
-    );
-  }
 
   const statuses = toFmeQueryList(input.status);
-  if (statuses) {
-    input.status = statuses.map((s) => canonicalizeFmeEnum(s, FME_CHANGE_REQUEST_STATUSES, "status", "list"));
-  } else {
-    delete input.status;
-  }
+  if (statuses) input.status = statuses;
+  else delete input.status;
   const environmentIds = toFmeQueryList(input.environment_id);
   if (environmentIds) input.environment_id = environmentIds;
   else delete input.environment_id;
 
-  const filter = canonicalizeFmeEnum(input.filter, FME_CHANGE_REQUEST_FILTERS, "filter", "list");
-  if (filter) input.filter = filter;
-  const resourceType = canonicalizeFmeEnum(input.resource_type, FME_CHANGE_REQUEST_RESOURCE_TYPES, "resource_type", "list");
-  if (resourceType) input.resource_type = resourceType;
-  const segmentType = canonicalizeFmeEnum(input.segment_type, FME_SEGMENT_KINDS, "segment_type", "list");
-  if (segmentType) input.segment_type = segmentType;
-
-  if (resourceType === "SEGMENT" && !segmentType) {
+  if (input.entity_type === "SEGMENT" && !input.segment_type) {
     throw new Error(
-      `fme_change_request.list: segment_type is required when resource_type is SEGMENT (${FME_SEGMENT_KINDS.join(" | ")}).`,
+      `fme_change_request.list: segment_type is required when entity_type is SEGMENT (${FME_SEGMENT_KINDS.join(" | ")}).`,
     );
   }
-  if (segmentType && resourceType !== "SEGMENT") {
-    throw new Error("fme_change_request.list: segment_type is only allowed together with resource_type=SEGMENT.");
+  if (input.segment_type && input.entity_type !== "SEGMENT") {
+    throw new Error("fme_change_request.list: segment_type is only allowed together with entity_type=SEGMENT.");
   }
 }
 
@@ -2568,13 +2537,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "Filter to one or more environment IDs (array or comma-separated; get from fme_environment). Each must belong to the project.",
         },
         {
-          name: "resource_type",
-          description: "Filter to one resource kind. SEGMENT requires segment_type.",
+          name: "entity_type",
+          description: "Filter to one changed-entity kind. SEGMENT requires segment_type.",
           enum: [...FME_CHANGE_REQUEST_RESOURCE_TYPES],
         },
         {
           name: "segment_type",
-          description: "Segment kind. Required when resource_type=SEGMENT; not allowed otherwise.",
+          description: "Segment kind. Required when entity_type=SEGMENT; not allowed otherwise.",
           enum: [...FME_SEGMENT_KINDS],
         },
         { name: "offset", description: "Pagination offset (default 0)", type: "number" },
@@ -2593,7 +2562,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             status: "status",
             filter: "filter",
             environment_id: "environment_id",
-            resource_type: "resource_type",
+            entity_type: "resource_type",
             segment_type: "segment_type",
             offset: "offset",
             size: "limit",

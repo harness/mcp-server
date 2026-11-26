@@ -6,6 +6,25 @@ import { Registry } from "../../src/registry/index.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
 import { compactItems } from "../../src/utils/compact.js";
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
+
+type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<{ content: { type: string; text?: string }[]; isError?: boolean }>;
+
+/** Registers one public tool against a stub MCP server and returns its handler. */
+async function publicTool(
+  register: (server: never, registry: Registry, client: HarnessClient) => void,
+  registry: Registry,
+  client: HarnessClient,
+): Promise<(args: Record<string, unknown>, extra?: Record<string, unknown>) => ReturnType<ToolHandler>> {
+  let handler: ToolHandler | undefined;
+  const server = {
+    server: { getClientCapabilities: () => ({}) },
+    registerTool: (_name: string, _schema: unknown, fn: ToolHandler) => { handler = fn; },
+  };
+  register(server as never, registry, client);
+  return (args, extra) =>
+    handler!(args, { ...toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION), ...extra });
+}
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -3574,15 +3593,29 @@ describe("fme_change_request", () => {
     expect(req.params).toEqual({ account_id: "test-account" });
   });
 
-  it("list: throws when org_id/project_id missing without resource_scope='account' (no silent fallback to ambient config)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
+  it("list: falls back to HARNESS_ORG/HARNESS_PROJECT when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
     const client = makeClient(mockRequest);
 
-    await expect(registry.dispatch(client, "fme_change_request", "list", {})).rejects.toThrow(
-      /fme_change_request: org_id and project_id are required.*resource_scope='account'/,
+    await registry.dispatch(client, "fme_change_request", "list", {});
+
+    expect(firstRequest(mockRequest).params).toEqual({
+      account_id: "test-account",
+      organization_identifier: "default",
+      project_identifier: "test-project",
+    });
+  });
+
+  it("list: throws when org_id/project_id are missing and not configured", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const unconfigured = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
+
+    await expect(unconfigured.dispatch(client, "fme_change_request", "list", {})).rejects.toThrow(
+      /fme_change_request: listing requires project scope/,
     );
-    await expect(registry.dispatch(client, "fme_change_request", "list", { org_id: "o1" })).rejects.toThrow(
-      /org_id and project_id are required/,
+    await expect(unconfigured.dispatch(client, "fme_change_request", "list", { org_id: "o1" })).rejects.toThrow(
+      /fme_change_request: listing requires project scope/,
     );
     expect(mockRequest).not.toHaveBeenCalled();
   });
@@ -3607,7 +3640,7 @@ describe("fme_change_request", () => {
       status: ["REQUESTED", "PUBLISHED"],
       filter: "APPROVALS",
       environment_id: ["env1", "env2"],
-      resource_type: "SEGMENT",
+      entity_type: "SEGMENT",
       segment_type: "LARGE",
       offset: 10,
       limit: 20,
@@ -3635,7 +3668,7 @@ describe("fme_change_request", () => {
       status: "requested, scheduled",
       environment_id: "env1,env2",
       filter: "submissions",
-      resource_type: "feature_flag",
+      entity_type: "feature_flag",
     });
 
     const req = firstRequest(mockRequest);
@@ -3656,37 +3689,58 @@ describe("fme_change_request", () => {
     expect(firstRequest(mockRequest).params).toMatchObject({ limit: 5 });
   });
 
-  it("list: rejects invalid status/filter/resource_type values without HTTP", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
+  it("list: passes values outside the documented enums through to the API", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
     const client = makeClient(mockRequest);
-    const scope = { org_id: "o1", project_id: "p1" };
 
-    await expect(
-      registry.dispatch(client, "fme_change_request", "list", { ...scope, status: ["REQUESTED", "PENDING"] }),
-    ).rejects.toThrow(/invalid status 'PENDING'/);
-    await expect(
-      registry.dispatch(client, "fme_change_request", "list", { ...scope, filter: "MINE" }),
-    ).rejects.toThrow(/invalid filter 'MINE'/);
-    await expect(
-      registry.dispatch(client, "fme_change_request", "list", { ...scope, resource_type: "EXPERIMENT" }),
-    ).rejects.toThrow(/invalid resource_type 'EXPERIMENT'/);
-    expect(mockRequest).not.toHaveBeenCalled();
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: ["requested", "ARCHIVED"],
+      filter: "MINE",
+      entity_type: "EXPERIMENT",
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({
+      status: ["REQUESTED", "ARCHIVED"],
+      filter: "MINE",
+      resource_type: "EXPERIMENT",
+    });
   });
 
-  it("list: requires segment_type iff resource_type=SEGMENT", async () => {
+  it("list: harness_list entity_type filter keeps dispatching to fme_change_request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    const harnessList = await publicTool(registerListTool, registry, client);
+
+    const result = await harnessList({
+      resource_type: "fme_change_request",
+      org_id: "o1",
+      project_id: "p1",
+      filters: { entity_type: "SEGMENT", segment_type: "LARGE" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.params).toMatchObject({ resource_type: "SEGMENT", segment_type: "LARGE" });
+  });
+
+  it("list: requires segment_type iff entity_type=SEGMENT", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
     const scope = { org_id: "o1", project_id: "p1" };
 
     await expect(
-      registry.dispatch(client, "fme_change_request", "list", { ...scope, resource_type: "SEGMENT" }),
-    ).rejects.toThrow(/segment_type is required when resource_type is SEGMENT/);
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, entity_type: "SEGMENT" }),
+    ).rejects.toThrow(/segment_type is required when entity_type is SEGMENT/);
     await expect(
-      registry.dispatch(client, "fme_change_request", "list", { ...scope, resource_type: "FEATURE_FLAG", segment_type: "STANDARD" }),
-    ).rejects.toThrow(/segment_type is only allowed together with resource_type=SEGMENT/);
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, entity_type: "FEATURE_FLAG", segment_type: "STANDARD" }),
+    ).rejects.toThrow(/segment_type is only allowed together with entity_type=SEGMENT/);
     await expect(
       registry.dispatch(client, "fme_change_request", "list", { ...scope, segment_type: "STANDARD" }),
-    ).rejects.toThrow(/segment_type is only allowed together with resource_type=SEGMENT/);
+    ).rejects.toThrow(/segment_type is only allowed together with entity_type=SEGMENT/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
