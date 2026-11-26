@@ -1442,7 +1442,7 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 
 | Resource Type      | List | Get | Create | Update | Delete | Execute Actions |
 | ------------------ | ---- | --- | ------ | ------ | ------ | --------------- |
-| `registry`         | x    | x   |        |        |        |                 |
+| `registry`         | x    | x   |        |        |        | stats           |
 | `artifact`         | x    |     |        |        |        |                 |
 | `artifact_version` | x    |     |        |        |        |                 |
 | `artifact_file`    | x    |     |        |        |        |                 |
@@ -2159,7 +2159,7 @@ Available toolset names:
 | `observability-evaluations` *(opt-in)* | observability_eval                                                                                                                                                                                                                                                               |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
-| `registries-v3` *(opt-in)* | package, package_version, package_file, registry_metadata, package_metadata, version_metadata, file_metadata, metadata_key, metadata_value                                                                                                                                                      |
+| `registries-v3` *(opt-in)* | package, package_version, package_file, registry_metadata, package_metadata, version_metadata, file_metadata, metadata_key, metadata_value, conan_revision                                                                                                                                      |
 | `incidents`             | incident                                                                                                                                                                                                                                                                                        |
 | `alerts`                | alert                                                                                                                                                                                                                                                                                           |
 | `deploys`               | deploy                                                                                                                                                                                                                                                                                          |

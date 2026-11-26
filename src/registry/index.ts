@@ -113,7 +113,7 @@ export const TOOLSET_ALIASES: Readonly<Record<string, string>> = {
  * toolsets when passed in `HARNESS_TOOLSETS` (e.g. `HARNESS_TOOLSETS=+artifacts`).
  */
 export const TOOLSET_GROUP_ALIASES: Readonly<Record<string, readonly string[]>> = {
-  artifacts: ["registries", "registries-v3", "registries-firewall"],
+  artifacts: ["registries", "registries-v3", "registries-firewall", "registries-lifecycle"],
   evals: ["ai-evals", "observability-evaluations"],
   sre: ["incidents", "alerts", "deploys", "runbooks", "timelines"],
   "worker-agents": ["autonomous_work", "agents"],

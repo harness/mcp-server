@@ -85,6 +85,60 @@ function assertObjectBody(body: unknown): void {
   }
 }
 
+/** The ids in a list value: an array, a comma-separated string, or nothing. Anything else is an error. */
+function idList(raw: unknown, name: string): unknown[] {
+  if (raw === undefined || raw === null) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") return raw.split(",");
+  throw new Error(`${name} must be a comma-separated string or array of string ids, got ${typeof raw}.`);
+}
+
+export interface IdListBodyOptions {
+  /** Input key holding a single id; set only when it is the resource's identifier field, so resource_id fills it. */
+  singleKey?: string;
+  /** Input key holding several ids, as an array or a comma-separated string. */
+  listKey: string;
+  /** Body key the ids are sent under. */
+  bodyKey: string;
+  /** Maximum number of ids the endpoint accepts. */
+  max: number;
+}
+
+/**
+ * Factory: returns a bodyBuilder for batch endpoints that take `{ <bodyKey>: [id, ...] }`.
+ * Accepts one id via `singleKey` and/or many via `listKey`, de-duplicates them, and
+ * rejects an empty or over-limit list before the API is called.
+ */
+export function buildIdListBody(opts: IdListBodyOptions): (input: Record<string, unknown>) => Record<string, string[]> {
+  return (input: Record<string, unknown>) => {
+    const listed = idList(input[opts.listKey], opts.listKey);
+    // harness_execute keeps args.body nested under input.body, so read the advertised body key there too.
+    const body = input.body;
+    const fromBody = body !== null && typeof body === "object" && !Array.isArray(body)
+      ? idList((body as Record<string, unknown>)[opts.bodyKey], `body.${opts.bodyKey}`)
+      : [];
+    const single = opts.singleKey ? input[opts.singleKey] : undefined;
+    const ids = [...new Set(
+      [...(single == null ? [] : [single]), ...listed, ...fromBody]
+        .map((v) => {
+          if (typeof v !== "string") {
+            throw new Error(`${opts.listKey} must contain string ids, got ${v === null ? "null" : typeof v}.`);
+          }
+          return v.trim();
+        })
+        .filter((v) => v.length > 0),
+    )];
+    if (ids.length === 0) {
+      const single = opts.singleKey ? `${opts.singleKey} (resource_id) or ` : "";
+      throw new Error(`Pass ${single}${opts.listKey} (comma-separated, up to ${opts.max}).`);
+    }
+    if (ids.length > opts.max) {
+      throw new Error(`${opts.listKey} accepts at most ${opts.max} ids (got ${ids.length}).`);
+    }
+    return { [opts.bodyKey]: ids };
+  };
+}
+
 /**
  * Options for the standardized body builder factory.
  */
