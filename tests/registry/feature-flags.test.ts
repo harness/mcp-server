@@ -2455,6 +2455,7 @@ describe("fme_metric", () => {
       event_type_ids: ["purchase"],
       tags: ["billing"],
       ids: ["m1", "m2"],
+      categories: ["Guardrail metrics"],
       sort_order: "ASCENDING",
       offset: 10,
       limit: 20,
@@ -2467,6 +2468,7 @@ describe("fme_metric", () => {
       event_type_ids: ["purchase"],
       tags: ["billing"],
       ids: ["m1", "m2"],
+      categories: ["Guardrail metrics"],
       sort_order: "ASCENDING",
       offset: 10,
       limit: 20,
@@ -2551,6 +2553,7 @@ describe("fme_metric", () => {
         baseEventTypes: [{ eventTypeId: "e1" }],
         triggerEventType: { eventTypeId: "e0" },
         tags: ["checkout"],
+        categories: ["Guardrail metrics", { name: "Revenue" }],
         owners: [{ type: "USER", id: "u1" }],
       },
     });
@@ -2567,6 +2570,7 @@ describe("fme_metric", () => {
       baseEventTypes: [{ eventTypeId: "e1", propertyFilters: [], propertyForValue: null }],
       triggerEventType: { eventTypeId: "e0" },
       tags: [{ name: "checkout" }],
+      categories: [{ name: "Guardrail metrics" }, { name: "Revenue" }],
       owners: [{ type: "USER", id: "u1" }],
     });
   });
@@ -2601,14 +2605,18 @@ describe("fme_metric", () => {
       org_id: "o1",
       project_id: "p1",
       metric_id: "m1",
-      body: { description: null, tags: ["billing"] },
+      body: { description: null, tags: ["billing"], categories: ["Guardrail metrics"] },
     });
 
     const req = firstRequest(mockRequest);
     expect(req.method).toBe("PATCH");
     expect(req.path).toBe("/fme/api/v4/metrics/m1");
     expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
-    expect(req.body).toEqual({ description: null, tags: [{ name: "billing" }] });
+    expect(req.body).toEqual({
+      description: null,
+      tags: [{ name: "billing" }],
+      categories: [{ name: "Guardrail metrics" }],
+    });
   });
 
   it("update: omits fields not present in body (does not send name/trafficType)", async () => {
@@ -2626,7 +2634,7 @@ describe("fme_metric", () => {
     expect(req.body).toEqual({ spread: "ACROSS" });
   });
 
-  it("update: null clears filterEventType/triggerEventType/tags/owners/cap", async () => {
+  it("update: null clears filterEventType/triggerEventType/tags/categories/owners/cap", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -2634,7 +2642,7 @@ describe("fme_metric", () => {
       org_id: "o1",
       project_id: "p1",
       metric_id: "m1",
-      body: { filterEventType: null, triggerEventType: null, tags: null, owners: null, cap: null },
+      body: { filterEventType: null, triggerEventType: null, tags: null, categories: null, owners: null, cap: null },
     });
 
     const req = firstRequest(mockRequest);
@@ -2642,6 +2650,7 @@ describe("fme_metric", () => {
       filterEventType: null,
       triggerEventType: null,
       tags: null,
+      categories: null,
       owners: null,
       cap: null,
     });
