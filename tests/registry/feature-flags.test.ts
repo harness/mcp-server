@@ -6,6 +6,25 @@ import { Registry } from "../../src/registry/index.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
 import { compactItems } from "../../src/utils/compact.js";
+import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
+
+type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<{ content: { type: string; text?: string }[]; isError?: boolean }>;
+
+/** Registers one public tool against a stub MCP server and returns its handler. */
+async function publicTool(
+  register: (server: never, registry: Registry, client: HarnessClient) => void,
+  registry: Registry,
+  client: HarnessClient,
+): Promise<(args: Record<string, unknown>, extra?: Record<string, unknown>) => ReturnType<ToolHandler>> {
+  let handler: ToolHandler | undefined;
+  const server = {
+    server: { getClientCapabilities: () => ({}) },
+    registerTool: (_name: string, _schema: unknown, fn: ToolHandler) => { handler = fn; },
+  };
+  register(server as never, registry, client);
+  return (args, extra) =>
+    handler!(args, { ...toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION), ...extra });
+}
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -3536,6 +3555,231 @@ describe("fme_experiment_alerting", () => {
     expect(resource.operations.update?.bodySchema?.fields).toEqual([
       expect.objectContaining({ name: "isEnabled", type: "boolean", required: true }),
     ]);
+  });
+});
+
+describe("fme_change_request", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: routes to /fme/api/v4/change-requests with account_id/organization_identifier/project_identifier params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toEqual({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("list: resource_scope='account' omits organization_identifier/project_identifier (account-wide)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { resource_scope: "account" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.params).toEqual({ account_id: "test-account" });
+  });
+
+  it("list: falls back to HARNESS_ORG/HARNESS_PROJECT when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {});
+
+    expect(firstRequest(mockRequest).params).toEqual({
+      account_id: "test-account",
+      organization_identifier: "default",
+      project_identifier: "test-project",
+    });
+  });
+
+  it("list: throws when org_id/project_id are missing and not configured", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const unconfigured = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
+
+    await expect(unconfigured.dispatch(client, "fme_change_request", "list", {})).rejects.toThrow(
+      /fme_change_request: listing requires project scope/,
+    );
+    await expect(unconfigured.dispatch(client, "fme_change_request", "list", { org_id: "o1" })).rejects.toThrow(
+      /fme_change_request: listing requires project scope/,
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: rejects legacy workspace_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { workspace_id: "ws1", org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/Harness-native \(org_id\/project_id\) only/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: maps each documented filter to the correct query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 20, offset: 10, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: ["REQUESTED", "PUBLISHED"],
+      filter: "APPROVALS",
+      environment_id: ["env1", "env2"],
+      entity_type: "SEGMENT",
+      segment_type: "LARGE",
+      offset: 10,
+      limit: 20,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({
+      status: ["REQUESTED", "PUBLISHED"],
+      filter: "APPROVALS",
+      environment_id: ["env1", "env2"],
+      resource_type: "SEGMENT",
+      segment_type: "LARGE",
+      offset: 10,
+      limit: 20,
+    });
+  });
+
+  it("list: splits comma-separated status/environment_id into repeated params and canonicalizes case", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: "requested, scheduled",
+      environment_id: "env1,env2",
+      filter: "submissions",
+      entity_type: "feature_flag",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({
+      status: ["REQUESTED", "SCHEDULED"],
+      environment_id: ["env1", "env2"],
+      filter: "SUBMISSIONS",
+      resource_type: "FEATURE_FLAG",
+    });
+  });
+
+  it("list: harness_list size maps to limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 5, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1", size: 5 });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ limit: 5 });
+  });
+
+  it("list: passes values outside the documented enums through to the API", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: ["requested", "ARCHIVED"],
+      filter: "MINE",
+      entity_type: "EXPERIMENT",
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({
+      status: ["REQUESTED", "ARCHIVED"],
+      filter: "MINE",
+      resource_type: "EXPERIMENT",
+    });
+  });
+
+  it("list: harness_list entity_type filter keeps dispatching to fme_change_request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    const harnessList = await publicTool(registerListTool, registry, client);
+
+    const result = await harnessList({
+      resource_type: "fme_change_request",
+      org_id: "o1",
+      project_id: "p1",
+      filters: { entity_type: "SEGMENT", segment_type: "LARGE" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.params).toMatchObject({ resource_type: "SEGMENT", segment_type: "LARGE" });
+  });
+
+  it("list: requires segment_type iff entity_type=SEGMENT", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const scope = { org_id: "o1", project_id: "p1" };
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, entity_type: "SEGMENT" }),
+    ).rejects.toThrow(/segment_type is required when entity_type is SEGMENT/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, entity_type: "FEATURE_FLAG", segment_type: "STANDARD" }),
+    ).rejects.toThrow(/segment_type is only allowed together with entity_type=SEGMENT/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, segment_type: "STANDARD" }),
+    ).rejects.toThrow(/segment_type is only allowed together with entity_type=SEGMENT/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: extractor maps {data, totalCount} to a closed {items, total}", async () => {
+    const changeRequests = [
+      {
+        id: "cr1",
+        status: "REQUESTED",
+        resourceType: "FEATURE_FLAG",
+        resourceName: "checkout-flag",
+        environment: { id: "env1", name: "Production" },
+        approvalConfig: { approvers: [{ id: "g1", type: "GROUP", name: "platform-team" }] },
+        createdBy: { id: "u1", type: "USER", name: "Alice", email: "alice@example.com" },
+        organizationIdentifier: "o1",
+        projectIdentifier: "p1",
+        createdAt: "2026-09-01T10:00:00.000Z",
+      },
+    ];
+    const mockRequest = vi.fn().mockResolvedValue({ data: changeRequests, limit: 100, offset: 0, totalCount: 7 });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1" });
+
+    expect(result).toEqual({ items: changeRequests, total: 7 });
+  });
+
+  it("list: skips compaction so resourceName/environment/approvalConfig/createdBy survive", () => {
+    expect(getOperation("fme_change_request", "list").skipCompact).toBe(true);
+  });
+
+  it("is list-only and supports project and account scope", () => {
+    const resource = findResource("fme_change_request");
+    expect(resource.operations.list).toBeDefined();
+    expect(resource.operations.get).toBeUndefined();
+    expect(resource.operations.create).toBeUndefined();
+    expect(resource.operations.update).toBeUndefined();
+    expect(resource.operations.delete).toBeUndefined();
+    expect(resource.scope).toBe("project");
+    expect(resource.supportedScopes).toEqual(["account", "project"]);
   });
 });
 
