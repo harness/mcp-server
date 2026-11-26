@@ -2119,6 +2119,7 @@ describe("FME title/comment on v4 writes", () => {
       ids: { segment_name: "seg1", environment_id: "e1" },
     },
     { resourceType: "fme_segment", path: "/fme/api/v4/segments/seg1", ids: { segment_name: "seg1", segment_type: "STANDARD" } },
+    { resourceType: "fme_environment", path: "/fme/api/v4/environments/e1", ids: { environment_id: "e1" } },
   ];
 
   it.each(deletes)("$resourceType delete: declares title/comment in its bodySchema", ({ resourceType }) => {
@@ -2197,25 +2198,6 @@ describe("FME title/comment on v4 writes", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag");
-    expect(req.body).toBeUndefined();
-  });
-
-  it("fme_environment delete is unchanged: no body schema, no body sent", async () => {
-    expect(findResource("fme_environment").operations.delete?.bodySchema).toBeUndefined();
-
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_environment", "delete", {
-      org_id: "o1",
-      project_id: "p1",
-      environment_id: "e1",
-      body: { title: "Cleanup" },
-      title: "Cleanup",
-    });
-
-    const req = firstRequest(mockRequest);
-    expect(req.path).toBe("/fme/api/v4/environments/e1");
     expect(req.body).toBeUndefined();
   });
 
