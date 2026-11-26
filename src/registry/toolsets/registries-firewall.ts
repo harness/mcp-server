@@ -343,7 +343,10 @@ export const registriesFirewallToolset: ToolsetDefinition = {
     {
       resourceType: "firewall_exception",
       displayName: "Firewall Exception (v3)",
-      description: "Approved / pending exceptions that let a policy-blocked artifact through firewall.",
+      description:
+        "Approved / pending exceptions that let a policy-blocked artifact through firewall. " +
+        "Scoped to a single registryId (the registry that evaluated and blocked the artifact) — " +
+        "no inheritance across registries or project/org/account hierarchy walk.",
       toolset: "registries-firewall",
       // account-scoped: CreateFirewallExceptionV3 only accepts account_identifier (no org/project).
       // List accepts optional org/project for filtering — pass them explicitly via filter fields.
