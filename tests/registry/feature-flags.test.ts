@@ -7,24 +7,22 @@ import { HarnessApiError } from "../../src/utils/errors.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
 import { compactItems } from "../../src/utils/compact.js";
-import { ACCEPTED_CONFIRMATION, toolHandlerContext } from "../helpers/request-context.js";
+import { ACCEPTED_CONFIRMATION, toolHandlerContext, type ConfirmationAnswer } from "../helpers/request-context.js";
 
 type ToolHandler = (args: Record<string, unknown>, extra: unknown) => Promise<{ content: { type: string; text?: string }[]; isError?: boolean }>;
 
 /** Registers one public tool against a stub MCP server and returns its handler. */
-async function publicTool(
-  register: (server: never, registry: Registry, client: HarnessClient) => void,
-  registry: Registry,
-  client: HarnessClient,
-): Promise<(args: Record<string, unknown>, extra?: Record<string, unknown>) => ReturnType<ToolHandler>> {
+function publicTool(
+  register: (server: never) => void,
+): (args: Record<string, unknown>, confirmation?: ConfirmationAnswer) => ReturnType<ToolHandler> {
   let handler: ToolHandler | undefined;
   const server = {
-    server: { getClientCapabilities: () => ({}) },
+    server: { getClientCapabilities: () => ({ elicitation: { form: {} } }) },
     registerTool: (_name: string, _schema: unknown, fn: ToolHandler) => { handler = fn; },
   };
-  register(server as never, registry, client);
-  return (args, extra) =>
-    handler!(args, { ...toolHandlerContext(new AbortController().signal, ACCEPTED_CONFIRMATION), ...extra });
+  register(server as never);
+  return (args, confirmation = ACCEPTED_CONFIRMATION) =>
+    handler!(args, toolHandlerContext(new AbortController().signal, confirmation));
 }
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
@@ -3713,7 +3711,7 @@ describe("fme_change_request", () => {
     const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
     const client = makeClient(mockRequest);
     const { registerListTool } = await import("../../src/tools/harness-list.js");
-    const harnessList = await publicTool(registerListTool, registry, client);
+    const harnessList = publicTool((server) => registerListTool(server, registry, client));
 
     const result = await harnessList({
       resource_type: "fme_change_request",
@@ -3811,10 +3809,23 @@ describe("fme_change_request", () => {
     await expect(
       registry.dispatch(client, "fme_change_request", "get", { org_id: "o1", project_id: "p1" }),
     ).rejects.toThrow(/change_request_id/);
+    const unconfigured = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
     await expect(
-      registry.dispatch(client, "fme_change_request", "get", { change_request_id: "cr1", resource_scope: "account" }),
+      unconfigured.dispatch(client, "fme_change_request", "get", { change_request_id: "cr1", resource_scope: "account" }),
     ).rejects.toThrow("fme_change_request: org_id and project_id are required (account is taken from config).");
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get and actions: fall back to HARNESS_ORG/HARNESS_PROJECT when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+    const configured = { account_id: "test-account", organization_identifier: "default", project_identifier: "test-project" };
+
+    await registry.dispatch(client, "fme_change_request", "get", { change_request_id: "cr1" });
+    await registry.dispatchExecute(client, "fme_change_request", "withdraw", { change_request_id: "cr1" });
+
+    expect(mockRequest.mock.calls[0]![0].params).toEqual(configured);
+    expect(mockRequest.mock.calls[1]![0].params).toEqual(configured);
   });
 
   it.each([
@@ -3883,12 +3894,72 @@ describe("fme_change_request", () => {
     await expect(
       registry.dispatchExecute(client, "fme_change_request", "approve", { workspace_id: "ws1", change_request_id: "cr1" }),
     ).rejects.toThrow(/Harness-native \(org_id\/project_id\) only/);
+    const unconfigured = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
     await expect(
-      registry.dispatchExecute(client, "fme_change_request", "withdraw", { change_request_id: "cr1" }),
-    ).rejects.toThrow(/org_id and project_id are required/);
+      unconfigured.dispatchExecute(client, "fme_change_request", "withdraw", { change_request_id: "cr1" }),
+    ).rejects.toThrow("fme_change_request: org_id and project_id are required (account is taken from config).");
     await expect(
       registry.dispatchExecute(client, "fme_change_request", "reject", { org_id: "o1", project_id: "p1" }),
     ).rejects.toThrow(/change_request_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("harness_execute: maps resource_id to change_request_id and posts the action", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1", status: "PUBLISHED" });
+    const client = makeClient(mockRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const harnessExecute = publicTool((server) => registerExecuteTool(server, registry, client, makeConfig()));
+
+    const result = await harnessExecute({
+      resource_type: "fme_change_request",
+      action: "approve",
+      resource_id: "cr1",
+      org_id: "o1",
+      project_id: "p1",
+      body: { comment: "ok" },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/change-requests/cr1/approve");
+    expect(req.body).toEqual({ comment: "ok" });
+  });
+
+  it("harness_execute: a declined confirmation sends no request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const harnessExecute = publicTool((server) => registerExecuteTool(server, registry, client, makeConfig()));
+
+    for (const action of ["approve", "reject", "withdraw"]) {
+      await harnessExecute(
+        { resource_type: "fme_change_request", action, resource_id: "cr1", org_id: "o1", project_id: "p1" },
+        { action: "decline" },
+      );
+    }
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("harness_execute: HARNESS_READ_ONLY blocks every action without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "cr1" });
+    const client = makeClient(mockRequest);
+    const readOnly = makeConfig({ HARNESS_READ_ONLY: true });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    const harnessExecute = publicTool((server) => registerExecuteTool(server, new Registry(readOnly), client, readOnly));
+
+    for (const action of ["approve", "reject", "withdraw"]) {
+      const result = await harnessExecute({
+        resource_type: "fme_change_request",
+        action,
+        resource_id: "cr1",
+        org_id: "o1",
+        project_id: "p1",
+      });
+      expect(result.isError).toBe(true);
+    }
+
     expect(mockRequest).not.toHaveBeenCalled();
   });
 

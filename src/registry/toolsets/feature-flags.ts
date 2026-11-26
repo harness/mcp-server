@@ -1,5 +1,5 @@
 import { encodePathSegment } from "../../utils/path.js";
-import type { ToolsetDefinition, BodySchema } from "../types.js";
+import type { ToolsetDefinition, BodySchema, PathBuilderConfig } from "../types.js";
 import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract, fmeExperimentResultExtract, fmeActionExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
 
@@ -185,10 +185,11 @@ function toFmeQueryList(raw: unknown): string[] | undefined {
   return parts.length > 0 ? parts : undefined;
 }
 
-function resolveFmeChangeRequestRoute(input: Record<string, unknown>, suffix = ""): { path: string } {
-  if (input.workspace_id) {
-    throw new Error("fme_change_request: Harness-native (org_id/project_id) only - pass org_id+project_id instead of workspace_id.");
-  }
+function resolveFmeChangeRequestRoute(input: Record<string, unknown>, config: PathBuilderConfig, suffix = ""): { path: string } {
+  requireHarnessNativeSegmentScope(
+    { ...input, org_id: input.org_id || config.HARNESS_ORG, project_id: input.project_id || config.HARNESS_PROJECT },
+    "fme_change_request",
+  );
   const id = encodePathSegment(requireFmeIdentifier(input, "change_request_id", "fme_change_request"));
   return { path: `/fme/api/v4/change-requests/${id}${suffix}` };
 }
@@ -2603,7 +2604,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           method: "GET",
           path: "",
           scope: "project",
-          routeResolver: (input) => resolveFmeChangeRequestRoute(input),
+          routeResolver: (input, config) => resolveFmeChangeRequestRoute(input, config),
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description:
@@ -2617,7 +2618,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           scope: "project",
-          routeResolver: (input) => resolveFmeChangeRequestRoute(input, "/approve"),
+          routeResolver: (input, config) => resolveFmeChangeRequestRoute(input, config, "/approve"),
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           bodyBuilder: fmeChangeRequestActionBody,
           responseExtractor: passthrough,
@@ -2632,7 +2633,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           scope: "project",
-          routeResolver: (input) => resolveFmeChangeRequestRoute(input, "/reject"),
+          routeResolver: (input, config) => resolveFmeChangeRequestRoute(input, config, "/reject"),
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           bodyBuilder: fmeChangeRequestActionBody,
           responseExtractor: passthrough,
@@ -2646,7 +2647,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           scope: "project",
-          routeResolver: (input) => resolveFmeChangeRequestRoute(input, "/withdraw"),
+          routeResolver: (input, config) => resolveFmeChangeRequestRoute(input, config, "/withdraw"),
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: fmeChangeRequestActionBody,
           responseExtractor: passthrough,
