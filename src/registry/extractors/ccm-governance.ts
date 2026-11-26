@@ -169,25 +169,6 @@ function projectEvaluation(item: Row): Row {
   });
 }
 
-function projectRecommendationSummary(item: Row): Row {
-  const id = asRecord(item.id);
-  return compactRow({
-    ruleId: id?.ruleId ?? item.ruleId ?? (typeof item.id === "string" ? item.id : undefined),
-    ruleName: item.ruleName,
-    cloudProvider: item.cloudProvider,
-    isOOTB: item.isOOTB,
-    status: item.status,
-    potentialSavings: item.potentialSavings,
-    totalRecommendations: item.totalRecommendations,
-    totalExecutions: item.totalExecutions,
-    totalFailedExecutions: item.totalFailedExecutions,
-    lastEvaluatedAt: item.lastEvaluatedAt,
-    enableGranularRecommendation: item.enableGranularRecommendation,
-    pricingCostType: item.pricingCostType,
-    targets: item.targets,
-  });
-}
-
 function projectAlert(item: Row): Row {
   return compactRow({
     id: item.uuid ?? item.id,
@@ -229,29 +210,15 @@ export const ccmGovernanceEnforcementRecommendationListExtract = (
 ): { items: unknown[]; total: number } =>
   mapItems(pagedList(raw, "ruleEnforcementRecommendations"), projectEnforcement);
 
-/** `POST execution/list` → `{ ruleExecution, totalItems }`. Drops per-resource breakdowns and sub-rule details. */
-export const ccmGovernanceEvaluationListExtract = (raw: unknown): { items: unknown[]; total: number } =>
-  mapItems(pagedList(raw, "ruleExecution"), projectEvaluation);
-
 /** `POST execution/ruleLastExecution` → bare `RuleExecution[]`. */
 export const ccmGovernanceLastEvaluationExtract = (raw: unknown): { items: unknown[]; total: number } =>
   mapItems(pagedList(raw, "ruleExecution"), projectEvaluation);
-
-/** `POST recommendationHealth/list` → `{ ruleRecommendationSummaries, totalItems }`. Drops per-run `executions`. */
-export const ccmGovernanceRecommendationListExtract = (raw: unknown): { items: unknown[]; total: number } =>
-  mapItems(pagedList(raw, "ruleRecommendationSummaries"), projectRecommendationSummary);
 
 /** `GET alert/list` → bare `GovernanceNotification[]` (not paged). */
 export const ccmGovernanceAlertListExtract = (raw: unknown): { items: unknown[]; total: number } =>
   mapItems(pagedList(raw, "alerts"), projectAlert);
 
 // ── Single entities ──────────────────────────────────────────────────────────
-
-/** `GET recommendationHealth?ruleId` → one summary. */
-export const ccmGovernanceRecommendationGetExtract = (raw: unknown): unknown => {
-  const data = dataOf(raw);
-  return isRecord(data) ? projectRecommendationSummary(data) : data;
-};
 
 /** First rule set from a `ruleSet/list` filtered by id; 404 when none matched. */
 export const ccmGovernanceRuleSetFirstExtract = (raw: unknown): unknown => {
@@ -387,41 +354,4 @@ export const ccmGovernanceWriteExtract = (raw: unknown): unknown => {
   if (typeof data === "number") return { result: data };
   if (Array.isArray(data)) return { items: data };
   return data;
-};
-
-// ── Overview ────────────────────────────────────────────────────────────────
-
-/** Scalar overview metrics (`Long` / `Double`) → `{ metric, value }`. */
-export const ccmGovernanceOverviewValueExtract = (raw: unknown, input?: Row): unknown => {
-  const data = dataOf(raw);
-  const metric = input?.metric ?? input?.resource_id;
-  if (isRecord(data)) return { metric, ...data };
-  return { metric, value: data ?? 0 };
-};
-
-/**
- * Breakdown overview metrics → `{ items, total }`:
- *  - map of number           → `[{ key, value }]`   (savings by cloud provider)
- *  - map of map of number    → `[{ key, ...inner }]` (evaluations per day)
- *  - `{ timeSeriesData: [] }` / `{ cloudAccounts: [] }` → the inner array
- */
-export const ccmGovernanceOverviewSeriesExtract = (
-  raw: unknown,
-): { items: unknown[]; total: number; granularity?: unknown } => {
-  const data = dataOf(raw);
-  if (!isRecord(data)) return { items: [], total: 0 };
-  for (const key of ["timeSeriesData", "cloudAccounts"]) {
-    const inner = data[key];
-    if (Array.isArray(inner)) {
-      return {
-        items: inner,
-        total: inner.length,
-        ...(data.granularity !== undefined ? { granularity: data.granularity } : {}),
-      };
-    }
-  }
-  const items = Object.entries(data).map(([key, value]) =>
-    isRecord(value) ? { key, ...value } : { key, value },
-  );
-  return { items, total: items.length };
 };

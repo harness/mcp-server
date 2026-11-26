@@ -5,8 +5,11 @@
  * toolset (so governance ships with the rest of Cloud Cost Management and needs no new toolset).
  *
  * Resource types (all `cost_governance_*`):
- *   rule, rule_set, enforcement, enforcement_recommendation, recommendation,
- *   evaluation, alert, overview.
+ *   rule, rule_set, enforcement, enforcement_recommendation, evaluation (get only), alert.
+ *
+ * Scope: configuration CRUD, lifecycle actions and per-run drill-down. Analytics (counts, savings, run history,
+ * recommendation health) are intentionally NOT resources here: type-registry already exposes them to the
+ * knowledge-graph toolset as HQL types (`ccm:governance_*`, `ccm:asset_governance`).
  *
  * Safety model (see the knowledge-base note "ccm-asset-governance-surface"):
  *  - Policy execution is split into two actions with fixed risk: `dry_run` (medium_write, read-only
@@ -18,7 +21,6 @@
  *  - Fields only the platform may set (`isGeneratedByAI`, `ruleEnforcementType`, …) are stripped.
  */
 import type { BodySchema, FilterFieldSpec, ParamsSchema, ResourceDefinition } from "../types.js";
-import { parseCustomWindow } from "../../utils/ccm-time.js";
 import {
   ccmGovernanceAlertGetExtract,
   ccmGovernanceAlertListExtract,
@@ -26,14 +28,9 @@ import {
   ccmGovernanceEnforcementRecommendationListExtract,
   ccmGovernanceEnqueueExtract,
   ccmGovernanceEvaluationGetExtract,
-  ccmGovernanceEvaluationListExtract,
   ccmGovernanceExecutionDetailsExtract,
   ccmGovernanceLastEvaluationExtract,
-  ccmGovernanceOverviewSeriesExtract,
-  ccmGovernanceOverviewValueExtract,
   ccmGovernancePotentialRulesExtract,
-  ccmGovernanceRecommendationGetExtract,
-  ccmGovernanceRecommendationListExtract,
   ccmGovernanceRuleListExtract,
   ccmGovernanceRuleSetFirstExtract,
   ccmGovernanceRuleSetListExtract,
@@ -46,10 +43,11 @@ import {
 
 const GOV = "/ccm/api/governance";
 const CLOUD_PROVIDERS = ["AWS", "AZURE", "GCP"];
-const DAY_MS = 86_400_000;
-const TIME_FILTER_DAYS: Readonly<Record<string, number>> = { LAST_7_DAYS: 7, LAST_30_DAYS: 30, LAST_90_DAYS: 90 };
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+/** Pointer used in descriptions: analytics on governance live in the knowledge-graph toolset, not here. */
+const KG_HINT =
+  "for counts, savings, run history and recommendation health, use the knowledge-graph toolset (HQL types ccm:governance_*, ccm:asset_governance).";
 
 type Input = Record<string, unknown>;
 type Body = Record<string, unknown>;
@@ -123,25 +121,6 @@ function pageNumberFor(limit: number, offset: number): number {
     );
   }
   return offset / limit;
-}
-
-/** Time window as the `List<CCMTimeFilter>` the backend expects. Explicit start/end win over `time_filter`. */
-function timeFilters(input: Input): Array<{ operator: "AFTER" | "BEFORE"; timestamp: number }> {
-  const custom = parseCustomWindow(input);
-  let { startMs, endMs } = custom;
-  if (startMs === undefined || endMs === undefined) {
-    const key = (toText(input.time_filter) ?? "LAST_30_DAYS").toUpperCase();
-    const days = TIME_FILTER_DAYS[key];
-    if (days === undefined) {
-      throw new Error(`Invalid time_filter "${key}". Use ${Object.keys(TIME_FILTER_DAYS).join(", ")}, or start_time + end_time.`);
-    }
-    endMs = Date.now();
-    startMs = endMs - days * DAY_MS;
-  }
-  return [
-    { operator: "AFTER", timestamp: startMs },
-    { operator: "BEFORE", timestamp: endMs },
-  ];
 }
 
 /** Body object for a create/update whose DTO wraps the entity (`{ rule: {...} }`); tolerates a caller that already wrapped it. */
@@ -311,78 +290,6 @@ function enforcementNote(input: Input): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Overview metric dispatch
-// ---------------------------------------------------------------------------
-
-interface OverviewMetric {
-  path: string;
-  method: "GET" | "POST";
-}
-
-const OVERVIEW_VALUE_METRICS: Readonly<Record<string, OverviewMetric>> = {
-  total_evaluations: { path: "overview/totalEvaluations", method: "GET" },
-  total_active_enforcements: { path: "overview/totalActiveEnforcements", method: "GET" },
-  total_new_enforcement_recommendations: { path: "overview/totalNewEnforcementRecommendations", method: "GET" },
-  total_realised_savings: { path: "overview/totalRealisedSavingsV2", method: "POST" },
-};
-
-const OVERVIEW_SERIES_METRICS: Readonly<Record<string, OverviewMetric>> = {
-  savings_grouped: { path: "overview/totalRealisedSavingsGrouped", method: "GET" },
-  savings_time_series: { path: "overview/totalRealisedSavingsTimeSeries", method: "POST" },
-  top_cloud_accounts: { path: "overview/topCloudAccountGovernanceSavings", method: "POST" },
-  daily_evaluations: { path: "overview/dayWiseTotalEvaluations", method: "POST" },
-};
-
-/** Metrics served by a GET endpoint take no time window (they are all-time / current); only POST metrics are windowed. */
-function rejectWindowForUnwindowed(metricName: string, input: Input): void {
-  const supplied = ["time_filter", "start_time", "end_time"].filter((k) => toText(input[k]) !== undefined);
-  if (supplied.length > 0) {
-    throw new Error(
-      `${metricName} is not time-windowed (it reports all-time or current values), so ${supplied.join(", ")} cannot be applied. ` +
-        "Remove it, or use a windowed metric (total_realised_savings, savings_time_series, top_cloud_accounts, daily_evaluations).",
-    );
-  }
-}
-
-function resolveMetric(table: Readonly<Record<string, OverviewMetric>>, input: Input): OverviewMetric {
-  const name = toText(input.metric ?? input.resource_id);
-  const metric = name ? table[name] : undefined;
-  if (!metric) {
-    throw new Error(`metric is required. Use one of: ${Object.keys(table).join(", ")}.`);
-  }
-  return metric;
-}
-
-const OVERVIEW_PARAMS_SCHEMA: ParamsSchema = {
-  fields: [
-    { name: "cloud_provider", required: false, description: "AWS, AZURE, GCP (comma-separated for several); default all" },
-    { name: "time_filter", required: false, description: "LAST_7_DAYS | LAST_30_DAYS (default) | LAST_90_DAYS — windowed metrics only (total_realised_savings, savings_time_series, top_cloud_accounts, daily_evaluations); rejected for the all-time/current metrics" },
-    { name: "start_time", required: false, description: "Custom window start (YYYY-MM-DD, ISO 8601 or epoch ms); pair with end_time" },
-    { name: "end_time", required: false, description: "Custom window end; pair with start_time" },
-  ],
-};
-
-function overviewSpec(table: Readonly<Record<string, OverviewMetric>>) {
-  return {
-    method: "POST" as const,
-    path: `${GOV}/overview`,
-    pathBuilder: (input: Input) => `${GOV}/${resolveMetric(table, input).path}`,
-    methodBuilder: (input: Input) => resolveMetric(table, input).method,
-    inputNormalizer: normalizeCloudProviders,
-    queryParams: { cloud_provider: "cloudProvider" },
-    // GET metrics have no request body and no window: fail loudly rather than silently dropping a window the caller asked for.
-    bodyBuilder: (input: Input) => {
-      const metric = resolveMetric(table, input);
-      if (metric.method === "POST") return timeFilters(input);
-      rejectWindowForUnwindowed(toText(input.metric ?? input.resource_id) ?? "this metric", input);
-      return undefined;
-    },
-    paramsSchema: OVERVIEW_PARAMS_SCHEMA,
-    operationPolicy: { risk: "read" as const, retryPolicy: "safe" as const },
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Resource definitions
 // ---------------------------------------------------------------------------
 
@@ -410,12 +317,11 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
       { resourceType: "cost_governance_evaluation", relationship: "child", description: "Results of dry_run / run / scheduled enforcement" },
       { resourceType: "cost_governance_rule_set", relationship: "parent", description: "Named bundles of rules" },
       { resourceType: "cost_governance_enforcement", relationship: "parent", description: "Schedules that run rules automatically" },
-      { resourceType: "cost_governance_recommendation", relationship: "child", description: "Recommendation health per rule" },
-    ],
+        ],
     listFilterFields: [
       { name: "search_term", description: "Match rule name (case-insensitive substring)" },
       CLOUD_PROVIDER_FILTER,
-      { name: "resource_type", description: "Filter by resource type, e.g. aws.ec2" },
+      { name: "rule_resource_type", description: "Filter by the Cloud Custodian resource type the rule targets, e.g. aws.ec2" },
       { name: "is_ootb", description: "true = Harness out-of-the-box rules only, false = your custom rules only", type: "boolean" },
       { name: "for_recommendation", description: "true = rules that feed recommendations", type: "boolean" },
       { name: "rule_ids", description: "Only these rule ids (comma-separated)" },
@@ -433,7 +339,8 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
             query: dropUndefined({
               cloudProvider: toText(input.cloud_provider)?.toUpperCase(),
               search: toText(input.search_term ?? input.search),
-              resourceType: toText(input.resource_type),
+              // NOT `resource_type`: harness_list always passes that as the registry type ("cost_governance_rule").
+              resourceType: toText(input.rule_resource_type),
               isOOTB: toBool(input.is_ootb),
               forRecommendation: toBool(input.for_recommendation),
               policyIds: toList(input.rule_ids),
@@ -745,13 +652,14 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
     resourceType: "cost_governance_enforcement",
     displayName: "Cost Governance Enforcement",
     description:
-      "A schedule that runs rules/rule sets automatically against cloud accounts and regions. isDryRun=true only reports; isDryRun=false APPLIES the rules' actions on a schedule. Create, update and enable need approval; disable is a lighter action. Also: savings (realised over a window).",
+      "A schedule that runs rules/rule sets automatically against cloud accounts and regions. isDryRun=true only reports; isDryRun=false APPLIES the rules' actions on a schedule. Create, update and enable need approval; disable is a lighter action. Savings and run history: use the knowledge-graph toolset (ccm:governance_*).",
     toolset: "ccm",
     scope: "account",
     identifierFields: ["enforcement_id"],
     deepLinkTemplate: "/ng/account/{accountId}/ce/governance/enforcements",
     searchAliases: ["governance schedule", "rule enforcement", "governance enforcement", "scheduled governance"],
-    diagnosticHint: "To see what an enforcement did, list cost_governance_evaluation with filters.enforcement_id.",
+    diagnosticHint:
+      "To see what an enforcement did, query the knowledge-graph toolset for its runs (HQL type ccm:governance_rule_execution), then harness_get one run from cost_governance_evaluation.",
     relatedResources: [
       { resourceType: "cost_governance_rule", relationship: "child", description: "Rules the enforcement runs (ruleIds)" },
       { resourceType: "cost_governance_rule_set", relationship: "child", description: "Rule sets the enforcement runs (ruleSetIDs)" },
@@ -883,26 +791,6 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
         responseExtractor: ccmGovernanceWriteExtract,
         actionDescription: "Disable an enforcement's schedule (resource_id = enforcement id). Stops future runs; does not undo past actions.",
       },
-      savings: {
-        method: "POST",
-        path: `${GOV}/enforcement/savings`,
-        operationPolicy: { risk: "read", retryPolicy: "safe" },
-        queryParams: { enforcement_id: "enforcementId" },
-        bodyBuilder: (input) => timeFilters(input),
-        bodySchema: {
-          description: "No body needed: the window comes from params (time_filter or start_time + end_time). Sent to the API as a list of time filters.",
-          fields: [],
-        },
-        paramsSchema: {
-          fields: [
-            { name: "time_filter", required: false, description: "LAST_7_DAYS | LAST_30_DAYS (default) | LAST_90_DAYS" },
-            { name: "start_time", required: false, description: "Custom window start; pair with end_time" },
-            { name: "end_time", required: false, description: "Custom window end; pair with start_time" },
-          ],
-        },
-        responseExtractor: ccmGovernanceWriteExtract,
-        actionDescription: "Savings an enforcement realised in a window (resource_id = enforcement id).",
-      },
     },
   },
 
@@ -1008,65 +896,14 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
   },
 
   // ------------------------------------------------------------------
-  // cost_governance_recommendation — rule recommendation health (read-only)
-  // ------------------------------------------------------------------
-  {
-    resourceType: "cost_governance_recommendation",
-    displayName: "Cost Governance Recommendation Health",
-    description:
-      "Read-only health of governance rules that generate cost recommendations: potential savings, recommendation count and run success per rule. For the recommendations themselves use cost_recommendation (filter governanceRuleNames).",
-    toolset: "ccm",
-    scope: "account",
-    identifierFields: ["rule_id"],
-    deepLinkTemplate: "/ng/account/{accountId}/ce/governance/rules-generating-recommendations",
-    searchAliases: ["recommendation health", "governance recommendation"],
-    relatedResources: [{ resourceType: "cost_governance_rule", relationship: "parent", description: "The rule being summarised" }],
-    listFilterFields: [
-      { name: "search_term", description: "Match rule name" },
-      CLOUD_PROVIDER_FILTER,
-      { name: "health_status", description: "Latest run status", enum: ["SUCCESS", "PARTIAL_SUCCESS", "FAILED", "IN_PROGRESS", "IGNORED"] },
-      { name: "is_ootb", description: "true = out-of-the-box rules only", type: "boolean" },
-      ...PAGE_FILTERS,
-    ],
-    operations: {
-      list: {
-        method: "POST",
-        path: `${GOV}/recommendationHealth/list`,
-        operationPolicy: { risk: "read", retryPolicy: "safe" },
-        skipCompact: true,
-        bodyBuilder: (input) => {
-          const { limit, offset } = paging(input);
-          return dropUndefined({
-            cloudProvider: toText(input.cloud_provider)?.toUpperCase(),
-            healthStatus: toText(input.health_status)?.toUpperCase(),
-            isOOTB: toBool(input.is_ootb),
-            search: toText(input.search_term ?? input.search),
-            limit,
-            offset,
-          });
-        },
-        responseExtractor: ccmGovernanceRecommendationListExtract,
-        description: "Per-rule recommendation health: potentialSavings (currency), totalRecommendations, status, lastEvaluatedAt.",
-      },
-      get: {
-        method: "GET",
-        path: `${GOV}/recommendationHealth`,
-        operationPolicy: { risk: "read", retryPolicy: "safe" },
-        queryParams: { rule_id: "ruleId" },
-        responseExtractor: ccmGovernanceRecommendationGetExtract,
-        description: "Recommendation health of one rule (resource_id = rule id).",
-      },
-    },
-  },
-
-  // ------------------------------------------------------------------
   // cost_governance_evaluation — results of dry runs, live runs and scheduled runs
   // ------------------------------------------------------------------
   {
     resourceType: "cost_governance_evaluation",
     displayName: "Cost Governance Evaluation",
     description:
-      "One rule evaluated on one cloud account (a dry run, live run or scheduled run): status, matched resource count, cost and savings. List by rule/enforcement/status; get one; actions fetch matched resources, logs, actioned resources and the YAML used.",
+      "One rule evaluated on one cloud account (dry run, live run or scheduled run): status, matched resource count, cost and savings. " +
+      "Get by id (returned by dry_run / run / rule last_evaluation); actions fetch matched resources, logs, actioned resources and the YAML used. No list: " + KG_HINT,
     toolset: "ccm",
     scope: "account",
     identifierFields: ["evaluation_id"],
@@ -1079,56 +916,7 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
       { resourceType: "cost_governance_rule", relationship: "parent", description: "The rule that was evaluated" },
       { resourceType: "cost_governance_enforcement", relationship: "parent", description: "The schedule that triggered scheduled evaluations" },
     ],
-    listFilterFields: [
-      { name: "rule_id", description: "Only these rule ids (comma-separated)" },
-      { name: "enforcement_id", description: "Only runs of these enforcements (comma-separated)" },
-      { name: "execution_ids", description: "Only these evaluation ids (comma-separated)" },
-      { name: "execution_status", description: "Run status", enum: ["ENQUEUED", "SUCCESS", "PARTIAL_SUCCESS", "FAILED"] },
-      CLOUD_PROVIDER_FILTER,
-      { name: "target_account", description: "Cloud account / subscription / project ids (comma-separated)" },
-      { name: "region", description: "Regions (comma-separated)" },
-      { name: "is_dry_run", description: "true = dry runs only, false = LIVE runs only", type: "boolean" },
-      { name: "cost_type", description: "POTENTIAL (dry run) or REALIZED (live) cost", enum: ["POTENTIAL", "REALIZED"] },
-      { name: "has_resources", description: "true = only evaluations that matched at least one resource", type: "boolean" },
-      { name: "sort_by", description: "Sort field (default LAST_UPDATED_AT)", enum: ["COST", "LAST_UPDATED_AT", "RESOURCE_COUNT"] },
-      { name: "sort_order", description: "Sort direction (default DESCENDING)", enum: ["ASCENDING", "DESCENDING"] },
-      { name: "time_filter", description: "Window (default LAST_30_DAYS)", enum: Object.keys(TIME_FILTER_DAYS) },
-      { name: "start_time", description: "Custom window start (YYYY-MM-DD, ISO 8601 or epoch ms); pair with end_time" },
-      { name: "end_time", description: "Custom window end; pair with start_time" },
-      ...PAGE_FILTERS,
-    ],
     operations: {
-      list: {
-        method: "POST",
-        path: `${GOV}/execution/list`,
-        operationPolicy: { risk: "read", retryPolicy: "safe" },
-        skipCompact: true,
-        bodyBuilder: (input) => {
-          const { limit, offset } = paging(input);
-          const provider = toText(input.cloud_provider)?.toUpperCase();
-          return {
-            policyExecutionFilter: dropUndefined({
-              ruleIds: toList(input.rule_id ?? input.rule_ids),
-              ruleEnforcementId: toList(input.enforcement_id),
-              executionIds: toList(input.execution_ids),
-              executionStatus: toText(input.execution_status)?.toUpperCase(),
-              cloudProviders: provider ? [provider] : undefined,
-              targetAccount: toList(input.target_account),
-              region: toList(input.region),
-              isDryRun: toBool(input.is_dry_run),
-              costType: toText(input.cost_type)?.toUpperCase(),
-              resourceCountGreaterThanZero: toBool(input.has_resources),
-              ruleExecutionSortType: toText(input.sort_by)?.toUpperCase() ?? "LAST_UPDATED_AT",
-              sortOrder: toText(input.sort_order)?.toUpperCase() ?? "DESCENDING",
-              time: timeFilters(input),
-              limit,
-              offset,
-            }),
-          };
-        },
-        responseExtractor: ccmGovernanceEvaluationListExtract,
-        description: "List evaluations (newest first, last 30 days unless time_filter/start_time+end_time is given). Per-resource breakdowns are omitted — harness_get one for detail.",
-      },
       get: {
         method: "GET",
         path: `${GOV}/execution/{evaluationId}`,
@@ -1287,41 +1075,6 @@ export const ccmGovernanceResources: ResourceDefinition[] = [
         bodySchema: NO_BODY_SCHEMA,
         responseExtractor: ccmGovernanceWriteExtract,
         actionDescription: "Clone an alert (resource_id = alert id).",
-      },
-    },
-  },
-
-  // ------------------------------------------------------------------
-  // cost_governance_overview — dashboard metrics (read-only)
-  // ------------------------------------------------------------------
-  {
-    resourceType: "cost_governance_overview",
-    displayName: "Cost Governance Overview",
-    description:
-      "Read-only governance dashboard metrics. get (resource_id = metric): total_evaluations, total_active_enforcements, total_new_enforcement_recommendations, total_realised_savings. list (filters.metric): savings_grouped (all-time), savings_time_series, top_cloud_accounts, daily_evaluations. total_realised_savings and the windowed series accept time_filter or start_time+end_time; the counts and savings_grouped are all-time/current and reject a window. Needs the governance overview view permission.",
-    toolset: "ccm",
-    scope: "account",
-    identifierFields: ["metric"],
-    searchAliases: ["governance dashboard", "realised savings", "governance savings"],
-    listFilterFields: [
-      { name: "metric", description: "Breakdown to return", enum: Object.keys(OVERVIEW_SERIES_METRICS), required: true },
-      { name: "cloud_provider", description: "AWS, AZURE, GCP (comma-separated for several); default all" },
-      { name: "time_filter", description: "LAST_7_DAYS | LAST_30_DAYS (default) | LAST_90_DAYS. Not valid for savings_grouped, which is all-time", enum: Object.keys(TIME_FILTER_DAYS) },
-      { name: "start_time", description: "Custom window start; pair with end_time. Not valid for savings_grouped" },
-      { name: "end_time", description: "Custom window end; pair with start_time. Not valid for savings_grouped" },
-    ],
-    operations: {
-      get: {
-        ...overviewSpec(OVERVIEW_VALUE_METRICS),
-        responseExtractor: ccmGovernanceOverviewValueExtract,
-        description:
-          `One headline number. resource_id is the metric: ${Object.keys(OVERVIEW_VALUE_METRICS).join(", ")}. Savings are currency amounts over the window.`,
-      },
-      list: {
-        ...overviewSpec(OVERVIEW_SERIES_METRICS),
-        skipCompact: true,
-        responseExtractor: ccmGovernanceOverviewSeriesExtract,
-        description: `A breakdown. filters.metric is one of: ${Object.keys(OVERVIEW_SERIES_METRICS).join(", ")}.`,
       },
     },
   },

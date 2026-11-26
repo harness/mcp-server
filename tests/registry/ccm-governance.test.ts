@@ -12,10 +12,8 @@ import {
   ccmGovernanceAlertGetExtract,
   ccmGovernanceEnqueueExtract,
   ccmGovernanceEvaluationGetExtract,
-  ccmGovernanceEvaluationListExtract,
+  ccmGovernanceLastEvaluationExtract,
   ccmGovernanceExecutionDetailsExtract,
-  ccmGovernanceOverviewSeriesExtract,
-  ccmGovernanceOverviewValueExtract,
   ccmGovernanceRuleListExtract,
   ccmGovernanceRuleSetFirstExtract,
   ccmGovernanceStringListExtract,
@@ -64,13 +62,11 @@ describe("cost_governance registration", () => {
     "cost_governance_rule_set",
     "cost_governance_enforcement",
     "cost_governance_enforcement_recommendation",
-    "cost_governance_recommendation",
     "cost_governance_evaluation",
     "cost_governance_alert",
-    "cost_governance_overview",
   ];
 
-  it("registers all eight resource types in the ccm toolset, account scoped", () => {
+  it("registers all six resource types in the ccm toolset, account scoped", () => {
     for (const t of types) {
       const def = registry.getResource(t);
       expect(def.toolset, t).toBe("ccm");
@@ -105,10 +101,25 @@ describe("cost_governance registration", () => {
     expect(registry.getResource("cost_governance_alert").operations.create!.operationPolicy.risk).toBe("low_write");
   });
 
-  it("keeps read-only resources read-only", () => {
-    for (const t of ["cost_governance_evaluation", "cost_governance_overview", "cost_governance_recommendation"]) {
-      const def = registry.getResource(t);
-      for (const spec of Object.values(def.operations)) expect(spec.operationPolicy.risk, t).toBe("read");
+  it("keeps the evaluation resource read-only apart from refresh_cost", () => {
+    const def = registry.getResource("cost_governance_evaluation");
+    for (const spec of Object.values(def.operations)) expect(spec.operationPolicy.risk).toBe("read");
+    for (const [name, spec] of Object.entries(def.executeActions!)) {
+      expect(spec.operationPolicy.risk, name).toBe(name === "refresh_cost" ? "low_write" : "read");
+    }
+  });
+
+  it("leaves analytics to the knowledge graph: no overview, recommendation-health, evaluation list or savings", () => {
+    const all = registry.getAllResourceTypes();
+    expect(all).not.toContain("cost_governance_overview");
+    expect(all).not.toContain("cost_governance_recommendation");
+    expect(Object.keys(registry.getResource("cost_governance_evaluation").operations)).toEqual(["get"]);
+    expect(registry.getResource("cost_governance_enforcement").executeActions).not.toHaveProperty("savings");
+  });
+
+  it("points analytics descriptions at the knowledge-graph HQL types", () => {
+    for (const t of ["cost_governance_evaluation", "cost_governance_enforcement"]) {
+      expect(registry.getResource(t).description, t).toMatch(/ccm:governance_/);
     }
   });
 });
@@ -162,6 +173,15 @@ describe("rule: list / get / write bodies", () => {
     const { client, request } = makeClient({ status: "SUCCESS", data: { totalItems: 0, rules: [] } });
     await registry.dispatch(client, "cost_governance_rule", "list", {});
     expect(request.mock.calls[0][0].body).toEqual({ query: { limit: 20, offset: 0 } });
+  });
+
+  it("never treats the tool's own resource_type argument as the rule resource-type filter", async () => {
+    const { client, request } = makeClient({ status: "SUCCESS", data: { totalItems: 0, rules: [] } });
+    // harness_list always passes resource_type=<registry type>; it must not leak into the backend filter.
+    await registry.dispatch(client, "cost_governance_rule", "list", { resource_type: "cost_governance_rule" });
+    expect(request.mock.calls[0][0].body.query).toEqual({ limit: 20, offset: 0 });
+    await registry.dispatch(client, "cost_governance_rule", "list", { resource_type: "cost_governance_rule", rule_resource_type: "aws.ec2" });
+    expect(request.mock.calls[1][0].body.query).toEqual({ resourceType: "aws.ec2", limit: 20, offset: 0 });
   });
 
   it("rejects an out-of-range limit or negative offset instead of clamping", async () => {
@@ -517,19 +537,6 @@ describe("enforcement", () => {
     expect(request.mock.calls[1][0]).toMatchObject({ method: "DELETE", path: `${GOV}/enforcement/e1` });
   });
 
-  it("savings posts a time-filter list", async () => {
-    const { client, request } = makeClient({ status: "SUCCESS", data: { AWS: 12.5 } });
-    const result = await registry.dispatchExecute(client, "cost_governance_enforcement", "savings", {
-      enforcement_id: "e1",
-      start_time: "2026-11-01",
-      end_time: "2026-11-07",
-    });
-    expect(request.mock.calls[0][0].body).toEqual([
-      { operator: "AFTER", timestamp: Date.UTC(2026, 10, 1) },
-      { operator: "BEFORE", timestamp: Date.UTC(2026, 10, 8) - 1 },
-    ]);
-    expect(bare(result)).toEqual({ AWS: 12.5 });
-  });
 });
 
 describe("enforcement recommendation", () => {
@@ -575,82 +582,6 @@ describe("evaluation", () => {
   });
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it("list defaults to newest-first over the last 30 days and sends a bounded page", async () => {
-    const { client, request } = makeClient({
-      status: "SUCCESS",
-      data: {
-        totalItems: 1,
-        ruleExecution: [
-          {
-            uuid: "e1",
-            ruleIdentifier: "r1",
-            ruleName: "idle",
-            executionStatus: "SUCCESS",
-            isDryRun: true,
-            resourceCount: 3,
-            cost: 120.5,
-            savings: 60,
-            resourceBreakdownList: [{ big: 1 }],
-            subRuleExecutionDetails: [{ big: 1 }],
-            errorMessage: "e".repeat(900),
-          },
-        ],
-      },
-    });
-    const result = (await registry.dispatch(client, "cost_governance_evaluation", "list", {
-      rule_id: "r1",
-      execution_status: "failed",
-      is_dry_run: false,
-      has_resources: true,
-      cloud_provider: "aws",
-    })) as { items: Record<string, unknown>[]; total: number };
-
-    const call = request.mock.calls[0][0];
-    expect(call).toMatchObject({ method: "POST", path: `${GOV}/execution/list` });
-    const end = Date.parse("2026-11-23T00:00:00Z");
-    expect(call.body).toEqual({
-      policyExecutionFilter: {
-        ruleIds: ["r1"],
-        executionStatus: "FAILED",
-        cloudProviders: ["AWS"],
-        isDryRun: false,
-        resourceCountGreaterThanZero: true,
-        ruleExecutionSortType: "LAST_UPDATED_AT",
-        sortOrder: "DESCENDING",
-        time: [
-          { operator: "AFTER", timestamp: end - 30 * 86_400_000 },
-          { operator: "BEFORE", timestamp: end },
-        ],
-        limit: 20,
-        offset: 0,
-      },
-    });
-    expect(result.items[0]).toMatchObject({ id: "e1", ruleId: "r1", executionStatus: "SUCCESS", cost: 120.5, savings: 60 });
-    expect(result.items[0]).not.toHaveProperty("resourceBreakdownList");
-    expect(result.items[0]).not.toHaveProperty("subRuleExecutionDetails");
-    expect(String(result.items[0]!.errorMessage).length).toBeLessThanOrEqual(501);
-  });
-
-  it("list honours an explicit window and rejects a half-open or unknown one", async () => {
-    const { client, request } = makeClient({ status: "SUCCESS", data: { ruleExecution: [] } });
-    await registry.dispatch(client, "cost_governance_evaluation", "list", { time_filter: "LAST_7_DAYS" });
-    const end = Date.parse("2026-11-23T00:00:00Z");
-    expect(request.mock.calls[0][0].body.policyExecutionFilter.time[0].timestamp).toBe(end - 7 * 86_400_000);
-
-    await registry.dispatch(client, "cost_governance_evaluation", "list", { start_time: "2026-11-01", end_time: "2026-11-02" });
-    expect(request.mock.calls[1][0].body.policyExecutionFilter.time).toEqual([
-      { operator: "AFTER", timestamp: Date.UTC(2026, 10, 1) },
-      { operator: "BEFORE", timestamp: Date.UTC(2026, 10, 3) - 1 },
-    ]);
-
-    await expect(
-      registry.dispatch(client, "cost_governance_evaluation", "list", { start_time: "2026-11-01" }),
-    ).rejects.toThrow(/start_time and end_time must be provided together/);
-    await expect(
-      registry.dispatch(client, "cost_governance_evaluation", "list", { time_filter: "LAST_YEAR" }),
-    ).rejects.toThrow(/Invalid time_filter/);
   });
 
   it("get passes executionType through when given and caps the per-resource arrays", async () => {
@@ -740,97 +671,6 @@ describe("alert", () => {
   });
 });
 
-describe("recommendation health", () => {
-  it("list and get project the summary and drop per-run executions", async () => {
-    const registry = new Registry(makeConfig());
-    const summary = {
-      id: { ruleId: "r1", accountId: "a" },
-      ruleName: "idle",
-      cloudProvider: "AWS",
-      status: "SUCCESS",
-      potentialSavings: 410.2,
-      totalRecommendations: 7,
-      executions: [{ big: true }],
-    };
-    const { client, request } = makeClient({ status: "SUCCESS", data: { totalItems: 1, ruleRecommendationSummaries: [summary] } });
-    const list = (await registry.dispatch(client, "cost_governance_recommendation", "list", { health_status: "success" })) as {
-      items: Record<string, unknown>[];
-    };
-    expect(request.mock.calls[0][0].body).toEqual({ healthStatus: "SUCCESS", limit: 20, offset: 0 });
-    expect(list.items[0]).toMatchObject({ ruleId: "r1", potentialSavings: 410.2, totalRecommendations: 7 });
-    expect(list.items[0]).not.toHaveProperty("executions");
-
-    const one = makeClient({ status: "SUCCESS", data: summary });
-    expect(await registry.dispatch(one.client, "cost_governance_recommendation", "get", { rule_id: "r1" })).toMatchObject({ ruleId: "r1" });
-    expect(one.request.mock.calls[0][0].params).toMatchObject({ ruleId: "r1" });
-  });
-});
-
-describe("overview", () => {
-  let registry: Registry;
-  beforeEach(() => {
-    registry = new Registry(makeConfig());
-  });
-
-  it("get dispatches GET scalar metrics by name with comma-separated providers", async () => {
-    const { client, request } = makeClient({ status: "SUCCESS", data: 42 });
-    const result = await registry.dispatch(client, "cost_governance_overview", "get", {
-      metric: "total_evaluations",
-      cloud_provider: "aws, gcp",
-    });
-    expect(request.mock.calls[0][0]).toMatchObject({ method: "GET", path: `${GOV}/overview/totalEvaluations` });
-    expect(request.mock.calls[0][0].params.cloudProvider).toEqual(["AWS", "GCP"]);
-    expect(request.mock.calls[0][0].body).toBeUndefined();
-    expect(result).toEqual({ metric: "total_evaluations", value: 42 });
-  });
-
-  it("get posts the time window for savings", async () => {
-    const { client, request } = makeClient({ status: "SUCCESS", data: 1234.5 });
-    const result = await registry.dispatch(client, "cost_governance_overview", "get", {
-      metric: "total_realised_savings",
-      start_time: "2026-11-01",
-      end_time: "2026-11-02",
-    });
-    expect(request.mock.calls[0][0]).toMatchObject({ method: "POST", path: `${GOV}/overview/totalRealisedSavingsV2` });
-    expect(request.mock.calls[0][0].body).toEqual([
-      { operator: "AFTER", timestamp: Date.UTC(2026, 10, 1) },
-      { operator: "BEFORE", timestamp: Date.UTC(2026, 10, 3) - 1 },
-    ]);
-    expect(result).toEqual({ metric: "total_realised_savings", value: 1234.5 });
-  });
-
-  it("rejects a time window on all-time metrics instead of silently dropping it", async () => {
-    const { client, request } = makeClient();
-    await expect(
-      registry.dispatch(client, "cost_governance_overview", "list", { metric: "savings_grouped", time_filter: "LAST_7_DAYS" }),
-    ).rejects.toThrow(/savings_grouped is not time-windowed/);
-    await expect(
-      registry.dispatch(client, "cost_governance_overview", "get", { metric: "total_evaluations", start_time: "2026-11-01", end_time: "2026-11-02" }),
-    ).rejects.toThrow(/total_evaluations is not time-windowed/);
-    expect(request).not.toHaveBeenCalled();
-  });
-
-  it("an unknown or missing metric fails locally and lists the valid ones", async () => {
-    const { client, request } = makeClient();
-    await expect(registry.dispatch(client, "cost_governance_overview", "get", { metric: "nope" })).rejects.toThrow(/total_evaluations/);
-    await expect(registry.dispatch(client, "cost_governance_overview", "get", {})).rejects.toThrow(/metric is required/);
-    // a series metric is not valid for get, and vice versa
-    await expect(registry.dispatch(client, "cost_governance_overview", "get", { metric: "savings_time_series" })).rejects.toThrow(/metric is required/);
-    expect(request).not.toHaveBeenCalled();
-  });
-
-  it("list returns breakdown rows for series metrics", async () => {
-    const { client, request } = makeClient({
-      status: "SUCCESS",
-      data: { granularity: "DAY", timeSeriesData: [{ time: 1, savings: 5 }, { time: 2, savings: 6 }] },
-    });
-    const result = await registry.dispatch(client, "cost_governance_overview", "list", { metric: "savings_time_series" });
-    expect(request.mock.calls[0][0]).toMatchObject({ method: "POST", path: `${GOV}/overview/totalRealisedSavingsTimeSeries` });
-    expect(result).toEqual({ items: [{ time: 1, savings: 5 }, { time: 2, savings: 6 }], total: 2, granularity: "DAY" });
-    await expect(registry.dispatch(client, "cost_governance_overview", "list", {})).rejects.toThrow(/metric/);
-  });
-});
-
 describe("governance extractors", () => {
   it("rule list: tolerates empty and malformed payloads", () => {
     expect(ccmGovernanceRuleListExtract({ status: "SUCCESS", data: { totalItems: 0, rules: [] } })).toEqual({ items: [], total: 0 });
@@ -840,7 +680,7 @@ describe("governance extractors", () => {
   });
 
   it("keeps falsy-but-meaningful values (0, false) in projections", () => {
-    const { items } = ccmGovernanceEvaluationListExtract({
+    const { items } = ccmGovernanceLastEvaluationExtract({
       data: { ruleExecution: [{ uuid: "e", resourceCount: 0, cost: 0, isDryRun: false, executionStatus: "SUCCESS" }] },
     });
     expect(items[0]).toMatchObject({ id: "e", resourceCount: 0, cost: 0, isDryRun: false });
@@ -930,21 +770,11 @@ describe("governance extractors", () => {
     expect(ccmGovernanceEnqueueExtract(undefined)).toMatchObject({ evaluationIds: [], count: 0 });
   });
 
-  it("small helpers: target list, string list, rule set first, alert get, overview", () => {
+  it("small helpers: target list, string list, rule set first, alert get", () => {
     expect(ccmGovernanceTargetListExtract({ data: { a: "A" } })).toEqual({ items: [{ id: "a", name: "A" }], total: 1 });
     expect(ccmGovernanceTargetListExtract({ data: null })).toEqual({ items: [], total: 0 });
     expect(ccmGovernanceStringListExtract({ data: ["us-west-2", "us-east-1"] })).toEqual({ items: ["us-east-1", "us-west-2"], total: 2 });
     expect(() => ccmGovernanceRuleSetFirstExtract({ data: { ruleSet: [] } })).toThrow(/not found/);
     expect(() => ccmGovernanceAlertGetExtract({ data: [] }, { alert_id: "x" })).toThrow(/not found/);
-    expect(ccmGovernanceOverviewValueExtract({ data: null }, { metric: "total_evaluations" })).toEqual({ metric: "total_evaluations", value: 0 });
-    expect(ccmGovernanceOverviewSeriesExtract({ data: { AWS: 5, GCP: 1 } })).toEqual({
-      items: [{ key: "AWS", value: 5 }, { key: "GCP", value: 1 }],
-      total: 2,
-    });
-    expect(ccmGovernanceOverviewSeriesExtract({ data: { "2026-11-01": { SUCCESS: 3, FAILED: 1 } } })).toEqual({
-      items: [{ key: "2026-11-01", SUCCESS: 3, FAILED: 1 }],
-      total: 1,
-    });
-    expect(ccmGovernanceOverviewSeriesExtract({ data: null })).toEqual({ items: [], total: 0 });
   });
 });
