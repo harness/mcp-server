@@ -313,6 +313,26 @@ function resolveNativeOnlyEnvironmentRoute(
   };
 }
 
+const fmeTrafficTypeCreateSchema: BodySchema = {
+  description: "Create an FME traffic type in a project (org_id+project_id). name is the only field.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Traffic type name, unique in the project. Max 50 characters; must match ^[a-z][a-z0-9\\-_]*$ (starts with a lowercase letter; lowercase letters, digits, hyphens, underscores). Reserved names are rejected." },
+  ],
+};
+
+function resolveNativeOnlyTrafficTypeRoute(input: Record<string, unknown>, operation: string, opts: { collection?: boolean } = {}) {
+  const mode = resolveFmeDualMode(input, "fme_traffic_type");
+  if (mode.mode === "legacy") {
+    throw new Error(
+      `fme_traffic_type.${operation}: requires org_id and project_id.`,
+    );
+  }
+  const path = opts.collection
+    ? "/fme/api/v4/traffic-types"
+    : `/fme/api/v4/traffic-types/${encodePathSegment(requireFmeIdentifier(input, "traffic_type_id", "fme_traffic_type"))}`;
+  return { path, product: "harness" as const, scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
+}
+
 const fmeFeatureFlagDefinitionCreateSchema: BodySchema = {
   description: "Create a feature flag definition in a specific environment (initial treatments, rules, and default rule required)",
   fields: [
@@ -1538,11 +1558,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_traffic_type",
       displayName: "FME Traffic Type",
       description:
-        "Traffic type (e.g. 'user', 'account'). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover traffic_type_id / name values for flag and segment create. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
+        "Traffic type (e.g. 'user', 'account'). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. create/delete require org_id+project_id. Use harness_list to discover traffic_type_id / name values for flag and segment create. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
-      identifierFields: ["workspace_id"],
+      identifierFields: ["workspace_id", "traffic_type_id"],
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
@@ -1565,6 +1585,33 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: fmeV4PaginatedListExtract,
           description:
             "List traffic types. Pass org_id+project_id (preferred) or deprecated workspace_id. Optional offset/limit (harness_list size maps to limit).",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyTrafficTypeRoute(input, "create", { collection: true }),
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return { name: body?.name };
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeTrafficTypeCreateSchema,
+          description:
+            "Create a traffic type in a project (org_id+project_id). Body requires name (max 50, ^[a-z][a-z0-9\\-_]*$). Returns {id, name, governance}. " +
+            "400 for an invalid or reserved name, or when the project already has its limit of traffic types (10 by default); " +
+            "402 when the limit is enforced by the account plan; 409 when the name already exists in the project.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyTrafficTypeRoute(input, "delete"),
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: fmeV4EntityExtract,
+          description:
+            "Delete a traffic type by traffic_type_id (org_id+project_id). 404 when it does not exist in the project or was already deleted; " +
+            "409 hasDependents while feature flags, segments, large segments, rule-based segments, or metrics still use it.",
         },
       },
     },
