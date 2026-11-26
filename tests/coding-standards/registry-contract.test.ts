@@ -390,7 +390,7 @@ describe("Coding standards — registry resource contract", () => {
   });
 
   it("expands TOOLSET_GROUP_ALIASES in explicit, additive (+), and subtractive (-) HARNESS_TOOLSETS modes", () => {
-    // Explicit group selection: "artifacts" -> registries, registries-v3, registries-firewall
+    // Explicit group selection: "artifacts" -> registries, registries-v3, registries-firewall, registries-lifecycle
     const explicitReg = new Registry({
       ...MINIMAL_CONFIG,
       HARNESS_TOOLSETS: "artifacts",
@@ -398,6 +398,7 @@ describe("Coding standards — registry resource contract", () => {
     expect(explicitReg.getAllToolsets().map((t) => t.name).sort()).toEqual([
       "registries",
       "registries-firewall",
+      "registries-lifecycle",
       "registries-v3",
     ]);
 
@@ -410,6 +411,7 @@ describe("Coding standards — registry resource contract", () => {
     expect(additiveNames).toContain("registries");
     expect(additiveNames).toContain("registries-v3");
     expect(additiveNames).toContain("registries-firewall");
+    expect(additiveNames).toContain("registries-lifecycle");
     expect(additiveNames).toContain("pipelines");
 
     // Subtractive group selection: "-sre" removes incidents, alerts, deploys, runbooks, timelines

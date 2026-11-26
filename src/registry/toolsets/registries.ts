@@ -1,6 +1,8 @@
 import { encodePathSegment } from "../../utils/path.js";
 import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
-import { ngExtract, harListExtract, passthrough } from "../extractors.js";
+import { ngExtract, harListExtract, harV3ListExtract, passthrough } from "../extractors.js";
+import { buildIdListBody } from "../../utils/body-normalizer.js";
+import { V3_SCOPE_PARAMS, V3_STATS_MAX_IDS, statsBodySchema } from "./har-common.js";
 
 // Canonical PackageType enum — matches RegistryRequest.PackageType in the v1 OpenAPI spec.
 const PACKAGE_TYPES = [
@@ -188,6 +190,22 @@ export const registriesToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           description: "Update (replace) an existing artifact registry",
           bodySchema: registryUpdateSchema,
+        },
+      },
+      executeActions: {
+        stats: {
+          method: "POST",
+          path: "/har/api/v3/registries/stats",
+          scopeParams: V3_SCOPE_PARAMS,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          queryParams: { scope: "scope" },
+          bodyBuilder: buildIdListBody({ listKey: "registry_uuids", bodyKey: "registryIds", max: V3_STATS_MAX_IDS }),
+          responseExtractor: harV3ListExtract,
+          actionDescription:
+            `Package count, size, downloads and firewall mode for up to ${V3_STATS_MAX_IDS} registries. Pass params.registry_uuids ` +
+            "(comma-separated `uuid` values from registry list/get, not the identifier). Optional: scope (none|ancestors|descendants).",
+          bodySchema: statsBodySchema("registry_uuids", "registryIds", false),
         },
       },
     },
