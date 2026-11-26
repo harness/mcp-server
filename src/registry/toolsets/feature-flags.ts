@@ -258,6 +258,14 @@ const fmeSegmentDefinitionDeleteSchema: BodySchema = {
   ],
 };
 
+const fmeEnvironmentDeleteSchema: BodySchema = {
+  description: "Optional comment and/or title recorded with the delete, passed as params.body.",
+  fields: [
+    { name: "comment", type: "string", required: false, description: "Optional comment explaining the change" },
+    { name: "title", type: "string", required: false, description: "Optional short title for the change" },
+  ],
+};
+
 const fmeEnvironmentCreateSchema: BodySchema = {
   description:
     "Create an FME environment (Harness-native org_id+project_id only). name is required (max 15 characters). isProduction is optional (default false). production is accepted as an alias for isProduction.",
@@ -748,7 +756,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "delete"),
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const picked = pickTitleComment(input.body);
+            return Object.keys(picked).length > 0 ? picked : undefined;
+          },
           responseExtractor: passthrough,
+          bodySchema: fmeEnvironmentDeleteSchema,
           description:
             "Delete (archive) an environment by environment_id (Harness-native only). Returns 400 hasDependents while SDK API keys, flags, or segments still target it. Create via EnvironmentStarterKit always provisions client/server API keys, so a brand-new environment cannot be deleted until those keys are removed.",
         },
