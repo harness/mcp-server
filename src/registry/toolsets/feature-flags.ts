@@ -202,7 +202,7 @@ function canonicalizeFmeEnum<T extends string>(
 
 function applyFmeChangeRequestListQuery(input: Record<string, unknown>): void {
   if (input.workspace_id) {
-    throw new Error("fme_change_request: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.");
+    throw new Error("fme_change_request: Harness-native (org_id/project_id) only - pass org_id+project_id instead of workspace_id.");
   }
   if (input.resource_scope !== "account" && (!input.org_id || !input.project_id)) {
     throw new Error(
@@ -2539,11 +2539,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_change_request",
       displayName: "FME Change Request",
       description:
-        "Change requests (approval workflow items) for feature flag and segment changes. Harness-native only. Read-only: " +
-        "list only. Project-scoped by default (org_id + project_id); pass resource_scope='account' to list across the whole " +
-        "account. By default only pending (REQUESTED) change requests are returned — pass status to see other lifecycle " +
-        "states. filter=APPROVALS returns change requests where the caller is an approver (excluding the caller's own " +
-        "submissions), SUBMISSIONS returns the caller's own, ALL (default) returns both. Sorted by most recently modified first.",
+        "Change requests (approval workflow items) for feature flag and segment changes. Harness-native only. List only. " +
+        "Project-scoped by default (org_id + project_id); pass resource_scope='account' to list across the account. " +
+        "Defaults to pending (REQUESTED); pass status for other states. filter=APPROVALS: the caller is an approver " +
+        "(excluding own submissions); SUBMISSIONS: the caller's own; ALL (default): both. Most recently modified first.",
       toolset: "feature-flags",
       scope: "project",
       supportedScopes: ["account", "project"],
