@@ -370,6 +370,7 @@ describe("chaos_risk_scan list/get", () => {
       pipeline_identity: "deploy-pipeline",
       agent_identity: "agent-1",
       environment_identity: "env-prod",
+      repo_url: "github.com/acme/payments",
       start_time: 1700000000,
       end_time: 1700100000,
     });
@@ -384,6 +385,7 @@ describe("chaos_risk_scan list/get", () => {
     expect(params.pipelineIdentity).toBe("deploy-pipeline");
     expect(params.agentIdentity).toBe("agent-1");
     expect(params.environmentIdentity).toBe("env-prod");
+    expect(params.repoURL).toBe("github.com/acme/payments");
     expect(params.startTime).toBe(1700000000);
     expect(params.endTime).toBe(1700100000);
   });
@@ -610,6 +612,25 @@ describe("chaos_risk_scan update", () => {
     expect(call.body.name).toBe("Only Name");
     expect(call.body.description).toBeUndefined();
     expect(call.body.tags).toBeUndefined();
+    expect(call.body.source).toBeUndefined();
+  });
+
+  it("update: passes source through for ANALYSING External patches", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "scan-1" });
+    const client = makeClient(mockRequest);
+    const source = {
+      codeRepository: { repoURL: "github.com/acme/payments", commitSHA: "abc", scope: "branch", branch: "main" },
+      pipeline: { pipelineIdentity: "ci_risk_scan", pipelineExecutionID: "exec-1" },
+    };
+
+    await registry.dispatch(client, "chaos_risk_scan", "update", {
+      identity: "scan-1",
+      org_id: "org1",
+      project_id: "proj1",
+      body: { source },
+    });
+
+    expect(mockRequest.mock.calls[0][0].body).toMatchObject({ source });
   });
 });
 
@@ -766,6 +787,25 @@ describe("chaos_risk_scan execute actions", () => {
     expect(call.body).toMatchObject({ findings });
   });
 
+  it("submit_findings: includes commitSHA in the body when provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ accepted: 0 });
+    const client = makeClient(mockRequest);
+    const findings: unknown[] = [];
+
+    await registry.dispatchExecute(client, "chaos_risk_scan", "submit_findings", {
+      identity: "ci-scan-1",
+      org_id: "default",
+      project_id: "chaos-proj",
+      body: { findings, commitSHA: "abc123def456abc123def456abc123def456abc1" },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body).toMatchObject({
+      findings,
+      commitSHA: "abc123def456abc123def456abc123def456abc1",
+    });
+  });
+
   it("submit_findings: rejects a missing findings array and more than 100 findings", async () => {
     const mockRequest = vi.fn();
     const client = makeClient(mockRequest);
@@ -805,6 +845,21 @@ describe("chaos_risk_scan create (CodeRepository)", () => {
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.body).toMatchObject({ scanType: "CodeRepository", detectionMethod: "External", source });
+  });
+
+  it("defaults detectionMethod to External for CIRiskScan scans", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "ci-scan-1" });
+    const client = makeClient(mockRequest);
+    const source = { codeRepository: { repoURL: "github.com/acme/payments", branch: "main" } };
+
+    await registry.dispatch(client, "chaos_risk_scan", "create", {
+      org_id: "o",
+      project_id: "p",
+      body: { identity: "ci-scan-1", name: "CI risk scan", scanType: "CIRiskScan", source },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body).toMatchObject({ scanType: "CIRiskScan", detectionMethod: "External", source });
   });
 
   it("passes an explicit detectionMethod through and omits it when absent for other types", async () => {

@@ -221,7 +221,7 @@ import {
   descRiskScanType, descRiskScanSource,
   descScannedRiskSeverity, descScannedRiskRuleId, descScannedRiskValidationType,
   descScannedRiskServiceIdentity, descScannedRiskScanType,
-  descRiskEnvironmentIdentity, descRiskAgentIdentity, descRiskPipelineIdentity, descRiskScanStatus,
+  descRiskEnvironmentIdentity, descRiskAgentIdentity, descRiskPipelineIdentity, descRiskRepoURL, descRiskScanStatus,
   descRiskSearch, descRiskSortField, descRiskSortAscending, descRiskTags, descRiskIncludeAllScope,
   descRiskStartTime, descRiskEndTime,
   descRiskRuleDataSource, descRiskRuleIsSystem, descHeatmapSearch,
@@ -6532,17 +6532,18 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
-      searchAliases: ["risk scan", "resilience risk scan", "manifest scan", "code scan", "code repository risk scan"],
+      searchAliases: ["risk scan", "resilience risk scan", "manifest scan", "code scan", "code repository risk scan", "ci risk scan", "build scan"],
       listFilterFields: [
         { name: "search", description: descRiskSearch },
         { name: "sort_field", description: descRiskSortField },
         { name: "sort_ascending", description: descRiskSortAscending, type: "boolean" },
         { name: "tags", description: descRiskTags },
-        { name: "scan_type", description: descScannedRiskScanType, enum: ["PipelineExecution", "DiscoveryAgent", "CodeRepository"] },
+        { name: "scan_type", description: descScannedRiskScanType, enum: ["PipelineExecution", "DiscoveryAgent", "CodeRepository", "CIRiskScan"] },
         { name: "status", description: descRiskScanStatus, enum: ["PENDING", "COLLECTING", "ANALYSING", "REPORTING", "COMPLETED", "ERRORED", "ABORTED"] },
         { name: "pipeline_identity", description: descRiskPipelineIdentity },
         { name: "agent_identity", description: descRiskAgentIdentity },
         { name: "environment_identity", description: descRiskEnvironmentIdentity },
+        { name: "repo_url", description: descRiskRepoURL },
         { name: "start_time", description: descRiskStartTime, type: "number" },
         { name: "end_time", description: descRiskEndTime, type: "number" },
       ],
@@ -6568,6 +6569,7 @@ export const chaosToolset: ToolsetDefinition = {
             pipeline_identity: "pipelineIdentity",
             agent_identity: "agentIdentity",
             environment_identity: "environmentIdentity",
+            repo_url: "repoURL",
             start_time: "startTime",
             end_time: "endTime",
           },
@@ -6597,7 +6599,7 @@ export const chaosToolset: ToolsetDefinition = {
               source: descRiskScanSource,
             });
             const detectionMethod = b.detectionMethod ?? b.detection_method
-              ?? (b.scanType === "CodeRepository" ? "External" : undefined);
+              ?? (b.scanType === "CodeRepository" || b.scanType === "CIRiskScan" ? "External" : undefined);
             return {
               identity: b.identity,
               name: b.name,
@@ -6634,6 +6636,7 @@ export const chaosToolset: ToolsetDefinition = {
               ...(b.name !== undefined ? { name: b.name } : {}),
               ...(b.description !== undefined ? { description: b.description } : {}),
               ...(b.tags !== undefined ? { tags: b.tags } : {}),
+              ...(b.source !== undefined ? { source: b.source } : {}),
             };
           },
           responseExtractor: passthrough,
@@ -6644,6 +6647,7 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "name", type: "string", required: false, description: descRiskScanName },
               { name: "description", type: "string", required: false, description: descRiskScanDescription },
               { name: "tags", type: "array", required: false, itemType: "string", description: descRiskScanTags },
+              { name: "source", type: "object", required: false, description: descRiskScanSource },
             ],
           },
         },
@@ -6691,7 +6695,10 @@ export const chaosToolset: ToolsetDefinition = {
             if (findings.length > MAX_RISK_SCAN_FINDINGS) {
               throw new Error(`Too many findings: ${findings.length}. At most ${MAX_RISK_SCAN_FINDINGS} findings can be submitted per scan; aggregate call sites into one finding per rule and module.`);
             }
-            return { findings };
+            return {
+              findings,
+              ...(typeof b.commitSHA === "string" && b.commitSHA ? { commitSHA: b.commitSHA } : {}),
+            };
           },
           responseExtractor: passthrough,
           actionDescription: descSubmitRiskScanFindings,
@@ -6699,6 +6706,7 @@ export const chaosToolset: ToolsetDefinition = {
             description: descBodySubmitRiskScanFindings,
             fields: [
               { name: "findings", type: "array", required: true, itemType: "object", description: descRiskScanFindings },
+              { name: "commitSHA", type: "string", required: false, description: "HEAD SHA. Required when the CIRiskScan was created without commitSHA." },
             ],
           },
         },

@@ -1043,7 +1043,7 @@ export const descRiskRuleCustomOnly = `When true, return only this account's cus
 export const descRiskRuleIncludeInPassiveScan = `When true, a custom rule is returned only if its spec.includeInPassiveScan is true; a rule stored with false or without the flag is left out. With is_system, system rules are unchanged. With custom_only, only opted-in custom rules are returned. Alone, every system rule plus this account's opted-in custom rules.`;
 
 // Risk Scan operation descriptions
-export const descListRiskScans = `List chaos risk scans. Supports filtering by scan type, status, pipeline/agent/environment identity, tags, time range, and free-text search.`;
+export const descListRiskScans = `List chaos risk scans. Supports filtering by scan type, status, pipeline/agent/environment identity, repoURL (CodeRepository and CIRiskScan), tags, time range, and free-text search. For a CIRiskScan baseline, pass scan_type CIRiskScan and repoURL. Skip and baseline are per source.codeRepository.scope (branch, commit, pullRequest). A commit or pullRequest scan is never the baseline for a branch scan. A pullRequest skip matches PR number, head SHA, and base SHA.`;
 export const descGetRiskScan = `Get a single chaos risk scan by its identity.`;
 export const descCreateRiskScan = `Create a chaos risk scan. Requires identity, name, scanType, and source.
 scanType DiscoveryAgent with source.discoveryAgent { agentIdentity, environmentIdentity } is an infrastructure scan. It moves chaos_onboarding stats.infrastructureScans.
@@ -1064,13 +1064,13 @@ export const descGetRiskScanHeatmap = `Get the risk-detection heatmap for a scan
 
 // Risk Scan create body descriptions
 export const descBodyRiskScanCreate = `Risk scan creation payload. Provide identity, name, scanType, and the source object matching the scanType.`;
-export const descBodyRiskScanUpdate = `Risk scan update payload. All fields optional; only provided fields are changed.`;
+export const descBodyRiskScanUpdate = `Risk scan update payload. All fields optional; only provided fields are changed. On an ANALYSING External CodeRepository or CIRiskScan, source may patch pipelineIdentity / pipelineExecutionID and codeRepository fields (commitSHA, scope, pullRequestNumber, targetBranch, baseSHA, branch) in place — do not replace codeRepository with a second source object.`;
 export const descRiskScanIdentity = `Unique identifier (slug) for the risk scan.`;
 export const descRiskScanName = `Human-readable name of the risk scan.`;
 export const descRiskScanDescription = `Optional description of the risk scan.`;
 export const descRiskScanTags = `Optional list of tags for the risk scan.`;
-export const descRiskScanType = `Origin of the scan. One of: PipelineExecution, DiscoveryAgent, CodeRepository.`;
-export const descRiskScanSource = `Source object identifying what triggered the scan. Use { pipeline: { pipelineIdentity, pipelineExecutionID } } for PipelineExecution, { discoveryAgent: { agentIdentity, environmentIdentity } } for DiscoveryAgent, or { codeRepository: { repoURL (host/org/repo), commitSHA, branch, provider, linkedServices: [{ module, chaosServiceIdentity }] } } for CodeRepository. A code scan stores both branch and commitSHA. The next scan of that repo and branch diffs from that commit instead of reading the whole tree.`;
+export const descRiskScanType = `Origin of the scan. One of: PipelineExecution, DiscoveryAgent, CodeRepository, CIRiskScan.`;
+export const descRiskScanSource = `Source object identifying what triggered the scan. Use { pipeline: { pipelineIdentity, pipelineExecutionID } } for PipelineExecution, { discoveryAgent: { agentIdentity, environmentIdentity } } for DiscoveryAgent, or { codeRepository: { repoURL (host/org/repo), commitSHA, branch, provider, scope, pullRequestNumber, targetBranch, baseSHA, linkedServices: [{ module, chaosServiceIdentity }] } } for CodeRepository and CIRiskScan. CIRiskScan may omit commitSHA until submit_findings. Pipeline and codeRepository may both be set; do not replace codeRepository with a second source object. Skip and branch baseline are per scope.`;
 
 // Scanned Risk / Risk Scan filter field descriptions
 export const descScannedRiskSeverity = `Filter by severity. Comma-separated. Values: Critical, High, Medium, Low.`;
@@ -1081,6 +1081,7 @@ export const descScannedRiskScanType = `Filter by scan type of the detecting sca
 export const descRiskEnvironmentIdentity = `Filter by environment identity.`;
 export const descRiskAgentIdentity = `Filter by service-discovery agent identity.`;
 export const descRiskPipelineIdentity = `Filter by pipeline identity.`;
+export const descRiskRepoURL = `Filter CodeRepository and CIRiskScan by normalised repository URL (host/org/repo, no scheme).`;
 export const descRiskScanStatus = `Filter by scan status. Values: PENDING, COLLECTING, ANALYSING, REPORTING, COMPLETED, ERRORED, ABORTED.`;
 export const descRiskSearch = `Free-text search by name.`;
 export const descRiskSortField = `Field to sort by.`;
