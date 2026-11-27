@@ -2817,16 +2817,18 @@ const AICR_REVIEW_STATUS_NOTES: Record<string, string> = {
   none:
     'No AI Code Review run for this pull request yet. harness_execute(resource_type="aicr_review", action="request_review") starts one.',
   running:
-    `The review is running. Check again with ${AICR_REVIEW_STATUS_CALL} until status is success or failure.`,
+    `The review is running. Check again with ${AICR_REVIEW_STATUS_CALL} until it is no longer running.`,
   success:
     'The review finished. Read it with harness_get(resource_type="aicr_review"). run.head_sha is the commit it reviewed.',
   failure:
     "The review did not finish: run.status and run.error_message say why. request_review starts a new one.",
+  cancelled:
+    "The review was cancelled: a newer commit replaced it, or there was nothing to review. request_review reviews the current head.",
 };
 
 /**
  * `POST /pullreqs/{n}/review/start` and `GET /pullreqs/{n}/review/status` → `{pr_number, status?, run?}`.
- * `status` (running, success, failure) is absent until a review has been started.
+ * `status` (running, success, failure, cancelled) is absent until a review has been started.
  */
 export function aicrReviewStatusExtract(raw: unknown, input?: Record<string, unknown>): unknown {
   const r = asRecord(raw) ?? {};
@@ -2853,7 +2855,7 @@ const AICR_PR_FIELDS = [
 
 /** `GET /repos` rows are full repo settings; prompt, MCP servers, and criteria are config, not repo identity. */
 const AICR_REPOSITORY_FIELDS = [
-  "repo_path", "source", "connector_ref", "provider_repo", "has_linked_repo", "created", "updated",
+  "repo_path", "source", "connector_ref", "provider_repo", "has_linked_repo", "enabled", "created", "updated",
 ] as const;
 
 /** Bare array → `{items, total}`; `headerPagination` replaces `total` with the server's count. */
@@ -2880,7 +2882,7 @@ export function aicrPullRequestCompact(item: Record<string, unknown>): Record<st
 }
 
 export function aicrRepositoryCompact(item: Record<string, unknown>): Record<string, unknown> {
-  return pickPresent(item, ["repo_path", "source", "provider_repo", "updated"]);
+  return pickPresent(item, ["repo_path", "source", "provider_repo", "enabled", "updated"]);
 }
 
 type AicrSideCall = { ok: true; value: unknown } | { ok: false; error: string };

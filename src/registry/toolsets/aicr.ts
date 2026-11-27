@@ -1487,7 +1487,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
             "Start an AI Code Review of the pull request's current commit, run by the repo's AI Code Review pipeline as you. " +
             "Works only for an open PR in a project repository with AI Code Review enabled. " +
             "If a review of that commit is already running, that one is returned and no new one starts. " +
-            "Fails with a conflict while a review of an older commit of the PR is still running. " +
+            "A running review of an older commit of the PR is cancelled and replaced. " +
+            "It fails with a conflict only while a review is saving its result, which takes seconds; request again then. " +
             "Requesting a review of an already reviewed commit starts a new review of the whole pull request. " +
             "Returns status running with the run; follow it with review_status.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
@@ -1504,10 +1505,10 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: { repo_path: "repo_path" },
           responseExtractor: aicrReviewStatusExtract,
           actionDescription:
-            "Status of the pull request's latest review run: running, success, failure, or none. " +
+            "Status of the pull request's latest review run: running, success, failure, cancelled, or none. " +
             "Read-only, takes a Harness PR URL. run.head_sha is the commit reviewed; if the PR has newer commits, request_review again. " +
             "A running review whose pipeline has ended is marked failed here, when you can edit reviews. " +
-            "A cancelled run (superseded, or nothing to review) also reports status failure; check run.status to tell cancelled from error.",
+            "cancelled means the run was superseded by a newer commit or had nothing to review.",
           paramsSchema: { fields: PR_PARAM_FIELDS },
           bodySchema: { description: "No body", fields: [] },
         },
@@ -1709,7 +1710,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
       displayName: "AI Code Review Repository",
       description:
         "Repositories with an AI Code Review config under an account, org, or project. " +
-        "A disabled repository is still listed; the list does not show whether review is on. " +
+        "A disabled repository is still listed. enabled says whether review is on for a Harness Code repository; " +
+        "it is left out for a provider repository or when it could not be read. " +
         "Execute enable or disable to turn it on or off for one Harness Code repository.",
       toolset: "aicr",
       scope: "account",
@@ -1735,7 +1737,8 @@ export const aicrToolset: ToolsetDefinition = refuseUrlOnAicrWrites({
           queryParams: SPACE_LIST_QUERY,
           responseExtractor: aicrRepositoryListExtract,
           description:
-            "List repositories with an AI Code Review config (a disabled one is still listed; the list does not show whether review is on) with repo_path and SCM source (Harness Code or linked provider).",
+            "List repositories with an AI Code Review config (a disabled one is still listed) with repo_path and SCM source (Harness Code or linked provider). " +
+            "For Harness Code repositories, enabled says whether review is on; it is omitted when the setting is unavailable.",
           paramsSchema: { fields: SPACE_PARAM_FIELDS },
         },
       },
